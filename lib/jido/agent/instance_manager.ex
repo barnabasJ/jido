@@ -196,11 +196,16 @@ defmodule Jido.Agent.InstanceManager do
   ## Options
 
   - `:initial_state` - Initial state for fresh agents (default: `%{}`)
+  - `:agent_opts` - Extra options merged into AgentServer opts (e.g. `parent:`)
 
   ## Examples
 
       {:ok, pid} = Jido.Agent.InstanceManager.get(:sessions, "user-123")
       {:ok, pid} = Jido.Agent.InstanceManager.get(:sessions, "user-123", initial_state: %{foo: 1})
+      {:ok, pid} = Jido.Agent.InstanceManager.get(:sessions, "user-123",
+        initial_state: %{},
+        agent_opts: [parent: %{pid: self(), id: "parent-1", tag: :worker}]
+      )
   """
   @spec get(manager_name(), key(), keyword()) :: {:ok, pid()} | {:error, term()}
   def get(manager, key, opts \\ []) do
@@ -339,6 +344,7 @@ defmodule Jido.Agent.InstanceManager do
     agent_opts =
       config.agent_opts
       |> Keyword.drop(@reserved_agent_opts)
+      |> Keyword.merge(Keyword.get(opts, :agent_opts, []))
       |> Keyword.put_new(:jido, config.jido)
       |> Keyword.put(:partition, partition)
       |> Keyword.put(:registry, registry_name(config.name))
