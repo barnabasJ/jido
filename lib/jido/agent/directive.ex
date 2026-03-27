@@ -367,6 +367,59 @@ defmodule Jido.Agent.Directive do
   end
 
   # ============================================================================
+  # SpawnManagedAgent - Spawn via InstanceManager
+  # ============================================================================
+
+  defmodule SpawnManagedAgent do
+    @moduledoc """
+    Spawn an agent via `Jido.Agent.InstanceManager`.
+
+    Unlike `SpawnAgent` which creates a child in the parent's DynamicSupervisor,
+    this starts the agent through InstanceManager.
+
+    ## Fields
+
+    - `namespace` - InstanceManager namespace (e.g. `:threads`, `:sessions`)
+    - `key` - Registration key (e.g. thread_id)
+    - `tag` - Tag for the `jido.agent.child.started` signal back to parent
+    - `initial_state` - Initial state for the agent
+    - `agent_opts` - Extra options passed to AgentServer (e.g. `parent:`)
+
+    ## Examples
+
+        %SpawnManagedAgent{
+          namespace: :threads,
+          key: "thread-123",
+          tag: :worker,
+          initial_state: %{thread_id: "thread-123"},
+          agent_opts: [parent: %{pid: self(), id: "parent-1", tag: :worker}]
+        }
+    """
+
+    @schema Zoi.struct(
+              __MODULE__,
+              %{
+                namespace: Zoi.atom(description: "InstanceManager namespace"),
+                key: Zoi.string(description: "Registration key"),
+                tag: Zoi.any(description: "Tag for child.started signal"),
+                initial_state:
+                  Zoi.map(description: "Initial state for the agent") |> Zoi.default(%{}),
+                agent_opts:
+                  Zoi.list(Zoi.any(), description: "Extra AgentServer options") |> Zoi.default([])
+              },
+              coerce: true
+            )
+
+    @type t :: unquote(Zoi.type_spec(@schema))
+    @enforce_keys Zoi.Struct.enforce_keys(@schema)
+    defstruct Zoi.Struct.struct_fields(@schema)
+
+    @doc "Returns the Zoi schema for SpawnManagedAgent."
+    @spec schema() :: Zoi.schema()
+    def schema, do: @schema
+  end
+
+  # ============================================================================
   # AdoptChild - Attach an orphaned or unattached child agent
   # ============================================================================
 
@@ -666,6 +719,33 @@ defmodule Jido.Agent.Directive do
       {:error, message} ->
         raise Jido.Error.validation_error(message, field: :restart)
     end
+  end
+
+  @doc """
+  Creates a SpawnManagedAgent directive for spawning an agent via InstanceManager.
+
+  ## Options
+
+  - `:initial_state` - Initial state map (default: `%{}`)
+  - `:agent_opts` - Extra AgentServer options (default: `[]`)
+
+  ## Examples
+
+      Directive.spawn_managed_agent(:threads, "thread-123", :worker)
+      Directive.spawn_managed_agent(:threads, "thread-123", :worker,
+        initial_state: %{thread_id: "thread-123"},
+        agent_opts: [parent: %{pid: self(), id: "parent-1", tag: :worker}]
+      )
+  """
+  @spec spawn_managed_agent(atom(), String.t(), term(), keyword()) :: SpawnManagedAgent.t()
+  def spawn_managed_agent(namespace, key, tag, options \\ []) do
+    %SpawnManagedAgent{
+      namespace: namespace,
+      key: key,
+      tag: tag,
+      initial_state: Keyword.get(options, :initial_state, %{}),
+      agent_opts: Keyword.get(options, :agent_opts, [])
+    }
   end
 
   @doc """

@@ -411,6 +411,42 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Stop do
   end
 end
 
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnManagedAgent do
+  @moduledoc false
+
+  require Logger
+
+  def exec(directive, _input_signal, state) do
+    agent_opts =
+      directive.agent_opts ++
+        [
+          parent: %{
+            pid: self(),
+            id: state.id,
+            tag: directive.tag,
+            meta: %{}
+          }
+        ]
+
+    case Jido.Agent.InstanceManager.get(directive.namespace, directive.key,
+           initial_state: directive.initial_state,
+           agent_opts: agent_opts
+         ) do
+      {:ok, _pid} ->
+        Logger.debug(
+          "SpawnManagedAgent #{state.id}: #{directive.tag} at #{directive.namespace}/#{directive.key}"
+        )
+
+        {:ok, state}
+
+      {:error, reason} ->
+        Logger.error("SpawnManagedAgent #{state.id}: failed #{directive.tag}: #{inspect(reason)}")
+
+        {:ok, state}
+    end
+  end
+end
+
 defimpl Jido.AgentServer.DirectiveExec, for: Any do
   @moduledoc false
 
