@@ -7,6 +7,8 @@ defmodule Jido.Pod.TopologyState do
   alias Jido.Plugin.Instance, as: PluginInstance
   alias Jido.Pod.Plugin
   alias Jido.Pod.Topology
+  alias Jido.Signal
+  alias Jido.Signal.Call
 
   @pod_state_key Plugin.state_key_atom()
 
@@ -64,9 +66,7 @@ defmodule Jido.Pod.TopologyState do
     if function_exported?(module, :topology, 0) do
       {:ok, module.topology()}
     else
-      with {:ok, state} <- AgentServer.state(module) do
-        fetch_topology(state)
-      end
+      fetch_topology_via_signal(module)
     end
   end
 
@@ -78,9 +78,18 @@ defmodule Jido.Pod.TopologyState do
     end
   end
 
-  def fetch_topology(server) do
-    with {:ok, state} <- AgentServer.state(server) do
-      fetch_topology(state)
+  def fetch_topology(server), do: fetch_topology_via_signal(server)
+
+  defp fetch_topology_via_signal(server) do
+    with {:ok, query} <-
+           Signal.new("jido.pod.query.topology", %{},
+             source: "/jido/pod/topology_state"
+           ),
+         {:ok, reply} <- Call.call(server, query) do
+      case reply.type do
+        "jido.pod.query.topology.reply" -> {:ok, reply.data.topology}
+        "jido.pod.query.topology.error" -> {:error, reply.data.reason}
+      end
     end
   end
 
