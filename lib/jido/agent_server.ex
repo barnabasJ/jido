@@ -1131,6 +1131,12 @@ defmodule Jido.AgentServer do
                 tag: parent_ref.tag
               })
 
+            # Runtime adoption converges on the same observable signal as
+            # boot-time adoption (`handle_continue(:post_init, ...)`). This
+            # lets plugins/signal_routes react to "a new child is now mine"
+            # without needing a separate hook for `AdoptChild` directives.
+            notify_parent_of_startup(new_state)
+
             {:reply,
              {:ok,
               %{
