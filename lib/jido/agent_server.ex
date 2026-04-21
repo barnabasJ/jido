@@ -420,6 +420,45 @@ defmodule Jido.AgentServer do
     }
   end
 
+  @doc """
+  Wait for a child with the given tag to be registered under the agent.
+
+  Event-driven — mirrors `await_completion/2`. The parent parks the
+  caller in `state.child_waiters`; the handler that registers a new
+  child (`maybe_track_child_started/2`, fed by `jido.agent.child.started`
+  or by `handle_call({:adopt_child, ...})`) wakes matching waiters.
+  No polling.
+
+  If the tag already resolves to a child pid at call time, replies
+  immediately with the current pid.
+
+  ## Options
+
+  - `:timeout` - ms to wait before giving up (defaults to
+    `Jido.Config.Defaults.await_timeout_ms/0`)
+
+  ## Returns
+
+  - `{:ok, pid}` - Child registered (either already present or newly appeared)
+  - `{:error, :timeout}` - Child did not appear in time
+  - `{:error, :not_found}` - Parent server not found via resolution
+  """
+  @spec await_child(server(), term(), keyword()) :: {:ok, pid()} | {:error, term()}
+  def await_child(server, child_tag, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, Defaults.agent_server_await_timeout_ms())
+    waiter_id = make_ref()
+
+    with {:ok, pid} <- resolve_server(server) do
+      try do
+        GenServer.call(pid, {:await_child, child_tag, waiter_id}, timeout)
+      catch
+        :exit, {:timeout, _} ->
+          GenServer.cast(pid, {:cancel_await_child, waiter_id})
+          {:error, :timeout}
+      end
+    end
+  end
+
   defp infer_timeout_hint(status) do
     case status.snapshot.status do
       :waiting -> "Strategy is waiting (possibly for LLM response)"
@@ -1102,6 +1141,28 @@ defmodule Jido.AgentServer do
     end
   end
 
+  def handle_call({:await_child, child_tag, waiter_id}, from, %State{} = state) do
+    case State.get_child(state, child_tag) do
+      %ChildInfo{pid: pid} when is_pid(pid) ->
+        # Child is already registered — reply immediately.
+        {:reply, {:ok, pid}, state}
+
+      _ ->
+        {caller_pid, _tag} = from
+        monitor_ref = Process.monitor(caller_pid)
+
+        waiter = %{
+          from: from,
+          monitor_ref: monitor_ref,
+          waiter_id: waiter_id,
+          tag: child_tag
+        }
+
+        new_waiters = Map.put(state.child_waiters, monitor_ref, waiter)
+        {:noreply, %{state | child_waiters: new_waiters}}
+    end
+  end
+
   def handle_call({:attach, owner_pid}, _from, state) do
     case state.lifecycle.mod.handle_event({:attach, owner_pid}, state) do
       {:cont, new_state} -> {:reply, :ok, new_state}
@@ -1176,6 +1237,7 @@ defmodule Jido.AgentServer do
         state
         |> State.add_child(tag, child_info)
         |> State.record_debug_event(:child_adopted, %{child_id: child_runtime.id, tag: tag})
+        |> maybe_notify_child_waiters(tag, child_pid)
 
       {:reply, {:ok, child_pid}, new_state}
     else
@@ -1220,6 +1282,20 @@ defmodule Jido.AgentServer do
       end)
 
     {:noreply, %{state | completion_waiters: remaining_waiters}}
+  end
+
+  def handle_cast({:cancel_await_child, waiter_id}, %State{} = state) do
+    remaining_waiters =
+      Enum.reduce(state.child_waiters, %{}, fn {monitor_ref, waiter}, acc ->
+        if waiter.waiter_id == waiter_id do
+          Process.demonitor(waiter.monitor_ref, [:flush])
+          acc
+        else
+          Map.put(acc, monitor_ref, waiter)
+        end
+      end)
+
+    {:noreply, %{state | child_waiters: remaining_waiters}}
   end
 
   def handle_cast({:signal, %Signal{} = signal}, state) do
@@ -1305,9 +1381,18 @@ defmodule Jido.AgentServer do
       _ ->
         case Map.get(state.cron_monitor_refs, ref) do
           nil ->
-            # Not an attachment, check completion waiters using O(1) map lookup by monitor ref
-            {_popped_waiter, new_waiters} = Map.pop(state.completion_waiters, ref)
-            state = %{state | completion_waiters: new_waiters}
+            # Not an attachment, clean up any completion/child waiters whose
+            # caller pid died. Both maps are keyed by monitor_ref.
+            {_popped_completion, new_completion_waiters} =
+              Map.pop(state.completion_waiters, ref)
+
+            {_popped_child, new_child_waiters} = Map.pop(state.child_waiters, ref)
+
+            state = %{
+              state
+              | completion_waiters: new_completion_waiters,
+                child_waiters: new_child_waiters
+            }
 
             if match?(%{parent: %ParentRef{pid: ^pid}}, state) do
               handle_parent_down(state, pid, reason)
@@ -1751,7 +1836,26 @@ defmodule Jido.AgentServer do
         meta: meta
       })
 
-    State.add_child(state, tag, child_info)
+    state
+    |> State.add_child(tag, child_info)
+    |> maybe_notify_child_waiters(tag, pid)
+  end
+
+  defp maybe_notify_child_waiters(%State{child_waiters: waiters} = state, _tag, _pid)
+       when map_size(waiters) == 0 do
+    state
+  end
+
+  defp maybe_notify_child_waiters(%State{child_waiters: waiters} = state, tag, pid) do
+    {to_notify, still_waiting} =
+      Enum.split_with(waiters, fn {_ref, waiter} -> waiter.tag == tag end)
+
+    Enum.each(to_notify, fn {_ref, waiter} ->
+      Process.demonitor(waiter.monitor_ref, [:flush])
+      GenServer.reply(waiter.from, {:ok, pid})
+    end)
+
+    %{state | child_waiters: Map.new(still_waiting)}
   end
 
   defp do_process_signal(signal, router, state, start_time, metadata) do

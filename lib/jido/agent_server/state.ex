@@ -108,6 +108,12 @@ defmodule Jido.AgentServer.State do
               completion_waiters:
                 Zoi.map(description: "Map of ref => waiter for completion notifications")
                 |> Zoi.default(%{}),
+              child_waiters:
+                Zoi.map(
+                  description:
+                    "Map of monitor_ref => waiter for children-appearance notifications"
+                )
+                |> Zoi.default(%{}),
 
               # Lifecycle (InstanceManager integration: attachment tracking, idle timeout, storage)
               lifecycle: Zoi.any(description: "Lifecycle state (State.Lifecycle.t())"),
@@ -196,6 +202,7 @@ defmodule Jido.AgentServer.State do
         error_count: 0,
         metrics: %{},
         completion_waiters: %{},
+        child_waiters: %{},
         lifecycle: lifecycle,
         debug: opts.debug,
         debug_events: [],

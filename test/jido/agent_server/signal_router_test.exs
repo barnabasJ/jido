@@ -268,6 +268,7 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
       error_count: 0,
       metrics: %{},
       completion_waiters: %{},
+      child_waiters: %{},
       lifecycle: lifecycle
     }
 

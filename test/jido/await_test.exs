@@ -269,5 +269,86 @@ defmodule JidoTest.AwaitTest do
 
       GenServer.stop(pid)
     end
+
+    test "await_child wakes event-driven when adopt_child registers the child after await starts",
+         %{jido: jido} do
+      {:ok, parent} =
+        AgentServer.start_link(agent: AwaitAgent, id: "child-async", jido: jido)
+
+      {:ok, child} =
+        AgentServer.start_link(agent: ChildAgent, id: "child-to-adopt", jido: jido)
+
+      # Unlink both — adopt_child makes the child follow the parent on
+      # parent-death, and we don't want that cascade to reach the test
+      # process via the start_link link.
+      Process.unlink(parent)
+      Process.unlink(child)
+
+      caller = self()
+
+      # Kick off AgentServer.await_child/3 first, *before* the child is
+      # registered. The caller must block in the parent's child_waiters map.
+      waiter =
+        Task.async(fn ->
+          send(caller, :awaiting)
+          AgentServer.await_child(parent, :late_worker, timeout: 2_000)
+        end)
+
+      # Make sure the waiter task has actually issued the await_child call
+      # before we register the child.
+      assert_receive :awaiting, 500
+      # Give the GenServer.call a beat to arrive and register the waiter.
+      Process.sleep(20)
+
+      # Sanity check: the waiter is parked in child_waiters right now.
+      {:ok, parent_state} = AgentServer.state(parent)
+      assert map_size(parent_state.child_waiters) == 1
+
+      # Register the child under the awaited tag; handle_call({:adopt_child, ...})
+      # runs maybe_notify_child_waiters/3 which should reply to the parked
+      # caller with {:ok, child_pid}.
+      {:ok, ^child} = AgentServer.adopt_child(parent, child, :late_worker)
+
+      assert {:ok, adopted_pid} = Task.await(waiter, 3_000)
+      assert adopted_pid == child
+
+      # Waiter map should be drained.
+      {:ok, parent_state} = AgentServer.state(parent)
+      assert map_size(parent_state.child_waiters) == 0
+
+      Process.exit(child, :kill)
+      Process.exit(parent, :kill)
+    end
+
+    test "await_child returns {:ok, pid} immediately when the child is already registered",
+         %{jido: jido} do
+      {:ok, parent} =
+        AgentServer.start_link(agent: AwaitAgent, id: "child-sync", jido: jido)
+
+      {:ok, child} =
+        AgentServer.start_link(agent: ChildAgent, id: "child-preregistered", jido: jido)
+
+      Process.unlink(parent)
+      Process.unlink(child)
+
+      {:ok, ^child} = AgentServer.adopt_child(parent, child, :worker)
+
+      assert {:ok, pid} = AgentServer.await_child(parent, :worker, timeout: 100)
+      assert pid == child
+
+      Process.exit(child, :kill)
+      Process.exit(parent, :kill)
+    end
+
+    test "await_child returns {:error, :timeout} when the child never appears",
+         %{jido: jido} do
+      {:ok, parent} =
+        AgentServer.start_link(agent: AwaitAgent, id: "child-never", jido: jido)
+
+      assert {:error, :timeout} =
+               AgentServer.await_child(parent, :nonexistent, timeout: 50)
+
+      GenServer.stop(parent)
+    end
   end
 end
