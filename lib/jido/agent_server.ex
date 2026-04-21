@@ -1815,7 +1815,8 @@ defmodule Jido.AgentServer do
     {agent, directives} =
       agent_module.cmd(state.agent, action_arg,
         __jido_instance__: state.jido,
-        __partition__: state.partition
+        __partition__: state.partition,
+        __input_signal__: signal
       )
 
     directives = List.wrap(directives)
