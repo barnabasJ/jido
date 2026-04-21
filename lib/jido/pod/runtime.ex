@@ -1,6 +1,7 @@
 defmodule Jido.Pod.Runtime do
   @moduledoc false
 
+  alias Jido.Agent.Directive.SpawnManagedAgent
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
   alias Jido.AgentServer.{ChildInfo, ParentRef, StopChildRuntime}
@@ -255,15 +256,29 @@ defmodule Jido.Pod.Runtime do
     end
   end
 
-  defp get_managed_node(manager, key, opts) do
+  # Build + execute a %SpawnManagedAgent{} directive. This unifies the data
+  # shape with the DirectiveExec pipeline — what an action would emit as a
+  # directive, the pod runtime constructs as a struct and hands to
+  # `SpawnManagedAgent.execute/2`. Error-wraps ArgumentError/KeyError from
+  # InstanceManager so the caller gets a structured validation error.
+  defp spawn_node(name, %Node{} = node, key, parent_ref, state, initial_state) do
+    directive = %SpawnManagedAgent{
+      namespace: node.manager,
+      key: key,
+      tag: name,
+      initial_state: initial_state,
+      parent: parent_ref,
+      agent_opts: [partition: state.partition]
+    }
+
     try do
-      InstanceManager.get(manager, key, opts)
+      SpawnManagedAgent.execute(directive, state)
     rescue
       error in [ArgumentError, KeyError] ->
         {:error,
          Jido.Error.validation_error(
            "Failed to acquire pod node from InstanceManager.",
-           details: %{manager: manager, key: key, error: Exception.message(error)}
+           details: %{manager: node.manager, key: key, error: Exception.message(error)}
          )}
     end
   end
@@ -531,16 +546,9 @@ defmodule Jido.Pod.Runtime do
 
         with {:ok, parent_pid} <- resolve_parent_pid(server_pid, topology, name, report),
              {:ok, parent_ref} <-
-               build_parent_ref(parent_pid, state, topology, name, node.meta) do
-          get_opts = [
-            partition: state.partition,
-            initial_state: initial_state,
-            agent_opts: [parent: parent_ref]
-          ]
-
-          with {:ok, pid} <- get_managed_node(node.manager, key, get_opts) do
-            {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
-          end
+               build_parent_ref(parent_pid, state, topology, name, node.meta),
+             {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state) do
+          {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
         end
     end
   end
@@ -603,17 +611,10 @@ defmodule Jido.Pod.Runtime do
 
           with {:ok, parent_pid} <- resolve_parent_pid(server_pid, topology, name, report),
                {:ok, parent_ref} <-
-                 build_parent_ref(parent_pid, state, topology, name, node.meta) do
-            get_opts = [
-              partition: state.partition,
-              initial_state: initial_state,
-              agent_opts: [parent: parent_ref]
-            ]
-
-            with {:ok, pid} <- get_managed_node(node.manager, key, get_opts),
-                 {:ok, _nested_report} <- reconcile_nested_pod(pid, node, state, opts) do
-              {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
-            end
+                 build_parent_ref(parent_pid, state, topology, name, node.meta),
+               {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state),
+               {:ok, _nested_report} <- reconcile_nested_pod(pid, node, state, opts) do
+            {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
           end
       end
     end
@@ -642,19 +643,10 @@ defmodule Jido.Pod.Runtime do
 
         with {:ok, parent_pid} <- resolve_parent_pid(self(), topology, name, report),
              {:ok, parent_ref} <-
-               build_parent_ref(parent_pid, state, topology, name, node.meta) do
-          get_opts = [
-            partition: state.partition,
-            initial_state: initial_state,
-            agent_opts: [parent: parent_ref]
-          ]
-
-          with {:ok, pid} <- get_managed_node(node.manager, key, get_opts),
-               {:ok, next_state} <- register_child_locally(state, name, pid, node.meta) do
-            {:ok, {next_state, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}}
-          else
-            {:error, reason} -> {:error, state, reason}
-          end
+               build_parent_ref(parent_pid, state, topology, name, node.meta),
+             {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state),
+             {:ok, next_state} <- register_child_locally(state, name, pid, node.meta) do
+          {:ok, {next_state, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}}
         else
           {:error, reason} -> {:error, state, reason}
         end
@@ -690,20 +682,11 @@ defmodule Jido.Pod.Runtime do
 
           with {:ok, parent_pid} <- resolve_parent_pid(self(), topology, name, report),
                {:ok, parent_ref} <-
-                 build_parent_ref(parent_pid, state, topology, name, node.meta) do
-            get_opts = [
-              partition: state.partition,
-              initial_state: initial_state,
-              agent_opts: [parent: parent_ref]
-            ]
-
-            with {:ok, pid} <- get_managed_node(node.manager, key, get_opts),
-                 {:ok, next_state} <- register_child_locally(state, name, pid, node.meta),
-                 {:ok, _nested_report} <- reconcile_nested_pod(pid, node, state, opts) do
-              {:ok, {next_state, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}}
-            else
-              {:error, reason} -> {:error, state, reason}
-            end
+                 build_parent_ref(parent_pid, state, topology, name, node.meta),
+               {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state),
+               {:ok, next_state} <- register_child_locally(state, name, pid, node.meta),
+               {:ok, _nested_report} <- reconcile_nested_pod(pid, node, state, opts) do
+            {:ok, {next_state, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}}
           else
             {:error, reason} -> {:error, state, reason}
           end
@@ -743,8 +726,8 @@ defmodule Jido.Pod.Runtime do
   # skip the legacy `AgentServer.adopt_parent/2` round-trip here. We only need
   # to attach our own monitor and insert a `%ChildInfo{}` so the pod's state
   # has the child visible on the *current* callback turn — the async
-  # `jido.agent.child.started` signal arrives shortly after and is a no-op for
-  # an already-tracked tag.
+  # `jido.agent.child.started` signal arrives shortly after and is a no-op
+  # for an already-tracked tag.
   defp register_child_locally(%State{} = state, name, child_pid, meta)
        when is_pid(child_pid) do
     case State.get_child(state, name) do
