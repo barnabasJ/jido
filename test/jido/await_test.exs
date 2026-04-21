@@ -233,12 +233,12 @@ defmodule JidoTest.AwaitTest do
       GenServer.stop(pid)
     end
 
-    test "exits for dead process" do
+    test "returns {:error, :noproc} for dead process" do
       fake_pid = spawn(fn -> :ok end)
 
       eventually(fn -> not Process.alive?(fake_pid) end)
 
-      assert catch_exit(Await.get_children(fake_pid)) != nil
+      assert {:error, :noproc} = Await.get_children(fake_pid)
     end
   end
 
@@ -251,12 +251,12 @@ defmodule JidoTest.AwaitTest do
       GenServer.stop(pid)
     end
 
-    test "exits for dead process" do
+    test "returns {:error, :noproc} for dead process" do
       fake_pid = spawn(fn -> :ok end)
 
       eventually(fn -> not Process.alive?(fake_pid) end)
 
-      assert catch_exit(Await.get_child(fake_pid, :some_tag)) != nil
+      assert {:error, :noproc} = Await.get_child(fake_pid, :some_tag)
     end
   end
 

@@ -35,6 +35,8 @@ defmodule Jido.Await do
 
   alias Jido.AgentServer
   alias Jido.Config.Defaults
+  alias Jido.Signal
+  alias Jido.Signal.Call
 
   @type server :: AgentServer.server()
   @type status :: :completed | :failed | atom()
@@ -330,13 +332,8 @@ defmodule Jido.Await do
   """
   @spec get_children(server()) :: {:ok, %{term() => pid()}} | {:error, term()}
   def get_children(parent_server) do
-    case AgentServer.state(parent_server) do
-      {:ok, %{children: children}} ->
-        pids = Map.new(children, fn {tag, %{pid: pid}} -> {tag, pid} end)
-        {:ok, pids}
-
-      {:error, _} = error ->
-        error
+    with {:ok, children} <- query_children(parent_server) do
+      {:ok, children}
     end
   end
 
@@ -355,15 +352,11 @@ defmodule Jido.Await do
   """
   @spec get_child(server(), term()) :: {:ok, pid()} | {:error, :child_not_found | term()}
   def get_child(parent_server, child_tag) do
-    case AgentServer.state(parent_server) do
-      {:ok, %{children: children}} ->
-        case Map.get(children, child_tag) do
-          %{pid: pid} when is_pid(pid) -> {:ok, pid}
-          _ -> {:error, :child_not_found}
-        end
-
-      {:error, _} = error ->
-        error
+    with {:ok, children} <- query_children(parent_server) do
+      case Map.get(children, child_tag) do
+        pid when is_pid(pid) -> {:ok, pid}
+        _ -> {:error, :child_not_found}
+      end
     end
   end
 
@@ -378,6 +371,9 @@ defmodule Jido.Await do
   """
   @spec alive?(server()) :: boolean()
   def alive?(server) do
+    # Liveness check — the point is the round-trip itself, not any field
+    # of the state; a signal query would work but adds overhead for no
+    # gain (see ADR 0006).
     case AgentServer.state(server) do
       {:ok, _} -> true
       {:error, _} -> false
@@ -418,4 +414,17 @@ defmodule Jido.Await do
 
   defp sleep(ms) when ms > 0, do: Process.sleep(ms)
   defp sleep(_), do: :ok
+
+  defp query_children(server) do
+    with {:ok, query} <-
+           Signal.new("jido.agent.query.children", %{},
+             source: "/jido/await"
+           ),
+         {:ok, reply} <- Call.call(server, query) do
+      case reply.type do
+        "jido.agent.query.children.reply" -> {:ok, reply.data.children}
+        "jido.agent.query.children.error" -> {:error, reply.data.reason}
+      end
+    end
+  end
 end
