@@ -226,11 +226,11 @@ defmodule JidoTest.AwaitCoverageTest do
   end
 
   describe "get_children edge cases" do
-    test "get_children exits for dead parent" do
+    test "get_children returns {:error, :noproc} for dead parent" do
       fake_pid = spawn(fn -> :ok end)
       eventually(fn -> not Process.alive?(fake_pid) end)
 
-      assert catch_exit(Await.get_children(fake_pid)) != nil
+      assert {:error, :noproc} = Await.get_children(fake_pid)
     end
 
     test "get_children returns empty map for agent with no children", %{jido: jido} do
@@ -244,11 +244,11 @@ defmodule JidoTest.AwaitCoverageTest do
   end
 
   describe "get_child edge cases" do
-    test "get_child exits for dead parent" do
+    test "get_child returns {:error, :noproc} for dead parent" do
       fake_pid = spawn(fn -> :ok end)
       eventually(fn -> not Process.alive?(fake_pid) end)
 
-      assert catch_exit(Await.get_child(fake_pid, :some_tag)) != nil
+      assert {:error, :noproc} = Await.get_child(fake_pid, :some_tag)
     end
 
     test "get_child returns :child_not_found for nonexistent child", %{jido: jido} do

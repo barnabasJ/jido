@@ -2507,8 +2507,20 @@ defmodule Jido.AgentServer do
   end
 
   # ---------------------------------------------------------------------------
-  # Internal: Server Resolution
+  # Server Resolution
   # ---------------------------------------------------------------------------
+
+  @doc """
+  Resolves a server reference to a pid.
+
+  Accepts the same reference types as `cast/2` and `call/2` — a pid, a
+  registered atom, or a `{:via, ...}` tuple. Returns `{:error, :not_found}`
+  when a registered name doesn't currently point at a process; does not
+  check process liveness for direct pids (`is_pid/1` alone is enough to
+  succeed).
+  """
+  @spec resolve(server()) :: {:ok, pid()} | {:error, term()}
+  def resolve(server), do: resolve_server(server)
 
   defp resolve_server(pid) when is_pid(pid), do: {:ok, pid}
 

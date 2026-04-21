@@ -293,7 +293,8 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
       router = SignalRouter.build(state)
 
       assert %JidoRouter.Router{} = router
-      assert router.route_count == 1
+      # 1 configured agent route + builtin jido.agent.query.children
+      assert router.route_count == 2
     end
 
     test "builds router when agent defines legacy signal_routes/0 callback" do
@@ -301,15 +302,17 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
       router = SignalRouter.build(state)
 
       assert %JidoRouter.Router{} = router
-      assert router.route_count == 1
+      # 1 legacy agent route + builtin jido.agent.query.children
+      assert router.route_count == 2
     end
 
-    test "returns empty router when agent doesn't export signal_routes/1" do
+    test "returns only builtin routes when agent doesn't export signal_routes/1" do
       state = build_test_state(AgentWithoutRoutes)
       router = SignalRouter.build(state)
 
       assert %JidoRouter.Router{} = router
-      assert router.route_count == 0
+      # Just the builtin jido.agent.query.children route
+      assert router.route_count == 1
     end
   end
 
@@ -348,8 +351,8 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
       # Should generate pattern-based routes instead
       assert %JidoRouter.Router{} = router
-      # Pattern routes: signal_patterns ["nil.*"] x actions [TestAction]
-      assert router.route_count == 1
+      # Pattern routes: signal_patterns ["nil.*"] x actions [TestAction] + builtin
+      assert router.route_count == 2
     end
 
     test "handles plugin signal_routes/1 returning non-list value - falls back to pattern routes" do
@@ -358,8 +361,8 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
       # Should generate pattern-based routes instead
       assert %JidoRouter.Router{} = router
-      # Pattern routes: signal_patterns ["nonlist.*"] x actions [TestAction]
-      assert router.route_count == 1
+      # Pattern routes: signal_patterns ["nonlist.*"] x actions [TestAction] + builtin
+      assert router.route_count == 2
     end
 
     test "generates routes from plugin routes definition" do
@@ -369,8 +372,8 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
       assert %JidoRouter.Router{} = router
       # PluginWithRouter has 2 custom routes, PluginWithPatterns has 2 explicit routes
-      # Total: 2 + 2 = 4 routes
-      assert router.route_count == 4
+      # Total: 2 + 2 = 4 plugin routes + 1 builtin = 5
+      assert router.route_count == 5
     end
   end
 
@@ -380,8 +383,8 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
       router = SignalRouter.build(state)
 
       assert %JidoRouter.Router{} = router
-      # Should have 2 routes with match functions
-      assert router.route_count == 2
+      # 2 routes with match functions + builtin jido.agent.query.children
+      assert router.route_count == 3
     end
 
     test "normalizes 4-tuple routes with match functions and priority" do
@@ -389,7 +392,8 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
       router = SignalRouter.build(state)
 
       assert %JidoRouter.Router{} = router
-      assert router.route_count == 2
+      # 2 routes + builtin
+      assert router.route_count == 3
     end
   end
 
@@ -473,18 +477,19 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
       router = SignalRouter.build(state)
 
       assert %JidoRouter.Router{} = router
-      # Strategy: 2 routes, Agent: 1 route, Plugin: 2 routes = 5 total
-      assert router.route_count == 5
+      # Strategy: 2, Agent: 1, Plugin: 2, Builtin: 1 = 6 total
+      assert router.route_count == 6
     end
   end
 
   describe "build/1 error handling" do
-    test "returns empty router when no routes are defined" do
+    test "returns router with only builtin routes when no user routes are defined" do
       state = build_test_state(AgentWithoutRoutes)
       router = SignalRouter.build(state)
 
       assert %JidoRouter.Router{} = router
-      assert router.route_count == 0
+      # Just the builtin jido.agent.query.children route
+      assert router.route_count == 1
     end
   end
 end

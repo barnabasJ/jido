@@ -66,8 +66,10 @@ defmodule Jido.Signal.Call do
   equals the request's `id`.
 
   Returns `{:ok, reply_signal}` on success, `{:error, :timeout}` if no
-  matching reply arrives within the timeout, or any error propagated
-  from the `AgentServer.cast/2` call.
+  matching reply arrives within the timeout, `{:error, :noproc}` if the
+  target process dies before replying, or any error propagated from
+  server resolution (e.g. `{:error, :not_found}` for an unregistered
+  name).
   """
   @spec call(AgentServer.server(), Signal.t(), [option]) ::
           {:ok, Signal.t()} | {:error, term()}
@@ -81,15 +83,25 @@ defmodule Jido.Signal.Call do
         _existing -> signal
       end
 
-    with :ok <- AgentServer.cast(server, query) do
-      await_reply(correlation_id, timeout)
+    with {:ok, pid} <- AgentServer.resolve(server) do
+      ref = Process.monitor(pid)
+      :ok = GenServer.cast(pid, {:signal, query})
+
+      try do
+        await_reply(correlation_id, ref, timeout)
+      after
+        Process.demonitor(ref, [:flush])
+      end
     end
   end
 
-  defp await_reply(correlation_id, timeout) do
+  defp await_reply(correlation_id, monitor_ref, timeout) do
     receive do
       {:signal, %Signal{subject: ^correlation_id} = reply} ->
         {:ok, reply}
+
+      {:DOWN, ^monitor_ref, :process, _pid, _reason} ->
+        {:error, :noproc}
     after
       timeout ->
         {:error, :timeout}
