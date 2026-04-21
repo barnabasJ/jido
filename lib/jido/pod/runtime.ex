@@ -528,14 +528,51 @@ defmodule Jido.Pod.Runtime do
       _status ->
         initial_state = node_initial_state(requested_names, name, node, opts)
         key = node_key(state, name)
-        get_opts = [partition: state.partition, initial_state: initial_state]
 
         with {:ok, parent_pid} <- resolve_parent_pid(server_pid, topology, name, report),
-             {:ok, pid} <- get_managed_node(node.manager, key, get_opts),
-             {:ok, ^pid} <- adopt_runtime_child(parent_pid, pid, name, node.meta, state, topology) do
-          {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
+             {:ok, parent_ref} <-
+               build_parent_ref(parent_pid, state, topology, name, node.meta) do
+          get_opts = [
+            partition: state.partition,
+            initial_state: initial_state,
+            agent_opts: [parent: parent_ref]
+          ]
+
+          with {:ok, pid} <- get_managed_node(node.manager, key, get_opts) do
+            {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
+          end
         end
     end
+  end
+
+  # Builds a %ParentRef{}-shaped map for the child's `:parent` AgentServer opt.
+  # When the child boots with state.parent set, its `handle_continue(:post_init)`
+  # calls `notify_parent_of_startup/1` which emits `jido.agent.child.started`
+  # back to the pod — that signal both registers the child in the pod's
+  # `state.children` map (via `maybe_track_child_started/2`) and flows through
+  # the pod's own `signal_routes:` for user-defined handling (auto-wiring,
+  # observability, etc.).
+  defp build_parent_ref(parent_pid, %State{} = state, %Topology{} = topology, name, meta) do
+    parent_id =
+      if parent_pid == self() do
+        state.id
+      else
+        case AgentServer.state(parent_pid) do
+          {:ok, parent_state} -> parent_state.id
+          {:error, _} -> state.id
+        end
+      end
+
+    _ = topology
+
+    {:ok,
+     Jido.AgentServer.ParentRef.new!(%{
+       pid: parent_pid,
+       id: parent_id,
+       partition: state.partition,
+       tag: name,
+       meta: meta || %{}
+     })}
   end
 
   defp ensure_planned_pod_node(
