@@ -24,3 +24,4 @@ changes that reverse an earlier call.
 | [0003](0003-server-state-access-lives-in-directives.md) | Server-state access lives in directives, not actions | Accepted |
 | [0004](0004-pod-lifecycle-signals.md) | Pod reconciliation emits lifecycle signals | Accepted |
 | [0005](0005-agent-domain-as-a-state-slice.md) | Agent domain state is a first-class `state_key` slice | Accepted |
+| [0006](0006-external-sync-uses-signals.md) | External sync uses signals and events, not state-dig or polling | Accepted |
