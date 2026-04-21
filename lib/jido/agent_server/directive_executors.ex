@@ -441,6 +441,52 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnManagedAg
   end
 end
 
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Reply do
+  @moduledoc false
+
+  require Logger
+
+  alias Jido.Signal
+  alias Jido.Signal.Dispatch
+
+  def exec(%{input_signal: nil}, _input_signal, state), do: {:ok, state}
+
+  def exec(%{input_signal: %{jido_dispatch: nil}}, _input_signal, state) do
+    # No reply channel on the input signal — caller wasn't using
+    # Signal.Call.call/3, so there's no one to reply to.
+    {:ok, state}
+  end
+
+  def exec(
+        %Jido.Agent.Directive.Reply{
+          input_signal: input,
+          reply_type: reply_type,
+          error_type: error_type,
+          build: {module, fun, extra_args}
+        },
+        _input_signal,
+        state
+      ) do
+    {type, data} =
+      case apply(module, fun, [state | extra_args]) do
+        {:ok, data} when is_map(data) -> {reply_type, data}
+        {:error, reason} -> {error_type, %{reason: reason}}
+      end
+
+    with {:ok, reply_signal} <- Signal.new(type, data, subject: input.id) do
+      _ = Dispatch.dispatch(reply_signal, input.jido_dispatch)
+      :ok
+    else
+      {:error, reason} ->
+        Logger.warning(
+          "Reply directive: failed to build #{inspect(type)} reply signal: #{inspect(reason)}"
+        )
+    end
+
+    {:ok, state}
+  end
+end
+
 defimpl Jido.AgentServer.DirectiveExec, for: Any do
   @moduledoc false
 

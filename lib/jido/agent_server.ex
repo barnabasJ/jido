@@ -293,9 +293,14 @@ defmodule Jido.AgentServer do
   end
 
   @doc """
-  Synchronously sends a signal and waits for processing.
+  Synchronously sends a signal and waits for the agent to finish processing
+  it, returning the updated agent struct.
 
-  Returns the updated agent struct after signal processing.
+  Useful as a sync barrier after a mutation (e.g. "cmd must land before I
+  proceed"). If what you want is *a specific answer* — a query — prefer
+  `Jido.Signal.Call.call/3`: it lets the agent decide what to expose via
+  a reply signal instead of handing the full agent struct to the caller.
+
   Directives are still executed asynchronously via the drain loop.
 
   ## Returns

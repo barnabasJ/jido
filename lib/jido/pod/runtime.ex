@@ -22,19 +22,33 @@ defmodule Jido.Pod.Runtime do
 
   @pod_state_key Plugin.state_key_atom()
 
+  @doc """
+  Returns the pod's current topology + per-node runtime snapshots.
+
+  Implemented as a signal-based query — the pod's `Pod.Plugin` routes
+  `jido.pod.query.nodes` to `Pod.Actions.QueryNodes`, which replies via
+  `Jido.Signal.Call`. The caller does not read pod state directly; the
+  pod controls exactly what fields are exposed in the reply.
+  """
   def nodes(server) do
-    with {:ok, state} <- AgentServer.state(server),
-         {:ok, topology} <- TopologyState.fetch_topology(state) do
-      {:ok, build_node_snapshots(state, topology)}
+    with {:ok, query} <- Signal.new("jido.pod.query.nodes", %{}, source: "/jido/pod/runtime"),
+         {:ok, reply} <- Jido.Signal.Call.call(server, query) do
+      case reply.type do
+        "jido.pod.query.nodes.reply" -> {:ok, reply.data.nodes}
+        "jido.pod.query.nodes.error" -> {:error, reply.data.reason}
+      end
     end
   end
 
+  @doc """
+  Returns the pid of the named node if it's running.
+
+  Resolves via the `nodes/1` query and then extracts the `running_pid`
+  field — same "answer over signal, not state extraction" pattern.
+  """
   def lookup_node(server, name) when is_node_name(name) do
-    with {:ok, state} <- AgentServer.state(server),
-         {:ok, topology} <- TopologyState.fetch_topology(state),
-         {:ok, node} <- fetch_node(topology, name),
-         :ok <- ensure_runtime_supported(node, name) do
-      case Map.get(build_node_snapshots(state, topology), name) do
+    with {:ok, snapshots} <- nodes(server) do
+      case Map.get(snapshots, name) do
         nil -> {:error, :unknown_node}
         %{running_pid: pid} when is_pid(pid) -> {:ok, pid}
         _snapshot -> :error
@@ -276,7 +290,13 @@ defmodule Jido.Pod.Runtime do
     end
   end
 
-  defp build_node_snapshots(%State{} = state, %Topology{} = topology) do
+  @doc """
+  Builds per-node runtime snapshots (status, pid, ownership, key) keyed by
+  node name. Shared helper for `nodes/1` and action handlers that reply
+  to topology queries — see `Jido.Pod.Actions.QueryNodes`.
+  """
+  @spec build_node_snapshots(State.t(), Topology.t()) :: map()
+  def build_node_snapshots(%State{} = state, %Topology{} = topology) do
     Map.new(topology.nodes, fn {name, node} ->
       {name, build_node_snapshot(state, topology, name, node)}
     end)

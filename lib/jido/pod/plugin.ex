@@ -8,6 +8,8 @@ defmodule Jido.Pod.Plugin do
   """
 
   alias Jido.Pod.Actions.Mutate, as: MutateAction
+  alias Jido.Pod.Actions.QueryNodes
+  alias Jido.Pod.Actions.QueryTopology
   alias Jido.Pod.Topology
 
   @state_key :__pod__
@@ -16,7 +18,7 @@ defmodule Jido.Pod.Plugin do
   use Jido.Plugin,
     name: "pod",
     state_key: @state_key,
-    actions: [MutateAction],
+    actions: [MutateAction, QueryNodes, QueryTopology],
     signal_routes: [{"mutate", MutateAction}],
     schema:
       Zoi.object(%{
@@ -72,6 +74,18 @@ defmodule Jido.Pod.Plugin do
            "#{inspect(agent_module)} does not export topology/0 required by pod plugins."
          )}
     end
+  end
+
+  @impl Jido.Plugin
+  def signal_routes(_config) do
+    # Unprefixed introspection routes — `jido.pod.query.*` lives in the
+    # system namespace, not the plugin's `pod.` prefix. Actions reply via
+    # `Jido.Signal.Call.reply/3` so callers do not need to read the pod's
+    # agent state directly.
+    [
+      {"jido.pod.query.nodes", QueryNodes},
+      {"jido.pod.query.topology", QueryTopology}
+    ]
   end
 
   @impl true
