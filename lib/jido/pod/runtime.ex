@@ -72,12 +72,49 @@ defmodule Jido.Pod.Runtime do
             |> Enum.filter(fn {_name, node} -> node.activation == :eager end)
             |> Enum.map(&elem(&1, 0))
 
-          with {:ok, waves} <- Topology.reconcile_waves(topology, eager_node_names) do
-            execute_runtime_plan(server_pid, state, topology, eager_node_names, waves, opts)
+          emit_pod_lifecycle(server_pid, state, "jido.pod.reconcile.started", %{
+            requested: eager_node_names
+          })
+
+          result =
+            with {:ok, waves} <- Topology.reconcile_waves(topology, eager_node_names) do
+              execute_runtime_plan(server_pid, state, topology, eager_node_names, waves, opts)
+            end
+
+          case result do
+            {:ok, report} ->
+              emit_pod_lifecycle(server_pid, state, "jido.pod.reconcile.completed", %{
+                requested: eager_node_names,
+                started: report[:completed] || [],
+                failed: report[:failed] || []
+              })
+
+            {:error, report_or_reason} ->
+              emit_pod_lifecycle(server_pid, state, "jido.pod.reconcile.failed", %{
+                requested: eager_node_names,
+                error: report_or_reason
+              })
           end
+
+          result
         end,
         &reconcile_measurements/1
       )
+    end
+  end
+
+  # Cast a pod-lifecycle signal to the pod's AgentServer so it flows through
+  # the pod's signal_routes and any attached plugins — same dispatch path as
+  # jido.agent.child.started, just originated by the runtime. Best effort:
+  # a failed cast is not fatal for the reconcile itself.
+  defp emit_pod_lifecycle(server_pid, %State{} = state, type, data) do
+    case Signal.new(type, data, source: "/pod/#{state.id}") do
+      {:ok, signal} ->
+        _ = AgentServer.cast(server_pid, signal)
+        :ok
+
+      {:error, _reason} ->
+        :ok
     end
   end
 
