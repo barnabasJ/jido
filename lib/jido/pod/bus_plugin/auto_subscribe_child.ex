@@ -30,6 +30,7 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
 
   require Logger
 
+  alias Jido.Agent.StateOp.SetPath
   alias Jido.Signal.Bus
 
   @impl true
@@ -57,10 +58,12 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
           end
         end)
 
-      # Record sub_ids by tag so AutoUnsubscribeChild can tear them down
-      # on jido.agent.child.exit. Relies on DeepMerge semantics — the
-      # subscriptions map is merged in-place under :__bus_wiring__.
-      {:ok, %{__bus_wiring__: %{subscriptions: %{params.tag => sub_ids}}}}
+      # Record sub_ids by tag via an explicit SetPath state op so
+      # AutoUnsubscribeChild's DeletePath is the structural mirror image.
+      # This matches the agent's "state changes as directives" contract
+      # instead of relying on DeepMerge semantics on the returned result.
+      {:ok, %{},
+       [%SetPath{path: [:__bus_wiring__, :subscriptions, params.tag], value: sub_ids}]}
     else
       {:error, reason} ->
         Logger.warning("pod_bus: skipped auto-subscribe — #{reason}")
