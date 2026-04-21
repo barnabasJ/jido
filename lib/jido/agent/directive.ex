@@ -380,10 +380,21 @@ defmodule Jido.Agent.Directive do
     ## Fields
 
     - `namespace` - InstanceManager namespace (e.g. `:threads`, `:sessions`)
-    - `key` - Registration key (e.g. thread_id)
+    - `key` - Registration key (any term InstanceManager can index by)
     - `tag` - Tag for the `jido.agent.child.started` signal back to parent
     - `initial_state` - Initial state for the agent
-    - `agent_opts` - Extra options passed to AgentServer (e.g. `parent:`)
+    - `parent` - Optional explicit parent ref. When nil the executor uses
+      `self()` + the current agent's id as the parent. Set this when the
+      directive is being evaluated outside the intended parent's process
+      (e.g. pod runtime orchestrating an adoption on behalf of the pod).
+    - `agent_opts` - Extra options passed to AgentServer
+
+    ## Executing directly
+
+    `execute/2` performs the spawn synchronously and returns the new child
+    pid, so callers outside the directive pipeline (like `Jido.Pod.Runtime`)
+    can reuse the exact same shape. The `DirectiveExec` impl is a thin
+    wrapper that discards the pid to match the protocol contract.
 
     ## Examples
 
@@ -391,19 +402,23 @@ defmodule Jido.Agent.Directive do
           namespace: :threads,
           key: "thread-123",
           tag: :worker,
-          initial_state: %{thread_id: "thread-123"},
-          agent_opts: [parent: %{pid: self(), id: "parent-1", tag: :worker}]
+          initial_state: %{thread_id: "thread-123"}
         }
+
+        {:ok, pid} = SpawnManagedAgent.execute(directive, state)
     """
 
     @schema Zoi.struct(
               __MODULE__,
               %{
                 namespace: Zoi.atom(description: "InstanceManager namespace"),
-                key: Zoi.string(description: "Registration key"),
+                key: Zoi.any(description: "Registration key (any term)"),
                 tag: Zoi.any(description: "Tag for child.started signal"),
                 initial_state:
                   Zoi.map(description: "Initial state for the agent") |> Zoi.default(%{}),
+                parent:
+                  Zoi.any(description: "Explicit %ParentRef{} (or compatible map) for the child.")
+                  |> Zoi.optional(),
                 agent_opts:
                   Zoi.list(Zoi.any(), description: "Extra AgentServer options") |> Zoi.default([])
               },
@@ -417,6 +432,56 @@ defmodule Jido.Agent.Directive do
     @doc "Returns the Zoi schema for SpawnManagedAgent."
     @spec schema() :: Zoi.schema()
     def schema, do: @schema
+
+    @doc """
+    Executes the directive synchronously, returning `{:ok, pid}` for the
+    spawned child or `{:error, reason}` on failure.
+
+    Resolves the parent ref in priority order:
+    1. `directive.parent` if supplied.
+    2. `parent:` entry already present in `directive.agent_opts`.
+    3. A default ref built from `self()` + `state.id` + `directive.tag`.
+
+    Whichever wins is threaded into `agent_opts` so the child AgentServer
+    attaches it to `state.parent` at init, which in turn causes
+    `handle_continue(:post_init, ...)` to emit `jido.agent.child.started`.
+    """
+    @spec execute(t(), Jido.AgentServer.State.t() | nil) ::
+            {:ok, pid()} | {:error, term()}
+    def execute(%__MODULE__{} = directive, state \\ nil) do
+      parent_ref = resolve_parent(directive, state)
+
+      agent_opts =
+        if parent_ref do
+          Keyword.put_new(directive.agent_opts, :parent, parent_ref)
+        else
+          directive.agent_opts
+        end
+
+      Jido.Agent.InstanceManager.get(directive.namespace, directive.key,
+        initial_state: directive.initial_state,
+        agent_opts: agent_opts
+      )
+    end
+
+    # Priority: explicit directive.parent > agent_opts[:parent] > self-as-parent
+    # fallback built from `state`. The fallback is only valid when execute/2 is
+    # called from the intended parent's own process (i.e. `self()` is the
+    # parent agent), which is true for DirectiveExec callers.
+    defp resolve_parent(%__MODULE__{parent: parent}, _state) when not is_nil(parent), do: parent
+
+    defp resolve_parent(%__MODULE__{agent_opts: agent_opts} = directive, state) do
+      case Keyword.get(agent_opts, :parent) do
+        nil -> default_parent_ref(directive, state)
+        ref -> ref
+      end
+    end
+
+    defp default_parent_ref(%__MODULE__{tag: tag}, %{id: id}) when is_binary(id) do
+      %{pid: self(), id: id, tag: tag, meta: %{}}
+    end
+
+    defp default_parent_ref(_directive, _state), do: nil
   end
 
   # ============================================================================

@@ -416,22 +416,14 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnManagedAg
 
   require Logger
 
-  def exec(directive, _input_signal, state) do
-    agent_opts =
-      directive.agent_opts ++
-        [
-          parent: %{
-            pid: self(),
-            id: state.id,
-            tag: directive.tag,
-            meta: %{}
-          }
-        ]
+  alias Jido.Agent.Directive.SpawnManagedAgent
 
-    case Jido.Agent.InstanceManager.get(directive.namespace, directive.key,
-           initial_state: directive.initial_state,
-           agent_opts: agent_opts
-         ) do
+  # Delegate to SpawnManagedAgent.execute/2 (the single source of truth for
+  # "spawn via InstanceManager with a parent ref") and discard the pid to
+  # fit the DirectiveExec {:ok, state} contract. Non-directive callers like
+  # Jido.Pod.Runtime use execute/2 directly and keep the pid.
+  def exec(directive, _input_signal, state) do
+    case SpawnManagedAgent.execute(directive, state) do
       {:ok, _pid} ->
         Logger.debug(
           "SpawnManagedAgent #{state.id}: #{directive.tag} at #{directive.namespace}/#{directive.key}"
@@ -440,7 +432,9 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnManagedAg
         {:ok, state}
 
       {:error, reason} ->
-        Logger.error("SpawnManagedAgent #{state.id}: failed #{directive.tag}: #{inspect(reason)}")
+        Logger.error(
+          "SpawnManagedAgent #{state.id}: failed #{directive.tag}: #{inspect(reason)}"
+        )
 
         {:ok, state}
     end
