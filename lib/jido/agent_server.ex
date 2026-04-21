@@ -615,7 +615,16 @@ defmodule Jido.AgentServer do
     end
   end
 
-  @doc false
+  @doc """
+  Low-level primitive: imperatively attach a running agent to a parent ref.
+
+  Used internally by the `%Jido.Agent.Directive.AdoptChild{}` executor to
+  push the parent relationship into the child's live `state.parent`.
+  Prefer booting the child with `parent: parent_ref` in its AgentServer
+  options (`State.from_options/3` consumes it) so `post_init` can emit
+  `jido.agent.child.started` declaratively — this function exists for
+  the explicit-adoption-at-runtime path only.
+  """
   @spec adopt_parent(server(), ParentRef.t()) ::
           {:ok, %{id: String.t(), agent_module: module(), partition: term() | nil}}
           | {:error, term()}
@@ -632,10 +641,16 @@ defmodule Jido.AgentServer do
   end
 
   @doc """
-  Adopts a live child into this agent's logical child map.
+  Imperative counterpart to `Jido.Agent.Directive.adopt_child/3`.
 
-  This updates both the child's live parent reference and the manager's tracked
+  Adopts a live child into this agent's logical child map. Updates both
+  the child's live parent reference and the manager's tracked
   `state.children` map before returning.
+
+  Prefer returning a `%Jido.Agent.Directive.AdoptChild{}` from an action
+  when the initiator is already inside an agent — this function is for
+  external callers (tests, supervisors, LiveView mounts) that need to
+  attach children from outside the signal/directive pipeline.
   """
   @spec adopt_child(server(), pid() | String.t(), term(), map()) ::
           {:ok, pid()} | {:error, term()}
