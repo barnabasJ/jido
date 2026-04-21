@@ -95,8 +95,11 @@ defmodule Jido.Await do
   @doc """
   Wait for a specific child of a parent agent to complete.
 
-  First looks up the child by tag in the parent's `children` map,
-  then polls the child for completion.
+  Event-driven — `AgentServer.await_child/3` parks the caller in the
+  parent's `state.child_waiters` map and wakes them when the child
+  with the matching tag is registered (either via the
+  `jido.agent.child.started` signal or a runtime adoption). No
+  polling, no sleep loops.
 
   ## Options
 
@@ -105,7 +108,8 @@ defmodule Jido.Await do
   ## Returns
 
   - `{:ok, %{status: atom(), result: any()}}` - Child completed
-  - `{:error, :timeout}` - Timeout reached
+  - `{:error, :timeout}` - Timeout reached (child never appeared, or
+    appeared but didn't complete in time)
   - `{:error, term()}` - Other error
 
   ## Examples
@@ -119,40 +123,10 @@ defmodule Jido.Await do
   def child(parent_server, child_tag, timeout_ms \\ Defaults.await_timeout_ms(), opts \\ []) do
     deadline = now_ms() + timeout_ms
 
-    with {:ok, child_pid} <- poll_for_child(parent_server, child_tag, deadline, 50) do
+    with {:ok, child_pid} <-
+           AgentServer.await_child(parent_server, child_tag, timeout: timeout_ms) do
       remaining = max(0, deadline - now_ms())
       completion(child_pid, remaining, opts)
-    end
-  end
-
-  defp poll_for_child(parent_server, child_tag, deadline, poll_interval) do
-    if now_ms() > deadline do
-      {:error, :timeout}
-    else
-      case lookup_child_pid(parent_server, child_tag) do
-        {:ok, pid} ->
-          {:ok, pid}
-
-        {:error, :not_found} ->
-          sleep(poll_interval)
-          poll_for_child(parent_server, child_tag, deadline, poll_interval)
-
-        {:error, _} = error ->
-          error
-      end
-    end
-  end
-
-  defp lookup_child_pid(parent_server, child_tag) do
-    case AgentServer.state(parent_server) do
-      {:ok, %{children: children}} ->
-        case Map.get(children, child_tag) do
-          %{pid: pid} when is_pid(pid) -> {:ok, pid}
-          _ -> {:error, :not_found}
-        end
-
-      {:error, _} = error ->
-        error
     end
   end
 
@@ -411,9 +385,6 @@ defmodule Jido.Await do
   # ---------------------------------------------------------------------------
 
   defp now_ms, do: System.monotonic_time(:millisecond)
-
-  defp sleep(ms) when ms > 0, do: Process.sleep(ms)
-  defp sleep(_), do: :ok
 
   defp query_children(server) do
     with {:ok, query} <-
