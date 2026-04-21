@@ -47,22 +47,26 @@ defmodule Jido.Pod.BusPlugin do
   """
 
   alias Jido.Pod.BusPlugin.AutoSubscribeChild
+  alias Jido.Pod.BusPlugin.AutoUnsubscribeChild
 
   use Jido.Plugin,
     name: "pod_bus",
     description: "Auto-subscribes pod children to a named signal bus.",
     state_key: :__bus_wiring__,
-    actions: [AutoSubscribeChild],
+    actions: [AutoSubscribeChild, AutoUnsubscribeChild],
     schema:
       Zoi.object(%{
         bus:
-          Zoi.atom(description: "Name of the Jido.Signal.Bus to subscribe children on.")
+          Zoi.atom(description: "Name of the Jido.Signal.Bus to subscribe children on."),
+        subscriptions:
+          Zoi.map(description: "Per-tag subscription-id lists, used for cleanup on child.exit.")
+          |> Zoi.default(%{})
       }),
     capabilities: [:bus_wiring]
 
   @impl Jido.Plugin
   def mount(_agent, %{bus: bus}) when is_atom(bus) and not is_nil(bus) do
-    {:ok, %{bus: bus}}
+    {:ok, %{bus: bus, subscriptions: %{}}}
   end
 
   def mount(_agent, config) do
@@ -73,8 +77,11 @@ defmodule Jido.Pod.BusPlugin do
   @impl Jido.Plugin
   def signal_routes(_config) do
     # Returned routes are added to the agent's signal router unprefixed —
-    # we want to match the system signal `jido.agent.child.started`
-    # verbatim, not `pod_bus.jido.agent.child.started`.
-    [{"jido.agent.child.started", AutoSubscribeChild}]
+    # we want to match system signals (`jido.agent.child.started`,
+    # `jido.agent.child.exit`) verbatim, not under a `pod_bus.` prefix.
+    [
+      {"jido.agent.child.started", AutoSubscribeChild},
+      {"jido.agent.child.exit", AutoUnsubscribeChild}
+    ]
   end
 end

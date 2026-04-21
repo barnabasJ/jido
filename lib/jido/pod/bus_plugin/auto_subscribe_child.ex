@@ -6,9 +6,9 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
   Reads the child's module and pid out of the signal data, pulls the
   target bus out of the plugin's state slice (`:__bus_wiring__`), and
   calls `Jido.Signal.Bus.subscribe/3` once per path declared by the
-  child's `signal_routes/0`. Errors during subscription are logged but
-  do not abort the pod — a missing bus or a duplicate subscription will
-  show up in the logs, not as a hard crash.
+  child's `signal_routes/0`. The returned subscription ids are written
+  back to the plugin's state so `AutoUnsubscribeChild` can undo them
+  when the child exits.
 
   The pod's own `maybe_track_child_started/2` still runs on the same
   signal and is responsible for putting the child in
@@ -36,23 +36,31 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
   def run(params, %{state: agent_state}) do
     with {:ok, bus} <- fetch_bus(agent_state),
          {:ok, routes} <- fetch_routes(params.child_module) do
-      for route <- routes do
-        path = elem(route, 0)
+      sub_ids =
+        Enum.reduce(routes, [], fn route, acc ->
+          path = elem(route, 0)
 
-        case Bus.subscribe(bus, path, dispatch: {:pid, target: params.pid}) do
-          {:ok, _sub_id} ->
-            Logger.debug(
-              "pod_bus: subscribed #{inspect(params.child_module)}/#{inspect(params.tag)} to #{inspect(path)} on #{inspect(bus)}"
-            )
+          case Bus.subscribe(bus, path, dispatch: {:pid, target: params.pid}) do
+            {:ok, sub_id} ->
+              Logger.debug(
+                "pod_bus: subscribed #{inspect(params.child_module)}/#{inspect(params.tag)} to #{inspect(path)} on #{inspect(bus)}"
+              )
 
-          {:error, reason} ->
-            Logger.warning(
-              "pod_bus: failed to subscribe #{inspect(params.child_module)} to #{inspect(path)} on #{inspect(bus)}: #{inspect(reason)}"
-            )
-        end
-      end
+              [sub_id | acc]
 
-      {:ok, %{}}
+            {:error, reason} ->
+              Logger.warning(
+                "pod_bus: failed to subscribe #{inspect(params.child_module)} to #{inspect(path)} on #{inspect(bus)}: #{inspect(reason)}"
+              )
+
+              acc
+          end
+        end)
+
+      # Record sub_ids by tag so AutoUnsubscribeChild can tear them down
+      # on jido.agent.child.exit. Relies on DeepMerge semantics — the
+      # subscriptions map is merged in-place under :__bus_wiring__.
+      {:ok, %{__bus_wiring__: %{subscriptions: %{params.tag => sub_ids}}}}
     else
       {:error, reason} ->
         Logger.warning("pod_bus: skipped auto-subscribe — #{reason}")
