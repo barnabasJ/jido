@@ -321,6 +321,12 @@ defmodule Jido.Agent do
                                description:
                                  "Jido instance module for resolving default plugins at compile time"
                              )
+                             |> Zoi.optional(),
+                           state_key:
+                             Zoi.atom(
+                               description:
+                                 "If set, seed schema defaults under agent.state[state_key] instead of at the top level. Must match the key scoped actions declare. See ADR 0005."
+                             )
                              |> Zoi.optional()
                          },
                          coerce: true
@@ -485,6 +491,17 @@ defmodule Jido.Agent do
       @doc "Returns the agent's version."
       @spec vsn() :: String.t() | nil
       def vsn, do: @validated_opts[:vsn]
+
+      @doc """
+      Returns the atom slice key where the agent's user-domain state lives,
+      or `nil` if the agent uses the legacy flat layout.
+
+      See ADR 0005 — when set, schema defaults are seeded under
+      `agent.state[state_key]` and scoped actions (`Jido.Agent.ScopedAction`)
+      declaring the same key receive just that slice as `ctx.state`.
+      """
+      @spec state_key() :: atom() | nil
+      def state_key, do: @validated_opts[:state_key]
 
       @doc "Returns the merged schema (base + plugin schemas)."
       @spec schema() :: Zoi.schema() | keyword()
@@ -786,6 +803,15 @@ defmodule Jido.Agent do
       defp __build_initial_state__(opts) do
         # Build initial state from base schema defaults
         base_defaults = AgentState.defaults_from_schema(@validated_opts[:schema])
+
+        # If the agent declared a state_key, nest user-domain defaults under
+        # that slice so it participates in the same "combined reducers"
+        # layout as plugins. See ADR 0005.
+        base_defaults =
+          case state_key() do
+            nil -> base_defaults
+            key when is_atom(key) -> %{key => base_defaults}
+          end
 
         # Build plugin defaults nested under their state_keys
         # Skip plugins with nil schema (they manage their own state lifecycle)

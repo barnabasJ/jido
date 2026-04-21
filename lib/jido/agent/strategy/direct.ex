@@ -27,6 +27,7 @@ defmodule Jido.Agent.Strategy.Direct do
 
   alias Jido.Agent
   alias Jido.Agent.Directive
+  alias Jido.Agent.StateOp
   alias Jido.Observe.Config, as: ObserveConfig
   alias Jido.Agent.Strategy.InstructionTracking
   alias Jido.Agent.StateOps
@@ -71,12 +72,19 @@ defmodule Jido.Agent.Strategy.Direct do
   end
 
   defp run_instruction(agent, %Instruction{} = instruction, ctx) do
+    # Reflect on the action to see whether it declared ownership of a
+    # slice (Jido.Agent.ScopedAction, see ADR 0005). When it did we run
+    # the action with `ctx.state` scoped to just that slice and treat
+    # its return as a whole-slice replacement.
+    state_key = scoped_state_key(instruction.action)
+    scoped_state = scoped_state(agent.state, state_key)
+
     instruction =
       %{
         instruction
         | context:
             instruction.context
-            |> Map.put(:state, agent.state)
+            |> Map.put(:state, scoped_state)
             |> Map.put(:agent, agent)
             |> Map.put(:agent_server_pid, self())
       }
@@ -85,16 +93,42 @@ defmodule Jido.Agent.Strategy.Direct do
 
     case Jido.Exec.run(%{instruction | opts: exec_opts}) do
       {:ok, result} when is_map(result) ->
-        {StateOps.apply_result(agent, result), [], :ok}
+        apply_scoped_result(agent, state_key, result, [])
 
       {:ok, result, effects} when is_map(result) ->
-        agent = StateOps.apply_result(agent, result)
-        {agent, directives} = StateOps.apply_state_ops(agent, List.wrap(effects))
-        {agent, directives, :ok}
+        apply_scoped_result(agent, state_key, result, List.wrap(effects))
 
       {:error, reason} ->
         error = Error.execution_error("Instruction failed", details: %{reason: reason})
         {agent, [%Directive.Error{error: error, context: :instruction}], :error}
     end
+  end
+
+  # Pulls state_key/0 off the action module if it's a ScopedAction.
+  # Accepts bare module, {module, params}, {module, params, context}, etc —
+  # Instruction.normalize has already flattened the shape into :action.
+  defp scoped_state_key(mod) when is_atom(mod) and not is_nil(mod) do
+    if function_exported?(mod, :state_key, 0), do: mod.state_key(), else: nil
+  end
+
+  defp scoped_state_key(_), do: nil
+
+  defp scoped_state(agent_state, nil), do: agent_state
+  defp scoped_state(agent_state, key) when is_atom(key), do: Map.get(agent_state, key, %{})
+
+  # Unscoped action: legacy deep-merge of the returned map into full agent.state.
+  defp apply_scoped_result(agent, nil, result, effects) do
+    agent = StateOps.apply_result(agent, result)
+    {agent, directives} = StateOps.apply_state_ops(agent, effects)
+    {agent, directives, :ok}
+  end
+
+  # Scoped action: the returned map IS the new value of agent.state[state_key].
+  # Wrap as a SetPath state-op so it goes through the same applied-pipeline as
+  # explicit state ops (and is observable via `Jido.Agent.StateOps.apply_state_ops/2`).
+  defp apply_scoped_result(agent, state_key, new_slice, effects) do
+    slice_op = %StateOp.SetPath{path: [state_key], value: new_slice}
+    {agent, directives} = StateOps.apply_state_ops(agent, [slice_op | effects])
+    {agent, directives, :ok}
   end
 end
