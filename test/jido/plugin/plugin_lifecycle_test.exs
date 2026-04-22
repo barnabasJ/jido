@@ -28,8 +28,10 @@ defmodule JidoTest.PluginLifecycleTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%{role: role, content: content}, %{state: state}) do
-      messages = get_in(state, [:chat, :messages]) || []
+    def run(%{role: role, content: content}, %{agent: agent}) do
+      # :chat is a plugin slice at top of full agent.state, not in the
+      # user-domain slice ctx.state exposes (ADR 0008).
+      messages = get_in(agent.state, [:chat, :messages]) || []
       new_message = %{role: role, content: content, timestamp: DateTime.utc_now()}
       {:ok, %{}, %StateOp.SetPath{path: [:chat, :messages], value: messages ++ [new_message]}}
     end
@@ -56,8 +58,9 @@ defmodule JidoTest.PluginLifecycleTest do
 
     alias Jido.Agent.StateOp
 
-    def run(_params, %{state: state}) do
-      messages = get_in(state, [:chat, :messages]) || []
+    def run(_params, %{agent: agent}) do
+      # :chat is a plugin slice; read from full state.
+      messages = get_in(agent.state, [:chat, :messages]) || []
       message_count = length(messages)
 
       {:ok, %{},

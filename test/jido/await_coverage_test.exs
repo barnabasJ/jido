@@ -165,7 +165,7 @@ defmodule JidoTest.AwaitCoverageTest do
 
       eventually(fn ->
         {:ok, server_state} = AgentServer.state(fast_pid)
-        server_state.agent.state.status == :completed
+        server_state.agent.state.__domain__.status == :completed
       end)
 
       result = Await.any([fast_pid, slow_pid], 2000)

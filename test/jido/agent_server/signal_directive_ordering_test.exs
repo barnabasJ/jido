@@ -90,11 +90,11 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
 
       # Wait for the directive to drain
       eventually_state(pid, fn state ->
-        state.agent.state.step1_directive_ran == true
+        state.agent.state.__domain__.step1_directive_ran == true
       end)
 
       {:ok, state} = Jido.AgentServer.state(pid)
-      agent_state = state.agent.state
+      agent_state = state.agent.state.__domain__
 
       # Everything ran in the end
       assert agent_state.step1_cmd_ran == true

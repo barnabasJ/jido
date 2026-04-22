@@ -103,12 +103,12 @@ defmodule JidoTest.Plugin.CheckpointHooksTest do
       agent = AgentWithThreadPlugin.new()
 
       thread = Thread.new(id: "t-state-test")
-      agent = %{agent | state: %{agent.state | counter: 99}}
+      agent = %{agent | state: put_in(agent.state, [:__domain__, :counter], 99)}
       agent = %{agent | state: Map.put(agent.state, :__thread__, thread)}
 
       {:ok, checkpoint} = AgentWithThreadPlugin.checkpoint(agent, %{})
 
-      assert checkpoint.state.counter == 99
+      assert checkpoint.state.__domain__.counter == 99
       assert checkpoint.thread == %{id: "t-state-test", rev: 0}
     end
   end

@@ -358,7 +358,13 @@ defmodule JidoTest.Agent.StrategyFSMTest do
     end
 
     test "handles DeletePath effect" do
-      agent = FSMTestAgent.new(state: %{to_remove: %{nested: "gone", keep: "here"}})
+      # Explicit slice layout so :to_remove sits at top-level where the
+      # absolute-path DeletePath state-op targets it.
+      agent =
+        FSMTestAgent.new(
+          state: %{__domain__: %{}, to_remove: %{nested: "gone", keep: "here"}}
+        )
+
       {updated, directives} = run_cmd(FSMTestAgent, agent, DeletePathAction)
 
       refute Map.has_key?(updated.state.to_remove, :nested)

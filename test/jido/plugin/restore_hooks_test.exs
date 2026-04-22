@@ -213,7 +213,7 @@ defmodule JidoTest.Plugin.RestoreHooksTest do
 
       assert restored.state[:kept] == %{value: 10}
       assert restored.state[:ext] == %{id: "ext-mixed", restored: true}
-      assert restored.state[:counter] == 0
+      assert restored.state[:__domain__][:counter] == 0
     end
 
     test "no externalized_keys in checkpoint when no plugins externalize" do

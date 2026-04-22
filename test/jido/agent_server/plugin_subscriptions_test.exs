@@ -371,12 +371,12 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
       state =
         eventually_state(pid, fn state ->
-          state.agent.state.last_sensor_value == :test_value and
-            state.agent.state.last_sensor_count == 1
+          state.agent.state.__domain__.last_sensor_value == :test_value and
+            state.agent.state.__domain__.last_sensor_count == 1
         end)
 
-      assert state.agent.state.last_sensor_value == :test_value
-      assert state.agent.state.last_sensor_count == 1
+      assert state.agent.state.__domain__.last_sensor_value == :test_value
+      assert state.agent.state.__domain__.last_sensor_count == 1
 
       GenServer.stop(pid)
     end

@@ -14,8 +14,10 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
     alias Jido.Agent.StateOp
 
     def run(%{amount: amount}, %{state: state}) do
+      # ctx.state is the :__domain__ slice; SetPath operates on full
+      # agent.state, so target the slice explicitly.
       current = get_in(state, [:counter]) || 0
-      {:ok, %{}, %StateOp.SetPath{path: [:counter], value: current + amount}}
+      {:ok, %{}, %StateOp.SetPath{path: [:__domain__, :counter], value: current + amount}}
     end
   end
 
@@ -28,7 +30,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
     alias Jido.Agent.StateOp
 
     def run(%{marker: marker}, _context) do
-      {:ok, %{}, %StateOp.SetPath{path: [:marker], value: marker}}
+      {:ok, %{}, %StateOp.SetPath{path: [:__domain__, :marker], value: marker}}
     end
   end
 
@@ -169,7 +171,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
       signal = Signal.new!("counter.double", %{amount: 5}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:counter] == 10
+      assert agent.state[:__domain__][:counter] == 10
     end
 
     test "unmatched signals pass through unmodified", %{jido: jido} do
@@ -178,7 +180,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
       signal = Signal.new!("counter.increment", %{amount: 7}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:counter] == 7
+      assert agent.state[:__domain__][:counter] == 7
     end
 
     test "plugin can override with modified signal", %{jido: jido} do
@@ -187,8 +189,8 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
       signal = Signal.new!("counter.special", %{}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:marker] == "special_override"
-      assert agent.state[:counter] == 0
+      assert agent.state[:__domain__][:marker] == "special_override"
+      assert agent.state[:__domain__][:counter] == 0
     end
 
     test "signal modifications chain through multiple plugins", %{jido: jido} do
@@ -197,7 +199,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
       signal = Signal.new!("counter.increment", %{amount: 4}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:counter] == 12
+      assert agent.state[:__domain__][:counter] == 12
     end
   end
 
@@ -310,7 +312,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
 
       signal = Signal.new!("other.increment", %{amount: 5}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
-      assert agent.state[:counter] == 5
+      assert agent.state[:__domain__][:counter] == 5
     end
 
     test "plugin with empty patterns receives all signals", %{jido: jido} do
@@ -318,11 +320,11 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
 
       signal = Signal.new!("counter.increment", %{amount: 1}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
-      assert agent.state[:counter] == 101
+      assert agent.state[:__domain__][:counter] == 101
 
       signal2 = Signal.new!("other.action", %{amount: 1}, source: "/test")
       {:ok, agent2} = Jido.AgentServer.call(pid, signal2)
-      assert agent2.state[:counter] == 202
+      assert agent2.state[:__domain__][:counter] == 202
     end
 
     test "wildcard segment pattern matches correctly", %{jido: jido} do
@@ -337,7 +339,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
 
       signal = Signal.new!("api.user.delete", %{amount: 1}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
-      assert agent.state[:counter] == 1
+      assert agent.state[:__domain__][:counter] == 1
     end
 
     test "unrelated signals skip patterned plugins entirely", %{jido: jido} do
@@ -345,7 +347,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
 
       signal = Signal.new!("other.action", %{amount: 5}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
-      assert agent.state[:counter] == 5
+      assert agent.state[:__domain__][:counter] == 5
     end
   end
 
@@ -402,7 +404,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
       signal = Signal.new!("counter.increment", %{amount: 3}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:counter] == 3
+      assert agent.state[:__domain__][:counter] == 3
       assert agent.state[:last_action] == "IncrementAction"
     end
 
@@ -412,7 +414,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
       signal = Signal.new!("marker.set", %{marker: "hello"}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:marker] == "hello"
+      assert agent.state[:__domain__][:marker] == "hello"
       assert agent.state[:last_action] == "MarkAction"
     end
 
@@ -512,7 +514,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
       signal = Signal.new!("counter.increment", %{amount: 42}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:counter] == 42
+      assert agent.state[:__domain__][:counter] == 42
     end
 
     @tag capture_log: true
@@ -522,7 +524,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
       signal = Signal.new!("counter.increment", %{amount: 10}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:counter] == 10
+      assert agent.state[:__domain__][:counter] == 10
       assert Process.alive?(pid)
     end
   end
@@ -592,7 +594,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
       signal = Signal.new!("check.context", %{amount: 1}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:counter] == 1
+      assert agent.state[:__domain__][:counter] == 1
     end
 
     test "transform_result context includes plugin_instance", %{jido: jido} do
