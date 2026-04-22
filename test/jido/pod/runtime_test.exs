@@ -349,10 +349,10 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert {:ok, ^reviewer_pid} = InstanceManager.lookup(@reviewer_manager, reviewer_key)
 
     assert {:ok, planner_state} = AgentServer.state(planner_pid)
-    assert planner_state.agent.state.role == "planner"
+    assert planner_state.agent.state.__domain__.role == "planner"
 
     assert {:ok, reviewer_state} = AgentServer.state(reviewer_pid)
-    assert reviewer_state.agent.state.role == "override"
+    assert reviewer_state.agent.state.__domain__.role == "override"
   end
 
   test "restored pod managers can re-adopt surviving eager nodes", %{pod_key: pod_key} do
