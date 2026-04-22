@@ -206,18 +206,18 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
       signal = signal("process", %{value: 10})
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.counter == 10
-      assert agent.state.message == "processed"
+      assert agent.state.__domain__.counter == 10
+      assert agent.state.__domain__.message == "processed"
     end
 
     test "set_mode changes agent state", %{jido: jido} do
       {:ok, pid} = Jido.start_agent(jido, GatedAgent, id: unique_id("gated"))
 
       {:ok, agent} = AgentServer.call(pid, signal("set_mode", %{mode: :maintenance}))
-      assert agent.state.mode == :maintenance
+      assert agent.state.__domain__.mode == :maintenance
 
       {:ok, agent} = AgentServer.call(pid, signal("set_mode", %{mode: :admin}))
-      assert agent.state.mode == :admin
+      assert agent.state.__domain__.mode == :admin
     end
 
     test "admin action records commands", %{jido: jido} do
@@ -226,9 +226,9 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
       {:ok, _} = AgentServer.call(pid, signal("admin", %{command: "flush_cache"}))
       {:ok, agent} = AgentServer.call(pid, signal("admin", %{command: "restart_workers"}))
 
-      assert length(agent.state.admin_log) == 2
-      assert "restart_workers" in agent.state.admin_log
-      assert "flush_cache" in agent.state.admin_log
+      assert length(agent.state.__domain__.admin_log) == 2
+      assert "restart_workers" in agent.state.__domain__.admin_log
+      assert "flush_cache" in agent.state.__domain__.admin_log
     end
 
     test "sequential signals accumulate state correctly", %{jido: jido} do
@@ -241,9 +241,9 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
 
       {:ok, state} = AgentServer.state(pid)
 
-      assert state.agent.state.counter == 8
-      assert state.agent.state.mode == :admin
-      assert length(state.agent.state.admin_log) == 1
+      assert state.agent.state.__domain__.counter == 8
+      assert state.agent.state.__domain__.mode == :admin
+      assert length(state.agent.state.__domain__.admin_log) == 1
     end
   end
 end

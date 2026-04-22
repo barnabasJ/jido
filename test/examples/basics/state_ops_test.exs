@@ -130,8 +130,8 @@ defmodule JidoExampleTest.StateOpsTest do
       {agent, []} =
         FlexAgent.cmd(agent, {MergeMetadataAction, %{metadata: %{version: "1.0"}}})
 
-      assert agent.state.counter == 10
-      assert agent.state.name == "test"
+      assert agent.state.__domain__.counter == 10
+      assert agent.state.__domain__.name == "test"
       assert agent.state.metadata == %{version: "1.0"}
     end
 
@@ -156,8 +156,8 @@ defmodule JidoExampleTest.StateOpsTest do
           {ReplaceAllAction, %{new_state: %{counter: 0, name: "fresh", step: :reset}}}
         )
 
-      assert agent.state.counter == 0
-      assert agent.state.name == "fresh"
+      assert agent.state.__domain__.counter == 0
+      assert agent.state.__domain__.name == "fresh"
       assert agent.state.step == :reset
       refute Map.has_key?(agent.state, :metadata)
     end
@@ -169,7 +169,7 @@ defmodule JidoExampleTest.StateOpsTest do
 
       {agent, []} = FlexAgent.cmd(agent, ClearTempDataAction)
 
-      assert agent.state.counter == 5
+      assert agent.state.__domain__.counter == 5
       refute Map.has_key?(agent.state, :temp)
       refute Map.has_key?(agent.state, :cache)
     end
@@ -179,7 +179,7 @@ defmodule JidoExampleTest.StateOpsTest do
 
       {agent, []} = FlexAgent.cmd(agent, ClearTempDataAction)
 
-      assert agent.state.counter == 5
+      assert agent.state.__domain__.counter == 5
     end
   end
 
@@ -193,7 +193,7 @@ defmodule JidoExampleTest.StateOpsTest do
           {SetNestedValueAction, %{path: [:config, :timeout], value: 5000}}
         )
 
-      assert agent.state.config.timeout == 5000
+      assert agent.state.__domain__.config.timeout == 5000
     end
 
     test "SetPath creates intermediate maps if needed" do
@@ -205,7 +205,7 @@ defmodule JidoExampleTest.StateOpsTest do
           {SetNestedValueAction, %{path: [:config, :database, :host], value: "localhost"}}
         )
 
-      assert agent.state.config.database.host == "localhost"
+      assert agent.state.__domain__.config.database.host == "localhost"
     end
 
     test "SetPath preserves sibling keys" do
@@ -217,8 +217,8 @@ defmodule JidoExampleTest.StateOpsTest do
           {SetNestedValueAction, %{path: [:config, :timeout], value: 5000}}
         )
 
-      assert agent.state.config.timeout == 5000
-      assert agent.state.config.retries == 3
+      assert agent.state.__domain__.config.timeout == 5000
+      assert agent.state.__domain__.config.retries == 3
     end
   end
 
@@ -232,8 +232,8 @@ defmodule JidoExampleTest.StateOpsTest do
           {DeleteNestedValueAction, %{path: [:config, :secret]}}
         )
 
-      assert agent.state.config.timeout == 1000
-      refute Map.has_key?(agent.state.config, :secret)
+      assert agent.state.__domain__.config.timeout == 1000
+      refute Map.has_key?(agent.state.__domain__.config, :secret)
     end
   end
 
@@ -243,7 +243,7 @@ defmodule JidoExampleTest.StateOpsTest do
 
       {agent, []} = FlexAgent.cmd(agent, ComboAction)
 
-      assert agent.state.primary_result == "done"
+      assert agent.state.__domain__.primary_result == "done"
       assert agent.state.step == :completed
       refute Map.has_key?(agent.state, :temp)
     end

@@ -234,13 +234,13 @@ defmodule JidoExampleTest.PluginMiddlewareTest do
       {:ok, agent} =
         AgentServer.call(pid, Signal.new!("task.run", %{value: "a"}, source: "/test"))
 
-      assert agent.state.last_action == "process"
+      assert agent.state.__domain__.last_action == "process"
 
       {:ok, agent} =
         AgentServer.call(pid, Signal.new!("other.run", %{value: "b"}, source: "/test"))
 
-      assert agent.state.last_action == "process"
-      assert length(agent.state.log) == 2
+      assert agent.state.__domain__.last_action == "process"
+      assert length(agent.state.__domain__.log) == 2
     end
   end
 
@@ -251,8 +251,8 @@ defmodule JidoExampleTest.PluginMiddlewareTest do
       {:ok, agent} =
         AgentServer.call(pid, Signal.new!("task.run", %{value: "ok"}, source: "/test"))
 
-      assert agent.state.last_action == "process"
-      assert length(agent.state.log) == 1
+      assert agent.state.__domain__.last_action == "process"
+      assert length(agent.state.__domain__.log) == 1
 
       assert {:error, _} =
                AgentServer.call(
@@ -267,8 +267,8 @@ defmodule JidoExampleTest.PluginMiddlewareTest do
       {:ok, agent} =
         AgentServer.call(pid, Signal.new!("task.run", %{value: "plain"}, source: "/test"))
 
-      assert agent.state.last_action == "process"
-      assert hd(agent.state.log) == "plain"
+      assert agent.state.__domain__.last_action == "process"
+      assert hd(agent.state.__domain__.log) == "plain"
     end
   end
 
@@ -282,8 +282,8 @@ defmodule JidoExampleTest.PluginMiddlewareTest do
           Signal.new!("admin.override", %{value: "secret"}, source: "/test")
         )
 
-      assert agent.state.last_action == "admin"
-      assert hd(agent.state.log) =~ "admin:"
+      assert agent.state.__domain__.last_action == "admin"
+      assert hd(agent.state.__domain__.log) =~ "admin:"
     end
 
     test "non-overridden signals use normal routing", %{jido: jido} do
@@ -295,8 +295,8 @@ defmodule JidoExampleTest.PluginMiddlewareTest do
           Signal.new!("admin.normal", %{value: "regular"}, source: "/test")
         )
 
-      assert agent.state.last_action == "process"
-      assert hd(agent.state.log) == "regular"
+      assert agent.state.__domain__.last_action == "process"
+      assert hd(agent.state.__domain__.log) == "regular"
     end
   end
 
@@ -307,7 +307,7 @@ defmodule JidoExampleTest.PluginMiddlewareTest do
       {:ok, agent} =
         AgentServer.call(pid, Signal.new!("task.run", %{value: "data"}, source: "/test"))
 
-      assert agent.state.last_action == "process"
+      assert agent.state.__domain__.last_action == "process"
       assert agent.state[:enriched] == true
       assert agent.state[:enriched_at] != nil
 

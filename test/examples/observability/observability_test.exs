@@ -176,7 +176,7 @@ defmodule JidoExampleTest.ObservabilityTest do
       signal = Signal.new!("observed_work", %{work_units: 5}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.last_result == 10
+      assert agent.state.__domain__.last_result == 10
 
       eventually(fn ->
         events = TelemetryCollector.get_events(collector)
@@ -262,7 +262,7 @@ defmodule JidoExampleTest.ObservabilityTest do
       signal = Signal.new!("observed_async", %{delay_ms: 5}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.async_result == 15
+      assert agent.state.__domain__.async_result == 15
 
       eventually(fn ->
         events = TelemetryCollector.get_events(collector)

@@ -229,7 +229,7 @@ defmodule JidoExampleTest.SpawnAgentTest do
       signal = Signal.new!("spawn_worker", %{tag: :worker_1}, source: "/test")
       {:ok, agent} = AgentServer.call(parent_pid, signal)
 
-      assert agent.state.last_spawned == :worker_1
+      assert agent.state.__domain__.last_spawned == :worker_1
 
       child_info = await_child(parent_pid, :worker_1)
       assert child_info.module == WorkerAgent
@@ -250,11 +250,11 @@ defmodule JidoExampleTest.SpawnAgentTest do
       child_info = await_child(parent_pid, :notified_worker)
 
       eventually_state(parent_pid, fn state ->
-        state.agent.state.child_started_events != []
+        state.agent.state.__domain__.child_started_events != []
       end)
 
       {:ok, state} = AgentServer.state(parent_pid)
-      [event | _] = state.agent.state.child_started_events
+      [event | _] = state.agent.state.__domain__.child_started_events
 
       assert event.tag == :notified_worker
       assert event.pid == child_info.pid
@@ -326,8 +326,8 @@ defmodule JidoExampleTest.SpawnAgentTest do
       result = AgentServer.call(child_info.pid, work_signal)
 
       {:ok, child_agent} = result
-      assert child_agent.state.status == :completed
-      assert child_agent.state.last_task == "process data"
+      assert child_agent.state.__domain__.status == :completed
+      assert child_agent.state.__domain__.last_task == "process data"
 
       eventually_state(parent_pid, fn state ->
         state.agent.state.worker_results != []
@@ -360,7 +360,7 @@ defmodule JidoExampleTest.SpawnAgentTest do
       stop_signal = Signal.new!("stop_worker", %{tag: :stopable_worker}, source: "/test")
       {:ok, agent} = AgentServer.call(parent_pid, stop_signal)
 
-      assert agent.state.last_stopped == :stopable_worker
+      assert agent.state.__domain__.last_stopped == :stopable_worker
 
       assert_receive {:DOWN, ^child_ref, :process, _, _}, 1000
 
@@ -372,7 +372,7 @@ defmodule JidoExampleTest.SpawnAgentTest do
 
       {:ok, parent_state} = AgentServer.state(parent_pid)
 
-      assert Enum.count(parent_state.agent.state.child_started_events, fn event ->
+      assert Enum.count(parent_state.agent.state.__domain__.child_started_events, fn event ->
                event.tag == :stopable_worker
              end) == 1
 
@@ -394,7 +394,7 @@ defmodule JidoExampleTest.SpawnAgentTest do
 
       {:ok, agent} = AgentServer.call(parent_pid, stop_signal)
 
-      assert agent.state.last_stopped == :cleanup_worker
+      assert agent.state.__domain__.last_stopped == :cleanup_worker
       assert_receive {:DOWN, ^child_ref, :process, _, {:shutdown, :cleanup}}, 1000
 
       eventually_state(parent_pid, fn state ->
@@ -405,7 +405,7 @@ defmodule JidoExampleTest.SpawnAgentTest do
 
       {:ok, parent_state} = AgentServer.state(parent_pid)
 
-      assert Enum.count(parent_state.agent.state.child_started_events, fn event ->
+      assert Enum.count(parent_state.agent.state.__domain__.child_started_events, fn event ->
                event.tag == :cleanup_worker
              end) == 1
 
@@ -453,15 +453,15 @@ defmodule JidoExampleTest.SpawnAgentTest do
       assert Jido.whereis(jido, child_info.id) == restarted_child.pid
 
       eventually_state(parent_pid, fn state ->
-        Enum.any?(state.agent.state.child_started_events, &(&1.pid == restarted_child.pid))
+        Enum.any?(state.agent.state.__domain__.child_started_events, &(&1.pid == restarted_child.pid))
       end)
 
       {:ok, parent_state} = AgentServer.state(parent_pid)
 
-      assert Enum.any?(parent_state.agent.state.child_started_events, &(&1.pid == child_pid))
+      assert Enum.any?(parent_state.agent.state.__domain__.child_started_events, &(&1.pid == child_pid))
 
       assert Enum.any?(
-               parent_state.agent.state.child_started_events,
+               parent_state.agent.state.__domain__.child_started_events,
                &(&1.pid == restarted_child.pid)
              )
 

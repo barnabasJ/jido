@@ -287,7 +287,7 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
       child_pid = await_child_pid(original_parent_pid, :primary_worker)
 
       eventually_state(original_parent_pid, fn state ->
-        length(state.agent.state.started_children) == 1
+        length(state.agent.state.__domain__.started_children) == 1
       end)
 
       attached_report =
@@ -296,11 +296,11 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
       {:ok, _agent} = AgentServer.call(child_pid, attached_report)
 
       eventually_state(original_parent_pid, fn state ->
-        length(state.agent.state.received_messages) == 1
+        length(state.agent.state.__domain__.received_messages) == 1
       end)
 
       {:ok, original_parent_state} = AgentServer.state(original_parent_pid)
-      [attached_message] = original_parent_state.agent.state.received_messages
+      [attached_message] = original_parent_state.agent.state.__domain__.received_messages
       assert attached_message.text == "attached hello"
       assert attached_message.current_parent_id == original_parent_id
 
@@ -393,11 +393,11 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
       {:ok, _agent} = AgentServer.call(child_pid, adopted_report)
 
       eventually_state(replacement_parent_pid, fn state ->
-        length(state.agent.state.received_messages) == 1
+        length(state.agent.state.__domain__.received_messages) == 1
       end)
 
       {:ok, replacement_parent_state} = AgentServer.state(replacement_parent_pid)
-      [adopted_message] = replacement_parent_state.agent.state.received_messages
+      [adopted_message] = replacement_parent_state.agent.state.__domain__.received_messages
       assert adopted_message.text == "adopted hello"
       assert adopted_message.current_parent_id == replacement_parent_id
 
@@ -509,7 +509,7 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
       {:ok, _agent} = AgentServer.call(restarted_child_pid, adopted_report)
 
       eventually_state(replacement_parent_pid, fn state ->
-        Enum.any?(state.agent.state.received_messages, fn message ->
+        Enum.any?(state.agent.state.__domain__.received_messages, fn message ->
           message.text == "after restart" and
             message.current_parent_id == replacement_parent_id
         end)
@@ -610,7 +610,7 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
           {:ok, _agent} = AgentServer.call(pid, report_signal)
 
           eventually_state(parent_pid, fn state ->
-            Enum.any?(state.agent.state.received_messages, fn message ->
+            Enum.any?(state.agent.state.__domain__.received_messages, fn message ->
               message.text == "cycle #{meta.cycle}" and message.current_parent_id == parent_id
             end)
           end)

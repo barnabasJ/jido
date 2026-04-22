@@ -68,8 +68,8 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
       assert restored.state.__identity__.profile[:age] == 5
       assert restored.state.__identity__.profile[:origin] == :test
 
-      assert restored.state.counter == 10
-      assert restored.state.status == :active
+      assert restored.state.__domain__.counter == 10
+      assert restored.state.__domain__.status == :active
     end
   end
 
@@ -95,7 +95,7 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
       assert length(tasks_space.data) == 1
       assert Enum.at(tasks_space.data, 0).id == "t1"
 
-      assert restored.state.counter == 5
+      assert restored.state.__domain__.counter == 5
     end
   end
 
@@ -136,8 +136,8 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
       assert Thread.entry_count(rehydrated_thread) == 2
 
       # Regular state preserved
-      assert restored.state.counter == 42
-      assert restored.state.status == :processing
+      assert restored.state.__domain__.counter == 42
+      assert restored.state.__domain__.status == :processing
     end
   end
 
@@ -151,7 +151,7 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, restored} = Persist.thaw(storage(table), FullAgent, "no-plugins-1")
 
-      assert restored.state.counter == 7
+      assert restored.state.__domain__.counter == 7
       refute IdentityAgent.has_identity?(restored)
       refute MemoryAgent.has_memory?(restored)
       refute ThreadAgent.has_thread?(restored)

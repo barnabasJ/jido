@@ -256,14 +256,14 @@ defmodule JidoExampleTest.SensorDemoTest do
         eventually_state(
           agent_pid,
           fn state ->
-            quotes = state.agent.state.quotes
+            quotes = state.agent.state.__domain__.quotes
             match?([_, _ | _], quotes)
           end,
           timeout: 5_000,
           interval: 50
         )
 
-      quotes = state.agent.state.quotes
+      quotes = state.agent.state.__domain__.quotes
       assert length(quotes) >= 2, "Expected at least 2 quotes, got #{length(quotes)}"
 
       assert Enum.all?(quotes, fn q ->
@@ -297,14 +297,14 @@ defmodule JidoExampleTest.SensorDemoTest do
         eventually_state(
           agent_pid,
           fn state ->
-            events = state.agent.state.events
+            events = state.agent.state.__domain__.events
             match?([_, _ | _], events)
           end,
           timeout: 5_000,
           interval: 50
         )
 
-      events = state.agent.state.events
+      events = state.agent.state.__domain__.events
       github_event = Enum.find(events, &(&1.source == :github))
       stripe_event = Enum.find(events, &(&1.source == :stripe))
 
@@ -338,7 +338,7 @@ defmodule JidoExampleTest.SensorDemoTest do
       # Wait for some quotes, then inject webhooks
       eventually_state(
         agent_pid,
-        fn state -> state.agent.state.quotes != [] end,
+        fn state -> state.agent.state.__domain__.quotes != [] end,
         timeout: 3_000,
         interval: 50
       )
@@ -352,8 +352,8 @@ defmodule JidoExampleTest.SensorDemoTest do
         eventually_state(
           agent_pid,
           fn state ->
-            quotes = state.agent.state.quotes
-            events = state.agent.state.events
+            quotes = state.agent.state.__domain__.quotes
+            events = state.agent.state.__domain__.events
             length(quotes) >= 2 and length(events) == 2
           end,
           timeout: 5_000,
@@ -361,10 +361,10 @@ defmodule JidoExampleTest.SensorDemoTest do
         )
 
       # Should have at least 2 quotes from sensor
-      assert length(state.agent.state.quotes) >= 2
+      assert length(state.agent.state.__domain__.quotes) >= 2
 
       # Should have both webhook events
-      events = state.agent.state.events
+      events = state.agent.state.__domain__.events
       assert length(events) == 2
 
       sources = Enum.map(events, & &1.source) |> Enum.sort()

@@ -422,8 +422,8 @@ defmodule JidoExampleTest.ParentChildTest do
 
       {:ok, agent} = AgentServer.call(orphan_pid, signal)
 
-      assert agent.state.last_processed.result == 10
-      assert agent.state.last_processed.request_id == "orphan-req"
+      assert agent.state.__domain__.last_processed.result == 10
+      assert agent.state.__domain__.last_processed.request_id == "orphan-req"
     end
 
     test "child with parent successfully emits to parent", %{jido: jido} do

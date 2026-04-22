@@ -147,8 +147,8 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
       default = DefaultAgent.new(state: %{status: :running})
       overridden = OverriddenAgent.new(state: %{status: :running})
 
-      assert default.state.status == :running
-      assert overridden.state.status == :running
+      assert default.state.__domain__.status == :running
+      assert overridden.state.__domain__.status == :running
 
       assert overridden.state.__thread__.custom_initialized == true
     end

@@ -664,7 +664,7 @@ defmodule JidoExampleTest.HierarchicalAgentsTest do
         )
 
       {:ok, agent_after_submit} = AgentServer.call(orchestrator_pid, signal)
-      assert map_size(agent_after_submit.state.pending_jobs) == 1
+      assert map_size(agent_after_submit.state.__domain__.pending_jobs) == 1
 
       eventually(
         fn ->
@@ -680,7 +680,7 @@ defmodule JidoExampleTest.HierarchicalAgentsTest do
       )
 
       {:ok, final_state} = AgentServer.state(orchestrator_pid)
-      assert map_size(final_state.agent.state.pending_jobs) == 0
+      assert map_size(final_state.agent.state.__domain__.pending_jobs) == 0
       assert length(final_state.agent.state.completed_jobs) == 1
     end
   end

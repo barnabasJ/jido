@@ -201,7 +201,7 @@ defmodule JidoExampleTest.FSMAgentTest do
       {agent, _directives} =
         run_cmd(CustomTransitionAgent, agent, {IncrementCounter, %{amount: 10}})
 
-      assert agent.state.counter == 10
+      assert agent.state.__domain__.counter == 10
 
       snapshot = FSM.snapshot(agent, %{})
       assert snapshot.details.fsm_state == "ready"
@@ -279,7 +279,7 @@ defmodule JidoExampleTest.FSMAgentTest do
           {ProcessWorkAction, %{work_item: "work-b"}}
         ])
 
-      assert agent.state.counter == 15
+      assert agent.state.__domain__.counter == 15
       assert agent.state.processed_items == ["work-a", "work-b"]
 
       snapshot = FSM.snapshot(agent, %{})

@@ -130,7 +130,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
       {agent, []} =
         ChatAgent.cmd(agent, {RecordMessageAction, %{role: "user", content: "hello"}})
 
-      assert agent.state.last_role == "user"
+      assert agent.state.__domain__.last_role == "user"
       assert ThreadAgent.has_thread?(agent)
 
       messages = Thread.filter_by_kind(ThreadAgent.get(agent), :message)
@@ -167,7 +167,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
       assert length(instruction_starts) > 0
 
       {agent, []} = ChatAgent.cmd(agent, SummarizeAction)
-      assert agent.state.summary == "3 messages in thread"
+      assert agent.state.__domain__.summary == "3 messages in thread"
     end
   end
 
@@ -224,7 +224,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
       {:ok, agent} =
         AgentServer.call(pid, signal("summarize"))
 
-      assert agent.state.summary == "2 messages in thread"
+      assert agent.state.__domain__.summary == "2 messages in thread"
     end
   end
 end

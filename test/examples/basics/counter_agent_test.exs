@@ -81,15 +81,15 @@ defmodule JidoExampleTest.CounterAgentTest do
     test "agent starts with default schema values" do
       agent = CounterAgent.new()
 
-      assert agent.state.counter == 0
-      assert agent.state.name == "unnamed"
+      assert agent.state.__domain__.counter == 0
+      assert agent.state.__domain__.name == "unnamed"
     end
 
     test "agent can be created with initial state" do
       agent = CounterAgent.new(state: %{counter: 10, name: "my-counter"})
 
-      assert agent.state.counter == 10
-      assert agent.state.name == "my-counter"
+      assert agent.state.__domain__.counter == 10
+      assert agent.state.__domain__.name == "my-counter"
     end
   end
 
@@ -99,9 +99,9 @@ defmodule JidoExampleTest.CounterAgentTest do
 
       {updated_agent, directives} = CounterAgent.cmd(agent, {IncrementAction, %{amount: 5}})
 
-      assert updated_agent.state.counter == 5
+      assert updated_agent.state.__domain__.counter == 5
       assert directives == []
-      assert agent.state.counter == 0
+      assert agent.state.__domain__.counter == 0
     end
 
     test "cmd/2 with default action params" do
@@ -109,7 +109,7 @@ defmodule JidoExampleTest.CounterAgentTest do
 
       {updated_agent, _directives} = CounterAgent.cmd(agent, IncrementAction)
 
-      assert updated_agent.state.counter == 11
+      assert updated_agent.state.__domain__.counter == 11
     end
 
     test "multiple cmd/2 calls chain state updates" do
@@ -119,7 +119,7 @@ defmodule JidoExampleTest.CounterAgentTest do
       {agent, []} = CounterAgent.cmd(agent, {IncrementAction, %{amount: 5}})
       {agent, []} = CounterAgent.cmd(agent, {DecrementAction, %{amount: 3}})
 
-      assert agent.state.counter == 12
+      assert agent.state.__domain__.counter == 12
     end
 
     test "cmd/2 with list of actions executes all in sequence" do
@@ -132,7 +132,7 @@ defmodule JidoExampleTest.CounterAgentTest do
           {DecrementAction, %{amount: 2}}
         ])
 
-      assert agent.state.counter == 13
+      assert agent.state.__domain__.counter == 13
       assert directives == []
     end
 
@@ -141,7 +141,7 @@ defmodule JidoExampleTest.CounterAgentTest do
 
       {agent, []} = CounterAgent.cmd(agent, ResetAction)
 
-      assert agent.state.counter == 0
+      assert agent.state.__domain__.counter == 0
     end
   end
 
@@ -151,7 +151,7 @@ defmodule JidoExampleTest.CounterAgentTest do
 
       {agent, []} = CounterAgent.cmd(agent, {IncrementAction, %{amount: 42}})
 
-      assert agent.state.counter == 42
+      assert agent.state.__domain__.counter == 42
     end
 
     test "action uses default when param omitted" do
@@ -159,7 +159,7 @@ defmodule JidoExampleTest.CounterAgentTest do
 
       {agent, []} = CounterAgent.cmd(agent, {IncrementAction, %{}})
 
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.counter == 1
     end
   end
 end

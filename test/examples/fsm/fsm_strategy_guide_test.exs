@@ -123,7 +123,7 @@ defmodule JidoExampleTest.FSMStrategyGuideTest do
       agent = wait_for_idle!(pid)
       snap = OrderAgent.strategy_snapshot(agent)
 
-      assert agent.state.order_status == :confirmed
+      assert agent.state.__domain__.order_status == :confirmed
       assert snap.details.fsm_state == "ready"
       assert snap.details.processed_count == 1
 
@@ -133,7 +133,7 @@ defmodule JidoExampleTest.FSMStrategyGuideTest do
       agent = wait_for_idle!(pid)
       snap = OrderAgent.strategy_snapshot(agent)
 
-      assert agent.state.order_status == :shipped
+      assert agent.state.__domain__.order_status == :shipped
       assert agent.state.shipped_via == "FedEx Express"
       assert agent.state.shipped_at != nil
       assert snap.details.fsm_state == "ready"
@@ -143,7 +143,7 @@ defmodule JidoExampleTest.FSMStrategyGuideTest do
       agent = wait_for_idle!(pid)
       snap = OrderAgent.strategy_snapshot(agent)
 
-      assert agent.state.order_status == :delivered
+      assert agent.state.__domain__.order_status == :delivered
       assert agent.state.delivered_at != nil
       assert snap.details.fsm_state == "ready"
       assert snap.details.processed_count == 3

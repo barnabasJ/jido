@@ -209,8 +209,8 @@ defmodule JidoExampleTest.EmitDirectiveTest do
 
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.last_order_id == "ORD-001"
-      assert length(agent.state.orders) == 1
+      assert agent.state.__domain__.last_order_id == "ORD-001"
+      assert length(agent.state.__domain__.orders) == 1
 
       eventually(
         fn ->
@@ -262,8 +262,8 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         )
 
       {:ok, state} = AgentServer.state(pid)
-      assert state.agent.state.last_order_id == "ORD-100"
-      assert state.agent.state.last_payment.status == :success
+      assert state.agent.state.__domain__.last_order_id == "ORD-100"
+      assert state.agent.state.__domain__.last_payment.status == :success
 
       eventually(
         fn ->
@@ -298,7 +298,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
       signal = Signal.new!("multi_emit", %{event_count: 5}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.emitted_count == 5
+      assert agent.state.__domain__.emitted_count == 5
 
       eventually(
         fn ->

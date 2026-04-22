@@ -105,7 +105,7 @@ defmodule JidoExampleTest.SignalRoutingTest do
       signal = Signal.new!("increment", %{amount: 5}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.counter == 5
+      assert agent.state.__domain__.counter == 5
     end
 
     test "different signal types route to different actions", %{jido: jido} do
@@ -117,8 +117,8 @@ defmodule JidoExampleTest.SignalRoutingTest do
       name_signal = Signal.new!("set_name", %{name: "TestAgent"}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, name_signal)
 
-      assert agent.state.counter == 10
-      assert agent.state.name == "TestAgent"
+      assert agent.state.__domain__.counter == 10
+      assert agent.state.__domain__.name == "TestAgent"
     end
 
     test "signal data is passed as action params", %{jido: jido} do
@@ -133,8 +133,8 @@ defmodule JidoExampleTest.SignalRoutingTest do
 
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert length(agent.state.events) == 1
-      [event] = agent.state.events
+      assert length(agent.state.__domain__.events) == 1
+      [event] = agent.state.__domain__.events
       assert event.type == "user.created"
       assert event.payload == %{user_id: 123}
     end
@@ -156,7 +156,7 @@ defmodule JidoExampleTest.SignalRoutingTest do
           agent
         end)
 
-      assert final_agent.state.counter == 6
+      assert final_agent.state.__domain__.counter == 6
     end
 
     test "different signal types interleave correctly", %{jido: jido} do
@@ -177,9 +177,9 @@ defmodule JidoExampleTest.SignalRoutingTest do
 
       {:ok, state} = AgentServer.state(pid)
 
-      assert state.agent.state.counter == 8
-      assert state.agent.state.name == "Counter"
-      assert length(state.agent.state.events) == 1
+      assert state.agent.state.__domain__.counter == 8
+      assert state.agent.state.__domain__.name == "Counter"
+      assert length(state.agent.state.__domain__.events) == 1
     end
   end
 
@@ -192,7 +192,7 @@ defmodule JidoExampleTest.SignalRoutingTest do
 
       eventually_state(
         pid,
-        fn state -> state.agent.state.counter == 7 end,
+        fn state -> state.agent.state.__domain__.counter == 7 end,
         timeout: 2_000
       )
     end
@@ -207,7 +207,7 @@ defmodule JidoExampleTest.SignalRoutingTest do
 
       eventually_state(
         pid,
-        fn state -> state.agent.state.counter == 15 end,
+        fn state -> state.agent.state.__domain__.counter == 15 end,
         timeout: 2_000
       )
     end

@@ -82,7 +82,7 @@ defmodule JidoExampleTest.CheckpointRestoreTest do
 
       {:ok, checkpoint} = CheckpointableAgent.checkpoint(agent, %{})
 
-      assert checkpoint.state.counter == 42
+      assert checkpoint.state.__domain__.counter == 42
     end
   end
 
@@ -153,7 +153,7 @@ defmodule JidoExampleTest.CheckpointRestoreTest do
 
       {:ok, checkpoint} = CheckpointableAgent.checkpoint(agent, %{})
 
-      assert checkpoint.state.counter == 99
+      assert checkpoint.state.__domain__.counter == 99
       refute Map.has_key?(checkpoint.state, :cache)
       refute Map.has_key?(checkpoint.state, :session)
       refute Map.has_key?(checkpoint.state, :__thread__)

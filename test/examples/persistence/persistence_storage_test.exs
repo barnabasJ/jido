@@ -58,8 +58,8 @@ defmodule JidoExampleTest.PersistenceStorageTest do
       {:ok, restored} = Persist.thaw(storage(table), PersistableAgent, "rt-1")
 
       assert restored.id == "rt-1"
-      assert restored.state.counter == 42
-      assert restored.state.status == :active
+      assert restored.state.__domain__.counter == 42
+      assert restored.state.__domain__.status == :active
       assert restored.state.notes == ["hello"]
     end
 
@@ -75,14 +75,14 @@ defmodule JidoExampleTest.PersistenceStorageTest do
       agent = PersistableAgent.new(id: "mutate-1")
 
       agent = %{agent | state: %{agent.state | counter: 1}}
-      agent = %{agent | state: %{agent.state | counter: agent.state.counter + 9}}
+      agent = %{agent | state: %{agent.state | counter: agent.state.__domain__.counter + 9}}
       agent = %{agent | state: %{agent.state | status: :processing, notes: ["step1", "step2"]}}
 
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, restored} = Persist.thaw(storage(table), PersistableAgent, "mutate-1")
 
-      assert restored.state.counter == 10
-      assert restored.state.status == :processing
+      assert restored.state.__domain__.counter == 10
+      assert restored.state.__domain__.status == :processing
       assert restored.state.notes == ["step1", "step2"]
     end
   end
@@ -124,7 +124,7 @@ defmodule JidoExampleTest.PersistenceStorageTest do
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, restored} = Persist.thaw(storage(table), PersistableAgent, "thread-2")
 
-      assert restored.state.counter == 7
+      assert restored.state.__domain__.counter == 7
 
       rehydrated = restored.state[:__thread__]
       assert rehydrated.id == "thread-restore-1"
@@ -148,10 +148,10 @@ defmodule JidoExampleTest.PersistenceStorageTest do
       {:ok, restored_a} = Persist.thaw(storage(table), PersistableAgent, "multi-a")
       {:ok, restored_b} = Persist.thaw(storage(table), PersistableAgent, "multi-b")
 
-      assert restored_a.state.counter == 100
-      assert restored_a.state.status == :done
+      assert restored_a.state.__domain__.counter == 100
+      assert restored_a.state.__domain__.status == :done
 
-      assert restored_b.state.counter == 200
+      assert restored_b.state.__domain__.counter == 200
       assert restored_b.state.notes == ["important"]
     end
   end
