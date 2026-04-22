@@ -1,6 +1,7 @@
 # 0001. Pod children boot with parent ref pre-set
 
 - Status: Accepted
+- Implementation: Complete
 - Date: 2026-04-20
 - Related commits: `17bbff7`, `4e57d6c`, `68f3ab4`
 

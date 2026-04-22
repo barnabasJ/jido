@@ -1,9 +1,11 @@
 # 0007. Start is the only operation; ready is the only lifecycle signal agents route
 
 - Status: Proposed
+- Implementation: Pending — see [0007-implementation.md](0007-implementation.md)
 - Date: 2026-04-22
-- Related commits: TBD (regression exemplified at `d85907f`)
-- Implementation plan: [0007-implementation.md](0007-implementation.md)
+- Related commits: `ed6abf4` (initial draft), `be37376` (rewrite),
+  `30def1e` (implementation plan). No behaviour commits yet; regression
+  exemplified at `d85907f`.
 - Supersedes `TBD` — none yet, but this revision (2026-04-22 afternoon)
   strengthens an earlier draft that distinguished fresh from thaw;
   the final form erases the distinction entirely.

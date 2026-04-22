@@ -1,6 +1,7 @@
 # 0002. Request/reply over signals (`Jido.Signal.Call`)
 
 - Status: Accepted
+- Implementation: Complete
 - Date: 2026-04-20
 - Related commits: `cb47212`, `8abfce6`
 

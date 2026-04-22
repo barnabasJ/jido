@@ -1,8 +1,9 @@
 # NNNN. Title
 
 - Status: Proposed | Accepted | Deprecated | Superseded by NNNN
+- Implementation: Pending | Partial | Complete
 - Date: YYYY-MM-DD
-- Related commits / PRs: `<sha>`, `<sha>`
+- Related commits / PRs: `<sha>`, `<sha>` (or `—` if none yet)
 
 ## Context
 

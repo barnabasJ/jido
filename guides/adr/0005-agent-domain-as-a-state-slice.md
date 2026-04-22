@@ -1,9 +1,10 @@
 # 0005. Agent domain state is a first-class `state_key` slice
 
 - Status: Accepted
+- Implementation: Complete
 - Date: 2026-04-21
 - Related ADRs: [0003](0003-server-state-access-lives-in-directives.md)
-- Related commits: TBD
+- Related commits: `4fb20c1` (ADR), `743f036` (implementation)
 
 ## Context
 
