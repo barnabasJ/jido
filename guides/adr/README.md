@@ -47,3 +47,4 @@ SHAs that implemented the decision (or `—` if none yet).
 | [0009](0009-inline-signal-processing.md) | Inline signal processing; signals are the only async-completion vehicle | Accepted | Complete |
 | [0010](0010-waiting-via-ack-and-subscribe.md) | Waiting on agents uses per-signal ack + subscribe, selector-based | Proposed | Pending |
 | [0011](0011-retire-strategy-plugins-are-control-flow.md) | Retire `Strategy`; control-flow patterns live as plugins | Proposed | Pending |
+| [0012](0012-middleware-for-cross-cutting-concerns.md) | Middleware for cross-cutting concerns | Proposed | Pending |
