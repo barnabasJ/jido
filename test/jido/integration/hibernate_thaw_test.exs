@@ -55,9 +55,9 @@ defmodule JidoTest.Integration.HibernateThawTest do
       :ok = Jido.Persist.hibernate(jido, agent)
       {:ok, thawed} = Jido.Persist.thaw(jido, WorkflowAgent, "basic-roundtrip-3")
 
-      assert thawed.state.step == 0
-      assert thawed.state.status == :pending
-      assert thawed.state.data == %{}
+      assert thawed.state.__domain__.step == 0
+      assert thawed.state.__domain__.status == :pending
+      assert thawed.state.__domain__.data == %{}
     end
   end
 
@@ -153,34 +153,34 @@ defmodule JidoTest.Integration.HibernateThawTest do
     test "modified step value is preserved" do
       jido = create_jido_instance(unique_table())
       agent = WorkflowAgent.new(id: "state-mut-1")
-      agent = %{agent | state: %{agent.state | step: 5}}
+      agent = %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | step: 5}}}
 
       :ok = Jido.Persist.hibernate(jido, agent)
       {:ok, thawed} = Jido.Persist.thaw(jido, WorkflowAgent, "state-mut-1")
 
-      assert thawed.state.step == 5
+      assert thawed.state.__domain__.step == 5
     end
 
     test "modified status value is preserved" do
       jido = create_jido_instance(unique_table())
       agent = WorkflowAgent.new(id: "state-mut-2")
-      agent = %{agent | state: %{agent.state | status: :completed}}
+      agent = %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | status: :completed}}}
 
       :ok = Jido.Persist.hibernate(jido, agent)
       {:ok, thawed} = Jido.Persist.thaw(jido, WorkflowAgent, "state-mut-2")
 
-      assert thawed.state.status == :completed
+      assert thawed.state.__domain__.status == :completed
     end
 
     test "modified data map is preserved" do
       jido = create_jido_instance(unique_table())
       agent = WorkflowAgent.new(id: "state-mut-3")
-      agent = %{agent | state: %{agent.state | data: %{user_id: "u123", items: ["a", "b", "c"]}}}
+      agent = %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | data: %{user_id: "u123", items: ["a", "b", "c"]}}}}
 
       :ok = Jido.Persist.hibernate(jido, agent)
       {:ok, thawed} = Jido.Persist.thaw(jido, WorkflowAgent, "state-mut-3")
 
-      assert thawed.state.data == %{user_id: "u123", items: ["a", "b", "c"]}
+      assert thawed.state.__domain__.data == %{user_id: "u123", items: ["a", "b", "c"]}
     end
 
     test "all state fields are preserved together" do
@@ -191,18 +191,21 @@ defmodule JidoTest.Integration.HibernateThawTest do
         agent
         | state: %{
             agent.state
-            | step: 10,
-              status: :in_progress,
-              data: %{key: "value", count: 42}
+            | __domain__: %{
+                agent.state.__domain__
+                | step: 10,
+                  status: :in_progress,
+                  data: %{key: "value", count: 42}
+              }
           }
       }
 
       :ok = Jido.Persist.hibernate(jido, agent)
       {:ok, thawed} = Jido.Persist.thaw(jido, WorkflowAgent, "state-mut-4")
 
-      assert thawed.state.step == 10
-      assert thawed.state.status == :in_progress
-      assert thawed.state.data == %{key: "value", count: 42}
+      assert thawed.state.__domain__.step == 10
+      assert thawed.state.__domain__.status == :in_progress
+      assert thawed.state.__domain__.data == %{key: "value", count: 42}
     end
   end
 
@@ -211,13 +214,13 @@ defmodule JidoTest.Integration.HibernateThawTest do
       jido = create_jido_instance(unique_table())
 
       agent1 = WorkflowAgent.new(id: "multi-agent-1")
-      agent1 = %{agent1 | state: %{agent1.state | step: 1, status: :first}}
+      agent1 = %{agent1 | state: %{agent1.state | __domain__: %{agent1.state.__domain__ | step: 1, status: :first}}}
 
       agent2 = WorkflowAgent.new(id: "multi-agent-2")
-      agent2 = %{agent2 | state: %{agent2.state | step: 2, status: :second}}
+      agent2 = %{agent2 | state: %{agent2.state | __domain__: %{agent2.state.__domain__ | step: 2, status: :second}}}
 
       agent3 = WorkflowAgent.new(id: "multi-agent-3")
-      agent3 = %{agent3 | state: %{agent3.state | step: 3, status: :third}}
+      agent3 = %{agent3 | state: %{agent3.state | __domain__: %{agent3.state.__domain__ | step: 3, status: :third}}}
 
       :ok = Jido.Persist.hibernate(jido, agent1)
       :ok = Jido.Persist.hibernate(jido, agent2)
@@ -228,16 +231,16 @@ defmodule JidoTest.Integration.HibernateThawTest do
       {:ok, thawed3} = Jido.Persist.thaw(jido, WorkflowAgent, "multi-agent-3")
 
       assert thawed1.id == "multi-agent-1"
-      assert thawed1.state.step == 1
-      assert thawed1.state.status == :first
+      assert thawed1.state.__domain__.step == 1
+      assert thawed1.state.__domain__.status == :first
 
       assert thawed2.id == "multi-agent-2"
-      assert thawed2.state.step == 2
-      assert thawed2.state.status == :second
+      assert thawed2.state.__domain__.step == 2
+      assert thawed2.state.__domain__.status == :second
 
       assert thawed3.id == "multi-agent-3"
-      assert thawed3.state.step == 3
-      assert thawed3.state.status == :third
+      assert thawed3.state.__domain__.step == 3
+      assert thawed3.state.__domain__.status == :third
     end
 
     test "multiple agents with threads can be hibernated and thawed independently" do
@@ -290,35 +293,35 @@ defmodule JidoTest.Integration.HibernateThawTest do
       jido = create_jido_instance(unique_table())
       agent = WorkflowAgent.new(id: "overwrite-1")
 
-      agent_v1 = %{agent | state: %{agent.state | step: 1, status: :version1}}
+      agent_v1 = %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | step: 1, status: :version1}}}
       :ok = Jido.Persist.hibernate(jido, agent_v1)
 
-      agent_v2 = %{agent | state: %{agent.state | step: 2, status: :version2}}
+      agent_v2 = %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | step: 2, status: :version2}}}
       :ok = Jido.Persist.hibernate(jido, agent_v2)
 
       {:ok, thawed} = Jido.Persist.thaw(jido, WorkflowAgent, "overwrite-1")
 
-      assert thawed.state.step == 2
-      assert thawed.state.status == :version2
+      assert thawed.state.__domain__.step == 2
+      assert thawed.state.__domain__.status == :version2
     end
 
     test "thaw → modify → hibernate → thaw preserves modifications" do
       jido = create_jido_instance(unique_table())
       agent = WorkflowAgent.new(id: "overwrite-2")
-      agent = %{agent | state: %{agent.state | step: 1}}
+      agent = %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | step: 1}}}
 
       :ok = Jido.Persist.hibernate(jido, agent)
       {:ok, thawed1} = Jido.Persist.thaw(jido, WorkflowAgent, "overwrite-2")
 
-      assert thawed1.state.step == 1
+      assert thawed1.state.__domain__.step == 1
 
-      updated = %{thawed1 | state: %{thawed1.state | step: 99, status: :final}}
+      updated = %{thawed1 | state: %{thawed1.state | __domain__: %{thawed1.state.__domain__ | step: 99, status: :final}}}
       :ok = Jido.Persist.hibernate(jido, updated)
 
       {:ok, thawed2} = Jido.Persist.thaw(jido, WorkflowAgent, "overwrite-2")
 
-      assert thawed2.state.step == 99
-      assert thawed2.state.status == :final
+      assert thawed2.state.__domain__.step == 99
+      assert thawed2.state.__domain__.status == :final
     end
 
     test "thread updates are preserved on re-hibernate" do

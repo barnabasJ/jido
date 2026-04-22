@@ -50,10 +50,13 @@ defmodule JidoTest.AgentServerCoverageTest do
     end
 
     def on_before_cmd(agent, action) do
-      agent = %{
-        agent
-        | state: Map.merge(agent.state, %{before_called: true, intercepted_action: action})
-      }
+      domain =
+        Map.merge(agent.state.__domain__, %{
+          before_called: true,
+          intercepted_action: action
+        })
+
+      agent = %{agent | state: %{agent.state | __domain__: domain}}
 
       {:ok, agent, action}
     end
@@ -74,7 +77,7 @@ defmodule JidoTest.AgentServerCoverageTest do
     end
 
     def on_after_cmd(agent, _action, directives) do
-      {:ok, %{agent | state: Map.put(agent.state, :after_called, true)}, directives}
+      {:ok, %{agent | state: put_in(agent.state, [:__domain__, :after_called], true)}, directives}
     end
   end
 
@@ -94,11 +97,11 @@ defmodule JidoTest.AgentServerCoverageTest do
     end
 
     def on_before_cmd(agent, action) do
-      {:ok, %{agent | state: Map.put(agent.state, :before_called, true)}, action}
+      {:ok, %{agent | state: put_in(agent.state, [:__domain__, :before_called], true)}, action}
     end
 
     def on_after_cmd(agent, _action, directives) do
-      {:ok, %{agent | state: Map.put(agent.state, :after_called, true)}, directives}
+      {:ok, %{agent | state: put_in(agent.state, [:__domain__, :after_called], true)}, directives}
     end
   end
 
@@ -211,7 +214,7 @@ defmodule JidoTest.AgentServerCoverageTest do
       signal = Signal.new!("increment", %{}, source: "/test")
 
       {:ok, agent} = AgentServer.call(via, signal)
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.counter == 1
     end
   end
 
@@ -246,7 +249,7 @@ defmodule JidoTest.AgentServerCoverageTest do
       {:ok, pid} = AgentServer.start_link(agent: SimpleTestAgent, jido: jido)
 
       {:ok, state} = AgentServer.state(pid)
-      assert state.agent.state.counter == 0
+      assert state.agent.state.__domain__.counter == 0
 
       GenServer.stop(pid)
     end
@@ -262,7 +265,7 @@ defmodule JidoTest.AgentServerCoverageTest do
 
       {:ok, state} = AgentServer.state(pid)
       assert state.id == "custom-id-123"
-      assert state.agent.state.counter == 999
+      assert state.agent.state.__domain__.counter == 999
 
       GenServer.stop(pid)
     end
@@ -271,7 +274,7 @@ defmodule JidoTest.AgentServerCoverageTest do
   describe "pre-built struct with agent_module option" do
     test "uses explicit agent_module for cmd routing", %{jido: jido} do
       agent = Counter.new(id: "prebuilt-struct-test")
-      agent = %{agent | state: Map.put(agent.state, :counter, 50)}
+      agent = %{agent | state: put_in(agent.state, [:__domain__, :counter], 50)}
 
       {:ok, pid} =
         AgentServer.start_link(
@@ -282,12 +285,12 @@ defmodule JidoTest.AgentServerCoverageTest do
 
       {:ok, state} = AgentServer.state(pid)
       assert state.id == "prebuilt-struct-test"
-      assert state.agent.state.counter == 50
+      assert state.agent.state.__domain__.counter == 50
       assert state.agent_module == Counter
 
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, updated_agent} = AgentServer.call(pid, signal)
-      assert updated_agent.state.counter == 51
+      assert updated_agent.state.__domain__.counter == 51
 
       GenServer.stop(pid)
     end
@@ -300,8 +303,8 @@ defmodule JidoTest.AgentServerCoverageTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.before_called == true
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.before_called == true
+      assert agent.state.__domain__.counter == 1
 
       GenServer.stop(pid)
     end
@@ -312,8 +315,8 @@ defmodule JidoTest.AgentServerCoverageTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.after_called == true
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.after_called == true
+      assert agent.state.__domain__.counter == 1
 
       GenServer.stop(pid)
     end
@@ -324,9 +327,9 @@ defmodule JidoTest.AgentServerCoverageTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.before_called == true
-      assert agent.state.after_called == true
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.before_called == true
+      assert agent.state.__domain__.after_called == true
+      assert agent.state.__domain__.counter == 1
 
       GenServer.stop(pid)
     end
@@ -350,13 +353,21 @@ defmodule JidoTest.AgentServerCoverageTest do
   end
 
   describe "await_completion" do
+    # Completion fields live under the agent's :__domain__ slice (ADR 0008),
+    # so await_completion needs explicit paths into that slice.
+    @completion_paths [
+      status_path: [:__domain__, :status],
+      result_path: [:__domain__, :last_answer],
+      error_path: [:__domain__, :error]
+    ]
+
     test "returns immediately when already completed", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent: CompletionAgent, jido: jido)
 
       signal = Signal.new!("complete", %{}, source: "/test")
       {:ok, _agent} = AgentServer.call(pid, signal)
 
-      {:ok, result} = AgentServer.await_completion(pid)
+      {:ok, result} = AgentServer.await_completion(pid, @completion_paths)
       assert result.status == :completed
       assert result.result == "done!"
 
@@ -369,7 +380,7 @@ defmodule JidoTest.AgentServerCoverageTest do
       signal = Signal.new!("fail", %{}, source: "/test")
       {:ok, _agent} = AgentServer.call(pid, signal)
 
-      {:ok, result} = AgentServer.await_completion(pid)
+      {:ok, result} = AgentServer.await_completion(pid, @completion_paths)
       assert result.status == :failed
       assert result.result == "something went wrong"
 
