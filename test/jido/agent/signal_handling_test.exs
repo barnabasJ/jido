@@ -65,7 +65,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
     # Handles action module tuples from signal routing
     def on_before_cmd(agent, {action_mod, _params} = action) when is_atom(action_mod) do
       action_name = action_mod.__action_metadata__().name
-      agent = %{agent | state: Map.put(agent.state, :last_action_type, action_name)}
+      agent = %{agent | state: put_in(agent.state, [:__domain__, :last_action_type], action_name)}
       {:ok, agent, action}
     end
 
@@ -82,7 +82,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
       # The IncrementAction should have been called
-      assert agent.state.counter == 5
+      assert agent.state.__domain__.counter == 5
 
       GenServer.stop(pid)
     end
@@ -103,7 +103,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
           agent
         end)
 
-      assert final_agent.state.counter == 6
+      assert final_agent.state.__domain__.counter == 6
 
       GenServer.stop(pid)
     end
@@ -116,7 +116,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
       # Fixtures.RecordAction stores the :message value when present
-      assert agent.state.messages == ["hello"]
+      assert agent.state.__domain__.messages == ["hello"]
 
       GenServer.stop(pid)
     end
@@ -147,7 +147,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
       # The agent should still be functional despite the error
       signal2 = Signal.new!("increment", %{amount: 1}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal2)
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.counter == 1
 
       GenServer.stop(pid)
     end
@@ -162,9 +162,9 @@ defmodule JidoTest.Agent.SignalHandlingTest do
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
       # on_before_cmd captured the action type
-      assert agent.state.last_action_type == "increment"
+      assert agent.state.__domain__.last_action_type == "increment"
       # Action still ran
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.counter == 1
 
       GenServer.stop(pid)
     end
@@ -204,7 +204,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
       # Action was modified to increment by 10
-      assert agent.state.counter == 10
+      assert agent.state.__domain__.counter == 10
 
       GenServer.stop(pid)
     end
@@ -217,7 +217,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
       {updated, _directives} =
         ActionBasedAgent.cmd(agent, {TestActions.IncrementAction, %{amount: 5}})
 
-      assert updated.state.counter == 5
+      assert updated.state.__domain__.counter == 5
     end
 
     test "cmd/2 calls on_before_cmd with action module" do
@@ -227,8 +227,8 @@ defmodule JidoTest.Agent.SignalHandlingTest do
         PreProcessingAgent.cmd(agent, {TestActions.IncrementAction, %{amount: 1}})
 
       # on_before_cmd now captures action module name
-      assert updated.state.last_action_type == "increment"
-      assert updated.state.counter == 1
+      assert updated.state.__domain__.last_action_type == "increment"
+      assert updated.state.__domain__.counter == 1
     end
   end
 end

@@ -72,12 +72,14 @@ defmodule Jido.Agent.Strategy.Direct do
   end
 
   defp run_instruction(agent, %Instruction{} = instruction, ctx) do
-    # Reflect on the action to see whether it declared ownership of a
-    # slice (Jido.Agent.ScopedAction, see ADR 0005). When it did we run
-    # the action with `ctx.state` scoped to just that slice and treat
-    # its return as a whole-slice replacement.
-    state_key = scoped_state_key(instruction.action)
-    scoped_state = scoped_state(agent.state, state_key)
+    # Every agent has a slice (ADR 0007). We run the action with `ctx.state`
+    # scoped to just that slice. How the action's return is applied depends on
+    # whether the action is a ScopedAction or not:
+    #   - ScopedAction: return is the new value of the slice (wholesale replace)
+    #   - regular Action: return is deep-merged into the slice (so partial
+    #     updates like `{:ok, %{counter: n + 1}}` preserve other keys)
+    {state_key, scoped?} = resolve_state_key(agent, instruction.action)
+    scoped_state = Map.get(agent.state, state_key, %{})
 
     instruction =
       %{
@@ -93,10 +95,10 @@ defmodule Jido.Agent.Strategy.Direct do
 
     case Jido.Exec.run(%{instruction | opts: exec_opts}) do
       {:ok, result} when is_map(result) ->
-        apply_scoped_result(agent, state_key, result, [])
+        apply_slice_result(agent, state_key, scoped?, result, [])
 
       {:ok, result, effects} when is_map(result) ->
-        apply_scoped_result(agent, state_key, result, List.wrap(effects))
+        apply_slice_result(agent, state_key, scoped?, result, List.wrap(effects))
 
       {:error, reason} ->
         error = Error.execution_error("Instruction failed", details: %{reason: reason})
@@ -104,30 +106,36 @@ defmodule Jido.Agent.Strategy.Direct do
     end
   end
 
-  # Pulls state_key/0 off the action module if it's a ScopedAction.
-  # Accepts bare module, {module, params}, {module, params, context}, etc —
-  # Instruction.normalize has already flattened the shape into :action.
-  defp scoped_state_key(mod) when is_atom(mod) and not is_nil(mod) do
-    if function_exported?(mod, :state_key, 0), do: mod.state_key(), else: nil
+  # Resolve `{state_key, scoped?}`:
+  #   - If the action module exports `state_key/0` (i.e. it's a ScopedAction),
+  #     use its declared slice and mark scoped? = true.
+  #   - Otherwise, fall back to the agent's own slice key; scoped? = false so
+  #     the runtime uses deep-merge semantics for partial-update returns.
+  defp resolve_state_key(%Agent{agent_module: mod}, action)
+       when is_atom(action) and not is_nil(action) do
+    if function_exported?(action, :state_key, 0) do
+      {action.state_key(), true}
+    else
+      {mod.state_key(), false}
+    end
   end
 
-  defp scoped_state_key(_), do: nil
+  defp resolve_state_key(%Agent{agent_module: mod}, _action), do: {mod.state_key(), false}
 
-  defp scoped_state(agent_state, nil), do: agent_state
-  defp scoped_state(agent_state, key) when is_atom(key), do: Map.get(agent_state, key, %{})
-
-  # Unscoped action: legacy deep-merge of the returned map into full agent.state.
-  defp apply_scoped_result(agent, nil, result, effects) do
-    agent = StateOps.apply_result(agent, result)
-    {agent, directives} = StateOps.apply_state_ops(agent, effects)
+  # Scoped action: the returned map IS the new value of the slice.
+  defp apply_slice_result(agent, state_key, true, new_slice, effects) do
+    slice_op = %StateOp.SetPath{path: [state_key], value: new_slice}
+    {agent, directives} = StateOps.apply_state_ops(agent, [slice_op | effects])
     {agent, directives, :ok}
   end
 
-  # Scoped action: the returned map IS the new value of agent.state[state_key].
-  # Wrap as a SetPath state-op so it goes through the same applied-pipeline as
-  # explicit state ops (and is observable via `Jido.Agent.StateOps.apply_state_ops/2`).
-  defp apply_scoped_result(agent, state_key, new_slice, effects) do
-    slice_op = %StateOp.SetPath{path: [state_key], value: new_slice}
+  # Non-scoped action: deep-merge returned map into existing slice contents.
+  # This preserves the pre-ADR-0007 ergonomics where an action returning
+  # `%{counter: n + 1}` updates only `:counter` and leaves other slice keys alone.
+  defp apply_slice_result(agent, state_key, false, partial, effects) do
+    current_slice = Map.get(agent.state, state_key, %{})
+    merged_slice = DeepMerge.deep_merge(current_slice, partial)
+    slice_op = %StateOp.SetPath{path: [state_key], value: merged_slice}
     {agent, directives} = StateOps.apply_state_ops(agent, [slice_op | effects])
     {agent, directives, :ok}
   end
