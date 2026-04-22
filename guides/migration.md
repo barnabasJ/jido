@@ -18,6 +18,29 @@ This guide helps you migrate existing Jido applications to version 2.0. The migr
 | Actions | `Jido.Actions.*` | `Jido.Tools.*` | Small |
 | Validation | NimbleOptions | Zoi schemas | Small-Medium |
 | Errors | Ad hoc tuples | Splode structured errors | Small-Medium |
+| State Layout | Flat `agent.state.counter` | Scoped `agent.state.__domain__.counter` ([ADR 0008](adr/0008-flat-layout-removed.md)) | Small |
+
+### State Layout: `:__domain__` slice
+
+As of [ADR 0008](adr/0008-flat-layout-removed.md), user-domain state lives under `agent.state.__domain__` by default. Plugin state continues to live under its own slice (`:__pod__`, `:__bus_wiring__`, etc.). Schema-backed fields declared via `use Jido.Agent, schema: [...]` are seeded under `:__domain__`.
+
+**Rewrites needed for agents declared before ADR 0008:**
+
+- Reading user-domain fields:
+  ```elixir
+  agent.state.counter        # old
+  agent.state.__domain__.counter  # new
+  ```
+- Writing user-domain fields via map-update (rare — prefer `set/2` or action returns):
+  ```elixir
+  %{agent | state: %{agent.state | counter: 42}}  # old
+  %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | counter: 42}}}  # new
+  # or:
+  %{agent | state: put_in(agent.state, [:__domain__, :counter], 42)}
+  ```
+- `new(state: ...)` and `set/2` **auto-wrap** flat attrs into `:__domain__`, so common constructor calls (`new(state: %{counter: 10})`) keep working.
+- State-op directives (`%SetPath{}`, `%DeletePath{}`, etc.) still operate on full `agent.state` — prefix paths with `:__domain__` to target user-domain fields.
+- Scoped actions (`use Jido.Agent.ScopedAction, state_key: :__domain__`) receive just their slice as `ctx.state` and return `{:ok, new_slice}` with wholesale-replace semantics.
 
 ## Migration Path Overview
 
