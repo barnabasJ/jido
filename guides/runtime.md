@@ -49,12 +49,17 @@ Or start directly via `AgentServer`:
 
 ```
 Signal → AgentServer.call/cast
-       → route_signal_to_action (via strategy/agent/plugin routes)
+       → plugin hooks → route_signal_to_action (strategy/agent/plugin routes)
        → Agent.cmd/2
        → {agent, directives}
-       → Directives queued → drain loop via DirectiveExec
+       → Directives executed inline via DirectiveExec (ADR 0009)
        → (for RunInstruction) execute instruction → call Agent.cmd/2 with result_action
 ```
+
+Every signal runs start-to-finish inside its triggering GenServer handler; the
+Erlang mailbox is the only queue. A directive that needs to do unbounded work
+should spawn a task, write a loading marker into state, and emit a completion
+signal when it's done — see [ADR 0009](adr/0009-inline-signal-processing.md).
 
 The AgentServer routes incoming signals using strategy, agent, and plugin route tables (`signal_routes/1` callbacks), executes the action via `cmd/2`, and processes any returned directives.
 
@@ -213,7 +218,7 @@ case Jido.await(pid, 5_000) do
     result
   {:error, {:timeout, diag}} ->
     Logger.warning("Agent await timed out", diag)
-    # diag includes: :hint, :server_status, :queue_length, :iteration, :waited_ms
+    # diag includes: :hint, :server_status, :mailbox_length, :iteration, :waited_ms
     {:error, :timeout}
 end
 ```

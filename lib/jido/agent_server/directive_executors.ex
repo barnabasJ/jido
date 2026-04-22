@@ -16,7 +16,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Emit do
 
     dispatch_signal(traced_signal, cfg, state)
 
-    {:async, nil, state}
+    {:ok, state}
   end
 
   defp dispatch_signal(traced_signal, nil, _state) do
@@ -50,8 +50,7 @@ end
 defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction do
   @moduledoc false
 
-  require Logger
-
+  alias Jido.AgentServer
   alias Jido.AgentServer.State
   alias Jido.Observe.Config, as: ObserveConfig
 
@@ -84,15 +83,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction
       )
 
     state = State.update_agent(state, agent)
-
-    case State.enqueue_all(state, input_signal, List.wrap(directives)) do
-      {:ok, state} ->
-        {:ok, state}
-
-      {:error, :queue_overflow} ->
-        Logger.warning("AgentServer #{state.id} queue overflow, dropping directives")
-        {:ok, state}
-    end
+    AgentServer.execute_directives(List.wrap(directives), input_signal, state)
   end
 
   defp normalize_result_payload({:ok, result}) do

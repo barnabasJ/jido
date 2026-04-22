@@ -244,21 +244,24 @@ defmodule JidoTest.AgentServerTest do
       GenServer.stop(pid)
     end
 
-    test "does not block state queries while a slow signal call is in-flight", %{jido: jido} do
-      defmodule NonBlockingSlowAction do
+    test "mailbox-queued messages wait for the in-flight sync call", %{jido: jido} do
+      # Under inline signal processing (ADR 0009) the GenServer runs each
+      # signal start-to-finish, so messages that arrive during a call wait
+      # in the mailbox and land in arrival order afterwards.
+      defmodule InlineSlowAction do
         @moduledoc false
-        use Jido.Action, name: "non_blocking_slow", schema: []
+        use Jido.Action, name: "inline_slow", schema: []
 
         def run(_params, _context) do
-          Process.sleep(150)
+          Process.sleep(80)
           {:ok, %{slow_done: true}}
         end
       end
 
-      defmodule NonBlockingAgent do
+      defmodule InlineAgent do
         @moduledoc false
         use Jido.Agent,
-          name: "non_blocking_agent",
+          name: "inline_agent",
           schema: [
             counter: [type: :integer, default: 0],
             slow_done: [type: :boolean, default: false]
@@ -266,25 +269,25 @@ defmodule JidoTest.AgentServerTest do
 
         def signal_routes(_ctx) do
           [
-            {"slow", NonBlockingSlowAction},
+            {"slow", InlineSlowAction},
             {"increment", TestActions.IncrementAction}
           ]
         end
       end
 
-      {:ok, pid} = AgentServer.start_link(agent: NonBlockingAgent, jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent: InlineAgent, jido: jido)
 
       slow_signal = Signal.new!("slow", %{}, source: "/test")
       task = Task.async(fn -> AgentServer.call(pid, slow_signal, 2_000) end)
 
-      Process.sleep(20)
-      started = System.monotonic_time(:millisecond)
-      assert {:ok, _state} = AgentServer.state(pid)
-      elapsed = System.monotonic_time(:millisecond) - started
-      assert elapsed < 100
+      Process.sleep(15)
+      # cast while slow is in-flight — mailbox-queued
+      AgentServer.cast(pid, Signal.new!("increment", %{}, source: "/test"))
 
       assert {:ok, agent} = Task.await(task, 2_000)
       assert agent.state.__domain__.slow_done == true
+
+      eventually_state(pid, fn s -> s.agent.state.__domain__.counter == 1 end)
 
       GenServer.stop(pid)
     end
@@ -582,41 +585,6 @@ defmodule JidoTest.AgentServerTest do
     end
   end
 
-  describe "queue overflow" do
-    test "returns error when queue is full", %{jido: jido} do
-      # Start with very small queue
-      {:ok, pid} = AgentServer.start_link(agent: TestAgent, max_queue_size: 2, jido: jido)
-
-      # Get state and manually fill queue
-      {:ok, state} = AgentServer.state(pid)
-
-      # Queue is processed fast, so we test via State module directly
-      signal = Signal.new!("record", %{}, source: "/test")
-      {:ok, s1} = State.enqueue(state, signal, %Directive.Emit{signal: signal})
-      {:ok, s2} = State.enqueue(s1, signal, %Directive.Emit{signal: signal})
-
-      assert {:error, :queue_overflow} =
-               State.enqueue(s2, signal, %Directive.Emit{signal: signal})
-
-      GenServer.stop(pid)
-    end
-
-    test "queue length is reported correctly", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: TestAgent, jido: jido)
-      {:ok, state} = AgentServer.state(pid)
-
-      assert State.queue_length(state) == 0
-      assert State.queue_empty?(state)
-
-      signal = Signal.new!("test", %{}, source: "/test")
-      {:ok, s1} = State.enqueue(state, signal, %Directive.Emit{signal: signal})
-      assert State.queue_length(s1) == 1
-      refute State.queue_empty?(s1)
-
-      GenServer.stop(pid)
-    end
-  end
-
   describe "status transitions" do
     test "starts as initializing then transitions to idle", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent: TestAgent, jido: jido)
@@ -628,57 +596,18 @@ defmodule JidoTest.AgentServerTest do
       GenServer.stop(pid)
     end
 
-    test "transitions to processing during signal handling", %{jido: jido} do
-      defmodule SlowAction do
-        @moduledoc false
-        use Jido.Action, name: "slow", schema: []
-
-        def run(_params, _context) do
-          Process.sleep(100)
-          {:ok, %{}}
-        end
-      end
-
-      defmodule SlowAgent do
-        @moduledoc false
-        use Jido.Agent,
-          name: "slow_agent",
-          schema: [value: [type: :integer, default: 0]]
-
-        def signal_routes(_ctx) do
-          [{"slow", SlowAction}]
-        end
-      end
-
-      {:ok, pid} = AgentServer.start_link(agent: SlowAgent, jido: jido)
-
-      # Start async processing
-      signal = Signal.new!("slow", %{}, source: "/test")
-      task = Task.async(fn -> AgentServer.call(pid, signal) end)
-
-      # Either catch processing in progress, or it completes quickly - either is valid
-      # The key is the server doesn't crash and returns to idle after processing
-      eventually_state(pid, fn state ->
-        state.status in [:idle, :processing]
-      end)
-
-      # Wait for task to complete
-      Task.await(task)
-
-      # After processing completes, status should be idle
-      eventually_state(pid, fn state -> state.status == :idle end)
-
-      GenServer.stop(pid)
-    end
-
-    test "returns to idle after processing completes", %{jido: jido} do
+    test "stays idle across signal handling; never surfaces a :processing state",
+         %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent: TestAgent, jido: jido)
 
+      # Under inline signal processing, status stays :idle outside the handler.
+      # A synchronous call completes before returning, so external observers
+      # always see :idle.
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, _agent} = AgentServer.call(pid, signal)
 
-      # After processing, wait for drain loop
-      eventually_state(pid, fn state -> state.status == :idle end)
+      {:ok, state} = AgentServer.state(pid)
+      assert state.status == :idle
 
       GenServer.stop(pid)
     end
@@ -1000,14 +929,14 @@ defmodule JidoTest.AgentServerTest do
     end
   end
 
-  describe "drain loop invariant" do
-    test "only one drain loop runs at a time", %{jido: jido} do
+  describe "inline signal processing" do
+    test "mailbox-serialized processing settles every cast", %{jido: jido} do
       defmodule SlowAction2 do
         @moduledoc false
         use Jido.Action, name: "slow", schema: []
 
         def run(_params, _context) do
-          Process.sleep(100)
+          Process.sleep(20)
           {:ok, %{processed: true}}
         end
       end
@@ -1032,34 +961,13 @@ defmodule JidoTest.AgentServerTest do
 
       Enum.each(signals, fn sig -> AgentServer.cast(pid, sig) end)
 
-      eventually_state(
-        pid,
-        fn state ->
-          state.status == :idle and state.processing == false and State.queue_empty?(state)
-        end,
-        timeout: 2000
-      )
+      # Inline processing keeps status at :idle outside the handler; the
+      # mailbox drains and a final round-trip confirms everything settled.
+      {:ok, _final} = AgentServer.call(pid, Signal.new!("slow", %{}, source: "/test"))
 
       {:ok, final_state} = AgentServer.state(pid)
-
       assert final_state.status == :idle
-      assert final_state.processing == false
-
-      assert State.queue_empty?(final_state)
-
-      GenServer.stop(pid)
-    end
-
-    test "processing flag prevents concurrent drain loops", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: TestAgent, jido: jido)
-
-      signal = Signal.new!("noop", %{}, source: "/test")
-      AgentServer.cast(pid, signal)
-
-      # Wait for processing to complete - status returns to idle and processing flag is false
-      eventually_state(pid, fn state ->
-        state.processing == false and state.status == :idle
-      end)
+      assert {:message_queue_len, 0} = Process.info(pid, :message_queue_len)
 
       GenServer.stop(pid)
     end

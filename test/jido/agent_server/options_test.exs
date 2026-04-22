@@ -23,7 +23,6 @@ defmodule JidoTest.AgentServer.OptionsTest do
       assert opts.registry == :"Elixir.test_jido.Registry"
       assert opts.register_global == true
       assert opts.error_policy == :log_only
-      assert opts.max_queue_size == 10_000
       assert opts.on_parent_death == :stop
     end
 
@@ -64,12 +63,6 @@ defmodule JidoTest.AgentServer.OptionsTest do
         Options.new(@base_opts ++ [agent: ValidAgent, default_dispatch: {:logger, level: :info}])
 
       assert opts.default_dispatch == {:logger, level: :info}
-    end
-
-    test "creates options with max_queue_size" do
-      {:ok, opts} = Options.new(@base_opts ++ [agent: ValidAgent, max_queue_size: 100])
-
-      assert opts.max_queue_size == 100
     end
 
     test "creates options with on_parent_death" do
@@ -288,20 +281,6 @@ defmodule JidoTest.AgentServer.OptionsTest do
       {:error, error} = Options.new(@base_opts ++ [agent: ValidAgent, parent: "invalid"])
 
       assert error.message =~ "parent"
-    end
-  end
-
-  describe "max_queue_size validation" do
-    test "accepts positive integer" do
-      {:ok, opts} = Options.new(@base_opts ++ [agent: ValidAgent, max_queue_size: 500])
-
-      assert opts.max_queue_size == 500
-    end
-
-    test "defaults to 10_000" do
-      {:ok, opts} = Options.new(@base_opts ++ [agent: ValidAgent])
-
-      assert opts.max_queue_size == 10_000
     end
   end
 

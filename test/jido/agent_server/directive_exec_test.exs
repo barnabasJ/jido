@@ -136,7 +136,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       signal = Signal.new!(%{type: "test.emitted", source: "/test", data: %{}})
       directive = %Directive.Emit{signal: signal, dispatch: nil}
 
-      assert {:async, nil, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
       assert_receive {:signal, %Signal{type: "test.emitted"}}
     end
 
@@ -147,7 +147,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       signal = Signal.new!(%{type: "test.emitted", source: "/test", data: %{}})
       directive = %Directive.Emit{signal: signal, dispatch: {:logger, level: :info}}
 
-      assert {:async, nil, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
     end
 
     test "uses default_dispatch from state when directive dispatch is nil", %{
@@ -168,7 +168,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       signal = Signal.new!(%{type: "test.emitted", source: "/test", data: %{}})
       directive = %Directive.Emit{signal: signal, dispatch: nil}
 
-      assert {:async, nil, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
     end
   end
 
@@ -363,10 +363,9 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       assert state.agent.state.__domain__.captured_result == %{ran: true}
       assert state.agent.state.__domain__.captured_reason == nil
       assert state.agent.state.__domain__.captured_meta == %{source: :test}
-      assert State.queue_length(state) == 0
     end
 
-    test "normalizes failures and enqueues directives from result_action", %{
+    test "normalizes failures and runs result_action's directives inline", %{
       state: state,
       input_signal: input_signal
     } do
@@ -379,10 +378,12 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
       assert {:ok, state} = DirectiveExec.exec(directive, input_signal, state)
       assert state.agent.state.__domain__.captured_emit == true
-      assert State.queue_length(state) == 1
 
-      assert {{:value, {^input_signal, %Directive.Emit{signal: %{type: "capture.result.event"}}}},
-              _state} = State.dequeue(state)
+      # CaptureResultEmitAction emitted a `capture.result.event` signal;
+      # Emit's local dispatch does send(self(), {:signal, signal}). (The
+      # test uses Directive.emit/2 with a bare map, so the emitted signal
+      # keeps that shape here.)
+      assert_receive {:signal, %{type: "capture.result.event"}}
     end
   end
 

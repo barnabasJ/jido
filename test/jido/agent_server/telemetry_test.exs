@@ -198,7 +198,7 @@ defmodule JidoTest.AgentServer.TelemetryTest do
       assert match?(%Directive.Emit{}, metadata.directive)
 
       assert_receive {:telemetry_event, [:jido, :agent_server, :directive, :stop], measurements,
-                      %{agent_id: "telemetry-directive-test", result: :async} = metadata},
+                      %{agent_id: "telemetry-directive-test", result: :ok} = metadata},
                      500
 
       assert is_integer(measurements.duration)
@@ -306,7 +306,7 @@ defmodule JidoTest.AgentServer.TelemetryTest do
       assert_receive {:telemetry_event, [:jido, :agent_server, :signal, :stop], _, _}
 
       assert_receive {:telemetry_event, [:jido, :agent_server, :directive, :stop], measurements,
-                      %{signal_type: "emit_directive", result: :async}},
+                      %{signal_type: "emit_directive", result: :ok}},
                      500
 
       assert measurements.duration >= 0

@@ -441,16 +441,6 @@ defmodule JidoTest.TelemetryTest do
                )
     end
 
-    test "handles queue overflow event" do
-      assert :ok =
-               Telemetry.handle_event(
-                 [:jido, :agent_server, :queue, :overflow],
-                 %{queue_size: 100},
-                 %{agent_id: "test", signal_type: "test.signal"},
-                 nil
-               )
-    end
-
     test "handles agent_server cron events" do
       assert :ok =
                Telemetry.handle_event(

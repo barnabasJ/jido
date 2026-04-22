@@ -335,23 +335,6 @@ defmodule JidoTest.AgentServerCoverageTest do
     end
   end
 
-  describe "queue overflow" do
-    test "queue overflow returns error when max_queue_size exceeded", %{jido: jido} do
-      {:ok, pid} =
-        AgentServer.start_link(
-          agent: ManyDirectivesAgent,
-          max_queue_size: 1,
-          jido: jido
-        )
-
-      signal = Signal.new!("many_directives", %{count: 5}, source: "/test")
-      # Action produces 5 directives but queue size is 1, so we get overflow error
-      {:error, :queue_overflow} = AgentServer.call(pid, signal)
-
-      GenServer.stop(pid)
-    end
-  end
-
   describe "await_completion" do
     # Completion fields live under the agent's :__domain__ slice (ADR 0008),
     # so await_completion needs explicit paths into that slice.

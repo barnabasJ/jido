@@ -81,7 +81,11 @@ Jido emits telemetry events for all core operations. Use these for metrics colle
 | `[:jido, :agent_server, :directive, :start]` | Directive execution started | `system_time` | `agent_id`, `directive_type`, `directive`, `jido_instance` |
 | `[:jido, :agent_server, :directive, :stop]` | Directive execution completed | `duration` | `agent_id`, `directive_type`, `directive`, `result`, `jido_instance` |
 | `[:jido, :agent_server, :directive, :exception]` | Directive execution failed | `duration` | `agent_id`, `directive_type`, `directive`, `error`, `jido_instance` |
-| `[:jido, :agent_server, :queue, :overflow]` | Directive queue overflow | `queue_size` | `agent_id`, `signal_type`, `jido_instance` |
+
+Since ADR 0009 (inline signal processing), the Erlang mailbox is the only
+queue inside an AgentServer; there is no internal directive queue and no
+`[:jido, :agent_server, :queue, :overflow]` event. For mailbox backpressure,
+inspect `Process.info(pid, :message_queue_len)` directly.
 
 When debug or trace logging is enabled, the structured `[signal]` log line
 includes the directive-type summary from `directive_types`, for example
@@ -199,9 +203,6 @@ defmodule MyApp.Telemetry do
         tags: [:directive_type]
       ),
 
-      # Queue overflow events
-      counter("jido.agent_server.queue.overflow.count"),
-
       # Directives per command
       summary("jido.agent.cmd.directive_count",
         tags: [:agent_module]
@@ -273,8 +274,7 @@ defmodule MyApp.Telemetry do
       summary("agent.cmd.duration"),
       counter("agent_server.signal.count"),
       summary("agent_server.signal.duration"),
-      counter("agent_server.directive.count"),
-      last_value("agent_server.queue.overflow.count")
+      counter("agent_server.directive.count")
     ]
   end
 end
@@ -298,7 +298,6 @@ defmodule MyApp.JidoTelemetryHandler do
     [:jido, :agent_server, :directive, :start],
     [:jido, :agent_server, :directive, :stop],
     [:jido, :agent_server, :directive, :exception],
-    [:jido, :agent_server, :queue, :overflow],
     [:jido, :agent, :strategy, :cmd, :start],
     [:jido, :agent, :strategy, :cmd, :stop],
     [:jido, :agent, :strategy, :cmd, :exception]
@@ -349,16 +348,6 @@ defmodule MyApp.JidoTelemetryHandler do
       agent_module: to_string(metadata.agent_module),
       jido_instance: to_string(metadata[:jido_instance])
     })
-  end
-
-  def handle_event([:jido, :agent_server, :queue, :overflow], measurements, metadata, _config) do
-    Logger.error("Agent queue overflow",
-      agent_id: metadata.agent_id,
-      jido_instance: metadata[:jido_instance],
-      queue_size: measurements.queue_size
-    )
-
-    MyMetrics.increment("jido.queue.overflow")
   end
 
   def handle_event(_event, _measurements, _metadata, _config), do: :ok
@@ -623,8 +612,8 @@ Observe.finish_span(request_span, %{directive_count: 1})
 | `jido.agent.cmd.duration` p99 | Histogram | > 1s |
 | `jido.agent.cmd.exception.count` rate | Counter | > 1/min per agent |
 | `jido.agent_server.signal.duration` p95 | Histogram | > 500ms |
-| `jido.agent_server.queue.overflow.count` | Counter | > 0 |
 | `jido.agent_server.directive.exception.count` | Counter | > 0 |
+| `Process.info(pid, :message_queue_len)` (sampled) | Gauge | > 1000 |
 
 ### Grafana Dashboard Panels
 
@@ -678,14 +667,6 @@ groups:
         annotations:
           summary: "Jido agent error rate > 5%"
 
-      - alert: JidoQueueOverflow
-        expr: increase(jido_agent_server_queue_overflow_count[5m]) > 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Jido directive queue overflow detected"
-
       - alert: JidoDirectiveFailures
         expr: increase(jido_agent_server_directive_exception_count[5m]) > 0
         for: 2m
@@ -702,7 +683,6 @@ groups:
 | Command Success Rate | 99.9% | `1 - (cmd.exception.count / cmd.stop.count)` |
 | Signal Latency p99 | < 500ms | `histogram_quantile(0.99, signal.duration)` |
 | Directive Success Rate | 99.99% | `1 - (directive.exception.count / directive.stop.count)` |
-| Queue Overflow Rate | 0 | `queue.overflow.count == 0` |
 
 ## Debug Events in Development
 

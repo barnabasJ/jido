@@ -46,10 +46,6 @@ defmodule Jido.AgentServer.Options do
                 |> Zoi.optional(),
               error_policy:
                 Zoi.any(description: "Error handling policy") |> Zoi.default(:log_only),
-              max_queue_size:
-                Zoi.integer(description: "Max directive queue size")
-                |> Zoi.min(1)
-                |> Zoi.default(10_000),
               parent: Zoi.any(description: "Parent reference for hierarchy") |> Zoi.optional(),
               on_parent_death:
                 Zoi.atom(description: "Behavior when parent dies")

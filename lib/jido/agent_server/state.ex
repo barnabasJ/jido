@@ -7,7 +7,10 @@ defmodule Jido.AgentServer.State do
   > change without notice. Use `Jido.AgentServer.state/1` to retrieve state.
 
   This struct holds all runtime state for an agent instance including
-  the agent itself, directive queue, hierarchy tracking, and configuration.
+  the agent itself, hierarchy tracking, and configuration.
+
+  Signal processing runs inline within the triggering handler; the Erlang
+  mailbox is the only queue. See ADR 0009 for the rationale.
   """
 
   require Logger
@@ -15,7 +18,7 @@ defmodule Jido.AgentServer.State do
   alias Jido.AgentServer.{ChildInfo, Options, ParentRef}
   alias Jido.AgentServer.State.Lifecycle, as: LifecycleState
 
-  @type status :: :initializing | :idle | :processing | :stopping
+  @type status :: :initializing | :idle | :stopping
 
   @schema Zoi.struct(
             __MODULE__,
@@ -25,24 +28,9 @@ defmodule Jido.AgentServer.State do
               agent_module: Zoi.atom(description: "Agent module"),
               agent: Zoi.any(description: "The Jido.Agent struct"),
 
-              # Status and processing
+              # Status
               status:
                 Zoi.atom(description: "Current server status") |> Zoi.default(:initializing),
-              processing:
-                Zoi.boolean(description: "Whether currently processing directives")
-                |> Zoi.default(false),
-              queue:
-                Zoi.any(description: "Directive queue (:queue.queue())")
-                |> Zoi.default(:queue.new()),
-              signal_call_inflight:
-                Zoi.any(description: "In-flight synchronous signal call context")
-                |> Zoi.optional(),
-              signal_call_queue:
-                Zoi.any(description: "Queued synchronous signal call requests")
-                |> Zoi.default(:queue.new()),
-              deferred_async_signals:
-                Zoi.any(description: "Async signals buffered while sync call is in-flight")
-                |> Zoi.default(:queue.new()),
 
               # Hierarchy
               parent: Zoi.any(description: "Parent reference") |> Zoi.optional(),
@@ -91,7 +79,6 @@ defmodule Jido.AgentServer.State do
               default_dispatch: Zoi.any(description: "Default dispatch config") |> Zoi.optional(),
               error_policy:
                 Zoi.any(description: "Error handling policy") |> Zoi.default(:log_only),
-              max_queue_size: Zoi.integer(description: "Max queue size") |> Zoi.default(10_000),
               registry: Zoi.atom(description: "Registry module"),
               spawn_fun: Zoi.any(description: "Custom spawn function") |> Zoi.optional(),
 
@@ -173,11 +160,6 @@ defmodule Jido.AgentServer.State do
         agent_module: agent_module,
         agent: agent,
         status: :initializing,
-        processing: false,
-        queue: :queue.new(),
-        signal_call_inflight: nil,
-        signal_call_queue: :queue.new(),
-        deferred_async_signals: :queue.new(),
         parent: opts.parent,
         orphaned_from: nil,
         children: %{},
@@ -186,7 +168,6 @@ defmodule Jido.AgentServer.State do
         partition: opts.partition,
         default_dispatch: opts.default_dispatch,
         error_policy: opts.error_policy,
-        max_queue_size: opts.max_queue_size,
         registry: opts.registry,
         spawn_fun: opts.spawn_fun,
         cron_jobs: %{},
@@ -268,63 +249,8 @@ defmodule Jido.AgentServer.State do
   """
   @spec set_status(t(), status()) :: t()
   def set_status(%__MODULE__{} = state, status)
-      when status in [:initializing, :idle, :processing, :stopping] do
+      when status in [:initializing, :idle, :stopping] do
     %{state | status: status}
-  end
-
-  @doc """
-  Enqueues a directive with its triggering signal for later execution.
-  """
-  @spec enqueue(t(), Jido.Signal.t(), struct()) :: {:ok, t()} | {:error, :queue_overflow}
-  def enqueue(%__MODULE__{queue: queue, max_queue_size: max} = state, signal, directive) do
-    if :queue.len(queue) >= max do
-      {:error, :queue_overflow}
-    else
-      {:ok, %{state | queue: :queue.in({signal, directive}, queue)}}
-    end
-  end
-
-  @doc """
-  Enqueues multiple directives from a single signal.
-  """
-  @spec enqueue_all(t(), Jido.Signal.t(), [struct()]) :: {:ok, t()} | {:error, :queue_overflow}
-  def enqueue_all(state, _signal, []), do: {:ok, state}
-
-  def enqueue_all(%__MODULE__{} = state, signal, [directive | rest]) do
-    case enqueue(state, signal, directive) do
-      {:ok, new_state} -> enqueue_all(new_state, signal, rest)
-      error -> error
-    end
-  end
-
-  @doc """
-  Dequeues the next directive for processing.
-  """
-  @spec dequeue(t()) :: {{:value, {Jido.Signal.t(), struct()}}, t()} | {:empty, t()}
-  def dequeue(%__MODULE__{queue: queue} = state) do
-    case :queue.out(queue) do
-      {{:value, item}, new_queue} ->
-        {{:value, item}, %{state | queue: new_queue}}
-
-      {:empty, _} ->
-        {:empty, state}
-    end
-  end
-
-  @doc """
-  Returns the current queue length.
-  """
-  @spec queue_length(t()) :: non_neg_integer()
-  def queue_length(%__MODULE__{queue: queue}) do
-    :queue.len(queue)
-  end
-
-  @doc """
-  Checks if the queue is empty.
-  """
-  @spec queue_empty?(t()) :: boolean()
-  def queue_empty?(%__MODULE__{queue: queue}) do
-    :queue.is_empty(queue)
   end
 
   @doc """

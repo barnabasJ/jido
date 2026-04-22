@@ -1,11 +1,15 @@
 defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
   @moduledoc """
-  Tests that demonstrate the ordering between signal processing (Agent.cmd)
-  and directive execution (drain loop).
+  Tests the ordering guarantee between signal processing (Agent.cmd/2) and
+  directive execution under inline signal processing (ADR 0009).
 
-  When two async signals are sent, the second signal's cmd can run before
-  the first signal's directives are drained, because the cast message is
-  already in the GenServer mailbox ahead of the :drain message.
+  When two async signals are cast, signal A runs fully — cmd/2 *and* all of
+  its directives — before signal B is picked up from the mailbox. So signal
+  B's cmd/2 always sees every synchronous state transition made by signal
+  A's directives, never a partial prefix.
+
+  This is a strictly stronger guarantee than the previous drain-loop
+  architecture provided.
   """
   use JidoTest.Case, async: true
 
@@ -15,13 +19,9 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
     @moduledoc false
     use Jido.Action, name: "step1"
 
-    def run(_params, context) do
-      IO.inspect(context.state, label: "[Step1Action] state at start of run/2")
-
-      IO.puts(
-        "[Step1Action] setting step1_cmd_ran=true, returning directive to set step1_directive_ran=true"
-      )
-
+    def run(_params, _context) do
+      # Sets step1_cmd_ran via the cmd state update; the emitted directive
+      # then sets step1_directive_ran via a state-op directive.
       {:ok, %{step1_cmd_ran: true},
        %JidoTest.SetStateDirective{key: :step1_directive_ran, value: true}}
     end
@@ -34,9 +34,6 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
     def run(_params, context) do
       saw_cmd = Map.get(context.state, :step1_cmd_ran, false)
       saw_directive = Map.get(context.state, :step1_directive_ran, false)
-
-      IO.inspect(context.state, label: "[Step2Action] state at start of run/2")
-      IO.puts("[Step2Action] saw step1_cmd_ran=#{saw_cmd}, step1_directive_ran=#{saw_directive}")
 
       {:ok, %{step2_saw_cmd_ran: saw_cmd, step2_saw_directive_ran: saw_directive}}
     end
@@ -65,44 +62,34 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
 
   # ── Tests ─────────────────────────────────────────────────────────────
 
-  describe "signal vs directive ordering" do
-    test "second async signal's cmd runs before first signal's directives drain", %{jido: jido} do
+  describe "inline signal processing ordering" do
+    test "signal B sees all synchronous state updates from signal A's directives",
+         %{jido: jido} do
       pid = start_server(%{jido: jido}, OrderingAgent)
 
       signal1 = signal("step1", %{})
       signal2 = signal("step2", %{})
 
-      # Both casts are sent sequentially from this process, so signal2's cast
-      # is already in the mailbox when handle_cast(signal1) runs. When signal1's
-      # handler does send(self(), :drain), :drain lands AFTER signal2's cast:
-      #
-      #   1. handle_cast(signal1) → cmd sets step1_cmd_ran=true
-      #      → enqueues SetStateDirective(step1_directive_ran=true)
-      #      → send(self(), :drain)
-      #      Mailbox: [signal2_cast, :drain]
-      #
-      #   2. handle_cast(signal2) → cmd reads state:
-      #      step1_cmd_ran=true (set by cmd), step1_directive_ran=false (directive hasn't drained!)
-      #
-      #   3. :drain → executes SetStateDirective → sets step1_directive_ran=true
+      # Two casts: signal1 is handled end-to-end (cmd + all directives) before
+      # signal2 is pulled from the mailbox. So step2 sees both step1_cmd_ran
+      # AND step1_directive_ran set to true.
       Jido.AgentServer.cast(pid, signal1)
       Jido.AgentServer.cast(pid, signal2)
 
-      # Wait for the directive to drain
       eventually_state(pid, fn state ->
-        state.agent.state.__domain__.step1_directive_ran == true
+        state.agent.state.__domain__.step2_saw_cmd_ran
       end)
 
       {:ok, state} = Jido.AgentServer.state(pid)
       agent_state = state.agent.state.__domain__
 
-      # Everything ran in the end
       assert agent_state.step1_cmd_ran == true
       assert agent_state.step1_directive_ran == true
 
-      # The proof: Step2 saw the cmd effect but NOT the directive effect
+      # The atomicity guarantee: step2 observed BOTH the cmd-level update and
+      # the directive's synchronous state transition.
       assert agent_state.step2_saw_cmd_ran == true
-      assert agent_state.step2_saw_directive_ran == false
+      assert agent_state.step2_saw_directive_ran == true
     end
   end
 end

@@ -62,7 +62,6 @@ defmodule Jido.Telemetry do
   - `[:jido, :agent_server, :directive, :start]` - Directive execution started
   - `[:jido, :agent_server, :directive, :stop]` - Directive execution completed
   - `[:jido, :agent_server, :directive, :exception]` - Directive execution failed
-  - `[:jido, :agent_server, :queue, :overflow]` - Directive queue overflow
   - `[:jido, :agent_server, :cron, :register]` - Dynamic cron registered
   - `[:jido, :agent_server, :cron, :cancel]` - Dynamic cron cancelled
   - `[:jido, :agent_server, :cron, :restart_scheduled]` - Dynamic cron restart scheduled
@@ -167,12 +166,6 @@ defmodule Jido.Telemetry do
         tags: [:jido_instance, :directive_type],
         tag_values: tag_values,
         description: "Total directives executed"
-      ),
-      Telemetry.Metrics.counter("jido.agent_server.queue.overflow.count",
-        event_name: [:jido, :agent_server, :queue, :overflow],
-        tags: [:jido_instance],
-        tag_values: tag_values,
-        description: "Queue overflow count"
       )
     ]
   end
@@ -203,7 +196,6 @@ defmodule Jido.Telemetry do
       [:jido, :agent_server, :directive, :start],
       [:jido, :agent_server, :directive, :stop],
       [:jido, :agent_server, :directive, :exception],
-      [:jido, :agent_server, :queue, :overflow],
       [:jido, :agent_server, :cron, :register],
       [:jido, :agent_server, :cron, :cancel],
       [:jido, :agent_server, :cron, :restart_scheduled],
@@ -495,15 +487,6 @@ defmodule Jido.Telemetry do
       trace_id: metadata[:jido_trace_id],
       span_id: metadata[:jido_span_id],
       stacktrace: metadata[:stacktrace]
-    )
-  end
-
-  def handle_event([:jido, :agent_server, :queue, :overflow], measurements, metadata, _config) do
-    Logger.warning(
-      "[queue.overflow] signal_type=#{Formatter.format_signal_type(metadata[:signal_type])} " <>
-        "queue_size=#{measurements[:queue_size]}",
-      agent_id: metadata[:agent_id],
-      trace_id: metadata[:jido_trace_id]
     )
   end
 
