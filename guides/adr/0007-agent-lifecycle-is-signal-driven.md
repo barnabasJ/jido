@@ -3,6 +3,7 @@
 - Status: Proposed
 - Date: 2026-04-22
 - Related commits: TBD (regression exemplified at `d85907f`)
+- Implementation plan: [0007-implementation.md](0007-implementation.md)
 - Supersedes `TBD` — none yet, but this revision (2026-04-22 afternoon)
   strengthens an earlier draft that distinguished fresh from thaw;
   the final form erases the distinction entirely.
