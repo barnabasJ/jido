@@ -213,7 +213,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     assert Map.has_key?(topology.nodes, "planner")
     assert {:ok, planner_pid} = Pod.lookup_node(pod_pid, "planner")
     assert {:ok, planner_state} = AgentServer.state(planner_pid)
-    assert planner_state.agent.state.role == "planner"
+    assert planner_state.agent.state.__domain__.role == "planner"
   end
 
   test "external mutate persists lazy nodes without starting them", %{pod_id: pod_id, jido: jido} do
