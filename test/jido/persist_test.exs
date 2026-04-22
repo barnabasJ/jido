@@ -37,7 +37,7 @@ defmodule JidoTest.PersistTest do
          version: 99,
          agent_module: __MODULE__,
          id: agent.id,
-         state: %{value: agent.state.value, serialized_by: :custom},
+         state: %{value: agent.state.__domain__.value, serialized_by: :custom},
          marker: :custom_checkpoint,
          thread: nil
        }}
@@ -72,7 +72,7 @@ defmodule JidoTest.PersistTest do
          agent_module: __MODULE__,
          id: agent.id,
          state: %{
-           value: agent.state.value,
+           value: agent.state.__domain__.value,
            __thread__: %{runtime_only: true}
          },
          thread: nil
@@ -155,14 +155,14 @@ defmodule JidoTest.PersistTest do
     test "hibernates agent without thread" do
       table = unique_table()
       agent = TestAgent.new(id: "agent-1")
-      agent = %{agent | state: %{agent.state | counter: 42, status: :active}}
+      agent = update_in(agent.state.__domain__, &%{&1 | counter: 42, status: :active})
 
       assert :ok = Persist.hibernate(storage(table), agent)
 
       {:ok, checkpoint} = ETS.get_checkpoint({TestAgent, "agent-1"}, table: table)
       assert checkpoint.id == "agent-1"
-      assert checkpoint.state.counter == 42
-      assert checkpoint.state.status == :active
+      assert checkpoint.state.__domain__.counter == 42
+      assert checkpoint.state.__domain__.status == :active
       assert checkpoint.thread == nil
     end
 
@@ -189,7 +189,7 @@ defmodule JidoTest.PersistTest do
     test "uses custom checkpoint callback when implemented" do
       table = unique_table()
       agent = CustomAgent.new(id: "custom-1")
-      agent = %{agent | state: %{agent.state | value: "custom_value"}}
+      agent = put_in(agent.state.__domain__.value, "custom_value")
 
       assert :ok = Persist.hibernate(storage(table), agent)
 
@@ -212,7 +212,8 @@ defmodule JidoTest.PersistTest do
       }
 
       agent =
-        %{agent | state: %{agent.state | value: "custom_value"}}
+        agent
+        |> put_in([Access.key!(:state), :__domain__, :value], "custom_value")
         |> then(fn agent ->
           %{agent | state: Map.put(agent.state, scheduler_key, scheduler_manifest)}
         end)
@@ -310,14 +311,14 @@ defmodule JidoTest.PersistTest do
     test "thaws agent without thread" do
       table = unique_table()
       agent = TestAgent.new(id: "thaw-1")
-      agent = %{agent | state: %{agent.state | counter: 100, status: :completed}}
+      agent = update_in(agent.state.__domain__, &%{&1 | counter: 100, status: :completed})
 
       :ok = Persist.hibernate(storage(table), agent)
 
       assert {:ok, thawed} = Persist.thaw(storage(table), TestAgent, "thaw-1")
       assert thawed.id == "thaw-1"
-      assert thawed.state.counter == 100
-      assert thawed.state.status == :completed
+      assert thawed.state.__domain__.counter == 100
+      assert thawed.state.__domain__.status == :completed
       refute Map.has_key?(thawed.state, :__thread__)
     end
 
@@ -345,7 +346,7 @@ defmodule JidoTest.PersistTest do
     test "uses custom restore callback when implemented" do
       table = unique_table()
       agent = CustomAgent.new(id: "thaw-custom")
-      agent = %{agent | state: %{agent.state | value: "restored_value"}}
+      agent = put_in(agent.state.__domain__.value, "restored_value")
 
       :ok = Persist.hibernate(storage(table), agent)
 
@@ -486,7 +487,7 @@ defmodule JidoTest.PersistTest do
     test "hibernate then thaw returns equivalent agent" do
       table = unique_table()
       agent = TestAgent.new(id: "roundtrip-1")
-      agent = %{agent | state: %{agent.state | counter: 999, status: :processing}}
+      agent = update_in(agent.state.__domain__, &%{&1 | counter: 999, status: :processing})
 
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, thawed} = Persist.thaw(storage(table), TestAgent, "roundtrip-1")
@@ -498,13 +499,13 @@ defmodule JidoTest.PersistTest do
     test "state is preserved correctly" do
       table = unique_table()
       agent = TestAgent.new(id: "roundtrip-2")
-      agent = %{agent | state: %{agent.state | counter: 12_345, status: :hibernated}}
+      agent = update_in(agent.state.__domain__, &%{&1 | counter: 12_345, status: :hibernated})
 
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, thawed} = Persist.thaw(storage(table), TestAgent, "roundtrip-2")
 
-      assert thawed.state.counter == 12_345
-      assert thawed.state.status == :hibernated
+      assert thawed.state.__domain__.counter == 12_345
+      assert thawed.state.__domain__.status == :hibernated
     end
 
     test "thread is preserved correctly with all entries" do
@@ -543,18 +544,19 @@ defmodule JidoTest.PersistTest do
     test "multiple hibernate cycles update correctly" do
       table = unique_table()
       agent = TestAgent.new(id: "multi-1")
+      agent = put_in(agent.state.__domain__.counter, 1)
 
-      agent = %{agent | state: %{agent.state | counter: 1}}
       :ok = Persist.hibernate(storage(table), agent)
 
       {:ok, thawed} = Persist.thaw(storage(table), TestAgent, "multi-1")
-      assert thawed.state.counter == 1
+      assert thawed.state.__domain__.counter == 1
 
-      updated = %{thawed | state: %{thawed.state | counter: 2}}
+      updated = put_in(thawed.state.__domain__.counter, 2)
+
       :ok = Persist.hibernate(storage(table), updated)
 
       {:ok, thawed2} = Persist.thaw(storage(table), TestAgent, "multi-1")
-      assert thawed2.state.counter == 2
+      assert thawed2.state.__domain__.counter == 2
     end
 
     test "partitioned and unpartitioned checkpoint identities coexist" do
@@ -562,13 +564,12 @@ defmodule JidoTest.PersistTest do
 
       unpartitioned =
         TestAgent.new(id: "partitioned-roundtrip")
-        |> then(fn agent -> %{agent | state: %{agent.state | counter: 10}} end)
+        |> put_in([Access.key!(:state), :__domain__, :counter], 10)
 
       partitioned =
         TestAgent.new(id: "partitioned-roundtrip")
-        |> then(fn agent ->
-          %{agent | state: agent.state |> Map.put(:counter, 20) |> Map.put(:__partition__, :blue)}
-        end)
+        |> put_in([Access.key!(:state), :__domain__, :counter], 20)
+        |> put_in([Access.key!(:state), :__partition__], :blue)
 
       assert :ok = Persist.hibernate(storage(table), unpartitioned)
       assert :ok = Persist.hibernate(storage(table), partitioned)
@@ -576,14 +577,14 @@ defmodule JidoTest.PersistTest do
       assert {:ok, checkpoint} =
                ETS.get_checkpoint({TestAgent, "partitioned-roundtrip"}, table: table)
 
-      assert checkpoint.state.counter == 10
+      assert checkpoint.state.__domain__.counter == 10
 
       assert {:ok, partitioned_checkpoint} =
                ETS.get_checkpoint({TestAgent, {:partition, :blue, "partitioned-roundtrip"}},
                  table: table
                )
 
-      assert partitioned_checkpoint.state.counter == 20
+      assert partitioned_checkpoint.state.__domain__.counter == 20
 
       assert {:ok, thawed_partitioned} =
                Persist.thaw(
@@ -592,7 +593,7 @@ defmodule JidoTest.PersistTest do
                  {:partition, :blue, "partitioned-roundtrip"}
                )
 
-      assert thawed_partitioned.state.counter == 20
+      assert thawed_partitioned.state.__domain__.counter == 20
       assert thawed_partitioned.state.__partition__ == :blue
     end
   end
@@ -603,12 +604,12 @@ defmodule JidoTest.PersistTest do
       jido_instance = %{storage: {ETS, table: table}}
 
       agent = TestAgent.new(id: "jido-instance-1")
-      agent = %{agent | state: %{agent.state | counter: 777}}
+      agent = put_in(agent.state.__domain__.counter, 777)
 
       assert :ok = Persist.hibernate(jido_instance, agent)
       assert {:ok, thawed} = Persist.thaw(jido_instance, TestAgent, "jido-instance-1")
 
-      assert thawed.state.counter == 777
+      assert thawed.state.__domain__.counter == 777
     end
 
     test "hibernate and thaw with thread using Jido instance" do
@@ -685,7 +686,7 @@ defmodule JidoTest.PersistTest do
       }
 
       agent = TestAgent.new(id: "agent-missing")
-      agent = %{agent | state: %{agent.state | counter: 42, status: :processing}}
+      agent = update_in(agent.state.__domain__, &%{&1 | counter: 42, status: :processing})
 
       assert :ok =
                Persist.persist_scheduler_manifest(
@@ -697,8 +698,8 @@ defmodule JidoTest.PersistTest do
                )
 
       {:ok, checkpoint} = ETS.get_checkpoint(checkpoint_key, table: table)
-      assert checkpoint.state.counter == 42
-      assert checkpoint.state.status == :processing
+      assert checkpoint.state.__domain__.counter == 42
+      assert checkpoint.state.__domain__.status == :processing
       assert checkpoint.state[scheduler_key] == manifest
     end
   end
@@ -737,7 +738,7 @@ defmodule JidoTest.PersistTest do
       table = unique_table()
       scheduler_key = Jido.Scheduler.cron_specs_state_key()
       agent = CustomAgent.new(id: "custom-thread-1")
-      agent = %{agent | state: %{agent.state | value: "with_thread"}}
+      agent = put_in(agent.state.__domain__.value, "with_thread")
 
       thread =
         Thread.new(id: "custom-thread")
@@ -773,11 +774,9 @@ defmodule JidoTest.PersistTest do
       agent = RuntimeStateCheckpointAgent.new(id: "runtime-invariant-1")
 
       agent =
-        %{
-          agent
-          | state:
-              agent.state |> Map.put(:value, "with_runtime") |> Map.put(scheduler_key, manifest)
-        }
+        agent
+        |> put_in([Access.key!(:state), :__domain__, :value], "with_runtime")
+        |> put_in([Access.key!(:state), scheduler_key], manifest)
 
       :ok = Persist.hibernate(storage(table), agent)
 
