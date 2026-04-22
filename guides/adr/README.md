@@ -25,4 +25,4 @@ changes that reverse an earlier call.
 | [0004](0004-pod-lifecycle-signals.md) | Pod reconciliation emits lifecycle signals | Accepted |
 | [0005](0005-agent-domain-as-a-state-slice.md) | Agent domain state is a first-class `state_key` slice | Accepted |
 | [0006](0006-external-sync-uses-signals.md) | External sync uses signals and events, not state-dig or polling | Accepted |
-| [0007](0007-agent-lifecycle-is-signal-driven.md) | Agent lifecycle is signal-driven; thaw is invisible to the agent module | Proposed |
+| [0007](0007-agent-lifecycle-is-signal-driven.md) | Start is the only operation; ready is the only lifecycle signal agents route | Proposed |
