@@ -72,8 +72,8 @@ defmodule JidoTest.AgentServer.StatusTest do
     test "status includes raw_state as escape hatch", %{pid: pid} do
       {:ok, status} = AgentServer.status(pid)
 
-      assert status.raw_state.counter == 0
-      assert status.raw_state.status == :idle
+      assert status.raw_state.__domain__.counter == 0
+      assert status.raw_state.__domain__.status == :idle
     end
 
     test "delegate helper functions work", %{pid: pid} do
@@ -132,17 +132,17 @@ defmodule JidoTest.AgentServer.StatusTest do
     test "reflects state changes", %{pid: pid} do
       # Initial state
       {:ok, status1} = AgentServer.status(pid)
-      assert status1.raw_state.counter == 0
+      assert status1.raw_state.__domain__.counter == 0
 
       # Send increment signal
       signal = Signal.new!("test_increment", %{}, source: "test")
       AgentServer.cast(pid, signal)
 
       # Wait for updated state
-      eventually_state(pid, fn state -> state.agent.state.counter == 1 end)
+      eventually_state(pid, fn state -> state.agent.state.__domain__.counter == 1 end)
 
       {:ok, status2} = AgentServer.status(pid)
-      assert status2.raw_state.counter == 1
+      assert status2.raw_state.__domain__.counter == 1
     end
 
     test "reflects completion", %{pid: pid} do
@@ -151,10 +151,10 @@ defmodule JidoTest.AgentServer.StatusTest do
       AgentServer.cast(pid, signal)
 
       # Wait for completion
-      eventually_state(pid, fn state -> state.agent.state.status == :completed end)
+      eventually_state(pid, fn state -> state.agent.state.__domain__.status == :completed end)
 
       {:ok, status} = AgentServer.status(pid)
-      assert status.raw_state.status == :completed
+      assert status.raw_state.__domain__.status == :completed
     end
   end
 
@@ -191,9 +191,9 @@ defmodule JidoTest.AgentServer.StatusTest do
           try do
             AgentServer.stream_status(pid, interval_ms: 20)
             |> Enum.reduce_while([], fn status, acc ->
-              new_acc = [status.raw_state[:counter] | acc]
+              new_acc = [get_in(status.raw_state, [:__domain__, :counter]) | acc]
 
-              if status.raw_state[:counter] >= 3 do
+              if get_in(status.raw_state, [:__domain__, :counter]) >= 3 do
                 {:halt, Enum.reverse(new_acc)}
               else
                 {:cont, new_acc}
@@ -211,7 +211,7 @@ defmodule JidoTest.AgentServer.StatusTest do
       for i <- 1..3 do
         signal = Signal.new!("test_increment", %{}, source: "test")
         AgentServer.cast(pid, signal)
-        eventually_state(pid, fn state -> state.agent.state[:counter] >= i end)
+        eventually_state(pid, fn state -> get_in(state.agent.state, [:__domain__, :counter]) >= i end)
       end
 
       # Check we saw the progression
@@ -236,7 +236,7 @@ defmodule JidoTest.AgentServer.StatusTest do
         Task.async(fn ->
           AgentServer.stream_status(pid, interval_ms: 20)
           |> Enum.reduce_while(nil, fn status, _acc ->
-            if status.raw_state[:status] == :completed do
+            if get_in(status.raw_state, [:__domain__, :status]) == :completed do
               {:halt, {:completed, status.raw_state[:result]}}
             else
               {:cont, nil}

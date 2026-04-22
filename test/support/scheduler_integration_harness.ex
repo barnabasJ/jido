@@ -176,7 +176,7 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
     eventually_state(
       pid,
       fn state ->
-        tick_count = state.agent.state.tick_count
+        tick_count = state.agent.state.__domain__.tick_count
         if tick_count >= count, do: tick_count, else: false
       end,
       opts
@@ -185,12 +185,12 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
 
   def tick_count(pid) do
     state = state(pid)
-    state.agent.state.tick_count
+    state.agent.state.__domain__.tick_count
   end
 
   def ticks(pid) do
     state = state(pid)
-    state.agent.state.ticks
+    state.agent.state.__domain__.ticks
   end
 
   def state(pid) do

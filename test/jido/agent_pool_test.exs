@@ -116,7 +116,7 @@ defmodule JidoTest.AgentPoolTest do
       result =
         AgentPool.with_agent(jido_name, :test_pool, fn pid ->
           {:ok, agent} = AgentServer.call(pid, signal)
-          agent.state.counter
+          agent.state.__domain__.counter
         end)
 
       assert result == 1
@@ -144,7 +144,7 @@ defmodule JidoTest.AgentPoolTest do
       result =
         AgentPool.with_agent(jido_name, :test_pool, fn pid ->
           {:ok, agent} = AgentServer.call(pid, signal)
-          agent.state.counter
+          agent.state.__domain__.counter
         end)
 
       assert result == 2
@@ -168,7 +168,7 @@ defmodule JidoTest.AgentPoolTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, agent} = AgentPool.call(jido_name, :test_pool, signal)
 
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.counter == 1
 
       Supervisor.stop(jido_pid)
     end
@@ -193,7 +193,7 @@ defmodule JidoTest.AgentPoolTest do
 
       eventually(fn ->
         {:ok, agent} = AgentPool.call(jido_name, :test_pool, get_signal)
-        agent.state.counter >= 1
+        agent.state.__domain__.counter >= 1
       end)
 
       Supervisor.stop(jido_pid)
@@ -286,7 +286,7 @@ defmodule JidoTest.AgentPoolTest do
       get_signal = Signal.new!("get_count", %{}, source: "/test")
       {:ok, agent} = AgentPool.call(jido_name, :test_pool, get_signal)
 
-      assert agent.state.counter == 100
+      assert agent.state.__domain__.counter == 100
 
       Supervisor.stop(jido_pid)
     end

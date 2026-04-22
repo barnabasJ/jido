@@ -59,12 +59,17 @@ defmodule JidoTest.AgentServer.HierarchyTest do
     def run(params, context) do
       events = Map.get(context.state, :orphan_events, [])
 
+      # Runtime metadata (:__parent__, :__orphaned_from__) lives on the full
+      # agent.state, not the :__domain__ slice this action receives as
+      # ctx.state. Use context.agent.state to reach it.
+      full_state = context.agent.state
+
       event =
         params
-        |> Map.put(:parent_available, not is_nil(Map.get(context.state, :__parent__)))
+        |> Map.put(:parent_available, not is_nil(Map.get(full_state, :__parent__)))
         |> Map.put(
           :orphaned_from_id,
-          context.state
+          full_state
           |> Map.get(:__orphaned_from__)
           |> case do
             %ParentRef{id: id} -> id
@@ -73,7 +78,7 @@ defmodule JidoTest.AgentServer.HierarchyTest do
         )
         |> Map.put(
           :can_emit_to_parent,
-          not is_nil(Directive.emit_to_parent(%{state: context.state}, %{type: "orphan.check"}))
+          not is_nil(Directive.emit_to_parent(%{state: full_state}, %{type: "orphan.check"}))
         )
 
       {:ok, %{orphan_events: events ++ [event]}}
@@ -307,14 +312,14 @@ defmodule JidoTest.AgentServer.HierarchyTest do
       GenServer.stop(parent_pid)
 
       eventually_state(child_pid, fn state ->
-        length(state.agent.state.orphan_events) == 1
+        length(state.agent.state.__domain__.orphan_events) == 1
       end)
 
       assert Process.alive?(child_pid)
 
       {:ok, child_state} = AgentServer.state(child_pid)
 
-      [event] = child_state.agent.state.orphan_events
+      [event] = child_state.agent.state.__domain__.orphan_events
       assert event.parent_id == "parent-orphan-1"
       assert event.parent_pid == parent_pid
       assert event.tag == :worker
@@ -362,12 +367,12 @@ defmodule JidoTest.AgentServer.HierarchyTest do
       send(parent_pid, {:DOWN, ref, :process, child_pid, :test_exit})
 
       eventually_state(parent_pid, fn state ->
-        length(state.agent.state.child_events) == 1
+        length(state.agent.state.__domain__.child_events) == 1
       end)
 
       {:ok, final_state} = AgentServer.state(parent_pid)
 
-      [event] = final_state.agent.state.child_events
+      [event] = final_state.agent.state.__domain__.child_events
       assert event.tag == :worker
       assert event.reason == :test_exit
 
@@ -618,9 +623,9 @@ defmodule JidoTest.AgentServer.HierarchyTest do
 
       {:ok, final_state} = AgentServer.state(parent_pid)
       refute Map.has_key?(final_state.children, :dying_child)
-      assert length(final_state.agent.state.child_events) == 1
+      assert length(final_state.agent.state.__domain__.child_events) == 1
 
-      [event] = final_state.agent.state.child_events
+      [event] = final_state.agent.state.__domain__.child_events
       assert event.tag == :dying_child
       assert event.reason == :shutdown
 
@@ -714,7 +719,7 @@ defmodule JidoTest.AgentServer.HierarchyTest do
 
       eventually_state(child_info.pid, fn state ->
         state.parent == nil and state.orphaned_from.id == old_parent_id and
-          length(state.agent.state.orphan_events) == 1
+          length(state.agent.state.__domain__.orphan_events) == 1
       end)
 
       {:ok, replacement_parent_pid} =
@@ -758,11 +763,11 @@ defmodule JidoTest.AgentServer.HierarchyTest do
 
       eventually_state(child_info.pid, fn state ->
         state.parent == nil and state.orphaned_from.id == replacement_parent_id and
-          length(state.agent.state.orphan_events) == 2
+          length(state.agent.state.__domain__.orphan_events) == 2
       end)
 
       {:ok, reorphaned_state} = AgentServer.state(child_info.pid)
-      [_, second_event] = reorphaned_state.agent.state.orphan_events
+      [_, second_event] = reorphaned_state.agent.state.__domain__.orphan_events
       assert second_event.parent_id == replacement_parent_id
 
       GenServer.stop(child_info.pid)

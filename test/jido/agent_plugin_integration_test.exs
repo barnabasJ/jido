@@ -16,8 +16,10 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%{amount: amount}, %{state: state}) do
-      current = get_in(state, [:counter_plugin, :count]) || 0
+    def run(%{amount: amount}, %{agent: agent}) do
+      # :counter_plugin is a plugin slice at the top of agent.state, not in
+      # the user-domain slice ctx.state exposes. Read it from the full state.
+      current = get_in(agent.state, [:counter_plugin, :count]) || 0
       {:ok, %{}, %StateOp.SetPath{path: [:counter_plugin, :count], value: current + amount}}
     end
   end
@@ -30,8 +32,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%{amount: amount}, %{state: state}) do
-      current = get_in(state, [:counter_plugin, :count]) || 0
+    def run(%{amount: amount}, %{agent: agent}) do
+      current = get_in(agent.state, [:counter_plugin, :count]) || 0
       {:ok, %{}, %StateOp.SetPath{path: [:counter_plugin, :count], value: current - amount}}
     end
   end
@@ -629,16 +631,16 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     test "defaults from both base and skill are applied in new/0" do
       agent = MixedSchemaAgent.new()
 
-      assert agent.state[:base_counter] == 100
-      assert agent.state[:base_mode] == :initial
+      assert agent.state[:__domain__][:base_counter] == 100
+      assert agent.state[:__domain__][:base_mode] == :initial
       assert agent.state[:counter_plugin][:count] == 0
     end
 
     test "base schema fields and plugin schema fields coexist" do
       agent = MixedSchemaAgent.new(state: %{base_counter: 50})
 
-      assert agent.state[:base_counter] == 50
-      assert agent.state[:base_mode] == :initial
+      assert agent.state[:__domain__][:base_counter] == 50
+      assert agent.state[:__domain__][:base_mode] == :initial
       assert agent.state[:counter_plugin][:count] == 0
     end
 

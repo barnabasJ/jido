@@ -91,7 +91,7 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
       assert state_during_outage.cron_jobs[:heartbeat] == job_pid
       assert Process.alive?(job_pid)
 
-      baseline = state_during_outage.agent.state.tick_count
+      baseline = state_during_outage.agent.state.__domain__.tick_count
 
       # Restore working database
       Application.put_env(:jido, :time_zone_database, TimeZoneInfo.TimeZoneDatabase)

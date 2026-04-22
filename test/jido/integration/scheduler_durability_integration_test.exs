@@ -414,7 +414,7 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
       end)
 
       agent = RestoreCountingAgent.new(id: "restore-once-agent")
-      agent = %{agent | state: %{agent.state | counter: 41}}
+      agent = %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | counter: 41}}}
 
       assert :ok =
                Persist.hibernate(
@@ -428,7 +428,7 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
       assert_receive {:restore_called, "restore-once-agent"}, 2_000
       refute_receive {:restore_called, "restore-once-agent"}, 500
 
-      assert state(pid).agent.state.counter == 41
+      assert state(pid).agent.state.__domain__.counter == 41
 
       :ok = AgentServer.detach(pid)
     end
