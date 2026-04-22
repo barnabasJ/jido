@@ -1,6 +1,7 @@
 # 0003. Server-state access lives in directives, not actions
 
 - Status: Accepted
+- Implementation: Complete
 - Date: 2026-04-20
 - Related commits: `0df476f`
 

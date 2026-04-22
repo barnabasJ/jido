@@ -1,8 +1,11 @@
 # 0006. External sync uses signals and events, not state-dig or polling
 
 - Status: Accepted
+- Implementation: Partial — see "Implementation status" below
 - Date: 2026-04-21
-- Related commits: TBD
+- Related commits: `7eff5b4` (ADR), `af2e7cb` (TopologyState via signal),
+  `fcf1a94` (Await children query + Signal.Call :noproc),
+  `d85907f` (await_child replaces poll_for_child)
 
 ## Context
 
@@ -126,3 +129,48 @@ This ADR lands the straightforward migrations against those rules:
   not one-line fixes; bundling them with the state-dig migration would
   delay both. Keeping `state/1` as a documented escape hatch and
   migrating callers one at a time keeps each ADR small.
+
+## Implementation status
+
+**Shipped:**
+
+- [x] `Jido.Pod.TopologyState.fetch_topology/1` (server clause) uses
+  `Signal.Call.call` with the existing `jido.pod.query.topology` signal.
+  — `af2e7cb`
+- [x] `Jido.Await.get_children/1` and `Jido.Await.get_child/2` use a
+  new `jido.agent.query.children` signal. Route registered as a
+  builtin via `AgentServer.SignalRouter.add_builtin_routes/1`.
+  — `fcf1a94`
+- [x] `Jido.Signal.Call.call/3` monitors the target pid and returns
+  `{:error, :noproc}` on DOWN instead of blocking until timeout.
+  `AgentServer.resolve/1` exposed as public helper.
+  — `fcf1a94`
+- [x] `Jido.Await.child/4` uses event-driven
+  `AgentServer.await_child/3` in place of `poll_for_child` sleep loop.
+  `state.child_waiters` parks callers; `maybe_notify_child_waiters/3`
+  wakes them on child registration (from either
+  `jido.agent.child.started` or `handle_call({:adopt_child, ...})`).
+  — `d85907f`
+- [x] `Jido.Await.alive?/1` keeps direct `state/1` call, documented as
+  Category B (liveness check, not a state read).
+
+**Deferred to follow-up ADRs:**
+
+- [ ] `Pod.Runtime.ensure_node/3`, `Pod.Runtime.reconcile/2`, and
+  `Pod.Runtime.teardown_runtime/2` still call `AgentServer.state/1`
+  directly. These orchestrate multi-step work that threads state
+  through many helpers — not a pure query. Will likely be addressed as
+  a consequence of ADR 0007 (pod reconcile moves into plugin
+  `after_start` callback; orchestration paths restructure around that).
+- [ ] `Pod.Mutable.mutate/3` still uses a hand-rolled ETS lock with an
+  internal cast/await dance. Rewrite on `Signal.Call.call/3` with an
+  idle/in-flight state machine in plugin state. Own ADR needed.
+- [ ] `build_parent_ref/5` ([runtime.ex:625](../../lib/jido/pod/runtime.ex))
+  and `register_child/3` ([runtime.ex:798](../../lib/jido/pod/runtime.ex))
+  still call `AgentServer.state/1` during directive execution to read
+  bootstrap metadata from another agent. Category B per this ADR —
+  keep with a justifying comment. Low priority.
+- [ ] `AgentServer.stream_status/2` uses `Process.sleep` in a
+  `Stream.repeatedly`. Exempt from this ADR's Wait rule (interval-based
+  observation is a different contract), but worth revisiting as a
+  long-lived signal subscription in a future ADR.

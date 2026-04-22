@@ -1,6 +1,7 @@
 # 0004. Pod reconciliation emits lifecycle signals
 
 - Status: Accepted
+- Implementation: Complete
 - Date: 2026-04-20
 - Related commits: `e624111`
 

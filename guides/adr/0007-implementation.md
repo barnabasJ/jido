@@ -9,6 +9,33 @@ Target: 11–12 commits across four phases. Phase 5 (final deprecation
 removal) is deferred to a future major release and not part of this
 stack.
 
+## Status tracker
+
+Tick each box when the corresponding commit lands on `origin/main`.
+The ADR's `Implementation:` field in its front matter progresses
+`Pending → Partial → Complete` as phases land.
+
+- [ ] 1.1 — Emit lifecycle signals from AgentServer
+- [ ] 1.2 — `AgentServer.await_ready/2` helper
+- [ ] 2.1 — Rewrite the 6 failing tests against `await_ready/2`
+- [ ] 3.1 — Add new plugin callbacks with safe defaults
+- [ ] 3.2 — Wire `Jido.Persist` to use `to_persistable` / `from_persistable`
+- [ ] 3.3 — Migrate `Jido.Pod.Plugin`: reconcile moves into `after_start`
+- [ ] 3.4 — Migrate `Jido.Thread.Plugin` to `to_persistable`
+- [ ] 3.5 — Migrate `Jido.Memory.Plugin` to new callbacks
+- [ ] 3.6 — Deprecate old plugin callbacks
+- [ ] 4.1 — `AgentServer.init/1` loads slice from storage
+- [ ] 4.2 — Remove `Lifecycle.Keyed.maybe_restore_agent_from_storage`
+- [ ] 4.3 — Remove `restored_from_storage` from external contract
+- [ ] 4.4 — `InstanceManager.build_child_spec` stops coordinating thaw
+
+Phase boundaries:
+- After Phase 1 (1.1, 1.2): ADR 0007 moves to `Implementation: Partial`.
+- After Phase 2 (2.1): the 6 pod thaw tests go green.
+- After Phase 3 (3.1–3.6): the plugin contract shift is in place.
+- After Phase 4 (4.1–4.4): two thaw paths collapse into zero and
+  `Implementation:` moves to `Complete`. Phase 5 is deferred.
+
 ## Phase 1 — Lifecycle signals + `await_ready/2`
 
 **Goal:** Publish the `starting`/`ready`/`stopping` signals. Provide
