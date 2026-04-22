@@ -325,9 +325,9 @@ defmodule Jido.Agent do
                            state_key:
                              Zoi.atom(
                                description:
-                                 "If set, seed schema defaults under agent.state[state_key] instead of at the top level. Must match the key scoped actions declare. See ADR 0005."
+                                 "Atom slice key where the agent's user-domain state lives under `agent.state`. Scoped actions (`Jido.Agent.ScopedAction`) target this same key to receive just that slice as `ctx.state`. Defaults to `:__domain__`. See ADR 0005 / 0007."
                              )
-                             |> Zoi.optional()
+                             |> Zoi.default(:__domain__)
                          },
                          coerce: true
                        )
@@ -493,14 +493,13 @@ defmodule Jido.Agent do
       def vsn, do: @validated_opts[:vsn]
 
       @doc """
-      Returns the atom slice key where the agent's user-domain state lives,
-      or `nil` if the agent uses the legacy flat layout.
+      Returns the atom slice key where the agent's user-domain state lives.
 
-      See ADR 0005 — when set, schema defaults are seeded under
+      Defaults to `:__domain__` (ADR 0007). Schema defaults are seeded under
       `agent.state[state_key]` and scoped actions (`Jido.Agent.ScopedAction`)
       declaring the same key receive just that slice as `ctx.state`.
       """
-      @spec state_key() :: atom() | nil
+      @spec state_key() :: atom()
       def state_key, do: @validated_opts[:state_key]
 
       @doc "Returns the merged schema (base + plugin schemas)."
@@ -804,14 +803,10 @@ defmodule Jido.Agent do
         # Build initial state from base schema defaults
         base_defaults = AgentState.defaults_from_schema(@validated_opts[:schema])
 
-        # If the agent declared a state_key, nest user-domain defaults under
-        # that slice so it participates in the same "combined reducers"
-        # layout as plugins. See ADR 0005.
-        base_defaults =
-          case state_key() do
-            nil -> base_defaults
-            key when is_atom(key) -> %{key => base_defaults}
-          end
+        # Nest user-domain defaults under the agent's slice so it participates
+        # in the same "combined reducers" layout as plugins. Every agent now
+        # has a slice (ADR 0007); `state_key()` is always an atom.
+        base_defaults = %{state_key() => base_defaults}
 
         # Build plugin defaults nested under their state_keys
         # Skip plugins with nil schema (they manage their own state lifecycle)
@@ -824,9 +819,32 @@ defmodule Jido.Agent do
           end)
           |> Map.new()
 
-        # Merge: base defaults + plugin defaults + provided state
         schema_defaults = Map.merge(base_defaults, plugin_defaults)
-        Map.merge(schema_defaults, opts[:state] || %{})
+
+        # Ergonomic auto-wrap (ADR 0007): if the user passes a flat map like
+        # `state: %{counter: 5}` we treat it as "my domain slice" and nest it
+        # under the agent's state_key. If they pass an explicit slice layout
+        # like `state: %{__domain__: %{...}, __pod__: %{...}}` we take it as-is.
+        user_state = __wrap_user_state__(opts[:state] || %{})
+
+        DeepMerge.deep_merge(schema_defaults, user_state)
+      end
+
+      defp __wrap_user_state__(%{} = user_state) do
+        known_slices = [state_key() | @plugin_state_keys]
+
+        cond do
+          map_size(user_state) == 0 ->
+            user_state
+
+          Enum.any?(Map.keys(user_state), fn k -> k in known_slices end) ->
+            # User passed an explicit slice layout — take it as-is
+            user_state
+
+          true ->
+            # Flat shape — wrap under the agent's slice
+            %{state_key() => user_state}
+        end
       end
     end
   end
@@ -975,7 +993,10 @@ defmodule Jido.Agent do
       """
       @spec set(Agent.t(), map() | keyword()) :: Agent.agent_result()
       def set(%Agent{} = agent, attrs) do
-        new_state = AgentState.merge(agent.state, Map.new(attrs))
+        # Same auto-wrap as __build_initial_state__: flat attrs become "my
+        # domain slice"; explicit slice layout is taken verbatim (ADR 0007).
+        wrapped = __wrap_user_state__(Map.new(attrs))
+        new_state = AgentState.merge(agent.state, wrapped)
         OK.success(%{agent | state: new_state})
       end
 
