@@ -193,7 +193,7 @@ defmodule JidoExampleTest.StateOpsTest do
           {SetNestedValueAction, %{path: [:config, :timeout], value: 5000}}
         )
 
-      assert agent.state.__domain__.config.timeout == 5000
+      assert agent.state.config.timeout == 5000
     end
 
     test "SetPath creates intermediate maps if needed" do
@@ -205,7 +205,7 @@ defmodule JidoExampleTest.StateOpsTest do
           {SetNestedValueAction, %{path: [:config, :database, :host], value: "localhost"}}
         )
 
-      assert agent.state.__domain__.config.database.host == "localhost"
+      assert agent.state.config.database.host == "localhost"
     end
 
     test "SetPath preserves sibling keys" do
@@ -217,8 +217,8 @@ defmodule JidoExampleTest.StateOpsTest do
           {SetNestedValueAction, %{path: [:config, :timeout], value: 5000}}
         )
 
-      assert agent.state.__domain__.config.timeout == 5000
-      assert agent.state.__domain__.config.retries == 3
+      assert agent.state.config.timeout == 5000
+      assert agent.state.config.retries == 3
     end
   end
 
@@ -232,8 +232,8 @@ defmodule JidoExampleTest.StateOpsTest do
           {DeleteNestedValueAction, %{path: [:config, :secret]}}
         )
 
-      assert agent.state.__domain__.config.timeout == 1000
-      refute Map.has_key?(agent.state.__domain__.config, :secret)
+      assert agent.state.config.timeout == 1000
+      refute Map.has_key?(agent.state.config, :secret)
     end
   end
 
