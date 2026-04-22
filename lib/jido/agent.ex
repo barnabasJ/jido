@@ -79,14 +79,17 @@ defmodule Jido.Agent do
       # Create a new agent (fully initialized including strategy state)
       agent = MyAgent.new()
       agent = MyAgent.new(id: "custom-id", state: %{counter: 10})
+      # User-domain fields live under the `:__domain__` slice:
+      #   agent.state.__domain__.counter  #=> 10
 
       # Execute actions
       {agent, directives} = MyAgent.cmd(agent, MyAction)
       {agent, directives} = MyAgent.cmd(agent, {MyAction, %{value: 42}})
       {agent, directives} = MyAgent.cmd(agent, [Action1, Action2])
 
-      # Update state directly
+      # Update state directly (flat attrs are auto-wrapped into the slice)
       {:ok, agent} = MyAgent.set(agent, %{status: :running})
+      # agent.state.__domain__.status  #=> :running
 
   ## Strategy Initialization
 
@@ -761,7 +764,10 @@ defmodule Jido.Agent do
 
           agent = #{inspect(__MODULE__)}.new()
           agent = #{inspect(__MODULE__)}.new(id: "custom-id")
+
+          # Flat state is auto-wrapped into the agent's slice (`:__domain__` by default)
           agent = #{inspect(__MODULE__)}.new(state: %{counter: 10})
+          # agent.state.__domain__.counter  #=> 10
       """
       @spec new(keyword() | map()) :: Agent.t()
       def new(opts \\ []) do
@@ -984,12 +990,16 @@ defmodule Jido.Agent do
       @doc """
       Updates the agent's state by merging new attributes.
 
-      Uses deep merge semantics - nested maps are merged recursively.
+      Uses deep merge semantics - nested maps are merged recursively. Flat
+      attrs are auto-wrapped into the agent's slice (`:__domain__` by default).
 
       ## Examples
 
           {:ok, agent} = #{inspect(__MODULE__)}.set(agent, %{status: :running})
+          # agent.state.__domain__.status  #=> :running
+
           {:ok, agent} = #{inspect(__MODULE__)}.set(agent, counter: 5)
+          # agent.state.__domain__.counter  #=> 5
       """
       @spec set(Agent.t(), map() | keyword()) :: Agent.agent_result()
       def set(%Agent{} = agent, attrs) do
