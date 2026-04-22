@@ -118,6 +118,13 @@ This ADR lands the straightforward migrations against those rules:
   pattern already handles both (already-present → reply immediately;
   future-event → park) and mirrors `await_completion/2` exactly, so
   there's one shape instead of two.
+
+  *ADR 0010 adds a general subscribe primitive. The subscribe-too-late
+  race is addressed for per-signal waits by `cast_and_await/4`'s
+  atomic registration. `child_waiters` has a different convergence
+  story (already-present vs. future-event) and stays as-is; the new
+  primitives are for consumer-side waits, not a `child_waiters`
+  migration.*
 - **Long-poll via `Signal.Call.call/3` with deferred reply.** Action
   stashes the `%Reply{}` directive in plugin state; a later wake-up
   builds and dispatches it. Elegant in theory but requires plumbing
@@ -171,6 +178,6 @@ This ADR lands the straightforward migrations against those rules:
   bootstrap metadata from another agent. Category B per this ADR —
   keep with a justifying comment. Low priority.
 - [ ] `AgentServer.stream_status/2` uses `Process.sleep` in a
-  `Stream.repeatedly`. Exempt from this ADR's Wait rule (interval-based
-  observation is a different contract), but worth revisiting as a
-  long-lived signal subscription in a future ADR.
+  `Stream.repeatedly`. ADR 0010 provides the long-lived
+  `AgentServer.subscribe/4`; the helper should be rebuilt on top of a
+  subscription with a status-snapshot selector.

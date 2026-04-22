@@ -44,3 +44,4 @@ SHAs that implemented the decision (or `—` if none yet).
 | [0006](0006-external-sync-uses-signals.md) | External sync uses signals and events, not state-dig or polling | Accepted | Partial |
 | [0007](0007-agent-lifecycle-is-signal-driven.md) | Start is the only operation; ready is the only lifecycle signal agents route | Proposed | Pending |
 | [0008](0008-flat-layout-removed.md) | Agent flat-layout removed; `:__domain__` slice is the default | Accepted | Complete |
+| [0010](0010-waiting-via-ack-and-subscribe.md) | Waiting on agents uses per-signal ack + subscribe, selector-based | Proposed | Pending |
