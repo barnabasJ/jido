@@ -86,7 +86,7 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
       # The actual regression: before the fix, ticks would silently fail
       # because cast(string_id, signal) was rejected by resolve_server/1.
       # With the fix, ticks should deliver and increment tick_count.
-      eventually_state(pid, fn state -> state.agent.state.tick_count > 0 end, timeout: 5_000)
+      eventually_state(pid, fn state -> state.agent.state.__domain__.tick_count > 0 end, timeout: 5_000)
 
       GenServer.stop(pid)
     end
@@ -101,7 +101,7 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
       # Cast with PID should succeed (the fix)
       assert :ok = AgentServer.cast(pid, tick_signal)
 
-      eventually_state(pid, fn state -> state.agent.state.tick_count == 1 end)
+      eventually_state(pid, fn state -> state.agent.state.__domain__.tick_count == 1 end)
 
       # Cast with string ID should fail (the original bug)
       assert {:error, {:invalid_server, _}} = AgentServer.call(id, tick_signal)
@@ -127,7 +127,7 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
       eventually_state(pid, fn state -> Map.has_key?(state.cron_jobs, :multi_tick) end)
 
       # Wait for at least 2 ticks to confirm accumulation
-      eventually_state(pid, fn state -> state.agent.state.tick_count >= 2 end, timeout: 5_000)
+      eventually_state(pid, fn state -> state.agent.state.__domain__.tick_count >= 2 end, timeout: 5_000)
 
       GenServer.stop(pid)
     end

@@ -13,8 +13,10 @@ defmodule JidoTest.AgentServer.PluginSignalHooksTest do
     alias Jido.Agent.StateOp
 
     def run(%{amount: amount}, %{state: state}) do
+      # ctx.state is the agent's :__domain__ slice (ADR 0008); SetPath
+      # operates on full agent.state, so target the slice explicitly.
       current = get_in(state, [:counter]) || 0
-      {:ok, %{}, %StateOp.SetPath{path: [:counter], value: current + amount}}
+      {:ok, %{}, %StateOp.SetPath{path: [:__domain__, :counter], value: current + amount}}
     end
   end
 
@@ -28,7 +30,7 @@ defmodule JidoTest.AgentServer.PluginSignalHooksTest do
     alias Jido.Agent.StateOp
 
     def run(_params, _context) do
-      {:ok, %{}, %StateOp.SetPath{path: [:overridden], value: true}}
+      {:ok, %{}, %StateOp.SetPath{path: [:__domain__, :overridden], value: true}}
     end
   end
 
@@ -135,7 +137,7 @@ defmodule JidoTest.AgentServer.PluginSignalHooksTest do
       signal = Signal.new!("counter.increment", %{amount: 5}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:counter] == 5
+      assert agent.state[:__domain__][:counter] == 5
     end
   end
 
@@ -148,9 +150,9 @@ defmodule JidoTest.AgentServer.PluginSignalHooksTest do
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
       # Override action sets :overridden to true instead of incrementing
-      assert agent.state[:overridden] == true
+      assert agent.state[:__domain__][:overridden] == true
       # Not incremented
-      assert agent.state[:counter] == 0
+      assert agent.state[:__domain__][:counter] == 0
     end
 
     test "plugin continues to normal routing when not overriding", %{jido: jido} do
@@ -159,8 +161,8 @@ defmodule JidoTest.AgentServer.PluginSignalHooksTest do
       signal = Signal.new!("counter.increment", %{amount: 10}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:counter] == 10
-      assert agent.state[:overridden] == false
+      assert agent.state[:__domain__][:counter] == 10
+      assert agent.state[:__domain__][:overridden] == false
     end
   end
 
@@ -177,7 +179,7 @@ defmodule JidoTest.AgentServer.PluginSignalHooksTest do
 
       # Agent state should be unchanged
       {:ok, state} = Jido.AgentServer.state(pid)
-      assert state.agent.state[:counter] == 0
+      assert state.agent.state[:__domain__][:counter] == 0
     end
 
     test "non-error signals still process normally", %{jido: jido} do
@@ -186,7 +188,7 @@ defmodule JidoTest.AgentServer.PluginSignalHooksTest do
       signal = Signal.new!("counter.increment", %{amount: 3}, source: "/test")
       {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-      assert agent.state[:counter] == 3
+      assert agent.state[:__domain__][:counter] == 3
     end
   end
 end

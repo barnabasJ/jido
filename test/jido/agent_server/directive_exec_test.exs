@@ -359,10 +359,10 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
       assert {:ok, state} = DirectiveExec.exec(directive, input_signal, state)
 
-      assert state.agent.state.captured_status == :ok
-      assert state.agent.state.captured_result == %{ran: true}
-      assert state.agent.state.captured_reason == nil
-      assert state.agent.state.captured_meta == %{source: :test}
+      assert state.agent.state.__domain__.captured_status == :ok
+      assert state.agent.state.__domain__.captured_result == %{ran: true}
+      assert state.agent.state.__domain__.captured_reason == nil
+      assert state.agent.state.__domain__.captured_meta == %{source: :test}
       assert State.queue_length(state) == 0
     end
 
@@ -378,7 +378,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         )
 
       assert {:ok, state} = DirectiveExec.exec(directive, input_signal, state)
-      assert state.agent.state.captured_emit == true
+      assert state.agent.state.__domain__.captured_emit == true
       assert State.queue_length(state) == 1
 
       assert {{:value, {^input_signal, %Directive.Emit{signal: %{type: "capture.result.event"}}}},

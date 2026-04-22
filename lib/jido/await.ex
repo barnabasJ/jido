@@ -55,9 +55,10 @@ defmodule Jido.Await do
 
   ## Options
 
-  - `:status_path` - Path to status field (default: `[:status]`)
-  - `:result_path` - Path to result field (default: `[:last_answer]`)
-  - `:error_path` - Path to error field (default: `[:error]`)
+  - `:status_path` - Path to status field in `agent.state` (default:
+    `[:__domain__, :status]` — the agent's domain slice)
+  - `:result_path` - Path to result field (default: `[:__domain__, :last_answer]`)
+  - `:error_path` - Path to error field (default: `[:__domain__, :error]`)
 
   ## Returns
 

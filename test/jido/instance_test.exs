@@ -146,7 +146,7 @@ defmodule JidoTest.InstanceTest do
 
       agent =
         RedisTestAgent.new(id: "redis-instance-agent")
-        |> then(fn agent -> %{agent | state: %{agent.state | counter: 42}} end)
+        |> then(fn agent -> %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | counter: 42}}} end)
         |> then(fn agent ->
           thread =
             Thread.new(id: "redis-thread")
@@ -157,7 +157,7 @@ defmodule JidoTest.InstanceTest do
 
       assert :ok = module.hibernate(agent)
       assert {:ok, thawed} = module.thaw(RedisTestAgent, "redis-instance-agent")
-      assert thawed.state.counter == 42
+      assert thawed.state.__domain__.counter == 42
       assert thawed.state[:__thread__].id == "redis-thread"
       assert Thread.entry_count(thawed.state[:__thread__]) == 1
     end
@@ -168,12 +168,12 @@ defmodule JidoTest.InstanceTest do
 
       unpartitioned =
         RedisTestAgent.new(id: "shared-partition-key")
-        |> then(fn agent -> %{agent | state: %{agent.state | counter: 10}} end)
+        |> then(fn agent -> %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | counter: 10}}} end)
 
       partitioned =
         RedisTestAgent.new(id: "shared-partition-key")
         |> then(fn agent ->
-          %{agent | state: agent.state |> Map.put(:counter, 20) |> Map.put(:__partition__, :blue)}
+          %{agent | state: agent.state |> put_in([:__domain__, :counter], 20) |> Map.put(:__partition__, :blue)}
         end)
 
       assert :ok = module.hibernate(unpartitioned)
@@ -184,10 +184,10 @@ defmodule JidoTest.InstanceTest do
       assert {:ok, thawed_partitioned} =
                module.thaw(RedisTestAgent, "shared-partition-key", partition: :blue)
 
-      assert thawed_unpartitioned.state.counter == 10
+      assert thawed_unpartitioned.state.__domain__.counter == 10
       assert Map.get(thawed_unpartitioned.state, :__partition__) == nil
 
-      assert thawed_partitioned.state.counter == 20
+      assert thawed_partitioned.state.__domain__.counter == 20
       assert thawed_partitioned.state.__partition__ == :blue
     end
 

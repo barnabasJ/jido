@@ -151,7 +151,7 @@ defmodule JidoTest.AgentServer.StrategyInitTest do
       {:ok, state} = AgentServer.state(pid)
 
       assert state.status == :idle
-      assert state.agent.state.status == :idle
+      assert state.agent.state.__domain__.status == :idle
 
       GenServer.stop(pid)
     end
@@ -176,7 +176,7 @@ defmodule JidoTest.AgentServer.StrategyInitTest do
 
       {:ok, state} = AgentServer.state(pid)
 
-      assert state.agent.state.counter == 42
+      assert state.agent.state.__domain__.counter == 42
       assert state.agent.state.__strategy__.initialized == true
 
       GenServer.stop(pid)

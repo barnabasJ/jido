@@ -83,7 +83,7 @@ defmodule JidoTest.Thread.StrategyIntegrationTest do
       agent = DirectTestAgent.new()
       {updated, directives} = DirectTestAgent.cmd(agent, SimpleAction)
 
-      assert updated.state.executed == true
+      assert updated.state.__domain__.executed == true
       assert directives == []
       refute ThreadAgent.has_thread?(updated)
     end
@@ -97,8 +97,8 @@ defmodule JidoTest.Thread.StrategyIntegrationTest do
           {ValueAction, %{value: 42}}
         ])
 
-      assert updated.state.executed == true
-      assert updated.state.value == 42
+      assert updated.state.__domain__.executed == true
+      assert updated.state.__domain__.value == 42
       refute ThreadAgent.has_thread?(updated)
     end
   end
@@ -108,7 +108,7 @@ defmodule JidoTest.Thread.StrategyIntegrationTest do
       agent = DirectThreadAgent.new()
       {updated, directives} = DirectThreadAgent.cmd(agent, SimpleAction)
 
-      assert updated.state.executed == true
+      assert updated.state.__domain__.executed == true
       assert directives == []
       assert ThreadAgent.has_thread?(updated)
 
@@ -182,6 +182,8 @@ defmodule JidoTest.Thread.StrategyIntegrationTest do
   end
 
   describe "FSM strategy without thread?" do
+    # FSM strategy currently merges action returns into flat agent.state
+    # (not into the :__domain__ slice). Assertions use the flat shape.
     test "behavior unchanged, no thread created" do
       agent = FSMTestAgent.new()
       {updated, directives} = run_cmd(FSMTestAgent, agent, SimpleAction)

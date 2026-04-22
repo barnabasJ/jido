@@ -375,9 +375,10 @@ defmodule Jido.AgentServer do
 
   ## Options
 
-  - `:status_path` - Path to status field in agent.state (default: `[:status]`)
-  - `:result_path` - Path to result field (default: `[:last_answer]`)
-  - `:error_path` - Path to error field (default: `[:error]`)
+  - `:status_path` - Path to status field in `agent.state` (default:
+    `[:__domain__, :status]` — the agent's domain slice)
+  - `:result_path` - Path to result field (default: `[:__domain__, :last_answer]`)
+  - `:error_path` - Path to error field (default: `[:__domain__, :error]`)
 
   ## Returns
 
@@ -1114,9 +1115,11 @@ defmodule Jido.AgentServer do
   end
 
   def handle_call({:await_completion, opts}, from, %State{} = state) do
-    status_path = Keyword.get(opts, :status_path, [:status])
-    result_path = Keyword.get(opts, :result_path, [:last_answer])
-    error_path = Keyword.get(opts, :error_path, [:error])
+    # Default completion paths target the agent's :__domain__ slice
+    # (ADR 0008), where schema-backed fields like :status live.
+    status_path = Keyword.get(opts, :status_path, [:__domain__, :status])
+    result_path = Keyword.get(opts, :result_path, [:__domain__, :last_answer])
+    error_path = Keyword.get(opts, :error_path, [:__domain__, :error])
     waiter_id = Keyword.get(opts, :waiter_id)
 
     case completion_from_agent_state(state.agent.state, status_path, result_path, error_path) do
