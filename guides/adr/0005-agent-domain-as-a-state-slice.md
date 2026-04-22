@@ -203,8 +203,8 @@ directives stay around for plugin state and cross-slice work.
 1. Write an agent with `state_key: :__domain__` and
    `use Jido.Agent.ScopedAction` actions.
 2. Confirm existing actions/agents are unchanged.
-3. Eventually: deprecate top-level layout, set `state_key:` default
-   to `:__domain__`, ship a `mix jido.migrate.state_key` scaffold that
-   rewrites `use Jido.Agent` and moves schema-backed fields into the
-   slice. Not part of this ADR; a future one when we're ready to make
-   the flat layout the minority case.
+3. **Done, landed in [0008](0008-flat-layout-removed.md).** `state_key:`
+   defaults to `:__domain__`; the flat top-level layout has been removed;
+   `new/1` and `set/2` auto-wrap flat state into the slice.
+   `mix jido.migrate.state_key` was intentionally skipped because there
+   were no external users to migrate.
