@@ -248,7 +248,7 @@ end
 signal = Jido.Signal.new!("increment", %{amount: 10}, source: "/user")
 {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-agent.state.counter
+agent.state.__domain__.counter
 # => 10
 ```
 

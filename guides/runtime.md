@@ -159,7 +159,7 @@ Agents signal completion via **state**, not process death. This allows retrievin
 
 ```elixir
 # In your agent/strategy - set terminal status
-agent = put_in(agent.state.status, :completed)
+agent = put_in(agent.state.__domain__.status, :completed)
 agent = put_in(agent.state.last_answer, result)
 ```
 
@@ -168,7 +168,7 @@ Check state externally:
 ```elixir
 {:ok, state} = Jido.AgentServer.state(pid)
 
-case state.agent.state.status do
+case state.agent.state.__domain__.status do
   :completed -> state.agent.state.last_answer
   :failed -> {:error, state.agent.state.error}
   _ -> :still_running

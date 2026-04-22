@@ -165,7 +165,7 @@ end)
 # Second checkout (same worker): counter = 1 → 2
 Jido.Agent.WorkerPool.with_agent(jido, :counter_pool, fn pid ->
   {:ok, agent} = Jido.AgentServer.call(pid, increment_signal)
-  agent.state.counter  # => 2, not 1!
+  agent.state.__domain__.counter  # => 2, not 1!
 end)
 ```
 

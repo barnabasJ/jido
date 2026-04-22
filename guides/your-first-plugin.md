@@ -39,11 +39,11 @@ Send a signal:
 signal = Jido.Signal.new!("counter.increment", %{amount: 5}, source: "/app")
 {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-agent.state.counter.value
+agent.state.__domain__.counter.value
 #=> 5
 ```
 
-The plugin owns `agent.state.counter`—isolated from other plugins.
+The plugin owns `agent.state.__domain__.counter`—isolated from other plugins.
 
 ## Building It Step by Step
 
@@ -187,14 +187,14 @@ When a signal arrives:
 signal = Jido.Signal.new!("counter.increment", %{amount: 10}, source: "/app")
 {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-agent.state.counter.value
+agent.state.__domain__.counter.value
 #=> 10
 
 # Send another
 signal = Jido.Signal.new!("counter.increment", %{amount: 5}, source: "/app")
 {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-agent.state.counter.value
+agent.state.__domain__.counter.value
 #=> 15
 ```
 
