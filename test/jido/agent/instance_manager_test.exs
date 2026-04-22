@@ -236,7 +236,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       {:ok, pid} = InstanceManager.get(manager, "key-state", initial_state: %{counter: 42})
       {:ok, state} = AgentServer.state(pid)
 
-      assert state.agent.state.counter == 42
+      assert state.agent.state.__domain__.counter == 42
     end
 
     test "manager-managed agents are not globally registered in Jido registry", %{
@@ -464,7 +464,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       {:ok, pid1} = InstanceManager.get(manager, "hibernate-key", initial_state: %{counter: 99})
       ref = Process.monitor(pid1)
       {:ok, state1} = AgentServer.state(pid1)
-      assert state1.agent.state.counter == 99
+      assert state1.agent.state.__domain__.counter == 99
 
       # Wait for idle timeout to hibernate
       assert_receive {:DOWN, ^ref, :process, ^pid1, {:shutdown, :idle_timeout}}, 1000
@@ -491,7 +491,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       {:ok, state2} = AgentServer.state(pid2)
       # The important assertion: state was preserved
-      assert state2.agent.state.counter == 99
+      assert state2.agent.state.__domain__.counter == 99
 
       # Cleanup
       :ok = AgentServer.detach(pid2)
@@ -503,7 +503,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       {:ok, pid} = InstanceManager.get(manager, "stop-persist-key", initial_state: %{counter: 42})
       ref = Process.monitor(pid)
       {:ok, state} = AgentServer.state(pid)
-      assert state.agent.state.counter == 42
+      assert state.agent.state.__domain__.counter == 42
 
       # Stop the agent (should hibernate first)
       :ok = InstanceManager.stop(manager, "stop-persist-key")
@@ -517,7 +517,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       case ETS.get_checkpoint(store_key, table: table) do
         {:ok, persisted} ->
           # Persisted data should contain the counter
-          assert persisted.state.counter == 42
+          assert persisted.state.__domain__.counter == 42
 
         :not_found ->
           flunk("Agent state was not persisted on stop")
@@ -562,8 +562,8 @@ defmodule JidoTest.Agent.InstanceManagerTest do
                  table: table
                )
 
-      assert alpha_checkpoint.state.counter == 11
-      assert beta_checkpoint.state.counter == 22
+      assert alpha_checkpoint.state.__domain__.counter == 11
+      assert beta_checkpoint.state.__domain__.counter == 22
 
       {:ok, restored_alpha} =
         InstanceManager.get(manager, "shared-storage-key", partition: :alpha)
@@ -574,11 +574,11 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       {:ok, beta_state} = AgentServer.state(restored_beta)
 
       assert alpha_state.partition == :alpha
-      assert alpha_state.agent.state.counter == 11
+      assert alpha_state.agent.state.__domain__.counter == 11
       assert alpha_state.agent.state.__partition__ == :alpha
 
       assert beta_state.partition == :beta
-      assert beta_state.agent.state.counter == 22
+      assert beta_state.agent.state.__domain__.counter == 22
       assert beta_state.agent.state.__partition__ == :beta
     end
   end
@@ -628,7 +628,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
         )
 
       {:ok, state2} = AgentServer.state(pid2)
-      assert state2.agent.state.counter == 123
+      assert state2.agent.state.__domain__.counter == 123
 
       :ok = AgentServer.detach(pid2)
     end
@@ -677,7 +677,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
         )
 
       {:ok, state2} = AgentServer.state(pid2)
-      assert state2.agent.state.counter == 123
+      assert state2.agent.state.__domain__.counter == 123
       assert map_size(RedisMock.data()) > 0
 
       :ok = AgentServer.detach(pid2)
@@ -731,9 +731,9 @@ defmodule JidoTest.Agent.InstanceManagerTest do
         )
 
       state1 =
-        eventually_state(pid1, fn state -> state.agent.state.tick_count > 0 end, timeout: 3_000)
+        eventually_state(pid1, fn state -> state.agent.state.__domain__.tick_count > 0 end, timeout: 3_000)
 
-      pre_hibernate_ticks = state1.agent.state.tick_count
+      pre_hibernate_ticks = state1.agent.state.__domain__.tick_count
 
       :ok = AgentServer.detach(pid1)
       ref = Process.monitor(pid1)
@@ -761,7 +761,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       eventually_state(
         pid2,
         fn state ->
-          state.agent.state.tick_count > pre_hibernate_ticks
+          state.agent.state.__domain__.tick_count > pre_hibernate_ticks
         end,
         timeout: 3_000
       )
@@ -1085,7 +1085,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       {:ok, pid2} = InstanceManager.get(manager_name, "no-storage")
       {:ok, state2} = AgentServer.state(pid2)
-      assert state2.agent.state.counter == 0
+      assert state2.agent.state.__domain__.counter == 0
     end
 
     test "explicit storage overrides jido default storage" do
@@ -1162,7 +1162,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
         )
 
       {:ok, state2} = AgentServer.state(pid2)
-      assert state2.agent.state.counter == 55
+      assert state2.agent.state.__domain__.counter == 55
       assert String.starts_with?(state2.agent.id, "key_")
 
       :ok = AgentServer.detach(pid2)
@@ -1249,8 +1249,8 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       {:ok, state_a2} = AgentServer.state(pid_a2)
       {:ok, state_b2} = AgentServer.state(pid_b2)
 
-      assert state_a2.agent.state.counter == 11
-      assert state_b2.agent.state.counter == 22
+      assert state_a2.agent.state.__domain__.counter == 11
+      assert state_b2.agent.state.__domain__.counter == 22
 
       :ok = AgentServer.detach(pid_a2)
       :ok = AgentServer.detach(pid_b2)

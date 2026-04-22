@@ -96,12 +96,12 @@ defmodule JidoTest.AgentServerTest do
 
     test "starts with pre-built agent", %{jido: jido} do
       agent = TestAgent.new(id: "prebuilt-456")
-      agent = %{agent | state: Map.put(agent.state, :counter, 99)}
+      agent = %{agent | state: put_in(agent.state, [:__domain__, :counter], 99)}
 
       {:ok, pid} = AgentServer.start_link(agent: agent, agent_module: TestAgent, jido: jido)
       {:ok, state} = AgentServer.state(pid)
       assert state.agent.id == "prebuilt-456"
-      assert state.agent.state.counter == 99
+      assert state.agent.state.__domain__.counter == 99
       GenServer.stop(pid)
     end
 
@@ -164,7 +164,7 @@ defmodule JidoTest.AgentServerTest do
         AgentServer.start_link(agent: TestAgent, initial_state: %{counter: 42}, jido: jido)
 
       {:ok, state} = AgentServer.state(pid)
-      assert state.agent.state.counter == 42
+      assert state.agent.state.__domain__.counter == 42
       GenServer.stop(pid)
     end
   end
@@ -207,7 +207,7 @@ defmodule JidoTest.AgentServerTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.counter == 1
       GenServer.stop(pid)
     end
 
@@ -220,7 +220,7 @@ defmodule JidoTest.AgentServerTest do
       end
 
       {:ok, state} = AgentServer.state(pid)
-      assert state.agent.state.counter == 5
+      assert state.agent.state.__domain__.counter == 5
       GenServer.stop(pid)
     end
 
@@ -230,7 +230,7 @@ defmodule JidoTest.AgentServerTest do
       signal = Signal.new!("record", %{message: "hello"}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.messages == ["hello"]
+      assert agent.state.__domain__.messages == ["hello"]
       GenServer.stop(pid)
     end
 
@@ -240,7 +240,7 @@ defmodule JidoTest.AgentServerTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.counter == 1
       GenServer.stop(pid)
     end
 
@@ -284,7 +284,7 @@ defmodule JidoTest.AgentServerTest do
       assert elapsed < 100
 
       assert {:ok, agent} = Task.await(task, 2_000)
-      assert agent.state.slow_done == true
+      assert agent.state.__domain__.slow_done == true
 
       GenServer.stop(pid)
     end
@@ -330,11 +330,11 @@ defmodule JidoTest.AgentServerTest do
 
       state =
         eventually_state(pid, fn state ->
-          state.agent.state.slow_done == true and state.agent.state.counter == 1
+          state.agent.state.__domain__.slow_done == true and state.agent.state.__domain__.counter == 1
         end)
 
-      assert state.agent.state.counter == 1
-      assert state.agent.state.slow_done == true
+      assert state.agent.state.__domain__.counter == 1
+      assert state.agent.state.__domain__.slow_done == true
 
       GenServer.stop(pid)
     end
@@ -347,7 +347,7 @@ defmodule JidoTest.AgentServerTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       assert :ok = AgentServer.cast(pid, signal)
 
-      eventually_state(pid, fn state -> state.agent.state.counter == 1 end)
+      eventually_state(pid, fn state -> state.agent.state.__domain__.counter == 1 end)
 
       GenServer.stop(pid)
     end
@@ -360,7 +360,7 @@ defmodule JidoTest.AgentServerTest do
         AgentServer.cast(pid, signal)
       end
 
-      eventually_state(pid, fn state -> state.agent.state.counter == 5 end)
+      eventually_state(pid, fn state -> state.agent.state.__domain__.counter == 5 end)
 
       GenServer.stop(pid)
     end
@@ -373,7 +373,7 @@ defmodule JidoTest.AgentServerTest do
 
       assert %State{} = state
       assert state.id == "state-test"
-      assert state.agent.state.counter == 0
+      assert state.agent.state.__domain__.counter == 0
       assert state.status == :idle
 
       GenServer.stop(pid)
@@ -561,11 +561,11 @@ defmodule JidoTest.AgentServerTest do
 
       state =
         eventually_state(pid, fn state ->
-          length(state.agent.state.messages) == 10
+          length(state.agent.state.__domain__.messages) == 10
         end)
 
       # Verify order is preserved
-      indices = Enum.map(state.agent.state.messages, & &1.index)
+      indices = Enum.map(state.agent.state.__domain__.messages, & &1.index)
       assert indices == Enum.to_list(1..10)
 
       GenServer.stop(pid)
@@ -729,10 +729,10 @@ defmodule JidoTest.AgentServerTest do
 
       # Before delay
       {:ok, state1} = AgentServer.state(pid)
-      assert state1.agent.state.pings == 0
+      assert state1.agent.state.__domain__.pings == 0
 
       # Wait for scheduled signal (50ms delay + processing)
-      eventually_state(pid, fn state -> state.agent.state.pings == 1 end, timeout: 200)
+      eventually_state(pid, fn state -> state.agent.state.__domain__.pings == 1 end, timeout: 200)
 
       GenServer.stop(pid)
     end
@@ -786,9 +786,9 @@ defmodule JidoTest.AgentServerTest do
 
       # Wait for all 3 scheduled signals (20ms, 40ms, 60ms delays)
       state =
-        eventually_state(pid, fn state -> state.agent.state.events == [1, 2, 3] end, timeout: 200)
+        eventually_state(pid, fn state -> state.agent.state.__domain__.events == [1, 2, 3] end, timeout: 200)
 
-      assert state.agent.state.events == [1, 2, 3]
+      assert state.agent.state.__domain__.events == [1, 2, 3]
 
       GenServer.stop(pid)
     end
@@ -835,11 +835,11 @@ defmodule JidoTest.AgentServerTest do
 
       # Wait for scheduled atom message (10ms delay + processing)
       state =
-        eventually_state(pid, fn state -> state.agent.state.received == :timeout end,
+        eventually_state(pid, fn state -> state.agent.state.__domain__.received == :timeout end,
           timeout: 100
         )
 
-      assert state.agent.state.received == :timeout
+      assert state.agent.state.__domain__.received == :timeout
 
       GenServer.stop(pid)
     end
@@ -851,7 +851,7 @@ defmodule JidoTest.AgentServerTest do
       signal = Signal.new!("increment", %{}, source: "/test")
 
       {:ok, agent} = AgentServer.call(pid, signal)
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.counter == 1
 
       GenServer.stop(pid)
     end
@@ -863,7 +863,7 @@ defmodule JidoTest.AgentServerTest do
       signal = Signal.new!("increment", %{}, source: "/test")
 
       {:ok, agent} = AgentServer.call(via, signal)
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.counter == 1
 
       GenServer.stop(AgentServer.whereis(Jido.registry_name(jido), "via-resolve-test"))
     end
@@ -874,7 +874,7 @@ defmodule JidoTest.AgentServerTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.counter == 1
+      assert agent.state.__domain__.counter == 1
 
       GenServer.stop(pid)
     end

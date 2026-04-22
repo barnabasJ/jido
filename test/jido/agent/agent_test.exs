@@ -111,20 +111,20 @@ defmodule JidoTest.AgentTest do
 
     test "creates agent with initial state" do
       agent = TestAgents.Basic.new(state: %{counter: 10})
-      assert agent.state.counter == 10
-      assert agent.state.status == :idle
+      assert agent.state.__domain__.counter == 10
+      assert agent.state.__domain__.status == :idle
     end
 
     test "applies schema defaults to state" do
       agent = TestAgents.Basic.new()
-      assert agent.state.counter == 0
-      assert agent.state.status == :idle
+      assert agent.state.__domain__.counter == 0
+      assert agent.state.__domain__.status == :idle
     end
 
     test "merges initial state with defaults" do
       agent = TestAgents.Basic.new(state: %{counter: 5})
-      assert agent.state.counter == 5
-      assert agent.state.status == :idle
+      assert agent.state.__domain__.counter == 5
+      assert agent.state.__domain__.status == :idle
     end
 
     test "populates agent metadata" do
@@ -176,20 +176,20 @@ defmodule JidoTest.AgentTest do
     test "updates state with map" do
       agent = TestAgents.Basic.new()
       {:ok, updated} = TestAgents.Basic.set(agent, %{counter: 42})
-      assert updated.state.counter == 42
+      assert updated.state.__domain__.counter == 42
     end
 
     test "updates state with keyword list" do
       agent = TestAgents.Basic.new()
       {:ok, updated} = TestAgents.Basic.set(agent, counter: 42, status: :running)
-      assert updated.state.counter == 42
-      assert updated.state.status == :running
+      assert updated.state.__domain__.counter == 42
+      assert updated.state.__domain__.status == :running
     end
 
     test "deep merges nested maps" do
       agent = TestAgents.Basic.new(state: %{config: %{a: 1, b: 2}})
       {:ok, updated} = TestAgents.Basic.set(agent, %{config: %{b: 3, c: 4}})
-      assert updated.state.config == %{a: 1, b: 3, c: 4}
+      assert updated.state.__domain__.config == %{a: 1, b: 3, c: 4}
     end
   end
 
@@ -197,19 +197,20 @@ defmodule JidoTest.AgentTest do
     test "validates state against schema" do
       agent = TestAgents.Basic.new()
       {:ok, validated} = TestAgents.Basic.validate(agent)
-      assert validated.state.counter == 0
-      assert validated.state.status == :idle
+      assert validated.state.__domain__.counter == 0
+      assert validated.state.__domain__.status == :idle
     end
 
     test "preserves extra fields in non-strict mode" do
       agent = TestAgents.Basic.new(state: %{counter: 0, extra_field: "hello"})
       {:ok, validated} = TestAgents.Basic.validate(agent)
-      assert validated.state.extra_field == "hello"
+      assert validated.state.__domain__.extra_field == "hello"
     end
 
     test "strict mode only keeps schema fields" do
       agent = TestAgents.Basic.new(state: %{counter: 0, status: :idle, extra_field: "hello"})
       {:ok, validated} = TestAgents.Basic.validate(agent, strict: true)
+      refute Map.has_key?(Map.get(validated.state, :__domain__, %{}), :extra_field)
       refute Map.has_key?(validated.state, :extra_field)
     end
   end
@@ -218,7 +219,7 @@ defmodule JidoTest.AgentTest do
     test "executes action module" do
       agent = TestAgents.Basic.new()
       {updated, _directives} = TestAgents.Basic.cmd(agent, TestActions.NoSchema)
-      assert updated.state.result == "No params"
+      assert updated.state.__domain__.result == "No params"
     end
 
     test "executes action tuple" do
@@ -227,7 +228,7 @@ defmodule JidoTest.AgentTest do
       {updated, _directives} =
         TestAgents.Basic.cmd(agent, {TestActions.BasicAction, %{value: 42}})
 
-      assert updated.state.value == 42
+      assert updated.state.__domain__.value == 42
     end
 
     test "executes list of actions" do
@@ -239,8 +240,8 @@ defmodule JidoTest.AgentTest do
           TestActions.NoSchema
         ])
 
-      assert updated.state.value == 8
-      assert updated.state.result == "No params"
+      assert updated.state.__domain__.value == 8
+      assert updated.state.__domain__.result == "No params"
       assert directives == []
     end
 
@@ -251,7 +252,7 @@ defmodule JidoTest.AgentTest do
         Jido.Instruction.new(%{action: TestActions.BasicAction, params: %{value: 99}})
 
       {updated, _directives} = TestAgents.Basic.cmd(agent, instruction)
-      assert updated.state.value == 99
+      assert updated.state.__domain__.value == 99
     end
 
     test "emits error directive for invalid action params" do
@@ -344,10 +345,10 @@ defmodule JidoTest.AgentTest do
   describe "lifecycle hooks" do
     test "on_after_cmd is called after processing" do
       agent = TestAgents.Hook.new()
-      refute Map.has_key?(agent.state, :hook_called)
+      refute Map.has_key?(agent.state.__domain__, :hook_called)
 
       {updated, _} = TestAgents.Hook.cmd(agent, TestActions.NoSchema)
-      assert updated.state.hook_called == true
+      assert updated.state.__domain__.hook_called == true
     end
   end
 
@@ -369,13 +370,13 @@ defmodule JidoTest.AgentTest do
 
     test "custom strategy is invoked during cmd/2" do
       agent = TestAgents.CustomStrategy.new()
-      refute Map.has_key?(agent.state, :strategy_count)
+      refute Map.has_key?(agent.state.__domain__, :strategy_count)
 
       {updated, _} = TestAgents.CustomStrategy.cmd(agent, TestActions.NoSchema)
-      assert updated.state.strategy_count == 1
+      assert updated.state.__domain__.strategy_count == 1
 
       {updated2, _} = TestAgents.CustomStrategy.cmd(updated, TestActions.NoSchema)
-      assert updated2.state.strategy_count == 2
+      assert updated2.state.__domain__.strategy_count == 2
     end
   end
 
@@ -450,7 +451,7 @@ defmodule JidoTest.AgentTest do
       agent = TestAgents.Basic.new()
       {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.EmitAction)
 
-      assert updated.state.emitted == true
+      assert updated.state.__domain__.emitted == true
       assert [%Jido.Agent.Directive.Emit{signal: signal}] = directives
       assert signal.type == "test.emitted"
     end
@@ -459,7 +460,7 @@ defmodule JidoTest.AgentTest do
       agent = TestAgents.Basic.new()
       {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.MultiEffectAction)
 
-      assert updated.state.triggered == true
+      assert updated.state.__domain__.triggered == true
       assert length(directives) == 2
       assert [%Jido.Agent.Directive.Emit{}, %Jido.Agent.Directive.Schedule{}] = directives
     end
@@ -468,7 +469,9 @@ defmodule JidoTest.AgentTest do
       agent = TestAgents.Basic.new()
       {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.SetStateAction)
 
-      assert updated.state.primary == "result"
+      # Action return (:primary) goes through non-scoped deep-merge into the slice;
+      # SetState attrs (:extra) are applied to full state, so stay top-level.
+      assert updated.state.__domain__.primary == "result"
       assert updated.state.extra == "state"
       assert directives == []
     end
@@ -477,14 +480,20 @@ defmodule JidoTest.AgentTest do
       agent = TestAgents.Basic.new(state: %{old: "data", counter: 10})
       {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.ReplaceStateAction)
 
+      # ReplaceState wholesale-replaces full agent.state — no slice survives.
       assert updated.state == %{replaced: true, fresh: "state"}
-      refute Map.has_key?(updated.state, :old)
-      refute Map.has_key?(updated.state, :counter)
+      refute Map.has_key?(updated.state, :__domain__)
       assert directives == []
     end
 
     test "StateOp.DeleteKeys removes top-level keys from state" do
-      agent = TestAgents.Basic.new(state: %{to_delete: 1, also_delete: 2, keep: 3})
+      # Explicit slice layout so :to_delete/:also_delete/:keep sit at top level
+      # (state-ops operate on full state, so the test targets top-level keys).
+      agent =
+        TestAgents.Basic.new(
+          state: %{__domain__: %{}, to_delete: 1, also_delete: 2, keep: 3}
+        )
+
       {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.DeleteKeysAction)
 
       refute Map.has_key?(updated.state, :to_delete)
@@ -494,7 +503,8 @@ defmodule JidoTest.AgentTest do
     end
 
     test "StateOp.SetPath sets value at nested path" do
-      agent = TestAgents.Basic.new(state: %{existing: "value"})
+      # Explicit slice layout so :existing sits at top level for the state-op to preserve.
+      agent = TestAgents.Basic.new(state: %{__domain__: %{}, existing: "value"})
       {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.SetPathAction)
 
       assert updated.state.nested.deep.value == 42
@@ -503,7 +513,12 @@ defmodule JidoTest.AgentTest do
     end
 
     test "StateOp.DeletePath removes value at nested path" do
-      agent = TestAgents.Basic.new(state: %{nested: %{to_remove: "gone", keep: "here"}})
+      # Explicit slice layout so :nested sits at top level where DeletePath targets it.
+      agent =
+        TestAgents.Basic.new(
+          state: %{__domain__: %{}, nested: %{to_remove: "gone", keep: "here"}}
+        )
+
       {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.DeletePathAction)
 
       refute Map.has_key?(updated.state.nested, :to_remove)
@@ -521,8 +536,8 @@ defmodule JidoTest.AgentTest do
     test "validate works with Zoi schema" do
       agent = TestAgents.ZoiSchema.new(state: %{status: :running, count: 5})
       {:ok, validated} = TestAgents.ZoiSchema.validate(agent)
-      assert validated.state.status == :running
-      assert validated.state.count == 5
+      assert validated.state.__domain__.status == :running
+      assert validated.state.__domain__.count == 5
     end
   end
 
