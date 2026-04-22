@@ -73,7 +73,8 @@ defmodule JidoTest.TestAgents do
     def signal_routes(_ctx), do: []
 
     def on_after_cmd(agent, _action, directives) do
-      {:ok, %{agent | state: Map.put(agent.state, :hook_called, true)}, directives}
+      new_agent = %{agent | state: put_in(agent.state, [:__domain__, :hook_called], true)}
+      {:ok, new_agent, directives}
     end
   end
 
@@ -91,8 +92,9 @@ defmodule JidoTest.TestAgents do
 
     @impl true
     def cmd(agent, action, ctx) do
-      count = Map.get(agent.state, :strategy_count, 0)
-      agent = %{agent | state: Map.put(agent.state, :strategy_count, count + 1)}
+      count = get_in(agent.state, [:__domain__, :strategy_count]) || 0
+      new_state = put_in(agent.state, [:__domain__, :strategy_count], count + 1)
+      agent = %{agent | state: new_state}
       Direct.cmd(agent, action, ctx)
     end
   end
