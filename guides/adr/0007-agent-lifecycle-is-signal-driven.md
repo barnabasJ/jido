@@ -1,6 +1,6 @@
 # 0007. Start is the only operation; ready is the only lifecycle signal agents route
 
-- Status: Proposed
+- Status: Superseded by [0015](0015-agent-start-is-signal-driven.md)
 - Implementation: Pending — see [0007-implementation.md](0007-implementation.md)
 - Date: 2026-04-22
 - Related commits: `ed6abf4` (initial draft), `be37376` (rewrite),
@@ -9,6 +9,13 @@
 - Supersedes `TBD` — none yet, but this revision (2026-04-22 afternoon)
   strengthens an earlier draft that distinguished fresh from thaw;
   the final form erases the distinction entirely.
+- Superseded-by: [0015](0015-agent-start-is-signal-driven.md) — the lifecycle-signal
+  decision and "no thaw distinction" stand; [0014](0014-slice-middleware-plugin.md)
+  settled the extension vocabulary differently (Slices have no callbacks),
+  so this ADR's proposed `after_start/1` / `to_persistable/1` / `from_persistable/1`
+  contract doesn't survive. [0015](0015-agent-start-is-signal-driven.md) restates
+  the lifecycle model: start-time setup is a `signal_route`; persistence is a
+  middleware concern.
 
 ## Context
 

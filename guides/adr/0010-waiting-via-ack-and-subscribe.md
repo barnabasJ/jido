@@ -1,9 +1,14 @@
 # 0010. Waiting on agents uses per-signal ack + subscribe, selector-based
 
-- Status: Proposed
+- Status: Superseded by [0016](0016-agent-server-ack-and-subscribe.md)
 - Implementation: Pending
 - Date: 2026-04-22
 - Related commits: —
+- Superseded-by: [0016](0016-agent-server-ack-and-subscribe.md) — the
+  `cast_and_await/4` + `subscribe/4` primitives stand; [0016](0016-agent-server-ack-and-subscribe.md)
+  pins the hook point to the outer AgentServer boundary (wrapping the
+  middleware chain defined in [0014](0014-slice-middleware-plugin.md))
+  and updates examples to use `path:`-declared slices instead of `:__domain__`.
 
 ## Context
 

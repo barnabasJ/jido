@@ -42,10 +42,13 @@ SHAs that implemented the decision (or `—` if none yet).
 | [0004](0004-pod-lifecycle-signals.md) | Pod reconciliation emits lifecycle signals | Accepted | Complete |
 | [0005](0005-agent-domain-as-a-state-slice.md) | Agent domain state is a first-class `state_key` slice | Accepted | Complete |
 | [0006](0006-external-sync-uses-signals.md) | External sync uses signals and events, not state-dig or polling | Accepted | Partial |
-| [0007](0007-agent-lifecycle-is-signal-driven.md) | Start is the only operation; ready is the only lifecycle signal agents route | Proposed | Pending |
+| [0007](0007-agent-lifecycle-is-signal-driven.md) | Start is the only operation; ready is the only lifecycle signal agents route | Superseded by [0015](0015-agent-start-is-signal-driven.md) | Pending |
 | [0008](0008-flat-layout-removed.md) | Agent flat-layout removed; `:__domain__` slice is the default | Accepted | Complete |
 | [0009](0009-inline-signal-processing.md) | Inline signal processing; signals are the only async-completion vehicle | Accepted | Complete |
-| [0010](0010-waiting-via-ack-and-subscribe.md) | Waiting on agents uses per-signal ack + subscribe, selector-based | Proposed | Pending |
+| [0010](0010-waiting-via-ack-and-subscribe.md) | Waiting on agents uses per-signal ack + subscribe, selector-based | Superseded by [0016](0016-agent-server-ack-and-subscribe.md) | Pending |
 | [0011](0011-retire-strategy-plugins-are-control-flow.md) | Retire `Strategy`; control-flow patterns live as plugins | Superseded by [0013](0013-slices-middleware-plugins.md) | Pending |
 | [0012](0012-middleware-for-cross-cutting-concerns.md) | Middleware for cross-cutting concerns | Superseded by [0013](0013-slices-middleware-plugins.md) | Pending |
-| [0013](0013-slices-middleware-plugins.md) | Slices, Middleware, Plugins — Redux-shaped extension vocabulary | Proposed | Pending |
+| [0013](0013-slices-middleware-plugins.md) | Slices, Middleware, Plugins — Redux-shaped extension vocabulary | Superseded by [0014](0014-slice-middleware-plugin.md) | Pending |
+| [0014](0014-slice-middleware-plugin.md) | Slices, Middleware, Plugins — Slice is pure, Middleware is single-tier | Proposed | Pending |
+| [0015](0015-agent-start-is-signal-driven.md) | Agent start is signal-driven; no thaw distinction | Proposed | Pending |
+| [0016](0016-agent-server-ack-and-subscribe.md) | Waiting on agents: ack + subscribe on AgentServer | Proposed | Pending |

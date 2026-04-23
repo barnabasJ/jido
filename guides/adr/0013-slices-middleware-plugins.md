@@ -1,10 +1,16 @@
 # 0013. Slices, Middleware, Plugins — Redux-shaped extension vocabulary
 
-- Status: Proposed
+- Status: Superseded by [0014](0014-slice-middleware-plugin.md)
 - Implementation: Pending
 - Date: 2026-04-23
 - Related commits: —
 - Supersedes: [0011](0011-retire-strategy-plugins-are-control-flow.md), [0012](0012-middleware-for-cross-cutting-concerns.md)
+- Superseded-by: [0014](0014-slice-middleware-plugin.md) — the three-tier
+  vocabulary (Slice / Middleware / Plugin) and path-based registration stand;
+  [0014](0014-slice-middleware-plugin.md) tightens the Slice surface (no
+  callbacks — `mount/2` / `on_checkpoint/2` / `on_restore/2` retire), collapses
+  Middleware to a single-tier `on_signal/3` contract, renames identity signals
+  to `jido.agent.identity.*`, and moves persistence onto a `Persister` middleware.
 
 ## Context
 
