@@ -1,9 +1,9 @@
 # 0008. Agent flat-layout removed; `:__domain__` slice is the default
 
 - Status: Accepted
-- Implementation: Partial
+- Implementation: Complete
 - Date: 2026-04-22
-- Related commits: `8942845` (foundation); `37fa544` (persist + pod test migration); `79521a8` (doc examples)
+- Related commits: `8942845` (foundation); `37fa544` (persist + pod test migration); `79521a8` (doc examples); `c6fa5cf` (remaining test+lib await_completion defaults); `0f0fd1a` (agent module doc examples); `e36f08d` (guide examples)
 - Supersedes: Migration section of [0005](0005-agent-domain-as-a-state-slice.md)
 
 ## Context
