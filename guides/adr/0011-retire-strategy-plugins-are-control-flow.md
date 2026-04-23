@@ -1,9 +1,10 @@
 # 0011. Retire `Strategy`; control-flow patterns live as plugins
 
-- Status: Proposed
+- Status: Superseded by [0013](0013-slices-middleware-plugins.md)
 - Implementation: Pending
 - Date: 2026-04-22
 - Related commits: —
+- Superseded-by: [0013](0013-slices-middleware-plugins.md) — the Strategy retirement decision stands; [0013](0013-slices-middleware-plugins.md) folds it into one coherent spec alongside [0012](0012-middleware-for-cross-cutting-concerns.md) plus path-based slice registration and runtime-identity migration to `%AgentServer.State{}`.
 
 ## Context
 

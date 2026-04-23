@@ -1,10 +1,11 @@
 # 0012. Middleware for cross-cutting concerns
 
-- Status: Proposed
+- Status: Superseded by [0013](0013-slices-middleware-plugins.md)
 - Implementation: Pending
 - Date: 2026-04-22
 - Related commits: —
 - Companion ADR: [0011](0011-retire-strategy-plugins-are-control-flow.md) (retires Strategy, moves control flow into plugins)
+- Superseded-by: [0013](0013-slices-middleware-plugins.md) — the middleware design stands as specified here; [0013](0013-slices-middleware-plugins.md) folds it into a three-tier vocabulary (slice/middleware/plugin), replaces the `state_key: :__x__` convention with flat-atom `path:` registration, and moves runtime identity (`partition`/`parent`/`orphaned_from`) to `%AgentServer.State{}` so `agent.state` is purely slice-owned.
 
 ## Context
 
