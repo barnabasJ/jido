@@ -3,7 +3,7 @@
 - Status: Proposed
 - Implementation: Pending
 - Date: 2026-04-22
-- Related commits: — (plan: [`how-does-the-elm-reflective-pixel.md`](../../.claude/plans/how-does-the-elm-reflective-pixel.md))
+- Related commits: —
 - Companion ADR: [0011](0011-retire-strategy-plugins-are-control-flow.md) (retires Strategy, moves control flow into plugins)
 
 ## Context
@@ -91,6 +91,28 @@ Default middleware chain for agents that declare none reproduces today's default
 ### Middleware state
 
 Stateless by default. When a middleware needs persistent state, it owns its own namespaced slice key — the same pattern plugins use. Example: `Jido.Middleware.CircuitBreaker` reads/writes `agent.state[:__circuit_breaker__]`. No dedicated `:__middleware__` umbrella key; collisions between middlewares (or with plugins) are user error, same as plugin slice collisions today.
+
+### Timeouts: directive-shaped vs. middleware-shaped
+
+Timeout concerns split cleanly along an existing seam and need no new framework primitive.
+
+- **Per-step / per-task timeouts are a property of the task-spawning directive.** The vocabulary already supports this via user-defined directives ([guides/directives.md](../directives.md) — "The runtime dispatches on struct type — no core changes needed"). Pattern:
+
+  ```elixir
+  %Jido.Agent.Directive.SpawnTask{
+    task: fn -> call_tool(name, args) end,
+    timeout: 5_000,
+    on_success: "tool.result",
+    on_timeout: "tool.timeout",
+    tag: "call_abc123"
+  }
+  ```
+
+  The directive executor spawns a supervised task with a deadline. On completion it emits `on_success` with the result; on deadline it kills the task and emits `on_timeout`. Both outcomes flow back through `signal_routes` (per [ADR 0009](0009-inline-signal-processing.md)). The timer is colocated with the work that uses it, and both outcomes are expressed in the signal vocabulary — no middleware state, no framework-level scheduler.
+
+- **Cumulative and idle timeouts are middleware.** A loop with a 30-second budget tracks elapsed time on `on_cmd` entry and emits `%Stop{}` when exceeded. An idle timeout ("no progress in N seconds") uses a self-scheduled timer signal that checks progress state on wake-up. Both are ordinary middleware composition — no new hook shape needed.
+
+The vocabulary stays small: new timeout needs become either new directives (when the deadline bounds a specific piece of work) or new middleware (when the deadline bounds a session or a trajectory). Neither requires a framework-level "timeout primitive."
 
 ## Consequences
 

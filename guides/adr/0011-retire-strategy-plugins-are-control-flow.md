@@ -3,7 +3,7 @@
 - Status: Proposed
 - Implementation: Pending
 - Date: 2026-04-22
-- Related commits: — (plan: [`how-does-the-elm-reflective-pixel.md`](../../.claude/plans/how-does-the-elm-reflective-pixel.md))
+- Related commits: —
 
 ## Context
 
@@ -50,6 +50,10 @@ Concretely:
 - **`cmd/2` becomes Elm-shaped by construction.** Slice application is structural, not policy. Custom agents write actions; advanced control flow (FSM, ReAct, BT, planners) lives as plugins with their own slices and routes.
 
 - **Plugins are now the home for complex control patterns.** Their existing surface (slice + actions + `signal_routes` + post-0007 `after_start`) is expressive enough — the "Can ReAct be a plugin?" sketch in the plan doc confirms it end-to-end. Nothing new is needed on the plugin side for this ADR.
+
+- **Hand-rolled single-flight locks in plugins become redundant.** Under [ADR 0009](0009-inline-signal-processing.md)'s inline signal processing the agent mailbox serializes signal handling; an in-state status flag in the plugin's own slice is the authoritative "in progress?" check. The Pod plugin's external ETS mutation lock ([lib/jido/pod/mutable.ex](../../lib/jido/pod/mutable.ex) — `:jido_pod_mutation_locks`) is an artifact of pre-0009 orchestration and retires alongside Strategy. Concretely: the `Mutate` action reads `:__pod__.mutation.status`, returns a `:mutation_in_progress` reply directive if `:running`, otherwise emits `StateOp` directives that flip status and the `%ApplyMutation{}` directive. This ties off the `Pod.Mutable.mutate/3` follow-up flagged by [ADR 0006](0006-external-sync-uses-signals.md).
+
+- **Plugin routes on lifecycle signals (e.g. `"jido.agent.started"`) are multicast.** The signal router returns a *list* of matching targets and runs every matched action ([lib/jido/agent_server.ex:1760](../../lib/jido/agent_server.ex:1760)). Ordering between matched routes within the Plugin priority tier (-10) is not specified. Plugin boot actions (and other lifecycle-routed actions) must not depend on each other's slice state. Slice boundaries from [ADR 0008](0008-flat-layout-removed.md) already disallow cross-slice reads, so this is a discipline clarification rather than a new constraint.
 
 - **Breaking change for any agent declaring `strategy:`.** Migration: drop the option for agents that used Direct (it's the default); migrate `strategy: {FSM, opts}` agents to `plugins: [{Jido.Plugin.FSM, opts}]`; migrate custom strategies to custom plugins. All in-repo sites are updated; there are no external users.
 
