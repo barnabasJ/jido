@@ -848,7 +848,7 @@ defmodule Jido.Pod.Runtime do
     }
   end
 
-  defp build_node_snapshot(%State{} = state, %Topology{} = topology, name, node \\ nil) do
+  defp build_node_snapshot(%State{} = state, %Topology{} = topology, name, node) do
     node =
       case node do
         %Node{} = existing_node -> existing_node

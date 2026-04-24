@@ -387,7 +387,6 @@ defmodule Jido.MixProject do
   defp deps do
     [
       # Jido Ecosystem
-      {:jido_action, "~> 2.2"},
       {:jido_signal, "~> 2.1"},
 
       # Jido Deps
@@ -403,6 +402,8 @@ defmodule Jido.MixProject do
       {:crontab, "~> 1.2"},
       {:time_zone_info, "~> 0.7"},
       {:uniq, "~> 0.6.1"},
+      {:zoi, "~> 0.17"},
+      {:private, "~> 0.1.2"},
 
       # Development & Test Dependencies
       {:git_ops, "~> 2.9", only: :dev, runtime: false},
