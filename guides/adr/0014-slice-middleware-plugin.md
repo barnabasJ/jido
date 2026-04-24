@@ -59,14 +59,15 @@ The full Slice surface is exactly these declarative fields:
 defmodule Jido.Middleware do
   @callback on_signal(signal :: Signal.t(),
                       ctx :: map(),
+                      opts :: map(),
                       next :: (Signal.t(), map() -> {map(), [Directive.t()]})) ::
               {map(), [Directive.t()]}
 
-  @optional_callbacks on_signal: 3
+  @optional_callbacks on_signal: 4
 end
 ```
 
-One callback. `next` runs the full inner pipeline: routing → `cmd/2` → directive execution. Each middleware wraps `next`; the outermost wraps the whole chain. To gate, transform, retry, or swallow, do it around the `next` call. To reject, don't call `next` and emit an `%Error{}` directive (or similar) instead.
+Four args: `signal`, `ctx` (per-signal runtime context), `opts` (compile-time options captured via closure at chain-build time from `{Mod, opts}` registrations), and `next` (continuation). `next` runs the full inner pipeline: routing → `cmd/2` → directive execution. Each middleware wraps `next`; the outermost wraps the whole chain. To gate, transform, retry, or swallow, do it around the `next` call. To reject, don't call `next` and emit an `%Error{}` directive (or similar) instead.
 
 Redux middleware is single-tier. The concrete cross-cutting cases — logging, retry, persist-after, circuit-break, error conversion — all fit within "act before `next`, call `next`, act after" without needing a separate cmd-layer hook. The two-tier split 0013 proposed did not pay for itself.
 
@@ -83,7 +84,7 @@ defmodule MyApp.ChatPlugin do
     signal_routes: [...]
 
   @impl Jido.Middleware
-  def on_signal(signal, ctx, next) do
+  def on_signal(signal, ctx, _opts, next) do
     # e.g. token-stream interception
     next.(signal, ctx)
   end
@@ -108,7 +109,6 @@ defmodule MyAgent do
       {MyApp.ThreadSlice, path: :audit}    # same module, different path
     ],
     middleware: [
-      Jido.Middleware.Logger,
       Jido.Middleware.Retry
     ],
     plugins: [
@@ -132,20 +132,21 @@ Every path has exactly one owning slice. `path:` is required on `use Jido.Agent`
 
 ```
 signal enters
-  → Logger.on_signal(signal, ctx, retry_next)
-     → Retry.on_signal(signal, ctx, plugin_next)
-        → ChatPlugin.on_signal(signal, ctx, core_next)
-           → core: routing → cmd/2 → directive execution
+  → Retry.on_signal(signal, ctx, plugin_next)
+     → ChatPlugin.on_signal(signal, ctx, core_next)
+        → core: routing → cmd/2 → directive execution
 ```
 
 Effective chain is `middleware ++ plugin_middleware_in_declaration_order`. Each wraps the next; the innermost wraps core routing + cmd + directives.
+
+**Emitted signals re-enter the chain.** When a directive executor fires `%Directive.Emit{signal: Y}`, Y self-casts back to the agent's mailbox and takes its own full pipeline pass — routing, chain, directives, ack. One uniform observability path; middleware doesn't distinguish externally-delivered signals from loop-backs. Ctx inherits via `signal.extensions[:jido_ctx]`. See ADR 0016:59 for the ack-boundary implication.
 
 ### Runtime identity on `%AgentServer.State{}`
 
 Values that describe the running process — not the agent's domain — live on the server struct, not on `agent.state`:
 
 - **`partition`** — typed field on `%Jido.AgentServer.State{}`. The `agent.state[:__partition__]` mirror retires. Callsites (`lib/jido/pod/mutable.ex:76`, `lib/jido/observe/config.ex:161`, `lib/jido/persist.ex:493`, `lib/jido/agent_server/options.ex:170`, `lib/jido/jido.ex:623-625`) read from server state.
-- **`parent`** — typed field on `%Jido.AgentServer.State{}`, holds `%Jido.AgentServer.ParentRef{pid: ...}` or nil. `Directive.emit_to_parent/3` reads it from server state.
+- **`parent`** — typed field on `%Jido.AgentServer.State{}`, holds `%Jido.AgentServer.ParentRef{pid: ...}` or nil. Middleware, actions, and directive executors read it via `ctx.parent` (seeded from server state at signal receipt). The old `Directive.emit_to_parent/3` helper is **deleted** — users that want to emit to parent build `%Directive.Emit{dispatch: {:pid, target: ctx.parent.pid}}` themselves.
 - **`orphaned_from`** — typed field on `%Jido.AgentServer.State{}`, set when `:DOWN` arrives for the parent.
 - **`pod_ancestry`** — already not on `agent.state`; rename drops the leading `__`.
 
@@ -161,25 +162,33 @@ Runtime-identity changes emit observable signals. Anything that wants to react s
 
 These are independent of [ADR 0015](0015-agent-start-is-signal-driven.md)'s `jido.agent.lifecycle.*` family (phase-of-boot signals). Two orthogonal namespaces: `identity.*` for runtime transitions, `lifecycle.*` for boot phase. Both are ordinary signals; both route through `signal_routes` like any other.
 
-### Persistence is a middleware concern
+### Persistence is blocking middleware
 
-`Jido.Middleware.Persister` (shipped in the standard library) handles serialization. Default behaviour: write every declared path's state, verbatim, to the configured storage after `next` returns.
+`Jido.Middleware.Persister` is a middleware-only module (no Slice, no `agent.state` footprint) whose `on_signal/4` pattern-matches `lifecycle.starting` / `lifecycle.stopping` and blocks synchronously on `Jido.Persist.thaw/3` / `hibernate/4`:
 
-Custom per-path shape transforms are declared via Persister config:
+- **On starting**: blocks on `Jido.Persist.thaw/3`, applies `reinstate/1` callbacks via the `Jido.Persist.Transform` behaviour walk, mutates `ctx.agent` with the thawed struct, calls `next`.
+- **On stopping**: applies `externalize/1` callbacks via the behaviour walk, blocks on `Jido.Persist.hibernate/4`, calls `next`.
+- Emits `jido.persist.thaw.completed|failed` / `.hibernate.completed|failed` as return-side directives.
+
+Config (storage, persistence_key) lives in the middleware's `opts` arg, captured by closure at chain-build time. Blocking IO lands on the mailbox path — acceptable trade-off since lifecycle emissions are rare and one-shot, and the consistent-in-chain-view property (every downstream middleware sees post-thaw `ctx.agent` in the same pass) is worth the blocking cost.
+
+**Custom shape per slice — `Jido.Persist.Transform` behaviour**: slices that need a different on-disk shape than in-memory (e.g., Thread writing journal entries to external storage and persisting only a pointer) declare the behaviour directly:
 
 ```elixir
-use Jido.Agent,
-  ...
-  middleware: [
-    {Jido.Middleware.Persister, transforms: %{
-      thread: {MyApp.ThreadPersister, :externalize, :reinstate}
-    }}
-  ]
+defmodule Jido.Thread.Plugin do
+  use Jido.Slice, name: "thread", path: :thread, ...
+  @behaviour Jido.Persist.Transform
+
+  @impl Jido.Persist.Transform
+  def externalize(thread), do: # flush + return pointer
+  @impl Jido.Persist.Transform
+  def reinstate(pointer), do: # rehydrate
+end
 ```
 
-…or, when the transform logic belongs with the slice, shipped as a Plugin whose middleware half implements the persistence wrap.
+Persister middleware walks every declared slice/plugin at hibernate/thaw and applies the callbacks of any module that implements the behaviour. `Jido.Persist.thaw/3` and `hibernate/4` stay unchanged; transform logic is purely a Persister-middleware concern.
 
-Slices never carry persistence callbacks. `to_persistable/1`, `from_persistable/1`, `on_checkpoint/2`, `on_restore/2` do not exist on the Slice surface. The persistence migration pass in `Jido.Persist.thaw/3` (rewriting pre-refactor `:__domain__`/`:__thread__` keys to user-declared paths) is the only concession to old on-disk data.
+Slices without persistence-shape concerns don't declare the behaviour; `function_exported?` skips them at walk time. No `to_persistable/1`, `from_persistable/1`, `on_checkpoint/2`, `on_restore/2` callbacks exist in the Slice surface. Pre-refactor on-disk checkpoints are **not forward-compatible** — per the "no external users exist" assumption, no migration pass ships; fresh checkpoints only.
 
 ### Start-time setup is a signal route
 
@@ -190,9 +199,9 @@ Components that need to do work at boot subscribe to `jido.agent.lifecycle.start
 These decisions were correct in the superseded ADRs and remain in force:
 
 - `Jido.Agent.Strategy` retires. `Direct` inlines into `Agent.cmd/2`. `:__strategy__` is gone. `strategy_snapshot/1` retires. FSM ports to `Jido.Plugin.FSM` at `path: :fsm`.
-- `handle_signal/2` → `on_signal/3` before-`next`.
-- `transform_result/3` → `on_signal/3` after-`next`.
-- `error_policy` config → composable error middleware (`Logger`, `Retry`, `CircuitBreaker`, `LogErrors`, `StopOnError`, `Persister`).
+- `handle_signal/2` → `on_signal/4` before-`next`.
+- `transform_result/3` → `on_signal/4` after-`next`.
+- `error_policy` config → composable middleware. This PR ships only `Jido.Middleware.Retry`; the error-handling replacement (`LogErrors`, `StopOnError`) is deferred to a follow-up PR. `Persister` ships as a Plugin (see "Persistence is a Plugin concern"), not middleware.
 - `on_before_cmd/2` / `on_after_cmd/3` retire; their uses land in middleware.
 - In-repo plugins (Thread, Identity, Memory, Pod, BusPlugin) migrate to Slice or Plugin as appropriate.
 
@@ -202,7 +211,7 @@ These decisions were correct in the superseded ADRs and remain in force:
 
 - **Slice is a honest pure type.** No hidden methods to discover by searching module definitions. Everything a Slice can contribute is in its `use` block. This is the biggest ergonomic win over 0013: readers know what's there by looking at the declaration, not by grepping for callbacks.
 
-- **Middleware is one thing, not two.** `on_signal/3` alone covers gate, transform, retry, persist, circuit-break, error-log-and-convert. The mental model is "wrap the pipeline," identical to Redux. Plugin authors who need a layered effect compose middleware modules in the chain — the composition is user-declared and visible at the agent declaration site.
+- **Middleware is one thing, not two.** `on_signal/4` alone covers gate, transform, retry, persist, circuit-break, error-log-and-convert. The mental model is "wrap the pipeline," identical to Redux. Plugin authors who need a layered effect compose middleware modules in the chain — the composition is user-declared and visible at the agent declaration site.
 
 - **`agent.state` is uniform.** Flat atom paths, one owning slice each, no `__identifier__` anywhere. `agent.state[path]` is the single answer to "where is X?"
 
@@ -212,16 +221,16 @@ These decisions were correct in the superseded ADRs and remain in force:
 
 - **Breaking change across the plugin author surface.** Every existing plugin migrates:
   - `state_key: :__x__` → `path: :x`.
-  - `handle_signal/2` → `on_signal/3` before-`next`.
-  - `transform_result/3` → `on_signal/3` after-`next`.
-  - `on_checkpoint/2` / `on_restore/2` → move to a Plugin's middleware (or Persister config).
+  - `handle_signal/2` → `on_signal/4` before-`next`.
+  - `transform_result/3` → `on_signal/4` after-`next`.
+  - `on_checkpoint/2` / `on_restore/2` → declare a `transforms:` entry in the `Jido.Middleware.Persister` config (MFA per path).
   - `mount/2` / dynamic lifecycle → Slice actions routed from `jido.agent.lifecycle.*`.
   - `as:` → explicit `path:`.
   Recipes are mechanical. In-repo plugins are migrated with this ADR. No external users exist.
 
 - **Breaking change for agents.** `use Jido.Agent, state_key: :__domain__` → `use Jido.Agent, path: :domain` (required). `agent.state.__domain__.X` → `agent.state.DECLARED_PATH.X`. Scoped actions `use Jido.Agent.ScopedAction, state_key: :foo` → `path: :foo`.
 
-- **Persistence touches real on-disk data.** Pre-refactor persisted state has `%{__domain__: ..., __thread__: ..., __partition__: ...}`. `Jido.Persist.thaw/3` gains a migration pass that rewrites old keys to user-declared paths using the agent module's path map; `__partition__`/`__parent__`/`__orphaned_from__` are discarded on load because they're reconstructed at server spawn.
+- **Pre-refactor persisted state is abandoned.** Old shape `%{__domain__: ..., __thread__: ..., __partition__: ...}` is unreadable by post-refactor code. Per "no external users exist," no migration pass ships; local dev / test fixtures regenerate on first run against the new code. Runtime keys (`__partition__`/`__parent__`/`__orphaned_from__`) are stripped at hibernate time going forward, since they're runtime state reconstructed at server spawn.
 
 - **Three concepts, each with one job.** Slice owns state shape. Middleware wraps execution. Plugin bundles both when they belong together. Strategy retires (0011). The "plugin or strategy?" question disappears.
 
@@ -239,12 +248,17 @@ These decisions were correct in the superseded ADRs and remain in force:
 
 - **Nested path lists or dotted strings (`path: [:system, :thread]`).** More organizational capability. Rejected: flat atoms match `combineReducers` exactly and sidestep "what happens when two slices register overlapping nested paths" questions. Agents that want grouping name paths `:system_thread` themselves.
 
+- **Persister as a pure Slice with Actions + Directives + Executors.** One interim proposal (round-4 W-G) was: Slice-only Persister whose actions route on `lifecycle.starting/.stopping`, emit `%Directive.Thaw{}` / `%Directive.Hibernate{}`, with executors running IO after the chain unwinds. Keeps IO off the mailbox hot path. Rejected (round-4 pivot): the action+directive approach runs IO *after* the chain unwinds, so any middleware observing `lifecycle.starting` sees pre-thaw `ctx.agent` in the same pass — inconsistent with the "chain view" of state. Users trying to write `starting`-observing middleware would need to wait for `ready` to see thawed data. The blocking-middleware approach makes the chain view consistent within each pass at the cost of blocking-IO-on-mailbox during lifecycle. Since lifecycle is rare and one-shot, the cost is acceptable.
+
+- **Ship the full error-handling middleware set (`LogErrors` / `StopOnError` / `Logger` / `CircuitBreaker`) in this PR.** Part of the original 0012/0013 story. Rejected: the error-handling model (what counts as an error, how directives propagate, whether `%Stop{}` is user-facing) deserves a dedicated PR after the structural refactor lands. This PR ships only `Retry` — enough to exercise the middleware pipeline end-to-end. `error_policy:` retires with no direct replacement; the migration guide includes reference snippets for users to self-roll log-and-continue or stop-on-error until the follow-up PR lands.
+
 ## Follow-ups
 
 - Write `guides/slices.md`, `guides/middleware.md`, `guides/plugins.md` (rewrite). Retire `guides/strategies.md`, `guides/custom-strategies.md`.
 - Migrate in-repo plugins (Thread, Identity, Memory, Pod, BusPlugin) to Slice or Plugin as appropriate.
 - Port `Jido.Agent.Strategy.FSM` to `Jido.Plugin.FSM` at `path: :fsm`; inline `Direct` into `Agent.cmd/2`.
-- Ship the standard middleware library under `lib/jido/middleware/`: `Logger`, `Retry`, `CircuitBreaker`, `LogErrors`, `StopOnError`, `Persister`.
-- Persistence migration pass in `Jido.Persist.thaw/3`: rewrite `:__domain__` / `:__thread__` / ... to user-declared paths; discard runtime-identity keys.
+- Ship `Jido.Middleware.Retry` under `lib/jido/middleware/retry.ex` and `Jido.Middleware.Persister` under `lib/jido/middleware/persister.ex` (middleware-only; blocks on thaw/hibernate IO during `lifecycle.starting`/`.stopping`; config in `opts`).
+- Deferred to follow-up PRs: `Logger`, `CircuitBreaker`, `LogErrors`, `StopOnError`, and the formal error-handling model.
+- No persistence migration pass: old on-disk checkpoints are abandoned by design; runtime-identity keys (`__partition__`/`__parent__`/`__orphaned_from__`) are stripped at hibernate time going forward so they don't accumulate.
 - Write a reference ReAct-as-Plugin example under `test/examples/react/` to exercise the Plugin combo shape end-to-end.
 - Update ADRs 0007, 0010, 0013 headers with `Superseded by` pointers.

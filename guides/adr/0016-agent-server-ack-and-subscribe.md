@@ -124,7 +124,7 @@ FSM agents with `:won`/`:lost`/`:cancelled` plug in with the obvious selector �
 ### What's intentionally *not* in this design
 
 - **No `signal_emissions/0` callback.** Subscription points are input signal types. Nothing new to declare; `signal_routes` is already the public vocabulary.
-- **No changes to `Jido.Actions.Status`.** `MarkCompleted` and `MarkFailed` keep writing terminal status into their slice. The subscribe primitive observes those state transitions via the caller's selector; no special emission needed.
+- **`Jido.Actions.Status.*` is deleted (C0).** The convention it encoded — write a terminal status atom into your domain slice — is inlined by users as a small action in their own code (a 10-line reference snippet lives in the migration guide). The subscribe primitive observes whatever terminal state the user writes, via the caller's selector; no special emission needed.
 - **No new lifecycle signal** for work completion. [ADR 0015](0015-agent-start-is-signal-driven.md)'s three lifecycle signals (`starting`, `ready`, `stopping`) cover process lifetime. Work completion is observed via selector on state, orthogonal to process lifetime.
 - **No state leakage.** The selector's return is author-chosen and typically small. The state struct never crosses the boundary.
 - **No change to `Jido.Signal.Call.call/3`.** It's a different job (request/reply with author-shaped payload via `%Directive.Reply{}`). Coexists.
@@ -150,11 +150,9 @@ FSM agents with `:won`/`:lost`/`:cancelled` plug in with the obvious selector �
 
 - **Swallow is transparent too.** A middleware that rejects a signal (by not calling `next`) leaves state untouched. The selector runs against that untouched state. If the caller wants to know "did my signal actually do anything," they encode that question in the selector — typically by looking for a state delta the actions would have produced. The primitives stay minimal.
 
-- `Jido.Await.completion/3` keeps its public shape. Internally it becomes a thin wrapper over `cast_and_await/4` with a default selector matching `:completed`/`:failed` in the agent's declared domain path. Callers with FSM-style terminals pass their own selector.
+- **`Jido.Await` is deleted entirely.** The module, along with `Jido.completion/3` / `all/3` / `any/3` wrappers in `Jido.*`, is removed in this PR. Rationale: the module baked in a terminal-status vocabulary (`:completed` / `:failed` in the domain path) that belongs in user code, not framework infrastructure. Zero in-repo consumers beyond its own tests. Users who want "wait for terminal" write a ~15-line helper over `subscribe/4` with `once: true` — the migration guide ships a reference snippet.
 
-- `Jido.Await.all/3` / `any/3` keep their shapes, rewired to use the new primitives underneath.
-
-- `AgentServer.await_completion/2` and `state.completion_waiters` retire — the primitive is replaced, not patched.
+- `AgentServer.await_completion/2` and `state.completion_waiters` retire alongside `Jido.Await` — the primitive is replaced, not patched.
 
 - [ADR 0006](0006-external-sync-uses-signals.md)'s deferred `stream_status/2` helper can be rebuilt on `subscribe/4` with a selector over the status snapshot.
 

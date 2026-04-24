@@ -40,7 +40,7 @@ These signals are independent of [ADR 0014](0014-slice-middleware-plugin.md)'s `
 @spec await_ready(server(), timeout()) :: :ok | {:error, :timeout}
 ```
 
-A helper on `Jido.AgentServer` that blocks the caller until `ready` fires, for code (tests, command-line scripts, bootstrap sequences) that wants a synchronous barrier. Shape mirrors [`await_completion/2`](0010-waiting-via-ack-and-subscribe.md) from the pre-0016 surface and `await_child/3` from [ADR 0006](0006-external-sync-uses-signals.md).
+A helper on `Jido.AgentServer` that blocks the caller until `ready` fires, for code (tests, command-line scripts, bootstrap sequences) that wants a synchronous barrier. Implementation is a `Process.monitor` + `GenServer.cast` register-waiter pattern; if `ready` has already fired by the time `await_ready/2` is called, it returns `:ok` immediately.
 
 There is no `thawing` signal. There is no `initializing` signal distinct from `starting`. Tests and operators who want to see "was this boot a thaw" look at telemetry (which spans boot) or storage logs, not at the agent's signal stream.
 
@@ -72,23 +72,46 @@ defmodule MyApp.SocketPlugin do
     actions: [...]
 
   @impl Jido.Middleware
-  def on_signal(%Signal{type: "jido.agent.lifecycle.ready"} = sig, ctx, next) do
+  def on_signal(%Signal{type: "jido.agent.lifecycle.ready"} = sig, ctx, _opts, next) do
     endpoint = ctx.agent.state.socket.endpoint
     :ok = MyApp.SocketPool.open(self(), endpoint)
     next.(sig, ctx)
   end
 
-  def on_signal(sig, ctx, next), do: next.(sig, ctx)
+  def on_signal(sig, ctx, _opts, next), do: next.(sig, ctx)
 end
 ```
 
 No dedicated `after_start/1` callback. The signal is the hook.
 
-### Persistence is middleware, not a Slice callback
+### Persistence is a Plugin, not a Slice callback
 
-A slice's state is serialized verbatim by default, via `Jido.Middleware.Persister` (shipped as part of 0014's standard middleware library). Custom shape transforms (the externalization pattern the old `on_checkpoint/2` served — e.g., a Thread plugin writing memory to external storage and persisting only a pointer) are declared in Persister config, **or** expressed in a Plugin whose middleware half implements the transform.
+A slice's state is serialized verbatim by default, via `Jido.Middleware.Persister` — a middleware-only module shipped alongside this refactor. Pattern-matches `jido.agent.lifecycle.starting` / `.stopping` and blocks on `Jido.Persist.thaw/3` / `hibernate/4` IO synchronously, mutating `ctx.agent` with the thawed struct before calling `next`. Completion is surfaced via emitted signals (`jido.persist.thaw.completed` / `.failed`). Config (storage, persistence_key) lives in the middleware's `opts` arg. Custom per-slice shape transforms are declared via the `Jido.Persist.Transform` behaviour on the slice itself (see 0014); no transforms map in Persister opts.
 
-The old 0007-proposed `to_persistable/1` / `from_persistable/1` callbacks retire. Slices cannot declare persistence shape because Slices have no callbacks per 0014. Plugins that need shape transforms use their middleware half.
+Custom shape transforms (the externalization pattern the old `on_checkpoint/2` served — e.g., a Thread plugin writing journal entries to external storage and persisting only a pointer) are declared on the slice itself via `@behaviour Jido.Persist.Transform`:
+
+```elixir
+defmodule Jido.Thread.Plugin do
+  use Jido.Slice, ...
+  @behaviour Jido.Persist.Transform
+
+  @impl Jido.Persist.Transform
+  def externalize(thread), do: # flush journal, return pointer
+
+  @impl Jido.Persist.Transform
+  def reinstate(pointer), do: # rehydrate from pointer
+end
+```
+
+Persister middleware walks every declared slice/plugin at hibernate/thaw and applies these callbacks where implemented. Users configuring Persister only supply storage + persistence_key:
+
+```elixir
+middleware: [
+  {Jido.Middleware.Persister, %{storage: {MyStorage, opts}, persistence_key: "my-agent"}}
+]
+```
+
+The old 0007-proposed `to_persistable/1` / `from_persistable/1` callbacks retire. Slices cannot declare persistence shape because Slices have no callbacks per 0014.
 
 ### Reconcile runs before `ready`
 
@@ -124,18 +147,11 @@ Runtime handles that aren't representable by "look up by id and adopt" (open soc
 
 - **Start-time cost is slightly higher.** Every boot runs the storage-load step (returns empty when no checkpoint exists). Every middleware that subscribes to `lifecycle.ready` runs. These are the cases that needed to run anyway; they just run unconditionally now.
 
-- **Breaking change for any plugin using 0007's proposed callbacks.** They never shipped; migration is forward to 0014's vocabulary. Persistence → Persister middleware config or Plugin middleware. Setup → route on `lifecycle.ready`.
+- **Breaking change for any plugin using 0007's proposed callbacks.** They never shipped; migration is forward to 0014's vocabulary. Persistence → `Jido.Middleware.Persister` config (transforms map for custom shape). Setup → route on `lifecycle.ready`.
 
 - **Breaking change for any plugin still using the pre-0007 `on_checkpoint/2` / `on_restore/2` / `checkpoint/2` / `restore/2` callbacks.** Same migration as above. In-repo plugins (Thread, Memory, Pod) are updated with this ADR.
 
-- **Migration path:**
-  1. Add `starting`, `ready`, `stopping` signals + `await_ready/2`. Old callbacks still called internally.
-  2. Rewrite the failing thaw/restore tests against `await_ready/2`.
-  3. Ship the Persister middleware (0014's standard library).
-  4. Migrate in-tree plugins off `on_checkpoint/2`/`on_restore/2` onto Persister config or Plugin middleware.
-  5. Migrate plugins that had `mount/2` or start-time logic onto `signal_routes` on `lifecycle.ready`.
-  6. Collapse the two thaw paths into AgentServer-owned loading. Remove `restored_from_storage` from opts and state.
-  7. Remove the deprecated callbacks.
+- **Implementation path:** shipped as part of ADRs 0014+0015+0016's single PR (C0–C8, with a red middle — no callback-deprecation phasing). The concrete task breakdown lives in [guides/tasks/0006-lifecycle-signals-collapse-thaw.md](../tasks/0006-lifecycle-signals-collapse-thaw.md) (lifecycle signals + `await_ready/2` + remove storage from AgentServer) and [guides/tasks/0005-migrate-intree-plugins.md](../tasks/0005-migrate-intree-plugins.md) (`Jido.Middleware.Persister` Slice + in-tree plugin migrations). The Legacy shim approach was dissolved during planning (see round-1 finding W1) in favor of pairing the plugin macro rewrite with all callsite migrations in a single commit.
 
 ## Alternatives considered
 
@@ -148,3 +164,5 @@ Runtime handles that aren't representable by "look up by id and adopt" (open soc
 - **Persist PIDs via node-id resolution on load.** Some systems store pids as serialisable node references and resolve them on thaw. Requires a cluster-aware registry and assumes processes outlive their host. Neither assumption holds here. Persist logical state; re-establish handles from identity on start.
 
 - **Keep the thaw phase; just add a `ready` signal.** Would fix the failing thaw-test regression without committing to a redesign. Leaves every user-facing module knowing about thaw for no reason. Two thaw paths would still exist. Rejected: 0007's original analysis still applies.
+
+- **Persister as a pure Slice with Actions + Directives + Executors.** An interim proposal moved all IO to a post-chain directive executor to keep the mailbox path non-blocking. Rejected: it created an asymmetric view where middleware observing `lifecycle.starting` saw pre-thaw `ctx.agent` in the same pass, breaking the "chain view" of state. Persister ships as a Plugin with a blocking middleware half — simpler, consistent, and blocking IO during rare lifecycle events is acceptable. See 0014's alternatives for the full reasoning.
