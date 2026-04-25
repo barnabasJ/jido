@@ -40,11 +40,27 @@ end
 defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Error do
   @moduledoc false
 
-  alias Jido.AgentServer.ErrorPolicy
+  # The framework-level error policy is gone (C4 of ADR 0014). Error
+  # directives just log and continue; users who need stop-on-error or
+  # max-errors semantics write a small middleware that pattern-matches on
+  # `%Directive.Error{}` in the chain result. A formal error-handling
+  # surface lands in a follow-up PR per task 0004 S6.
 
-  def exec(error_directive, _input_signal, state) do
-    ErrorPolicy.handle(error_directive, state)
+  require Logger
+
+  def exec(%Jido.Agent.Directive.Error{error: error, context: context}, _input_signal, state) do
+    Logger.error(
+      "Agent #{state.id}#{format_context(context)}: #{format_error(error)}"
+    )
+
+    {:ok, state}
   end
+
+  defp format_context(nil), do: ""
+  defp format_context(ctx), do: " [#{ctx}]"
+
+  defp format_error(%{message: message}) when is_binary(message), do: message
+  defp format_error(error), do: inspect(error)
 end
 
 defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction do
@@ -78,8 +94,8 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction
       state.agent_module.cmd(
         state.agent,
         {result_action, execution_payload},
-        __jido_instance__: state.jido,
-        __server_partition__: state.partition
+        ctx: %{jido_instance: state.jido, partition: state.partition, agent_id: state.agent.id},
+        input_signal: input_signal
       )
 
     state = State.update_agent(state, agent)

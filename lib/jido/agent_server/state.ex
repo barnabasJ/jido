@@ -77,8 +77,11 @@ defmodule Jido.AgentServer.State do
                 Zoi.any(description: "Logical partition within the Jido instance")
                 |> Zoi.optional(),
               default_dispatch: Zoi.any(description: "Default dispatch config") |> Zoi.optional(),
-              error_policy:
-                Zoi.any(description: "Error handling policy") |> Zoi.default(:log_only),
+              middleware_chain:
+                Zoi.any(
+                  description: "Composed middleware chain function (Signal, ctx -> {ctx, dirs})"
+                )
+                |> Zoi.optional(),
               registry: Zoi.atom(description: "Registry module"),
               spawn_fun: Zoi.any(description: "Custom spawn function") |> Zoi.optional(),
 
@@ -132,12 +135,15 @@ defmodule Jido.AgentServer.State do
   Runtime identity (`partition`, `parent`, `orphaned_from`) lives only on the
   returned `%State{}`; nothing is mirrored into `agent.state`.
 
-  Note: this function will grow a 4th `opts` argument in C4 to thread
-  `middleware_chain:` from the AgentServer init pipeline. The current
-  signature is intentionally not frozen as "always 3-arg".
+  ## Options
+
+  - `:middleware_chain` — composed middleware chain built by AgentServer's
+    `init/1` (a 2-arity function `(Signal.t, ctx -> {ctx, [directive]})`). Stored
+    on `%State{}` so signal processing can invoke it without rebuilding.
   """
-  @spec from_options(Options.t(), module(), struct()) :: {:ok, t()} | {:error, term()}
-  def from_options(%Options{} = opts, agent_module, agent) do
+  @spec from_options(Options.t(), module(), struct(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def from_options(%Options{} = opts, agent_module, agent, extra \\ []) do
     {agent, staged_cron_specs} = Jido.Scheduler.extract_staged_cron_specs(agent)
 
     {restored_cron_specs, invalid_cron_specs} =
@@ -170,7 +176,7 @@ defmodule Jido.AgentServer.State do
         jido: opts.jido,
         partition: opts.partition,
         default_dispatch: opts.default_dispatch,
-        error_policy: opts.error_policy,
+        middleware_chain: Keyword.get(extra, :middleware_chain),
         registry: opts.registry,
         spawn_fun: opts.spawn_fun,
         cron_jobs: %{},

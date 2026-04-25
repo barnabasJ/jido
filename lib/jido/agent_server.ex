@@ -34,9 +34,8 @@ defmodule Jido.AgentServer do
 
   ```
   Signal → AgentServer.call/cast
-        → plugin hooks + route_signal_to_action
-        → Agent.cmd/2
-        → {agent, directives}
+        → middleware chain (`on_signal/4` wrap)
+            → routing → Agent.cmd/2 → {agent, directives}
         → Directives executed inline via DirectiveExec protocol
   ```
 
@@ -53,7 +52,7 @@ defmodule Jido.AgentServer do
   - `:initial_state` - Initial state map for agent
   - `:registry` - Registry module (default: `Jido.Registry`)
   - `:default_dispatch` - Default dispatch config for Emit directives (fallback: current agent pid)
-  - `:error_policy` - Error handling policy
+  - `:middleware` - List of `module()` or `{module(), opts_map}` middleware appended at runtime
   - `:parent` - Parent reference for hierarchy
   - `:on_parent_death` - Behavior when parent dies:
     - `:stop` - stop the child
@@ -889,8 +888,11 @@ defmodule Jido.AgentServer do
 
     with {:ok, options} <- Options.new(opts),
          {:ok, options} <- hydrate_parent_from_runtime_store(options),
-         {:ok, agent_module, agent} <- resolve_agent(options),
-         {:ok, state} <- State.from_options(options, agent_module, agent),
+         agent_module = options.agent_module,
+         chain = build_middleware_chain(agent_module, options),
+         agent = build_agent(agent_module, options),
+         {:ok, state} <-
+           State.from_options(options, agent_module, agent, middleware_chain: chain),
          :ok <- maybe_register_global(options, state) do
       # Monitor parent if present
       state = maybe_monitor_parent(state)
@@ -899,6 +901,21 @@ defmodule Jido.AgentServer do
     else
       {:error, reason} ->
         {:stop, reason}
+    end
+  end
+
+  defp build_agent(agent_module, %Options{id: id, initial_state: state}) do
+    cond do
+      function_exported?(agent_module, :new, 1) ->
+        agent_module.new(id: id, state: state)
+
+      function_exported?(agent_module, :new, 0) ->
+        agent_module.new()
+
+      true ->
+        raise Jido.Error.validation_error(
+                "agent module #{inspect(agent_module)} does not implement new/0 or new/1"
+              )
     end
   end
 
@@ -1360,49 +1377,20 @@ defmodule Jido.AgentServer do
     )
 
     try do
-      case process_signal_common(signal, state) do
-        {:ok, new_state, resolved_action, directives} ->
-          emit_telemetry(
-            [:jido, :agent_server, :signal, :stop],
-            %{duration: System.monotonic_time() - start_time},
-            Map.merge(metadata, signal_stop_metadata(directives))
-          )
+      {:ok, new_state, directives} = process_signal_common(signal, state)
 
-          case execute_directives(directives, signal, new_state) do
-            {:ok, executed_state} ->
-              transformed_agent =
-                run_plugin_transform_hooks(
-                  executed_state.agent,
-                  resolved_action,
-                  signal,
-                  executed_state
-                )
+      emit_telemetry(
+        [:jido, :agent_server, :signal, :stop],
+        %{duration: System.monotonic_time() - start_time},
+        Map.merge(metadata, signal_stop_metadata(directives))
+      )
 
-              {:reply, {:ok, transformed_agent}, executed_state}
+      case execute_directives(directives, signal, new_state) do
+        {:ok, executed_state} ->
+          {:reply, {:ok, executed_state.agent}, executed_state}
 
-            {:stop, reason, executed_state} ->
-              transformed_agent =
-                run_plugin_transform_hooks(
-                  executed_state.agent,
-                  resolved_action,
-                  signal,
-                  executed_state
-                )
-
-              {:stop, reason, {:ok, transformed_agent}, executed_state}
-          end
-
-        {:error, error, error_directives} ->
-          emit_telemetry(
-            [:jido, :agent_server, :signal, :stop],
-            %{duration: System.monotonic_time() - start_time},
-            Map.merge(metadata, %{error: error})
-          )
-
-          case execute_directives(error_directives, signal, state) do
-            {:ok, executed_state} -> {:reply, {:error, error}, executed_state}
-            {:stop, reason, executed_state} -> {:stop, reason, {:error, error}, executed_state}
-          end
+        {:stop, reason, executed_state} ->
+          {:stop, reason, {:ok, executed_state.agent}, executed_state}
       end
     catch
       kind, reason ->
@@ -1439,25 +1427,15 @@ defmodule Jido.AgentServer do
     )
 
     try do
-      case process_signal_common(signal, state) do
-        {:ok, new_state, _resolved_action, directives} ->
-          emit_telemetry(
-            [:jido, :agent_server, :signal, :stop],
-            %{duration: System.monotonic_time() - start_time},
-            Map.merge(metadata, signal_stop_metadata(directives))
-          )
+      {:ok, new_state, directives} = process_signal_common(signal, state)
 
-          execute_directives(directives, signal, new_state)
+      emit_telemetry(
+        [:jido, :agent_server, :signal, :stop],
+        %{duration: System.monotonic_time() - start_time},
+        Map.merge(metadata, signal_stop_metadata(directives))
+      )
 
-        {:error, error, error_directives} ->
-          emit_telemetry(
-            [:jido, :agent_server, :signal, :stop],
-            %{duration: System.monotonic_time() - start_time},
-            Map.merge(metadata, %{error: error})
-          )
-
-          execute_directives(error_directives, signal, state)
-      end
+      execute_directives(directives, signal, new_state)
     catch
       kind, reason ->
         emit_telemetry(
@@ -1470,52 +1448,42 @@ defmodule Jido.AgentServer do
     end
   end
 
-  # Plugin hooks → routing → cmd/2. Returns the agent-updated state together
-  # with the directive list to execute (or an error directive list when hooks
-  # or routing fail).
-  defp process_signal_common(%Signal{} = signal, %State{signal_router: router} = state) do
-    case run_plugin_signal_hooks(signal, state) do
-      {:error, error} ->
-        {:error, error, [%Directive.Error{error: error, context: :plugin_handle_signal}]}
+  # Middleware chain → routing → cmd/2. The outermost middleware wraps the
+  # whole pipeline; the innermost `next` runs routing + cmd/2.
+  #
+  # Returns `{:ok, new_state, directives}` once the chain completes — the
+  # outer signal handler then runs `execute_directives/3`. The chain itself
+  # cannot raise framework-level routing errors; if a route fails, the
+  # innermost `next` returns an `%Error{}` directive that downstream
+  # middleware can react to.
+  defp process_signal_common(%Signal{} = signal, %State{middleware_chain: chain} = state)
+       when is_function(chain, 2) do
+    ctx = build_signal_ctx(signal, state)
+    {new_ctx, directives} = chain.(signal, ctx)
 
-      {:override, action_spec, modified_signal} ->
-        effective_signal = modified_signal || signal
-        dispatch_cmd(effective_signal, action_spec, state)
+    new_state =
+      state
+      |> State.update_agent(new_ctx.agent)
+      |> maybe_notify_completion_waiters()
 
-      {:continue, modified_signal} ->
-        case route_to_actions(router, modified_signal) do
-          {:ok, actions} ->
-            dispatch_cmd(modified_signal, actions, state)
-
-          {:error, reason} ->
-            error =
-              Jido.Error.routing_error("No route for signal", %{
-                signal_type: modified_signal.type,
-                reason: reason
-              })
-
-            {:error, error, [%Directive.Error{error: error, context: :routing}]}
-        end
-    end
+    {:ok, new_state, List.wrap(directives)}
   end
 
-  defp dispatch_cmd(signal, action_spec, state) do
-    action_arg =
-      case action_spec do
-        [single] -> single
-        list when is_list(list) -> list
-        other -> other
-      end
+  defp build_signal_ctx(%Signal{} = signal, %State{} = state) do
+    signal_ctx = Jido.SignalCtx.ctx(signal)
 
-    {agent, directives} =
-      state.agent_module.cmd(state.agent, action_arg,
-        __jido_instance__: state.jido,
-        __server_partition__: state.partition,
-        __input_signal__: signal
-      )
+    base = %{
+      agent: state.agent,
+      agent_module: state.agent_module,
+      agent_id: state.id,
+      partition: state.partition,
+      parent: state.parent,
+      orphaned_from: state.orphaned_from,
+      jido: state.jido,
+      __signal_router__: state.signal_router
+    }
 
-    {:ok, State.update_agent(state, agent) |> maybe_notify_completion_waiters(), action_arg,
-     List.wrap(directives)}
+    Map.merge(base, signal_ctx)
   end
 
   @doc false
@@ -1675,185 +1643,75 @@ defmodule Jido.AgentServer do
   end
 
   # ---------------------------------------------------------------------------
-  # Internal: Plugin Signal Hooks
+  # Internal: Middleware Chain Composition
   # ---------------------------------------------------------------------------
 
-  defp run_plugin_signal_hooks(%Signal{} = signal, %State{} = state) do
-    agent_module = state.agent_module
+  # Builds the on_signal/4 middleware chain for the agent at init time.
+  # Order: agent's compile-time `middleware:` ++ runtime `Options.middleware:`
+  # ++ plugin middleware halves (deferred to C5 — currently empty).
+  #
+  # Each entry is normalized to `{Mod, opts_map}` and wrapped around the core
+  # next function in declaration order: the first entry becomes the outermost
+  # wrap, the last entry the innermost. Duplicate-module detection is left
+  # to user discretion — the chain runs whatever is declared, in order.
+  defp build_middleware_chain(agent_module, %Options{middleware: runtime_mw}) do
+    compile_mw =
+      if function_exported?(agent_module, :middleware, 0),
+        do: agent_module.middleware(),
+        else: []
 
-    specs_and_instances = get_plugin_specs_and_instances(agent_module)
+    plugin_halves = plugin_middleware_halves(agent_module)
+    all_entries = compile_mw ++ runtime_mw ++ plugin_halves
 
-    Enum.reduce_while(specs_and_instances, {:continue, signal}, fn {spec, instance},
-                                                                   {_, current_signal} ->
-      if signal_matches_plugin?(current_signal, spec) do
-        case invoke_plugin_handle_signal(instance, spec, current_signal, state, agent_module) do
-          {:cont, :continue} ->
-            {:cont, {:continue, current_signal}}
+    compose_chain(all_entries, &core_next/2)
+  end
 
-          {:cont, {:continue, new_signal}} ->
-            {:cont, {:continue, new_signal}}
+  # Plugin middleware halves are wired in C5 when `Jido.Plugin` is rewritten
+  # on top of `use Jido.Slice + use Jido.Middleware`. C4 ships the chain
+  # infrastructure with this hook returning [].
+  defp plugin_middleware_halves(_agent_module), do: []
 
-          {:halt, {:override, action_spec}} ->
-            {:halt, {:override, action_spec}}
+  defp normalize_entry({mod, opts}) when is_atom(mod) and is_map(opts), do: {mod, opts}
+  defp normalize_entry(mod) when is_atom(mod), do: {mod, %{}}
 
-          {:halt, {:override, action_spec, new_signal}} ->
-            {:halt, {:override, action_spec, new_signal}}
-
-          {:halt, {:error, error}} ->
-            {:halt, {:error, error}}
-        end
-      else
-        {:cont, {:continue, current_signal}}
-      end
+  defp compose_chain(entries, core_next) do
+    Enum.reduce(Enum.reverse(entries), core_next, fn entry, acc_next ->
+      {mod, opts} = normalize_entry(entry)
+      fn sig, ctx -> mod.on_signal(sig, ctx, opts, acc_next) end
     end)
-    |> normalize_hook_result()
   end
 
-  defp normalize_hook_result({:continue, signal}), do: {:continue, signal}
-  defp normalize_hook_result({:override, action_spec}), do: {:override, action_spec, nil}
+  # Innermost continuation: routing → cmd/2. Routing failures surface as
+  # `%Directive.Error{}` returned alongside the unchanged ctx, so middleware
+  # upstream can observe them via the standard `{ctx, [directive]}` shape.
+  defp core_next(%Signal{} = signal, ctx) do
+    %{agent_module: agent_module, agent: agent, __signal_router__: router} = ctx
 
-  defp normalize_hook_result({:override, action_spec, signal}),
-    do: {:override, action_spec, signal}
+    case route_to_actions(router, signal) do
+      {:ok, actions} ->
+        action_arg =
+          case actions do
+            [single] -> single
+            list when is_list(list) -> list
+            other -> other
+          end
 
-  defp normalize_hook_result({:error, error}), do: {:error, error}
+        {new_agent, directives} =
+          agent_module.cmd(agent, action_arg,
+            ctx: ctx,
+            input_signal: signal
+          )
 
-  defp signal_matches_plugin?(_signal, %{signal_patterns: []}), do: true
-  defp signal_matches_plugin?(_signal, %{signal_patterns: nil}), do: true
+        {Map.put(ctx, :agent, new_agent), List.wrap(directives)}
 
-  defp signal_matches_plugin?(%Signal{type: type}, %{signal_patterns: patterns}) do
-    Enum.any?(patterns, &signal_type_matches?(type, &1))
-  end
-
-  defp signal_type_matches?(type, pattern) do
-    cond do
-      pattern == type ->
-        true
-
-      String.ends_with?(pattern, ".*") ->
-        prefix = String.trim_trailing(pattern, ".*")
-        String.starts_with?(type, prefix <> ".")
-
-      String.contains?(pattern, "*") ->
-        pattern_regex =
-          pattern
-          |> Regex.escape()
-          |> String.replace("\\*", "[^.]*")
-
-        Regex.match?(~r/^#{pattern_regex}$/, type)
-
-      true ->
-        false
-    end
-  end
-
-  defp get_plugin_specs_and_instances(agent_module) do
-    specs =
-      if function_exported?(agent_module, :plugin_specs, 0),
-        do: agent_module.plugin_specs(),
-        else: []
-
-    instances =
-      if function_exported?(agent_module, :plugin_instances, 0),
-        do: agent_module.plugin_instances(),
-        else: []
-
-    Enum.zip(specs, instances)
-  end
-
-  defp invoke_plugin_handle_signal(instance, spec, signal, state, agent_module) do
-    context = %{
-      agent: state.agent,
-      agent_module: agent_module,
-      plugin: spec.module,
-      plugin_spec: spec,
-      plugin_instance: instance,
-      config: spec.config || %{},
-      jido_instance: state.jido,
-      partition: state.partition
-    }
-
-    try do
-      case spec.module.handle_signal(signal, context) do
-        {:ok, {:override, action_spec}} ->
-          {:halt, {:override, action_spec}}
-
-        {:ok, {:continue, %Signal{} = new_signal}} ->
-          {:cont, {:continue, new_signal}}
-
-        {:ok, {:override, action_spec, %Signal{} = new_signal}} ->
-          {:halt, {:override, action_spec, new_signal}}
-
-        {:ok, _} ->
-          {:cont, :continue}
-
-        {:error, reason} ->
-          error =
-            Jido.Error.execution_error(
-              "Plugin handle_signal failed",
-              %{plugin: spec.module, reason: reason}
-            )
-
-          {:halt, {:error, error}}
-      end
-    rescue
-      e ->
-        Logger.error(
-          "Plugin #{inspect(spec.module)} handle_signal crashed: #{Exception.message(e)}"
-        )
-
+      {:error, reason} ->
         error =
-          Jido.Error.execution_error(
-            "Plugin handle_signal crashed",
-            %{plugin: spec.module, exception: Exception.message(e)}
-          )
+          Jido.Error.routing_error("No route for signal", %{
+            signal_type: signal.type,
+            reason: reason
+          })
 
-        {:halt, {:error, error}}
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # Internal: Plugin Transform Hooks
-  # ---------------------------------------------------------------------------
-
-  defp run_plugin_transform_hooks(agent, resolved_action, original_signal, %State{} = state) do
-    agent_module = state.agent_module
-
-    specs_and_instances = get_plugin_specs_and_instances(agent_module)
-
-    action_term = normalize_action_for_transform(resolved_action, original_signal)
-
-    Enum.reduce(specs_and_instances, agent, fn {spec, instance}, agent_acc ->
-      context = %{
-        agent: agent_acc,
-        agent_module: agent_module,
-        plugin: spec.module,
-        plugin_spec: spec,
-        plugin_instance: instance,
-        config: spec.config || %{},
-        jido_instance: state.jido,
-        partition: state.partition
-      }
-
-      try do
-        spec.module.transform_result(action_term, agent_acc, context)
-      rescue
-        e ->
-          Logger.error(
-            "Plugin #{inspect(spec.module)} transform_result crashed: #{Exception.message(e)}"
-          )
-
-          agent_acc
-      end
-    end)
-  end
-
-  defp normalize_action_for_transform(resolved_action, original_signal) do
-    case resolved_action do
-      mod when is_atom(mod) and not is_nil(mod) -> mod
-      {mod, _params} when is_atom(mod) -> mod
-      [{mod, _params} | _] when is_atom(mod) -> mod
-      [mod | _] when is_atom(mod) -> mod
-      _ -> original_signal.type
+        {ctx, [%Directive.Error{error: error, context: :routing}]}
     end
   end
 
@@ -2226,41 +2084,6 @@ defmodule Jido.AgentServer do
     end)
 
     %{state | completion_waiters: Map.new(still_waiting)}
-  end
-
-  # ---------------------------------------------------------------------------
-  # Internal: Agent Resolution
-  # ---------------------------------------------------------------------------
-
-  defp resolve_agent(%Options{
-         agent: agent,
-         agent_module: explicit_module,
-         initial_state: init_state,
-         id: id
-       }) do
-    cond do
-      is_atom(agent) ->
-        cond do
-          function_exported?(agent, :new, 1) ->
-            # new/1 accepts keyword options like [id: ..., state: ...]
-            {:ok, agent, agent.new(id: id, state: init_state)}
-
-          function_exported?(agent, :new, 0) ->
-            {:ok, agent, agent.new()}
-
-          true ->
-            {:error, Jido.Error.validation_error("Agent module must implement new/0 or new/1")}
-        end
-
-      is_struct(agent) ->
-        # For pre-built agents, use explicit agent_module if provided
-        # Otherwise fall back to the struct module (may not work for Jido.Agent structs)
-        agent_module = explicit_module || agent.__struct__
-        {:ok, agent_module, agent}
-
-      true ->
-        {:error, Jido.Error.validation_error("Invalid agent")}
-    end
   end
 
   # ---------------------------------------------------------------------------

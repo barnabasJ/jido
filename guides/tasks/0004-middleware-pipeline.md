@@ -51,24 +51,20 @@ end
 defp build_middleware_chain(agent_module, %Options{middleware: mw}) do
   plugin_halves = plugin_middleware_halves(agent_module.plugins())
 
-  all_entries =
-    agent_module.middleware()
-    ++ mw
-    ++ plugin_halves
-
-  # Reject duplicate middleware modules across the full chain.
-  all_entries
-  |> Enum.group_by(&normalize_module/1)
-  |> Enum.find(fn {_mod, entries} -> length(entries) > 1 end)
-  |> case do
-    nil -> compose_chain(all_entries, &core_next/2)
-    {mod, _dupes} -> raise Jido.Agent.DuplicatePluginError, module: mod
-  end
+  (agent_module.middleware() ++ mw ++ plugin_halves)
+  |> compose_chain(&core_next/2)
 end
-
-defp normalize_module({mod, _opts}) when is_atom(mod), do: mod
-defp normalize_module(mod) when is_atom(mod), do: mod
 ```
+
+> **Duplicate-module detection deferred.** Earlier drafts of this task raised
+> `Jido.Agent.DuplicatePluginError` if a module appeared in more than one of
+> the three sources, on the rationale that `InstanceManager` injecting
+> `Jido.Middleware.Persister` could silently double-register against a
+> compile-time declaration. That guarantee is worth re-evaluating in C5/C6
+> when InstanceManager actually wires Persister; until then, the rule blocks
+> legitimate same-module-different-opts uses (e.g. two `Retry` middlewares
+> with different `pattern:` values). The chain composes whatever is declared,
+> in order — duplicate-handling becomes a user concern.
 
 - Delete `run_plugin_signal_hooks/2` ([line 1805+](../../lib/jido/agent_server.ex)) and `invoke_plugin_handle_signal/5` ([line 1887+](../../lib/jido/agent_server.ex)).
 - Delete `run_plugin_transform_hooks/5` ([line ~1955+](../../lib/jido/agent_server.ex)).
@@ -178,7 +174,7 @@ Consistent with selector-crash behavior (task 0007's "no try/rescue around selec
 - Remove `error_policy` option.
 - Add **`middleware:`** option — `[module() | {module(), opts_map}]`, default `[]`. Runtime-appended middleware-only modules. InstanceManager uses this to inject Persister.
 - **No `plugins:` option.** Compile-time `plugins:` on the agent module stays (for user-defined Plugins with their own Slice), but runtime plugin injection is *not* supported. Rationale: runtime plugins would need to dynamically extend `agent.state`'s typed schema — hard to do cleanly without either weakening typing or adding schema-merging machinery. Middleware doesn't add state, so runtime middleware injection is safe. Persister is middleware-only (no Slice), so runtime-injected via `Options.middleware:`.
-- Duplicate module detection spans `agent_module.middleware() ++ options.middleware ++ plugin_middleware_halves(agent_module.plugins())` — raises at init if any module repeats.
+- Duplicate-module detection across the three sources is **deferred** (see note above and the C5/C6 follow-up). The chain composes whatever is declared.
 
 ### `lib/jido/agent_server/error_policy.ex`
 
@@ -349,35 +345,4 @@ Deferred to a future observability-focused follow-up PR:
 - `execute_directives/3` currently sits between `process_signal_common` and the telemetry/transform-hook phase. Moving it inside `core_next` requires confirming that directive failures correctly propagate as `%Error{}` directives rather than raises — test with a failing `Directive.Spawn{}`.
 - The `DirectiveExec.ex:77` hardcoded-path bit (partially fixed in C2) must be verified once more against the middleware chain — actions should read state via `ctx`, never via `state.agent.state.<hardcoded>`.
 - The Persister **Plugin** (C5) has a middleware half that blocks on `Jido.Persist.thaw/hibernate` IO synchronously during `lifecycle.starting` / `lifecycle.stopping`. No separate directive structs or executors. Blocking on the mailbox path is accepted because lifecycle emissions are rare and one-shot, and the alternative (post-chain executor) creates an asymmetric view where in-chain observers see pre-thaw state.
-- **Same-module collision across compile-time + runtime middleware lists**: the duplicate-module rule raises if a module appears both in `agent_module.middleware()` and in `Options.middleware:`. This is the rule that lets InstanceManager inject `Jido.Middleware.Persister` without silently double-registering it — but it means compile-time-declared Persister is incompatible with InstanceManager-managed agents. See C6 for the pooled-vs-standalone ownership pattern.
-
-  **Error surface**: wrap the duplicate-module raise with a dedicated error type — `Jido.Agent.DuplicatePluginError` — so users see a message that explains the real problem, not just "duplicate module":
-
-  ```elixir
-  defmodule Jido.Agent.DuplicatePluginError do
-    defexception [:module, :message]
-
-    @impl true
-    def exception(opts) do
-      mod = Keyword.fetch!(opts, :module)
-      %__MODULE__{module: mod, message: build_message(mod)}
-    end
-
-    defp build_message(Jido.Middleware.Persister) do
-      """
-      Jido.Middleware.Persister was declared in both the agent module's compile-time
-      middleware: list and via runtime Options.middleware:. Two ownership patterns:
-
-      (a) Standalone/fixed-config: declare Persister at compile time on use Jido.Agent.
-      (b) Pooled via InstanceManager: InstanceManager injects Persister automatically
-          with per-instance storage config; do NOT compile-time-declare it.
-
-      Pick one based on how this agent is spawned.
-      """
-    end
-
-    defp build_message(mod), do: "plugin module #{inspect(mod)} declared at both compile time and runtime; pick one"
-  end
-  ```
-
-  The chain builder's duplicate check raises this instead of a bare `RuntimeError`. Per-module messaging lets `Persister` specifically call out the ownership trap while keeping the generic message useful for other modules.
+- **Same-module collisions** between compile-time `middleware:` / `plugins:` and runtime `Options.middleware:` are **not detected in this commit**. Re-evaluate when InstanceManager actually injects Persister (C5/C6); until then the chain composes whatever is declared and same-module-different-opts (e.g. two `Retry` instances) is allowed.

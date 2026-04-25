@@ -92,20 +92,6 @@ defmodule Jido.Agent do
       {:ok, agent} = MyAgent.set(agent, %{status: :running})
       # agent.state.<path>.status  #=> :running
 
-  ## Strategy Initialization
-
-  `new/1` automatically calls `strategy.init/2` to initialize strategy-specific
-  state. Any directives returned by strategy init are dropped here since they
-  require a runtime to execute. When using `AgentServer`, it handles strategy
-  init directives separately during startup.
-
-  ## Lifecycle Hooks
-
-  Agents support two optional callbacks:
-
-  - `on_before_cmd/2` - Called before command processing (pure transformations only)
-  - `on_after_cmd/3` - Called after command processing (pure transformations only)
-
   ## State Schema Types
 
   Agent supports two schema formats for state validation:
@@ -296,6 +282,12 @@ defmodule Jido.Agent do
                                description: "Plugin modules or {module, config} tuples"
                              )
                              |> Zoi.default([]),
+                           middleware:
+                             Zoi.list(Zoi.any(),
+                               description:
+                                 "Middleware modules or {module, opts_map} tuples for the on_signal/4 chain"
+                             )
+                             |> Zoi.default([]),
                            signal_routes:
                              Zoi.list(Zoi.any(),
                                description:
@@ -336,33 +328,6 @@ defmodule Jido.Agent do
   # Callbacks
 
   @doc """
-  Called before command processing. Can transform the agent or action.
-  Must be pure - no side effects. Return `{:ok, agent, action}` to continue.
-
-  This hook runs once per `cmd/2` call, with the action as passed (which may be a list).
-  It is not a per-instruction hook.
-
-  Use cases:
-  - Mirror action params into agent state (e.g., save last_query before processing)
-  - Add default params that depend on current state
-  - Enforce invariants or guards before execution
-  """
-  @callback on_before_cmd(agent :: t(), action :: term()) ::
-              {:ok, t(), term()}
-
-  @doc """
-  Called after command processing. Can transform the agent or directives.
-  Must be pure - no side effects. Return `{:ok, agent, directives}` to continue.
-
-  Use cases:
-  - Auto-validate state after changes
-  - Derive computed fields
-  - Add invariant checks
-  """
-  @callback on_after_cmd(agent :: t(), action :: term(), directives :: [directive()]) ::
-              {:ok, t(), [directive()]}
-
-  @doc """
   Returns signal routes for this agent.
 
   Routes map signal types to action modules. AgentServer uses these routes
@@ -394,55 +359,9 @@ defmodule Jido.Agent do
   @callback signal_routes() :: [Jido.Signal.Router.route_spec()]
   @callback signal_routes(ctx :: map()) :: [Jido.Signal.Router.route_spec()]
 
-  @doc """
-  Serializes the agent for persistence.
-
-  Called by `Jido.Persist.hibernate/2` before writing to storage.
-  The default implementation passes the full agent state through.
-  `Jido.Persist` enforces invariants (e.g., stripping `:__thread__`
-  and storing a pointer) after this callback returns.
-
-  ## Parameters
-
-  - `agent` - The agent to serialize
-  - `ctx` - Context map (may contain jido instance, options)
-
-  ## Returns
-
-  - `{:ok, serializable_data}` - Data to persist
-  - `{:error, reason}` - Serialization failed
-  """
-  @callback checkpoint(agent :: t(), ctx :: map()) :: {:ok, map()} | {:error, term()}
-
-  @doc """
-  Restores an agent from persisted data.
-
-  Called by `Jido.Persist.thaw/3` after loading from storage.
-  The Thread is reattached separately by Persist after restore.
-
-  If not implemented, a default restoration is used that:
-  - Creates a new agent with the persisted id
-  - Merges the persisted state
-
-  ## Parameters
-
-  - `data` - The persisted data (from checkpoint/2)
-  - `ctx` - Context map (may contain jido instance, options)
-
-  ## Returns
-
-  - `{:ok, agent}` - Restored agent (without thread attached)
-  - `{:error, reason}` - Restoration failed
-  """
-  @callback restore(data :: map(), ctx :: map()) :: {:ok, t()} | {:error, term()}
-
   @optional_callbacks [
-    on_before_cmd: 2,
-    on_after_cmd: 3,
     signal_routes: 0,
-    signal_routes: 1,
-    checkpoint: 2,
-    restore: 2
+    signal_routes: 1
   ]
 
   # Helper functions that generate quoted code for the __using__ macro.
@@ -505,6 +424,16 @@ defmodule Jido.Agent do
       @doc "Returns the merged schema (base + plugin schemas)."
       @spec schema() :: Zoi.schema() | keyword()
       def schema, do: @merged_schema
+
+      @doc """
+      Returns the middleware modules attached to this agent.
+
+      Each entry is either a bare module or `{module, opts_map}`. The list
+      is verbatim from the `middleware:` compile-time option; AgentServer
+      composes these into the on_signal/4 chain at init time.
+      """
+      @spec middleware() :: [module() | {module(), map()}]
+      def middleware, do: @validated_opts[:middleware] || []
 
       @doc false
       @spec __agent_metadata__() :: map()
@@ -892,44 +821,24 @@ defmodule Jido.Agent do
 
       @spec cmd(Agent.t(), Agent.action(), keyword()) :: Agent.cmd_result()
       def cmd(%Agent{} = agent, action, opts) when is_list(opts) do
-        {:ok, agent, action} = on_before_cmd(agent, action)
+        {ctx, opts} = Keyword.pop(opts, :ctx, %{})
+        {input_signal, instruction_opts} = Keyword.pop(opts, :input_signal)
 
-        jido_instance = Keyword.get(opts, :__jido_instance__)
-        partition = Keyword.get(opts, :__server_partition__)
-        input_signal = Keyword.get(opts, :__input_signal__)
+        ctx =
+          ctx
+          |> Map.put_new(:agent_id, agent.id)
 
-        instruction_opts =
-          opts
-          |> Keyword.delete(:__jido_instance__)
-          |> Keyword.delete(:__server_partition__)
-          |> Keyword.delete(:__input_signal__)
-
-        # Seed agent-level runtime identity into the per-signal ctx so it
-        # reaches actions via the `ctx` arg of `run/4`. ADR 0014: runtime
-        # identity lives on `%AgentServer.State{}` and is mirrored into ctx,
-        # never into `agent.state`.
-        agent_ctx =
-          for {k, v} <- [
-                partition: partition,
-                agent_id: agent.id,
-                jido_instance: jido_instance
-              ],
-              not is_nil(v),
-              into: %{},
-              do: {k, v}
+        jido_instance = Map.get(ctx, :jido_instance)
 
         base_context =
           case input_signal do
-            nil -> %{state: agent.state, ctx: agent_ctx}
-            signal -> %{state: agent.state, signal: signal, ctx: agent_ctx}
+            nil -> %{state: agent.state, ctx: ctx}
+            signal -> %{state: agent.state, signal: signal, ctx: ctx}
           end
 
         case Instruction.normalize(action, base_context, instruction_opts) do
           {:ok, instructions} ->
-            {final_agent, directives} =
-              __run_cmd_loop__(agent, instructions, jido_instance)
-
-            __do_after_cmd__(final_agent, action, directives)
+            __run_cmd_loop__(agent, instructions, jido_instance)
 
           {:error, reason} ->
             error = Jido.Error.validation_error("Invalid action", %{reason: reason})
@@ -1059,35 +968,12 @@ defmodule Jido.Agent do
   @doc false
   @spec __quoted_callbacks__() :: Macro.t()
   def __quoted_callbacks__ do
-    before_after = __quoted_callback_before_after__()
     routes = __quoted_callback_routes__()
-    checkpoint = __quoted_callback_checkpoint__()
-    restore = __quoted_callback_restore__()
     overridables = __quoted_callback_overridables__()
-    helpers = __quoted_callback_helpers__()
 
     quote location: :keep do
-      unquote(before_after)
       unquote(routes)
-      unquote(checkpoint)
-      unquote(restore)
       unquote(overridables)
-      unquote(helpers)
-    end
-  end
-
-  defp __quoted_callback_before_after__ do
-    quote location: :keep do
-      # Default callback implementations
-
-      @impl true
-      @spec on_before_cmd(Agent.t(), Agent.action()) :: {:ok, Agent.t(), Agent.action()}
-      def on_before_cmd(agent, action), do: {:ok, agent, action}
-
-      @impl true
-      @spec on_after_cmd(Agent.t(), Agent.action(), [Agent.directive()]) ::
-              {:ok, Agent.t(), [Agent.directive()]}
-      def on_after_cmd(agent, _action, directives), do: {:ok, agent, directives}
     end
   end
 
@@ -1103,94 +989,9 @@ defmodule Jido.Agent do
     end
   end
 
-  defp __quoted_callback_checkpoint__ do
-    quote location: :keep do
-      @impl true
-      def checkpoint(agent, ctx) do
-        {state, externalized, externalized_keys} =
-          Enum.reduce(@plugin_instances, {agent.state, %{}, %{}}, fn instance,
-                                                                     {state_acc, ext_acc,
-                                                                      keys_acc} ->
-            plugin_state = Map.get(state_acc, instance.state_key)
-            config = instance.config || %{}
-
-            case instance.module.on_checkpoint(plugin_state, Map.put(ctx, :config, config)) do
-              {:externalize, key, pointer} ->
-                {Map.delete(state_acc, instance.state_key), Map.put(ext_acc, key, pointer),
-                 Map.put(keys_acc, key, instance.state_key)}
-
-              :drop ->
-                {Map.delete(state_acc, instance.state_key), ext_acc, keys_acc}
-
-              :keep ->
-                {state_acc, ext_acc, keys_acc}
-            end
-          end)
-
-        base = %{
-          version: 1,
-          agent_module: __MODULE__,
-          id: agent.id,
-          state: state
-        }
-
-        base =
-          if externalized_keys == %{},
-            do: base,
-            else: Map.put(base, :externalized_keys, externalized_keys)
-
-        {:ok, Map.merge(base, externalized)}
-      end
-    end
-  end
-
-  defp __quoted_callback_restore__ do
-    quote location: :keep do
-      @impl true
-      def restore(data, ctx) do
-        agent = new(id: data[:id] || data["id"])
-        base_state = data[:state] || data["state"] || %{}
-        agent = %{agent | state: Map.merge(agent.state, base_state)}
-        externalized_keys = data[:externalized_keys] || %{}
-
-        Enum.reduce_while(@plugin_instances, {:ok, agent}, fn instance, {:ok, acc} ->
-          config = instance.config || %{}
-          restore_ctx = Map.put(ctx, :config, config)
-
-          ext_key =
-            Enum.find_value(externalized_keys, fn {k, v} ->
-              if v == instance.state_key, do: k
-            end)
-
-          pointer = if ext_key, do: data[ext_key]
-
-          if pointer do
-            case instance.module.on_restore(pointer, restore_ctx) do
-              {:ok, nil} ->
-                {:cont, {:ok, acc}}
-
-              {:ok, restored_state} ->
-                {:cont,
-                 {:ok, %{acc | state: Map.put(acc.state, instance.state_key, restored_state)}}}
-
-              {:error, reason} ->
-                {:halt, {:error, reason}}
-            end
-          else
-            {:cont, {:ok, acc}}
-          end
-        end)
-      end
-    end
-  end
-
   defp __quoted_callback_overridables__ do
     quote location: :keep do
-      defoverridable on_before_cmd: 2,
-                     on_after_cmd: 3,
-                     checkpoint: 2,
-                     restore: 2,
-                     signal_routes: 0,
+      defoverridable signal_routes: 0,
                      signal_routes: 1,
                      name: 0,
                      description: 0,
@@ -1208,16 +1009,6 @@ defmodule Jido.Agent do
                      plugin_state: 2,
                      plugin_routes: 0,
                      plugin_schedules: 0
-    end
-  end
-
-  defp __quoted_callback_helpers__ do
-    quote location: :keep do
-      # Private helper for after hook dispatch
-      defp __do_after_cmd__(agent, msg, directives) do
-        {:ok, agent, directives} = on_after_cmd(agent, msg, directives)
-        {agent, directives}
-      end
     end
   end
 

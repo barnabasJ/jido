@@ -7,17 +7,10 @@ defmodule Jido.AgentServer.Options do
   > change without notice.
 
   Validates and normalizes startup options including agent configuration,
-  hierarchy settings, error policies, and dispatch configuration.
+  hierarchy settings, middleware chain, and dispatch configuration.
   """
 
   alias Jido.AgentServer.ParentRef
-
-  @type error_policy ::
-          :log_only
-          | :stop_on_error
-          | {:emit_signal, dispatch_cfg :: term()}
-          | {:max_errors, pos_integer()}
-          | (error :: term(), state :: map() -> {:ok, map()} | {:stop, term(), map()})
 
   @type on_parent_death :: :stop | :continue | :emit_orphan
 
@@ -26,7 +19,8 @@ defmodule Jido.AgentServer.Options do
             %{
               agent: Zoi.any(description: "Agent module (atom) or instantiated agent struct"),
               agent_module:
-                Zoi.atom(description: "Agent module for pre-built structs") |> Zoi.optional(),
+                Zoi.atom(description: "Resolved agent module (set by Options.new/1)")
+                |> Zoi.optional(),
               jido:
                 Zoi.atom(description: "Jido instance name for registry scoping (default: Jido)")
                 |> Zoi.optional(),
@@ -44,8 +38,12 @@ defmodule Jido.AgentServer.Options do
               default_dispatch:
                 Zoi.any(description: "Default dispatch config for Emit directives")
                 |> Zoi.optional(),
-              error_policy:
-                Zoi.any(description: "Error handling policy") |> Zoi.default(:log_only),
+              middleware:
+                Zoi.list(Zoi.any(),
+                  description:
+                    "Runtime-appended middleware modules. Each entry is a bare module or {Mod, opts_map}."
+                )
+                |> Zoi.default([]),
               parent: Zoi.any(description: "Parent reference for hierarchy") |> Zoi.optional(),
               on_parent_death:
                 Zoi.atom(description: "Behavior when parent dies")
@@ -100,7 +98,7 @@ defmodule Jido.AgentServer.Options do
   Normalizes and validates all options, including:
   - Generating an ID if not provided
   - Validating the agent module/struct
-  - Validating error policy
+  - Resolving `:agent_module` from the `:agent` option when not given explicitly
   - Parsing parent reference
 
   Returns `{:ok, options}` or `{:error, reason}`.
@@ -114,9 +112,13 @@ defmodule Jido.AgentServer.Options do
     attrs = normalize_attrs(attrs)
 
     with {:ok, _} <- validate_agent(attrs[:agent]),
-         {:ok, _} <- validate_error_policy(attrs[:error_policy]),
+         {:ok, agent_module} <- resolve_agent_module(attrs),
          {:ok, parent} <- validate_parent(attrs[:parent]) do
-      attrs = Map.put(attrs, :parent, parent)
+      attrs =
+        attrs
+        |> Map.put(:agent_module, agent_module)
+        |> Map.put(:parent, parent)
+
       Zoi.parse(@schema, attrs)
     end
   end
@@ -182,22 +184,29 @@ defmodule Jido.AgentServer.Options do
   defp validate_agent(_),
     do: {:error, Jido.Error.validation_error("agent must be a module or struct")}
 
-  @doc """
-  Validates an error policy value.
-  """
-  @spec validate_error_policy(term()) :: {:ok, error_policy()} | {:error, term()}
-  def validate_error_policy(nil), do: {:ok, :log_only}
-  def validate_error_policy(:log_only), do: {:ok, :log_only}
-  def validate_error_policy(:stop_on_error), do: {:ok, :stop_on_error}
-  def validate_error_policy({:emit_signal, _cfg} = policy), do: {:ok, policy}
+  defp resolve_agent_module(attrs) do
+    case Map.get(attrs, :agent_module) do
+      mod when is_atom(mod) and not is_nil(mod) ->
+        {:ok, mod}
 
-  def validate_error_policy({:max_errors, n} = policy) when is_integer(n) and n > 0,
-    do: {:ok, policy}
+      _ ->
+        case attrs[:agent] do
+          mod when is_atom(mod) and not is_nil(mod) ->
+            {:ok, mod}
 
-  def validate_error_policy(fun) when is_function(fun, 2), do: {:ok, fun}
+          %{agent_module: mod} when is_atom(mod) and not is_nil(mod) ->
+            {:ok, mod}
 
-  def validate_error_policy(other) do
-    {:error, Jido.Error.validation_error("invalid error_policy: #{inspect(other)}")}
+          %{__struct__: struct_mod} ->
+            {:ok, struct_mod}
+
+          _ ->
+            {:error,
+             Jido.Error.validation_error(
+               "agent_module is required (provide :agent as a module or set :agent_module)"
+             )}
+        end
+    end
   end
 
   defp validate_parent(nil), do: {:ok, nil}
