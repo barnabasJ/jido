@@ -230,8 +230,4 @@ defmodule Jido.Pod do
   @spec reconcile(AgentServer.server(), keyword()) ::
           {:ok, reconcile_report()} | {:error, reconcile_report()}
   defdelegate reconcile(server, opts \\ []), to: Runtime
-
-  @doc false
-  @spec mark_mutation_lock(Agent.t(), map(), String.t() | nil) :: :ok
-  defdelegate mark_mutation_lock(agent, context, mutation_id), to: Mutable
 end

@@ -10,7 +10,6 @@ defmodule Jido.Pod.Runtime do
   alias Jido.Pod.Mutation.Plan
   alias Jido.Pod.Mutation.Planner
   alias Jido.Pod.Mutation.Report
-  alias Jido.Pod.Mutable
   alias Jido.Pod.Plugin
   alias Jido.Pod.Topology
   alias Jido.Pod.Topology.Node
@@ -173,8 +172,6 @@ defmodule Jido.Pod.Runtime do
       report: report,
       error: if(mutation_status == :failed, do: report, else: nil)
     }
-
-    :ok = Mutable.clear_mutation_lock(state)
 
     agent_state = put_in(state.agent.state, [@pod_state_key, :mutation], mutation_state)
     {:ok, State.update_agent(state, %{state.agent | state: agent_state})}
