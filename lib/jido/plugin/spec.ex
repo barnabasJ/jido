@@ -12,6 +12,12 @@ defmodule Jido.Plugin.Spec do
               module: Zoi.atom(description: "Plugin module"),
               name: Zoi.string(description: "Plugin name"),
               state_key: Zoi.atom(description: "Key for plugin state in agent"),
+              path:
+                Zoi.atom(
+                  description:
+                    "Key for slice state in agent (Slice naming; populated alongside state_key during Plugin → Slice migration)"
+                )
+                |> Zoi.optional(),
               description: Zoi.string(description: "Plugin description") |> Zoi.nullish(),
               category: Zoi.string(description: "Plugin category") |> Zoi.nullish(),
               vsn: Zoi.string(description: "Plugin version") |> Zoi.nullish(),

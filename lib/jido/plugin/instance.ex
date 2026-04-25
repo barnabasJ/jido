@@ -13,6 +13,8 @@ defmodule Jido.Plugin.Instance do
   - `config` - Resolved config map (overrides from agent declaration)
   - `manifest` - The plugin's manifest struct
   - `state_key` - Derived state key (e.g., `:slack` or `:slack_support` if `as: :support`)
+  - `path` - Derived state path (Slice naming; populated alongside `state_key`
+    during the Plugin → Slice migration; identical to `state_key` for now)
   - `route_prefix` - Derived route prefix (e.g., `"slack"` or `"support.slack"`)
 
   ## Examples
@@ -36,6 +38,12 @@ defmodule Jido.Plugin.Instance do
               config: Zoi.map(description: "Resolved configuration") |> Zoi.default(%{}),
               manifest: Zoi.any(description: "The plugin's manifest struct"),
               state_key: Zoi.atom(description: "Derived state key for agent state"),
+              path:
+                Zoi.atom(
+                  description:
+                    "Derived state path (Slice naming; populated alongside state_key during Plugin → Slice migration)"
+                )
+                |> Zoi.optional(),
               route_prefix: Zoi.string(description: "Derived route prefix for signal routing")
             },
             coerce: true
@@ -101,6 +109,7 @@ defmodule Jido.Plugin.Instance do
       config: resolved_config,
       manifest: manifest,
       state_key: state_key,
+      path: derive_path(manifest.path, as_opt),
       route_prefix: route_prefix
     }
   end
@@ -122,6 +131,11 @@ defmodule Jido.Plugin.Instance do
   def derive_state_key(base_key, as_alias) when is_atom(as_alias) do
     String.to_atom("#{base_key}_#{as_alias}")
   end
+
+  @doc false
+  @spec derive_path(atom() | nil, atom() | nil) :: atom() | nil
+  def derive_path(nil, _as_alias), do: nil
+  def derive_path(base_path, as_alias), do: derive_state_key(base_path, as_alias)
 
   @doc """
   Derives the route prefix from the plugin name and optional `as:` alias.
