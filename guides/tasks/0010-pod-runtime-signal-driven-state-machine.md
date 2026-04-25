@@ -1,7 +1,7 @@
 # Task 0010 — Pod runtime: signal-driven state machine; delete wave orchestration
 
 - Implements: [ADR 0017](../adr/0017-pod-mutations-are-signal-driven.md) Phase 2 — runtime simplification + state machine
-- Depends on: [task 0009](0009-pod-mutate-cast-await-api.md) (caller API already cast_and_await + lifecycle signal-shaped)
+- Depends on: [task 0009](0009-pod-mutate-cast-await-api.md) (caller API already cast_and_await + lifecycle signal-shaped); transitively [task 0011](0011-tagged-tuple-return-shape.md)
 - Blocks: nothing — this is the terminal task for ADR 0017
 - Leaves tree: **green**
 

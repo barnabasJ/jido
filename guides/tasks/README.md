@@ -1,6 +1,8 @@
 # Implementation tasks — ADRs 0014–0018
 
-This directory holds the per-commit task breakdown for implementing [ADR 0014](../adr/0014-slice-middleware-plugin.md), [ADR 0015](../adr/0015-agent-start-is-signal-driven.md), [ADR 0016](../adr/0016-agent-server-ack-and-subscribe.md), [ADR 0017](../adr/0017-pod-mutations-are-signal-driven.md), and [ADR 0018](../adr/0018-tagged-tuple-return-shape.md). The 0014–0016 work shipped as one PR (commits C0–C8). [ADR 0017](../adr/0017-pod-mutations-are-signal-driven.md) lands across two follow-up commits (tasks 0009 and 0010). [ADR 0018](../adr/0018-tagged-tuple-return-shape.md) is one independent commit (task 0011). Each follow-up task is its own session.
+This directory holds the per-commit task breakdown for implementing [ADR 0014](../adr/0014-slice-middleware-plugin.md), [ADR 0015](../adr/0015-agent-start-is-signal-driven.md), [ADR 0016](../adr/0016-agent-server-ack-and-subscribe.md), [ADR 0017](../adr/0017-pod-mutations-are-signal-driven.md), and [ADR 0018](../adr/0018-tagged-tuple-return-shape.md).
+
+The 0014–0016 work shipped as one PR (commits C0–C8). The 0017–0018 follow-on work lands in three sequential commits, each its own session: **task 0011 first** (the tagged-tuple return shape; ADR 0018), then **task 0009** (the Pod.mutate API refactor on top of 0011; ADR 0017 Phase 1), then **task 0010** (Pod runtime signal-driven state machine; ADR 0017 Phase 2). 0011 ships first because it simplifies every selector and Retry-style middleware downstream — running it after 0009 would mean shipping 0009 with explicit-failure-branch selectors that immediately get rewritten.
 
 > # NO LEGACY ADAPTERS — APPLIES TO EVERY TASK BELOW
 >
@@ -51,9 +53,9 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 | [0006](0006-lifecycle-signals-collapse-thaw.md) | Lifecycle signals + `await_ready/2` + collapse thaw paths | red | 0015 |
 | [0007](0007-ack-subscribe-primitives.md) | `cast_and_await/4` + `subscribe/4`; retire `await_completion` | red | 0016 |
 | [0008](0008-tests-guides-adr-status.md) | Tests, guides, ReAct reference, ADR status flip | **green** | all three — housekeeping |
+| [0011](0011-tagged-tuple-return-shape.md) | Tagged-tuple return shape across action / cmd / middleware; ack reads chain outcome | **green** | 0018 |
 | [0009](0009-pod-mutate-cast-await-api.md) | `Pod.mutate` switches to `cast_and_await` + lifecycle signals; add `Pod.mutate_and_wait/3` | **green** | 0017 (Phase 1 — public API) |
 | [0010](0010-pod-runtime-signal-driven-state-machine.md) | Pod runtime: signal-driven state machine; delete wave orchestration | **green** | 0017 (Phase 2 — runtime simplification) |
-| [0011](0011-tagged-tuple-return-shape.md) | Tagged-tuple return shape across action / cmd / middleware; ack reads chain outcome | **green** | 0018 |
 
 ## Dependencies
 
@@ -66,9 +68,9 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 0005 ← 0006
 0006 ← 0007
 0007 ← 0008
-0008 ← 0009              (ADR 0017 follow-on)
-0009 ← 0010
-0008 ← 0011              (ADR 0018 — independent of 0017)
+0008 ← 0011              (ADR 0018 — first of the follow-on chain)
+0011 ← 0009              (ADR 0017 Phase 1 — uses 0011's simplified selectors)
+0009 ← 0010              (ADR 0017 Phase 2 — runtime state machine)
 ```
 
 ## Related planning artifacts

@@ -1,7 +1,7 @@
 # Task 0009 — `Pod.mutate` switches to `cast_and_await` + lifecycle signals; add `Pod.mutate_and_wait/3`
 
 - Implements: [ADR 0017](../adr/0017-pod-mutations-are-signal-driven.md) Phase 1 — the public API surface
-- Depends on: ADR 0017 + ETS lock deletion landed (commit 99f2cdb's successor — the one that introduces this task file). Also depends on [task 0011](0011-tagged-tuple-return-shape.md) (ADR 0018) for the simplified-selector form below; if 0011 has not landed, the selector must include the explicit `:failed` branch (see "Selector form before/after 0011" below).
+- Depends on: ADR 0017 + ETS lock deletion landed (commit `fdd59cf`). **Also requires [task 0011](0011-tagged-tuple-return-shape.md) (ADR 0018) to have landed first** — the default selector below assumes the framework delivers action errors automatically via the tagged-tuple return.
 - Blocks: [task 0010](0010-pod-runtime-signal-driven-state-machine.md)
 - Leaves tree: **green**
 
@@ -72,28 +72,9 @@ defp default_selector(%{agent: %{state: agent_state}}) do
 end
 ```
 
-Per [ADR 0018](../adr/0018-tagged-tuple-return-shape.md): "the selector is the *query* — different callers want different projections of the success-path state. The error is always the same — the action either succeeded or it didn't, and the framework owns delivery either way." The default selector is the common-case query; the framework delivers `{:error, :mutation_in_progress}` automatically when the action's `ensure_mutation_idle/1` rejects.
+Per [ADR 0018](../adr/0018-tagged-tuple-return-shape.md): "the selector is the *query* — different callers want different projections of the success-path state. The error is always the same — the action either succeeded or it didn't, and the framework owns delivery either way." The default selector is the common-case query; the framework delivers `{:error, :mutation_in_progress}` automatically when the action's `ensure_mutation_idle/1` rejects, so the selector never has to encode a synchronous-failure branch.
 
-#### Selector form before/after 0011
-
-If [task 0011](0011-tagged-tuple-return-shape.md) (ADR 0018) has **not** landed yet, the action's `{:error, :mutation_in_progress}` does not flow through `cast_and_await` automatically — it goes through `%Directive.Error{}` and the selector sees `:running`-then-`:failed` slice transitions. In that interim, the default selector needs explicit branches:
-
-```elixir
-defp default_selector(%{agent: %{state: agent_state}}) do
-  case get_in(agent_state, [@pod_state_key, :mutation]) do
-    %{id: id, status: status} when status in [:running, :completed] and is_binary(id) ->
-      {:ok, %{mutation_id: id, queued: true}}
-
-    %{status: :failed, error: error} ->
-      {:error, error}
-
-    _ ->
-      {:error, :mutation_not_settled}
-  end
-end
-```
-
-After 0011 lands, the selector collapses to the single-clause form shown above. **Land 0011 before this task** if you want to ship the simpler form on day one. Otherwise, ship the temporary explicit-branches form here, and follow up with the simplification when 0011 lands (one-line PR).
+The selector reads `mutation.id` directly without status-guarding because the action's StateOp directives have already set the slice before the selector runs (per [ADR 0016](../adr/0016-agent-server-ack-and-subscribe.md) hook point — selector fires after the outermost middleware unwinds and directives have been applied).
 
 Add `mutate_and_wait/3`:
 

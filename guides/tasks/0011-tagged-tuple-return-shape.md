@@ -1,8 +1,8 @@
 # Task 0011 — Tagged-tuple return shape across action / cmd / middleware
 
 - Implements: [ADR 0018](../adr/0018-tagged-tuple-return-shape.md) — unified return shape, all-or-nothing batches, ack reads chain outcome
-- Depends on: ADRs 0014/0015/0016 shipped (commits through `99f2cdb`). Independent of [task 0009](0009-pod-mutate-cast-await-api.md) and [task 0010](0010-pod-runtime-signal-driven-state-machine.md) — can land before, after, or interleaved.
-- Blocks: nothing
+- Depends on: ADRs 0014/0015/0016 shipped (commits through `99f2cdb`) and ADR 0017 + ETS lock deletion landed (commit `fdd59cf`).
+- Blocks: [task 0009](0009-pod-mutate-cast-await-api.md) (which uses the simplified single-clause selector enabled by this task), and transitively [task 0010](0010-pod-runtime-signal-driven-state-machine.md).
 - Leaves tree: **green**
 
 ## Goal

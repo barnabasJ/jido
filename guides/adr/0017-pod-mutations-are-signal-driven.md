@@ -1,7 +1,7 @@
 # 0017. Pod mutations are signal-driven; async actions ack-and-lifecycle-signal
 
 - Status: Accepted
-- Implementation: Partial — ADR + ETS lock deletion in this commit; Phase 1 (API) tracked by [task 0009](../tasks/0009-pod-mutate-cast-await-api.md); Phase 2 (runtime simplification) tracked by [task 0010](../tasks/0010-pod-runtime-signal-driven-state-machine.md)
+- Implementation: Partial — ADR + ETS lock deletion in this commit; Phase 1 (API) tracked by [task 0009](../tasks/0009-pod-mutate-cast-await-api.md); Phase 2 (runtime simplification) tracked by [task 0010](../tasks/0010-pod-runtime-signal-driven-state-machine.md). [Task 0011](../tasks/0011-tagged-tuple-return-shape.md) (ADR 0018) lands before 0009 so the cast_and_await selectors are written in their simplified single-clause form.
 - Date: 2026-04-25
 - Related commits: (this commit — ADR + ETS lock deletion only)
 - Related ADRs: [0014](0014-slice-middleware-plugin.md), [0015](0015-agent-start-is-signal-driven.md), [0016](0016-agent-server-ack-and-subscribe.md)
