@@ -71,10 +71,10 @@ defmodule Jido.Await do
 
       {:ok, result} = Jido.Await.completion(agent_pid, 10_000)
 
-      # With custom paths for strategy state
+      # With custom paths into a plugin/slice slice
       {:ok, result} = Jido.Await.completion(agent_pid, 10_000,
-        status_path: [:__strategy__, :status],
-        result_path: [:__strategy__, :result]
+        status_path: [:fsm, :state],
+        result_path: [:fsm, :last_result]
       )
   """
   @spec completion(server(), non_neg_integer(), Keyword.t()) ::

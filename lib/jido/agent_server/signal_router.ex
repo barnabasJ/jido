@@ -1,19 +1,18 @@
 defmodule Jido.AgentServer.SignalRouter do
   @moduledoc """
-  Builds a unified Jido.Signal.Router from strategy, agent, and plugin routes.
+  Builds a unified Jido.Signal.Router from agent and plugin routes.
 
   This module is responsible for:
-  1. Collecting routes from all sources (strategy, agent, plugins)
+  1. Collecting routes from all sources (agent, plugins)
   2. Normalizing route specs with appropriate priorities
   3. Building the trie-based router for efficient signal routing
 
   ## Priority Levels
 
-  | Source   | Default Priority | Range    |
-  |----------|------------------|----------|
-  | Strategy | 50               | 50-100   |
-  | Agent    | 0                | -25 to 25|
-  | Plugin   | -10              | -50 to -10|
+  | Source | Default Priority | Range     |
+  |--------|------------------|-----------|
+  | Agent  | 0                | -25 to 25 |
+  | Plugin | -10              | -50 to -10|
 
   ## Route Spec Formats
 
@@ -27,13 +26,11 @@ defmodule Jido.AgentServer.SignalRouter do
 
   - `module()` - Action module, params = signal.data
   - `{module(), map()}` - Action module with static params
-  - `{:strategy_cmd, atom()}` - Strategy command
   """
 
   alias Jido.AgentServer.State
   alias Jido.Signal.Router, as: SignalRouter
 
-  @strategy_default_priority 50
   @agent_default_priority 0
   @plugin_default_priority -10
 
@@ -41,7 +38,6 @@ defmodule Jido.AgentServer.SignalRouter do
   Builds a unified router from all route sources in the agent state.
 
   Collects routes from:
-  - Strategy routes (priority 50+) via `strategy.signal_routes/1`
   - Agent routes (priority 0) via `agent_module.signal_routes/1`
   - Plugin routes (priority -10) via plugin `signal_patterns` and `signal_routes/1`
 
@@ -51,7 +47,6 @@ defmodule Jido.AgentServer.SignalRouter do
   def build(%State{} = state) do
     routes =
       []
-      |> add_strategy_routes(state)
       |> add_agent_routes(state)
       |> add_plugin_routes(state)
       |> add_builtin_routes()
@@ -63,37 +58,13 @@ defmodule Jido.AgentServer.SignalRouter do
   end
 
   # Built-in system routes available on every agent. Priority sits below
-  # plugin/agent/strategy so user-defined routes always win on conflict.
+  # plugin/agent so user-defined routes always win on conflict.
   defp add_builtin_routes(routes) do
     builtin = [
       {"jido.agent.query.children", Jido.AgentServer.Actions.QueryChildren}
     ]
 
     routes ++ normalize_routes(builtin, @plugin_default_priority - 10)
-  end
-
-  # Collects routes from strategy.signal_routes/1
-  defp add_strategy_routes(routes, %State{
-         agent_module: agent_module,
-         jido: jido_instance,
-         partition: partition
-       }) do
-    strat = agent_module.strategy()
-
-    ctx = %{
-      agent_module: agent_module,
-      strategy_opts: agent_module.strategy_opts(),
-      jido_instance: jido_instance,
-      partition: partition
-    }
-
-    if function_exported?(strat, :signal_routes, 1) do
-      strategy_routes = strat.signal_routes(ctx)
-      normalized = normalize_routes(strategy_routes, @strategy_default_priority)
-      routes ++ normalized
-    else
-      routes
-    end
   end
 
   # Collects routes from agent_module.signal_routes/1

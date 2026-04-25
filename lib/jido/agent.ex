@@ -291,12 +291,6 @@ defmodule Jido.Agent do
                              )
                              |> Zoi.refine({Schema, :validate_config_schema, []})
                              |> Zoi.default([]),
-                           strategy:
-                             Zoi.any(
-                               description:
-                                 "Execution strategy module or {module, opts}. Default: Jido.Agent.Strategy.Direct"
-                             )
-                             |> Zoi.default(Jido.Agent.Strategy.Direct),
                            plugins:
                              Zoi.list(Zoi.any(),
                                description: "Plugin modules or {module, config} tuples"
@@ -462,9 +456,12 @@ defmodule Jido.Agent do
       @behaviour Jido.Agent
 
       alias Jido.Agent
+      alias Jido.Agent.Directive, as: AgentDirective
       alias Jido.Agent.State, as: AgentState
-      alias Jido.Agent.Strategy, as: AgentStrategy
+      alias Jido.Agent.StateOp
+      alias Jido.Agent.StateOps
       alias Jido.Instruction
+      alias Jido.Observe.Config, as: ObserveConfig
       alias Jido.Plugin.Requirements, as: PluginRequirements
 
       require OK
@@ -716,30 +713,6 @@ defmodule Jido.Agent do
   end
 
   @doc false
-  @spec __quoted_strategy_accessors__() :: Macro.t()
-  def __quoted_strategy_accessors__ do
-    quote location: :keep do
-      @doc "Returns the execution strategy module for this agent."
-      @spec strategy() :: module()
-      def strategy do
-        case @validated_opts[:strategy] do
-          {mod, _opts} -> mod
-          mod -> mod
-        end
-      end
-
-      @doc "Returns the strategy options for this agent."
-      @spec strategy_opts() :: keyword()
-      def strategy_opts do
-        case @validated_opts[:strategy] do
-          {_mod, opts} -> opts
-          _ -> []
-        end
-      end
-    end
-  end
-
-  @doc false
   @spec __quoted_new_function__() :: Macro.t()
   def __quoted_new_function__ do
     new_fn = __quoted_new_fn_definition__()
@@ -755,10 +728,6 @@ defmodule Jido.Agent do
     quote location: :keep do
       @doc """
       Creates a new agent with optional initial state.
-
-      The agent is fully initialized including strategy state. For the default
-      Direct strategy, this is a no-op. For custom strategies, any state
-      initialization is applied (but directives are only processed by AgentServer).
 
       ## Examples
 
@@ -796,13 +765,7 @@ defmodule Jido.Agent do
         }
 
         # Run plugin mount hooks (pure initialization)
-        agent = __mount_plugins__(agent)
-
-        # Run strategy initialization (directives are dropped here;
-        # AgentServer handles init directives separately)
-        ctx = __strategy_ctx__()
-        {initialized_agent, _directives} = strategy().init(agent, ctx)
-        initialized_agent
+        __mount_plugins__(agent)
       end
 
       defp __build_initial_state__(opts) do
@@ -893,8 +856,10 @@ defmodule Jido.Agent do
       @doc """
       Execute actions against the agent. Pure: `(agent, action) -> {agent, directives}`
 
-      This is the core operation. Actions modify state, directives are external effects.
-      Execution is delegated to the configured strategy (default: Direct).
+      Actions modify state; directives are external effects. The reducer runs
+      each instruction by handing the action its declared slice (per `path:`)
+      and writing the returned slice back wholesale (no deep-merge — every
+      action returns the full new slice, see ADR 0014).
 
       ## Action Formats
 
@@ -961,21 +926,80 @@ defmodule Jido.Agent do
 
         case Instruction.normalize(action, base_context, instruction_opts) do
           {:ok, instructions} ->
-            ctx = __strategy_ctx__(jido_instance, partition)
-            strat = strategy()
+            {final_agent, directives} =
+              __run_cmd_loop__(agent, instructions, jido_instance)
 
-            normalized_instructions =
-              Enum.map(instructions, fn instr ->
-                AgentStrategy.normalize_instruction(strat, instr, ctx)
-              end)
-
-            {agent, directives} = strat.cmd(agent, normalized_instructions, ctx)
-            __do_after_cmd__(agent, action, directives)
+            __do_after_cmd__(final_agent, action, directives)
 
           {:error, reason} ->
             error = Jido.Error.validation_error("Invalid action", %{reason: reason})
-            {agent, [%Jido.Agent.Directive.Error{error: error, context: :normalize}]}
+            {agent, [%AgentDirective.Error{error: error, context: :normalize}]}
         end
+      end
+
+      defp __run_cmd_loop__(agent, instructions, jido_instance) do
+        {final_agent, reversed_directives} =
+          Enum.reduce(instructions, {agent, []}, fn instruction, {acc_agent, acc_directives} ->
+            {new_agent, new_directives} =
+              __run_instruction__(acc_agent, instruction, jido_instance)
+
+            {new_agent, Enum.reverse(new_directives) ++ acc_directives}
+          end)
+
+        {final_agent, Enum.reverse(reversed_directives)}
+      end
+
+      defp __run_instruction__(agent, %Instruction{action: action} = instruction, jido_instance) do
+        slice_path = __resolve_slice_path__(action)
+        scoped_state = Map.get(agent.state, slice_path, %{})
+
+        instruction = %{
+          instruction
+          | context:
+              instruction.context
+              |> Map.put(:state, scoped_state)
+              |> Map.put(:agent, agent)
+              |> Map.put(:agent_server_pid, self())
+        }
+
+        exec_opts = ObserveConfig.action_exec_opts(jido_instance, instruction.opts)
+
+        case Jido.Exec.run(%{instruction | opts: exec_opts}) do
+          {:ok, new_slice} when is_map(new_slice) ->
+            __apply_slice_result__(agent, slice_path, new_slice, [])
+
+          {:ok, new_slice, effects} when is_map(new_slice) ->
+            __apply_slice_result__(agent, slice_path, new_slice, List.wrap(effects))
+
+          {:error, reason} ->
+            error = Jido.Error.execution_error("Instruction failed", details: %{reason: reason})
+            {agent, [%AgentDirective.Error{error: error, context: :instruction}]}
+        end
+      end
+
+      # Every action declares `path/0` (per C0). If it returns a non-nil atom,
+      # use it; otherwise fall back to the agent's domain slice. We
+      # `Code.ensure_loaded/1` first because `function_exported?/3` would
+      # spuriously say `false` for a module that hasn't been resolved yet —
+      # that yielded a non-deterministic test failure where the very first
+      # call to a fresh action targeted the wrong slice.
+      defp __resolve_slice_path__(action)
+           when is_atom(action) and not is_nil(action) do
+        Code.ensure_loaded(action)
+
+        case action.path() do
+          p when is_atom(p) and not is_nil(p) -> p
+          _ -> path()
+        end
+      rescue
+        UndefinedFunctionError -> path()
+      end
+
+      defp __resolve_slice_path__(_action), do: path()
+
+      defp __apply_slice_result__(agent, slice_path, new_slice, effects) do
+        slice_op = %StateOp.SetPath{path: [slice_path], value: new_slice}
+        StateOps.apply_state_ops(agent, [slice_op | effects])
       end
     end
   end
@@ -984,26 +1008,6 @@ defmodule Jido.Agent do
   @spec __quoted_utility_functions__() :: Macro.t()
   def __quoted_utility_functions__ do
     quote location: :keep do
-      @doc """
-      Returns a stable, public view of the strategy's execution state.
-
-      Use this instead of inspecting `agent.state.__strategy__` directly.
-      Returns a `Jido.Agent.Strategy.Snapshot` struct with:
-      - `status` - Coarse execution status
-      - `done?` - Whether strategy reached terminal state
-      - `result` - Main output if any
-      - `details` - Additional strategy-specific metadata
-
-      Runtime identity (e.g. partition) lives on `%Jido.AgentServer.State{}`
-      and is no longer mirrored into `agent.state`. Pass it via the optional
-      `partition:` opt when calling from the AgentServer.
-      """
-      @spec strategy_snapshot(Agent.t(), keyword()) :: Jido.Agent.Strategy.Snapshot.t()
-      def strategy_snapshot(%Agent{} = agent, opts \\ []) do
-        ctx = __strategy_ctx__(nil, Keyword.get(opts, :partition))
-        strategy().snapshot(agent, ctx)
-      end
-
       @doc """
       Updates the agent's state by merging new attributes.
 
@@ -1194,8 +1198,6 @@ defmodule Jido.Agent do
                      tags: 0,
                      vsn: 0,
                      schema: 0,
-                     strategy: 0,
-                     strategy_opts: 0,
                      plugins: 0,
                      plugin_specs: 0,
                      plugin_instances: 0,
@@ -1211,15 +1213,6 @@ defmodule Jido.Agent do
 
   defp __quoted_callback_helpers__ do
     quote location: :keep do
-      defp __strategy_ctx__(jido_instance \\ nil, partition \\ nil) do
-        %{
-          agent_module: __MODULE__,
-          strategy_opts: strategy_opts(),
-          jido_instance: jido_instance,
-          partition: partition
-        }
-      end
-
       # Private helper for after hook dispatch
       defp __do_after_cmd__(agent, msg, directives) do
         {:ok, agent, directives} = on_after_cmd(agent, msg, directives)
@@ -1234,7 +1227,6 @@ defmodule Jido.Agent do
     basic_accessors = Agent.__quoted_basic_accessors__()
     plugin_accessors = Agent.__quoted_plugin_accessors__()
     plugin_config_accessors = Agent.__quoted_plugin_config_accessors__()
-    strategy_accessors = Agent.__quoted_strategy_accessors__()
     new_function = Agent.__quoted_new_function__()
     cmd_function = Agent.__quoted_cmd_function__()
     utility_functions = Agent.__quoted_utility_functions__()
@@ -1404,7 +1396,6 @@ defmodule Jido.Agent do
       unquote(basic_accessors)
       unquote(plugin_accessors)
       unquote(plugin_config_accessors)
-      unquote(strategy_accessors)
       unquote(new_function)
       unquote(cmd_function)
       unquote(utility_functions)

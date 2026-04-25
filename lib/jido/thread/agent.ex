@@ -3,7 +3,6 @@ defmodule Jido.Thread.Agent do
   Helper for managing Thread in agent state.
 
   Thread is stored at the reserved key `:__thread__` in `agent.state`.
-  This follows the same pattern as `:__strategy__` for strategy state.
 
   ## Example
 

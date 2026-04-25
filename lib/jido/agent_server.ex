@@ -40,9 +40,10 @@ defmodule Jido.AgentServer do
         → Directives executed inline via DirectiveExec protocol
   ```
 
-  Signal routing is owned by AgentServer, not the Agent. Strategies can define
-  `signal_routes/1` to map signal types to strategy commands. Unmatched signals
-  fall back to `{signal.type, signal.data}` as the action.
+  Signal routing is owned by AgentServer, not the Agent. Plugins and the
+  agent itself can define `signal_routes/1` to map signal types to action
+  modules. Unmatched signals fall back to `{signal.type, signal.data}` as
+  the action.
 
   ## Options
 
@@ -97,15 +98,17 @@ defmodule Jido.AgentServer do
 
   Agents signal completion via **state**, not process death:
 
-      # In your strategy/agent, set terminal status:
-      agent = put_in(agent.state.status, :completed)
-      agent = put_in(agent.state.last_answer, answer)
+      # In an action, set the terminal status on the agent's slice:
+      slice = put_in(slice, [:status], :completed)
+      slice = put_in(slice, [:last_answer], answer)
+      {:ok, slice}
 
       # External code polls for completion:
       {:ok, state} = AgentServer.state(server)
-      case state.agent.state.status do
-        :completed -> state.agent.state.last_answer
-        :failed -> {:error, state.agent.state.error}
+      domain = state.agent_module.path()
+      case get_in(state.agent.state, [domain, :status]) do
+        :completed -> get_in(state.agent.state, [domain, :last_answer])
+        :failed -> {:error, get_in(state.agent.state, [domain, :error])}
         _ -> :still_running
       end
 
@@ -168,17 +171,14 @@ defmodule Jido.AgentServer do
   When `await_completion/2` times out, it returns a diagnostic map:
 
       {:error, {:timeout, %{
-        hint: "Agent is idle but await_completion is blocking",
-        server_status: :idle,
+        hint: "await_completion timed out before terminal status reached",
         mailbox_length: 0,
-        iteration: nil,
         waited_ms: 5000
       }}}
 
-  Use this to understand why the agent hasn't completed:
-  - `:idle` with empty mailbox → agent finished but state doesn't match await condition
-  - `:waiting` → strategy is waiting (e.g., for LLM response)
-  - `:running` → still processing directives
+  An empty mailbox usually means the agent finished but its state never
+  satisfied the await condition; a non-empty mailbox means signals are
+  still pending behind the call.
   """
 
   use GenServer
@@ -193,8 +193,7 @@ defmodule Jido.AgentServer do
     ParentRef,
     SignalRouter,
     State,
-    StopChildRuntime,
-    Status
+    StopChildRuntime
   }
 
   alias Jido.Agent.Directive
@@ -409,28 +408,22 @@ defmodule Jido.AgentServer do
       catch
         :exit, {:timeout, _} ->
           GenServer.cast(pid, {:cancel_await_completion, waiter_id})
-
-          case status(server) do
-            {:ok, s} -> {:error, {:timeout, build_timeout_diagnostic(s, timeout)}}
-            _ -> {:error, :timeout}
-          end
+          {:error, {:timeout, build_timeout_diagnostic(pid, timeout)}}
       end
     end
   end
 
-  defp build_timeout_diagnostic(status, timeout_ms) do
+  defp build_timeout_diagnostic(pid, timeout_ms) do
     mailbox_length =
-      case Process.info(status.pid, :message_queue_len) do
+      case Process.info(pid, :message_queue_len) do
         {:message_queue_len, len} -> len
         _ -> 0
       end
 
     %{
       waited_ms: timeout_ms,
-      server_status: status.snapshot.status,
       mailbox_length: mailbox_length,
-      iteration: Status.iteration(status),
-      hint: infer_timeout_hint(status)
+      hint: "await_completion timed out before terminal status reached"
     }
   end
 
@@ -471,104 +464,6 @@ defmodule Jido.AgentServer do
           {:error, :timeout}
       end
     end
-  end
-
-  defp infer_timeout_hint(status) do
-    case status.snapshot.status do
-      :waiting -> "Strategy is waiting (possibly for LLM response)"
-      :running -> "Strategy is running (processing directives)"
-      :idle -> "Agent is idle but await_completion is blocking"
-      _ -> nil
-    end
-  end
-
-  @doc """
-  Gets runtime status for an agent process.
-
-  Returns a `Status` struct combining the strategy snapshot with process metadata.
-  This provides a stable API for querying agent status without depending on internal
-  `__strategy__` state structure.
-
-  ## Returns
-
-  * `{:ok, status}` - Status struct with snapshot and metadata
-  * `{:error, :not_found}` - Server not found via registry
-  * `{:error, :invalid_server}` - Unsupported server reference
-
-  ## Examples
-
-      {:ok, agent_status} = Jido.AgentServer.status(pid)
-
-      # Check completion
-      if agent_status.snapshot.done? do
-        IO.puts("Result: " <> inspect(agent_status.snapshot.result))
-      end
-
-      # Use delegate helpers
-      case Status.status(agent_status) do
-        :success -> {:done, Status.result(agent_status)}
-        :failure -> {:error, Status.details(agent_status)}
-        _ -> :continue
-      end
-  """
-  @spec status(server()) :: {:ok, Status.t()} | {:error, term()}
-  def status(server) do
-    with {:ok, pid} <- resolve_server(server),
-         {:ok, %State{agent: agent, agent_module: agent_module} = state} <-
-           GenServer.call(pid, :get_state) do
-      snapshot = agent_module.strategy_snapshot(agent)
-
-      {:ok,
-       %Status{
-         agent_module: agent_module,
-         agent_id: state.id,
-         pid: pid,
-         snapshot: snapshot,
-         raw_state: agent.state
-       }}
-    end
-  end
-
-  @doc """
-  Streams status updates by polling at regular intervals.
-
-  Returns a Stream that yields status snapshots. Useful for monitoring agent
-  execution without manual polling loops.
-
-  ## Options
-
-  - `:interval_ms` - Polling interval in milliseconds (default: 100)
-
-  ## Examples
-
-      # Poll until completion
-      AgentServer.stream_status(pid, interval_ms: 50)
-      |> Enum.reduce_while(nil, fn status, _acc ->
-        case Status.status(status) do
-          :success -> {:halt, {:ok, Status.result(status)}}
-          :failure -> {:halt, {:error, Status.details(status)}}
-          _ -> {:cont, nil}
-        end
-      end)
-
-      # Take first 10 snapshots
-      AgentServer.stream_status(pid)
-      |> Enum.take(10)
-  """
-  @spec stream_status(server(), keyword()) :: Enumerable.t()
-  def stream_status(server, opts \\ []) do
-    interval_ms = Keyword.get(opts, :interval_ms, 100)
-
-    Stream.repeatedly(fn ->
-      case status(server) do
-        {:ok, status} ->
-          Process.sleep(interval_ms)
-          status
-
-        {:error, reason} ->
-          raise "Failed to get status: #{inspect(reason)}"
-      end
-    end)
   end
 
   @doc """
@@ -1024,36 +919,6 @@ defmodule Jido.AgentServer do
 
   @impl true
   def handle_continue(:post_init, state) do
-    agent_module = state.agent_module
-
-    state =
-      if function_exported?(agent_module, :strategy, 0) do
-        strategy = agent_module.strategy()
-
-        strategy_opts =
-          if function_exported?(agent_module, :strategy_opts, 0),
-            do: agent_module.strategy_opts(),
-            else: []
-
-        ctx = %{
-          agent_module: agent_module,
-          strategy_opts: strategy_opts,
-          jido_instance: state.jido,
-          partition: state.partition
-        }
-
-        {agent, directives} = strategy.init(state.agent, ctx)
-
-        state = State.update_agent(state, agent)
-
-        case execute_directives(List.wrap(directives), init_signal(), state) do
-          {:ok, new_state} -> new_state
-          {:stop, _reason, new_state} -> new_state
-        end
-      else
-        state
-      end
-
     signal_router = SignalRouter.build(state)
     state = %{state | signal_router: signal_router}
 
@@ -1102,10 +967,6 @@ defmodule Jido.AgentServer do
       {:ok, new_state} -> new_state
       {:stop, _reason, new_state} -> new_state
     end
-  end
-
-  defp init_signal do
-    Signal.new!("jido.strategy.init", %{}, source: "/agent/system")
   end
 
   @impl true
@@ -1804,18 +1665,6 @@ defmodule Jido.AgentServer do
   end
 
   defp default_system_action(_signal), do: {:error, :no_matching_route}
-
-  defp target_to_action({:strategy_cmd, cmd}, %Signal{data: data}) do
-    {cmd, data}
-  end
-
-  defp target_to_action({:strategy_tick}, _signal) do
-    {:strategy_tick, %{}}
-  end
-
-  defp target_to_action({:custom, _term}, %Signal{data: data}) do
-    {:custom, data}
-  end
 
   defp target_to_action(mod, %Signal{data: data}) when is_atom(mod) do
     {mod, data}

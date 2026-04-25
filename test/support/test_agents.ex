@@ -82,66 +82,6 @@ defmodule JidoTest.TestAgents do
     end
   end
 
-  defmodule CountingStrategy do
-    @moduledoc false
-    @behaviour Jido.Agent.Strategy
-
-    alias Jido.Agent.Strategy.Direct
-
-    @impl true
-    def init(agent, _ctx), do: {agent, []}
-
-    @impl true
-    def tick(agent, _ctx), do: {agent, []}
-
-    @impl true
-    def cmd(agent, action, ctx) do
-      count = get_in(agent.state, [:__domain__, :strategy_count]) || 0
-      new_state = put_in(agent.state, [:__domain__, :strategy_count], count + 1)
-      agent = %{agent | state: new_state}
-      Direct.cmd(agent, action, ctx)
-    end
-  end
-
-  defmodule InitDirectiveStrategy do
-    @moduledoc "Strategy that emits directives from init/2 for testing"
-    use Jido.Agent.Strategy
-
-    @impl true
-    def init(agent, _ctx) do
-      new_state = Map.put(agent.state, :__strategy__, %{initialized: true})
-      agent = %{agent | state: new_state}
-
-      signal = Jido.Signal.new!("strategy.initialized", %{}, source: "/strategy")
-      {agent, [%Jido.Agent.Directive.Emit{signal: signal}]}
-    end
-
-    @impl true
-    def cmd(agent, _instructions, _ctx) do
-      {agent, []}
-    end
-  end
-
-  defmodule CustomStrategy do
-    @moduledoc false
-    use Jido.Agent,
-      name: "custom_strategy_agent",
-      path: :domain,
-      strategy: JidoTest.TestAgents.CountingStrategy
-
-    def signal_routes(_ctx), do: []
-  end
-
-  defmodule StrategyWithOpts do
-    @moduledoc false
-    use Jido.Agent,
-      name: "strategy_opts_agent",
-      path: :domain,
-      strategy: {JidoTest.TestAgents.CountingStrategy, max_depth: 5}
-
-    def signal_routes(_ctx), do: []
-  end
-
   defmodule ZoiSchema do
     @moduledoc false
     use Jido.Agent,
@@ -152,19 +92,6 @@ defmodule JidoTest.TestAgents do
           status: Zoi.atom() |> Zoi.default(:idle),
           count: Zoi.integer() |> Zoi.default(0)
         })
-
-    def signal_routes(_ctx), do: []
-  end
-
-  defmodule WithCustomStrategy do
-    @moduledoc "Agent with a strategy that emits directives from init/2"
-    use Jido.Agent,
-      name: "with_custom_strategy_agent",
-      path: :domain,
-      strategy: JidoTest.TestAgents.InitDirectiveStrategy,
-      schema: [
-        value: [type: :integer, default: 0]
-      ]
 
     def signal_routes(_ctx), do: []
   end

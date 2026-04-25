@@ -29,10 +29,7 @@ defmodule Jido.Config.Defaults do
   @telemetry_log_args :keys_only
   @slow_signal_threshold_ms 10
   @slow_directive_threshold_ms 5
-  @interesting_signal_types [
-    "jido.strategy.init",
-    "jido.strategy.complete"
-  ]
+  @interesting_signal_types []
   @observe_log_level :info
   @observe_debug_events :off
   @redact_sensitive false
