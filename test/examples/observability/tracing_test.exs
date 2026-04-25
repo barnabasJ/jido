@@ -48,7 +48,7 @@ defmodule JidoExampleTest.TracingTest do
           source: "/workflow-agent"
         )
 
-      {:ok, %{workflow: params.workflow_name, step: 1}, %Directive.Emit{signal: event_signal}}
+      {:ok, %{workflow: params.workflow_name, step: 1}, [%Directive.Emit{signal: event_signal}]}
     end
   end
 
@@ -71,7 +71,7 @@ defmodule JidoExampleTest.TracingTest do
           source: "/workflow-agent"
         )
 
-      {:ok, %{step: new_step}, %Directive.Emit{signal: event_signal}}
+      {:ok, %{step: new_step}, [%Directive.Emit{signal: event_signal}]}
     end
   end
 
@@ -91,7 +91,7 @@ defmodule JidoExampleTest.TracingTest do
           source: "/workflow-agent"
         )
 
-      {:ok, %{status: :completed}, %Directive.Emit{signal: event_signal}}
+      {:ok, %{status: :completed}, [%Directive.Emit{signal: event_signal}]}
     end
   end
 

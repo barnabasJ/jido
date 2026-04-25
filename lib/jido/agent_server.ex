@@ -298,9 +298,15 @@ defmodule Jido.AgentServer do
   The signal's directives run inline before the reply, so the returned
   agent reflects every synchronous directive's state update.
 
+  Returns `{:ok, agent}` regardless of the action's outcome. To receive
+  action errors, use `cast_and_await/4` — the error-aware variant. See
+  [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md) for the
+  rationale behind this split.
+
   ## Returns
 
-  * `{:ok, agent}` - Signal processed successfully
+  * `{:ok, agent}` - Signal processed (the chain may have returned an error
+    internally; that error is not surfaced to `call/2` callers)
   * `{:error, :not_found}` - Server not found via registry
   * `{:error, :invalid_server}` - Unsupported server reference
   * Exits with `{:noproc, ...}` if process dies during call
@@ -1531,23 +1537,36 @@ defmodule Jido.AgentServer do
     )
 
     try do
-      {:ok, new_state, directives} = process_signal_common(signal, state)
+      result = run_chain(signal, state)
 
       emit_telemetry(
         [:jido, :agent_server, :signal, :stop],
         %{duration: System.monotonic_time() - start_time},
-        Map.merge(metadata, signal_stop_metadata(directives))
+        Map.merge(metadata, signal_stop_metadata_for(result))
       )
 
-      case execute_directives(directives, signal, new_state) do
-        {:ok, executed_state} ->
-          executed_state = fire_post_signal_hooks(executed_state, signal)
-          {:reply, {:ok, executed_state.agent}, executed_state}
+      case result do
+        {:ok, new_state, directives} ->
+          case execute_directives(directives, signal, new_state) do
+            {:ok, executed_state} ->
+              executed_state =
+                fire_post_signal_hooks(executed_state, signal, {:ok, executed_state, directives})
 
-        {:stop, reason, executed_state} ->
-          # Caller's :DOWN monitor on the agent surfaces the stop; no
-          # separate ack fired here. See ADR 0016 stop semantics.
-          {:stop, reason, {:ok, executed_state.agent}, executed_state}
+              {:reply, {:ok, executed_state.agent}, executed_state}
+
+            {:stop, reason, executed_state} ->
+              # Caller's :DOWN monitor on the agent surfaces the stop; no
+              # separate ack fired here. See ADR 0016 stop semantics.
+              {:stop, reason, {:ok, executed_state.agent}, executed_state}
+          end
+
+        {:error, _reason} = err ->
+          # Chain returned an error: agent state is unchanged. Skip
+          # directive execution; deliver the error verbatim to any
+          # cast_and_await caller via the post-signal hooks. AgentServer.call/2
+          # still replies with {:ok, agent} per ADR 0018.
+          state = fire_post_signal_hooks(state, signal, err)
+          {:reply, {:ok, state.agent}, state}
       end
     catch
       kind, reason ->
@@ -1564,7 +1583,7 @@ defmodule Jido.AgentServer do
             Exception.format_stacktrace(stacktrace)
         )
 
-        state = fire_ack_error_for_signal(state, signal, reason)
+        state = fire_post_signal_hooks(state, signal, {:error, reason})
         {:reply, {:error, reason}, state}
     end
   end
@@ -1585,20 +1604,27 @@ defmodule Jido.AgentServer do
     )
 
     try do
-      {:ok, new_state, directives} = process_signal_common(signal, state)
+      result = run_chain(signal, state)
 
       emit_telemetry(
         [:jido, :agent_server, :signal, :stop],
         %{duration: System.monotonic_time() - start_time},
-        Map.merge(metadata, signal_stop_metadata(directives))
+        Map.merge(metadata, signal_stop_metadata_for(result))
       )
 
-      case execute_directives(directives, signal, new_state) do
-        {:ok, executed_state} ->
-          {:ok, fire_post_signal_hooks(executed_state, signal)}
+      case result do
+        {:ok, new_state, directives} ->
+          case execute_directives(directives, signal, new_state) do
+            {:ok, executed_state} ->
+              {:ok,
+               fire_post_signal_hooks(executed_state, signal, {:ok, executed_state, directives})}
 
-        {:stop, reason, executed_state} ->
-          {:stop, reason, executed_state}
+            {:stop, reason, executed_state} ->
+              {:stop, reason, executed_state}
+          end
+
+        {:error, _reason} = err ->
+          {:ok, fire_post_signal_hooks(state, signal, err)}
       end
     catch
       kind, reason ->
@@ -1615,42 +1641,49 @@ defmodule Jido.AgentServer do
   # Middleware chain → routing → cmd/2. The outermost middleware wraps the
   # whole pipeline; the innermost `next` runs routing + cmd/2.
   #
-  # Returns `{:ok, new_state, directives}` once the chain completes — the
-  # outer signal handler then runs `execute_directives/3`. The chain itself
-  # cannot raise framework-level routing errors; if a route fails, the
-  # innermost `next` returns an `%Error{}` directive that downstream
-  # middleware can react to.
-  defp process_signal_common(%Signal{} = signal, %State{middleware_chain: chain} = state)
+  # Returns the chain's tagged outcome:
+  #
+  #   - `{:ok, new_state, directives}` — apply state, execute directives,
+  #     run post-signal hooks with success.
+  #   - `{:error, reason}` — agent state is unchanged; directives are not
+  #     produced; the post-signal hooks deliver the error to acks.
+  #
+  # See [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md).
+  defp run_chain(%Signal{} = signal, %State{middleware_chain: chain} = state)
        when is_function(chain, 2) do
     ctx = build_signal_ctx(signal, state)
-    {new_ctx, directives} = chain.(signal, ctx)
 
-    new_state = State.update_agent(state, new_ctx.agent)
+    case chain.(signal, ctx) do
+      {:ok, new_ctx, directives} ->
+        new_state = State.update_agent(state, new_ctx.agent)
+        {:ok, new_state, List.wrap(directives)}
 
-    {:ok, new_state, List.wrap(directives)}
+      {:error, _reason} = err ->
+        err
+    end
   end
 
   # Routes a lifecycle / identity signal through the middleware chain.
-  # Mirrors the agent-state sync in `process_signal_common/2` and runs
-  # any returned directives inline so middleware-emitted side-effect
-  # signals (e.g. `jido.persist.thaw.completed`) reach observers.
+  # Mirrors the agent-state sync in `run_chain/2` and runs any returned
+  # directives inline so middleware-emitted side-effect signals (e.g.
+  # `jido.persist.thaw.completed`) reach observers.
   #
   # Like the user-signal path, ack/subscriber hooks fire after the
   # outermost middleware unwinds and directives have executed.
-  defp emit_through_chain(%State{middleware_chain: chain} = state, %Signal{} = signal)
-       when is_function(chain, 2) do
-    ctx = build_signal_ctx(signal, state)
-    {new_ctx, directives} = chain.(signal, ctx)
+  defp emit_through_chain(%State{} = state, %Signal{} = signal) do
+    case run_chain(signal, state) do
+      {:ok, new_state, directives} ->
+        executed_state =
+          case execute_directives(directives, signal, new_state) do
+            {:ok, s} -> s
+            {:stop, _reason, s} -> s
+          end
 
-    new_state = State.update_agent(state, new_ctx.agent)
+        fire_post_signal_hooks(executed_state, signal, {:ok, executed_state, directives})
 
-    executed_state =
-      case execute_directives(List.wrap(directives), signal, new_state) do
-        {:ok, s} -> s
-        {:stop, _reason, s} -> s
-      end
-
-    fire_post_signal_hooks(executed_state, signal)
+      {:error, _reason} = err ->
+        fire_post_signal_hooks(state, signal, err)
+    end
   end
 
   defp build_signal_ctx(%Signal{} = signal, %State{} = state) do
@@ -1714,10 +1747,18 @@ defmodule Jido.AgentServer do
     |> Map.merge(trace_metadata)
   end
 
-  defp signal_stop_metadata(directives) when is_list(directives) do
+  defp signal_stop_metadata_for({:ok, _state, directives}) when is_list(directives) do
     %{
       directive_count: length(directives),
       directive_types: Formatter.summarize_directives(directives)
+    }
+  end
+
+  defp signal_stop_metadata_for({:error, reason}) do
+    %{
+      directive_count: 0,
+      directive_types: %{},
+      chain_error: reason
     }
   end
 
@@ -1782,36 +1823,41 @@ defmodule Jido.AgentServer do
   # executed (the "post-signal" hook point). Order is fixed: ack first,
   # then subscribers, both deterministic so observers can reason about
   # the sequence.
+  #
+  # The chain's tagged result drives ack delivery:
+  #   - on `{:ok, _, _}` the selector runs against state.
+  #   - on `{:error, reason}` the selector is skipped and `{:error, reason}`
+  #     is delivered to the caller verbatim.
+  #
+  # Subscribers are unchanged — they always run their selector against
+  # state, independent of the chain outcome. See ADR 0018 §3.
   # ---------------------------------------------------------------------------
 
-  defp fire_post_signal_hooks(%State{} = state, %Signal{} = signal) do
+  @typep chain_result ::
+           {:ok, State.t(), [struct()]} | {:error, term()}
+
+  @spec fire_post_signal_hooks(State.t(), Signal.t(), chain_result()) :: State.t()
+  defp fire_post_signal_hooks(%State{} = state, %Signal{} = signal, result) do
     state
-    |> fire_ack_for_signal(signal)
+    |> fire_ack_for_signal(signal, result)
     |> fire_subscribers(signal)
   end
 
-  defp fire_ack_for_signal(%State{pending_acks: acks} = state, %Signal{id: id})
+  defp fire_ack_for_signal(%State{pending_acks: acks} = state, %Signal{id: id}, _result)
        when map_size(acks) == 0 or not is_map_key(acks, id) do
     state
   end
 
-  defp fire_ack_for_signal(%State{pending_acks: acks} = state, %Signal{id: id}) do
+  defp fire_ack_for_signal(%State{pending_acks: acks} = state, %Signal{id: id}, result) do
     {entry, remaining} = Map.pop(acks, id)
-    result = entry.selector.(state)
-    send(entry.caller_pid, {:jido_ack, entry.ref, result})
-    Process.demonitor(entry.monitor_ref, [:flush])
-    %{state | pending_acks: remaining}
-  end
 
-  defp fire_ack_error_for_signal(%State{pending_acks: acks} = state, %Signal{id: id}, reason)
-       when map_size(acks) == 0 or not is_map_key(acks, id) do
-    _ = reason
-    state
-  end
+    payload =
+      case result do
+        {:ok, _new_state, _dirs} -> entry.selector.(state)
+        {:error, _reason} = err -> err
+      end
 
-  defp fire_ack_error_for_signal(%State{pending_acks: acks} = state, %Signal{id: id}, reason) do
-    {entry, remaining} = Map.pop(acks, id)
-    send(entry.caller_pid, {:jido_ack, entry.ref, {:error, reason}})
+    send(entry.caller_pid, {:jido_ack, entry.ref, payload})
     Process.demonitor(entry.monitor_ref, [:flush])
     %{state | pending_acks: remaining}
   end
@@ -1950,9 +1996,23 @@ defmodule Jido.AgentServer do
     end)
   end
 
-  # Innermost continuation: routing → cmd/2. Routing failures surface as
-  # `%Directive.Error{}` returned alongside the unchanged ctx, so middleware
-  # upstream can observe them via the standard `{ctx, [directive]}` shape.
+  # Innermost continuation: routing → cmd/2.
+  #
+  # Returns the tagged tuple per [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md):
+  #   - `{:ok, ctx, dirs}` on chain success
+  #   - `{:error, reason}` when an action's `cmd/2` errors
+  #
+  # Routing misses (`:no_matching_route`) are no-op successes:
+  # framework-emitted lifecycle signals (`jido.agent.lifecycle.*`,
+  # `jido.persist.*`, ...) routinely have no user routes, and treating a
+  # missing route as a chain error would skip `State.update_agent` —
+  # losing, for example, the `Persister` middleware's thawed-agent
+  # assignment on `lifecycle.starting`. Operators still get a debug log.
+  #
+  # Concrete routing failures (invalid pattern, etc.) propagate as
+  # `{:error, %RoutingError{}}`. `%Directive.Error{}` is no longer
+  # manufactured by the cmd reducer; user code is free to emit an `%Error{}`
+  # on the success path for log/audit purposes.
   defp core_next(%Signal{} = signal, ctx) do
     %{agent_module: agent_module, agent: agent, __signal_router__: router} = ctx
 
@@ -1965,23 +2025,44 @@ defmodule Jido.AgentServer do
             other -> other
           end
 
-        {new_agent, directives} =
-          agent_module.cmd(agent, action_arg,
-            ctx: ctx,
-            input_signal: signal
-          )
+        case agent_module.cmd(agent, action_arg, ctx: ctx, input_signal: signal) do
+          {:ok, new_agent, directives} ->
+            {:ok, Map.put(ctx, :agent, new_agent), List.wrap(directives)}
 
-        {Map.put(ctx, :agent, new_agent), List.wrap(directives)}
+          {:error, _reason} = err ->
+            err
+        end
+
+      {:error, :no_matching_route} ->
+        log_routing_miss(ctx, signal)
+        {:ok, ctx, []}
 
       {:error, reason} ->
-        error =
+        routing_error =
           Jido.Error.routing_error("No route for signal", %{
             signal_type: signal.type,
             reason: reason
           })
 
-        {ctx, [%Directive.Error{error: error, context: :routing}]}
+        log_routing_error(ctx, routing_error)
+        {:error, routing_error}
     end
+  end
+
+  defp log_routing_miss(ctx, %Signal{type: type}) do
+    Logger.debug(
+      "Agent #{Map.get(ctx, :agent_id, "unknown")} [routing]: no route for #{type}"
+    )
+  end
+
+  # Concrete routing failures (invalid pattern, etc.) previously emitted a
+  # `%Directive.Error{}` that `DirectiveExec.Error` logged on its
+  # success-path execution. The chain now short-circuits before directives
+  # run, so log inline to preserve the operator-visible signal.
+  defp log_routing_error(ctx, %{message: message}) do
+    Logger.error(
+      "Agent #{Map.get(ctx, :agent_id, "unknown")} [routing]: #{message}"
+    )
   end
 
   # ---------------------------------------------------------------------------

@@ -47,7 +47,7 @@ defmodule JidoExampleTest.SensorDemoTest do
         | current_quotes
       ]
 
-      {:ok, %{quotes: quotes}}
+      {:ok, %{quotes: quotes}, []}
     end
   end
 
@@ -75,7 +75,7 @@ defmodule JidoExampleTest.SensorDemoTest do
         | current_events
       ]
 
-      {:ok, %{events: events}}
+      {:ok, %{events: events}, []}
     end
   end
 
@@ -103,7 +103,7 @@ defmodule JidoExampleTest.SensorDemoTest do
         | current_events
       ]
 
-      {:ok, %{events: events}}
+      {:ok, %{events: events}, []}
     end
   end
 

@@ -64,7 +64,7 @@ defmodule Jido.Plugin.FSMSmokeTest do
     test "a routed transition signal mutates `agent.state.fsm.state`" do
       agent = DefaultFSMAgent.new()
 
-      {agent, _directives} =
+      {:ok, agent, _directives} =
         DefaultFSMAgent.cmd(agent, {Transition, %{to: "processing"}})
 
       assert agent.state.fsm.state == "processing"
@@ -74,8 +74,8 @@ defmodule Jido.Plugin.FSMSmokeTest do
     test "transitioning into a terminal state flips `terminal?`" do
       agent = DefaultFSMAgent.new()
 
-      {agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "processing"}})
-      {agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "completed"}})
+      {:ok, agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "processing"}})
+      {:ok, agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "completed"}})
 
       assert agent.state.fsm.state == "completed"
       assert agent.state.fsm.terminal? == true
@@ -84,9 +84,9 @@ defmodule Jido.Plugin.FSMSmokeTest do
     test "history records one entry per successful transition, oldest first" do
       agent = DefaultFSMAgent.new()
 
-      {agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "processing"}})
-      {agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "idle"}})
-      {agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "processing"}})
+      {:ok, agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "processing"}})
+      {:ok, agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "idle"}})
+      {:ok, agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "processing"}})
 
       assert [
                %{from: "idle", to: "processing"},

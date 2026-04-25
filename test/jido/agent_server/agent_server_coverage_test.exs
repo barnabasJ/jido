@@ -80,7 +80,7 @@ defmodule JidoTest.AgentServerCoverageTest do
     use Jido.Action, name: "complete", schema: []
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{status: :completed, last_answer: "done!"}}
+      {:ok, %{status: :completed, last_answer: "done!"}, []}
     end
   end
 
@@ -89,7 +89,7 @@ defmodule JidoTest.AgentServerCoverageTest do
     use Jido.Action, name: "fail", schema: []
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{status: :failed, error: "something went wrong"}}
+      {:ok, %{status: :failed, error: "something went wrong"}, []}
     end
   end
 
@@ -101,7 +101,7 @@ defmodule JidoTest.AgentServerCoverageTest do
 
     def run(%Jido.Signal{data: %{delay_ms: delay}}, _slice, _opts, _ctx) do
       Process.sleep(delay)
-      {:ok, %{status: :completed, last_answer: "delayed done!"}}
+      {:ok, %{status: :completed, last_answer: "delayed done!"}, []}
     end
   end
 

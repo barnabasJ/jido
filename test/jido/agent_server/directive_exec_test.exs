@@ -64,7 +64,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       name: "run_instruction_success",
       schema: []
 
-    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{ran: true}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{ran: true}, []}
   end
 
   defmodule RunInstructionFailureAction do
@@ -96,7 +96,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
          captured_result: params.result,
          captured_reason: params.reason,
          captured_meta: params.meta
-       }}
+       }, []}
     end
   end
 

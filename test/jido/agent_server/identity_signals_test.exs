@@ -9,7 +9,7 @@ defmodule JidoTest.AgentServer.IdentitySignalsTest do
 
     def run(%Jido.Signal{type: type, data: data}, slice, _opts, _ctx) do
       events = Map.get(slice, :identity_events, [])
-      {:ok, %{slice | identity_events: events ++ [%{type: type, data: data}]}}
+      {:ok, %{slice | identity_events: events ++ [%{type: type, data: data}]}, []}
     end
   end
 

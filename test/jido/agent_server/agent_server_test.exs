@@ -210,7 +210,7 @@ defmodule JidoTest.AgentServerTest do
 
         def run(_signal, _slice, _opts, _ctx) do
           Process.sleep(80)
-          {:ok, %{slow_done: true}}
+          {:ok, %{slow_done: true}, []}
         end
       end
 
@@ -257,7 +257,7 @@ defmodule JidoTest.AgentServerTest do
 
         def run(_signal, slice, _opts, _ctx) do
           Process.sleep(120)
-          {:ok, Map.put(slice, :slow_done, true)}
+          {:ok, Map.put(slice, :slow_done, true), []}
         end
       end
 
@@ -267,7 +267,7 @@ defmodule JidoTest.AgentServerTest do
 
         def run(_signal, slice, _opts, _ctx) do
           counter = Map.get(slice, :counter, 0)
-          {:ok, Map.put(slice, :counter, counter + 1)}
+          {:ok, Map.put(slice, :counter, counter + 1), []}
         end
       end
 
@@ -602,7 +602,7 @@ defmodule JidoTest.AgentServerTest do
 
         def run(_signal, slice, _opts, _ctx) do
           pings = Map.get(slice, :pings, 0)
-          {:ok, %{pings: pings + 1}}
+          {:ok, %{pings: pings + 1}, []}
         end
       end
 
@@ -661,7 +661,7 @@ defmodule JidoTest.AgentServerTest do
 
         def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
           events = Map.get(slice, :events, [])
-          {:ok, %{events: events ++ [params.n]}}
+          {:ok, %{events: events ++ [params.n]}, []}
         end
       end
 
@@ -712,7 +712,7 @@ defmodule JidoTest.AgentServerTest do
         use Jido.Action, name: "jido_scheduled", schema: []
 
         def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
-          {:ok, %{received: params.message}}
+          {:ok, %{received: params.message}, []}
         end
       end
 
@@ -914,7 +914,7 @@ defmodule JidoTest.AgentServerTest do
 
         def run(_signal, _slice, _opts, _ctx) do
           Process.sleep(20)
-          {:ok, %{processed: true}}
+          {:ok, %{processed: true}, []}
         end
       end
 
@@ -960,7 +960,7 @@ defmodule JidoTest.AgentServerTest do
         schema: []
 
       @impl true
-      def run(_signal, _slice, _opts, _ctx), do: {:ok, %{scheduled: true}}
+      def run(_signal, _slice, _opts, _ctx), do: {:ok, %{scheduled: true}, []}
     end
 
     defmodule ScheduledPlugin do

@@ -38,7 +38,7 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
     def run(_signal, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
       ticks = Map.get(slice, :ticks, [])
-      {:ok, %{tick_count: count + 1, ticks: ticks ++ [%{source: :plugin_schedule}]}}
+      {:ok, %{tick_count: count + 1, ticks: ticks ++ [%{source: :plugin_schedule}]}, []}
     end
   end
 

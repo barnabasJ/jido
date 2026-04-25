@@ -20,7 +20,7 @@ defmodule JidoTest.AgentServer.MiddlewarePipelineTest do
     use Jido.Action, name: "inspect", path: :app, schema: []
 
     def run(_signal, slice, _opts, ctx) do
-      {:ok, %{slice | last_tags: ctx[:tags] || []}}
+      {:ok, %{slice | last_tags: ctx[:tags] || []}, []}
     end
   end
 

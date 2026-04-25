@@ -31,7 +31,7 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
 
     def run(%Jido.Signal{data: %{value: value}}, slice, _opts, _ctx) do
       current = Map.get(slice, :counter, 0)
-      {:ok, %{counter: current + value, message: "processed"}}
+      {:ok, %{counter: current + value, message: "processed"}, []}
     end
   end
 
@@ -44,7 +44,7 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
       ]
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{message: "system in maintenance mode"}}
+      {:ok, %{message: "system in maintenance mode"}, []}
     end
   end
 
@@ -57,7 +57,7 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
       ]
 
     def run(%Jido.Signal{data: %{mode: mode}}, _slice, _opts, _ctx) do
-      {:ok, %{mode: mode}}
+      {:ok, %{mode: mode}, []}
     end
   end
 
@@ -71,7 +71,7 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
 
     def run(%Jido.Signal{data: %{command: command}}, slice, _opts, _ctx) do
       log = Map.get(slice, :admin_log, [])
-      {:ok, %{admin_log: [command | log], message: "admin: #{command}"}}
+      {:ok, %{admin_log: [command | log], message: "admin: #{command}"}, []}
     end
   end
 

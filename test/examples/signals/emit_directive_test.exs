@@ -53,7 +53,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         )
 
       {:ok, %{orders: [order | orders], last_order_id: order.id},
-       %Directive.Emit{signal: event_signal}}
+       [%Directive.Emit{signal: event_signal}]}
     end
   end
 
@@ -77,7 +77,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         )
 
       {:ok, %{last_payment: %{order_id: order_id, status: :success}},
-       %Directive.Emit{signal: payment_signal}}
+       [%Directive.Emit{signal: payment_signal}]}
     end
   end
 
@@ -161,7 +161,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
       if is_pid(slice.observer),
         do: send(slice.observer, {:print_count, previous_count, count})
 
-      {:ok, %{last_seen_count: count}}
+      {:ok, %{last_seen_count: count}, []}
     end
   end
 

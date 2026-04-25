@@ -41,7 +41,7 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
         saw_d3: Map.get(slice, :d3_ran, false)
       }
 
-      {:ok, Map.merge(slice, observation)}
+      {:ok, Map.merge(slice, observation), []}
     end
   end
 

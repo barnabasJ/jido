@@ -43,7 +43,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
       entry = %{kind: :message, payload: %{role: role, content: content}}
       updated_thread = Thread.append(thread, entry)
 
-      {:ok, %{thread: updated_thread, last_role: role}}
+      {:ok, %{thread: updated_thread, last_role: role}, []}
     end
   end
 
@@ -62,7 +62,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
           t -> length(Thread.filter_by_kind(t, :message))
         end
 
-      {:ok, %{summary: "#{message_count} messages in thread"}}
+      {:ok, %{summary: "#{message_count} messages in thread"}, []}
     end
   end
 
@@ -130,7 +130,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
     test "action can initialize and append to thread" do
       agent = ChatAgent.new()
 
-      {agent, []} =
+      {:ok, agent, []} =
         ChatAgent.cmd(agent, {RecordMessageAction, %{role: "user", content: "hello"}})
 
       assert agent.state.domain.last_role == "user"
@@ -148,13 +148,13 @@ defmodule JidoExampleTest.ThreadPluginTest do
     test "thread accumulates message entries across multiple actions" do
       agent = ChatAgent.new()
 
-      {agent, []} =
+      {:ok, agent, []} =
         ChatAgent.cmd(agent, {RecordMessageAction, %{role: "user", content: "hi"}})
 
-      {agent, []} =
+      {:ok, agent, []} =
         ChatAgent.cmd(agent, {RecordMessageAction, %{role: "assistant", content: "hello!"}})
 
-      {agent, []} =
+      {:ok, agent, []} =
         ChatAgent.cmd(agent, {RecordMessageAction, %{role: "user", content: "how are you?"}})
 
       messages = Thread.filter_by_kind(ThreadAgent.get(agent), :message)
@@ -169,7 +169,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
       instruction_starts = Thread.filter_by_kind(thread, :instruction_start)
       assert length(instruction_starts) > 0
 
-      {agent, []} = ChatAgent.cmd(agent, SummarizeAction)
+      {:ok, agent, []} = ChatAgent.cmd(agent, SummarizeAction)
       assert agent.state.domain.summary == "3 messages in thread"
     end
   end

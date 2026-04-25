@@ -30,7 +30,7 @@ defmodule JidoExampleTest.StateOpsTest do
       ]
 
     def run(%Jido.Signal{data: %{metadata: metadata}}, _slice, _opts, _ctx) do
-      {:ok, %{}, %StateOp.SetState{attrs: %{metadata: metadata}}}
+      {:ok, %{}, [%StateOp.SetState{attrs: %{metadata: metadata}}]}
     end
   end
 
@@ -43,7 +43,7 @@ defmodule JidoExampleTest.StateOpsTest do
       ]
 
     def run(%Jido.Signal{data: %{new_state: new_state}}, _slice, _opts, _ctx) do
-      {:ok, %{}, %StateOp.ReplaceState{state: new_state}}
+      {:ok, %{}, [%StateOp.ReplaceState{state: new_state}]}
     end
   end
 
@@ -54,7 +54,7 @@ defmodule JidoExampleTest.StateOpsTest do
       schema: []
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, %StateOp.DeleteKeys{keys: [:temp, :cache]}}
+      {:ok, %{}, [%StateOp.DeleteKeys{keys: [:temp, :cache]}]}
     end
   end
 
@@ -68,7 +68,7 @@ defmodule JidoExampleTest.StateOpsTest do
       ]
 
     def run(%Jido.Signal{data: %{path: path, value: value}}, _slice, _opts, _ctx) do
-      {:ok, %{}, %StateOp.SetPath{path: path, value: value}}
+      {:ok, %{}, [%StateOp.SetPath{path: path, value: value}]}
     end
   end
 
@@ -81,7 +81,7 @@ defmodule JidoExampleTest.StateOpsTest do
       ]
 
     def run(%Jido.Signal{data: %{path: path}}, _slice, _opts, _ctx) do
-      {:ok, %{}, %StateOp.DeletePath{path: path}}
+      {:ok, %{}, [%StateOp.DeletePath{path: path}]}
     end
   end
 
@@ -129,7 +129,7 @@ defmodule JidoExampleTest.StateOpsTest do
     test "SetState merges into existing state without overwriting other keys" do
       agent = FlexAgent.new(state: %{counter: 10, name: "test"})
 
-      {agent, []} =
+      {:ok, agent, []} =
         FlexAgent.cmd(agent, {MergeMetadataAction, %{metadata: %{version: "1.0"}}})
 
       assert agent.state.domain.counter == 10
@@ -140,7 +140,7 @@ defmodule JidoExampleTest.StateOpsTest do
     test "SetState deep merges nested maps" do
       agent = FlexAgent.new(state: %{metadata: %{author: "alice", tags: ["elixir"]}})
 
-      {agent, []} =
+      {:ok, agent, []} =
         FlexAgent.cmd(agent, {MergeMetadataAction, %{metadata: %{version: "2.0"}}})
 
       assert agent.state.metadata.author == "alice"
@@ -152,7 +152,7 @@ defmodule JidoExampleTest.StateOpsTest do
     test "ReplaceState overwrites entire state" do
       agent = FlexAgent.new(state: %{counter: 100, name: "old-name", metadata: %{foo: "bar"}})
 
-      {agent, []} =
+      {:ok, agent, []} =
         FlexAgent.cmd(
           agent,
           {ReplaceAllAction, %{new_state: %{counter: 0, name: "fresh", step: :reset}}}
@@ -169,7 +169,7 @@ defmodule JidoExampleTest.StateOpsTest do
     test "DeleteKeys removes specified keys" do
       agent = FlexAgent.new(state: %{counter: 5, temp: "temporary", cache: %{data: 123}})
 
-      {agent, []} = FlexAgent.cmd(agent, ClearTempDataAction)
+      {:ok, agent, []} = FlexAgent.cmd(agent, ClearTempDataAction)
 
       assert agent.state.domain.counter == 5
       refute Map.has_key?(agent.state, :temp)
@@ -179,7 +179,7 @@ defmodule JidoExampleTest.StateOpsTest do
     test "DeleteKeys is idempotent for missing keys" do
       agent = FlexAgent.new(state: %{counter: 5})
 
-      {agent, []} = FlexAgent.cmd(agent, ClearTempDataAction)
+      {:ok, agent, []} = FlexAgent.cmd(agent, ClearTempDataAction)
 
       assert agent.state.domain.counter == 5
     end
@@ -189,7 +189,7 @@ defmodule JidoExampleTest.StateOpsTest do
     test "SetPath sets value at nested path" do
       agent = FlexAgent.new(config: %{})
 
-      {agent, []} =
+      {:ok, agent, []} =
         FlexAgent.cmd(
           agent,
           {SetNestedValueAction, %{path: [:config, :timeout], value: 5000}}
@@ -201,7 +201,7 @@ defmodule JidoExampleTest.StateOpsTest do
     test "SetPath creates intermediate maps if needed" do
       agent = FlexAgent.new(config: %{})
 
-      {agent, []} =
+      {:ok, agent, []} =
         FlexAgent.cmd(
           agent,
           {SetNestedValueAction, %{path: [:config, :database, :host], value: "localhost"}}
@@ -213,7 +213,7 @@ defmodule JidoExampleTest.StateOpsTest do
     test "SetPath preserves sibling keys" do
       agent = FlexAgent.new(state: %{config: %{timeout: 1000, retries: 3}})
 
-      {agent, []} =
+      {:ok, agent, []} =
         FlexAgent.cmd(
           agent,
           {SetNestedValueAction, %{path: [:config, :timeout], value: 5000}}
@@ -228,7 +228,7 @@ defmodule JidoExampleTest.StateOpsTest do
     test "DeletePath removes value at nested path" do
       agent = FlexAgent.new(state: %{config: %{timeout: 1000, secret: "password"}})
 
-      {agent, []} =
+      {:ok, agent, []} =
         FlexAgent.cmd(
           agent,
           {DeleteNestedValueAction, %{path: [:config, :secret]}}
@@ -243,7 +243,7 @@ defmodule JidoExampleTest.StateOpsTest do
     test "action can return result map AND state ops" do
       agent = FlexAgent.new(state: %{temp: "will be deleted"})
 
-      {agent, []} = FlexAgent.cmd(agent, ComboAction)
+      {:ok, agent, []} = FlexAgent.cmd(agent, ComboAction)
 
       assert agent.state.domain.primary_result == "done"
       assert agent.state.step == :completed

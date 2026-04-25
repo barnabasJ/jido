@@ -18,7 +18,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
       ticks = Map.get(slice, :ticks, [])
-      {:ok, %{tick_count: count + 1, ticks: ticks ++ [params]}}
+      {:ok, %{tick_count: count + 1, ticks: ticks ++ [params]}, []}
     end
   end
 

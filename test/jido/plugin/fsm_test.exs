@@ -57,7 +57,7 @@ defmodule JidoTest.Plugin.FSMTest do
     test "an allowed transition mutates state" do
       agent = DefaultFSMAgent.new()
 
-      {agent, _} =
+      {:ok, agent, _} =
         DefaultFSMAgent.cmd(agent, {Transition, %{to: "processing"}})
 
       assert agent.state.fsm.state == "processing"
@@ -66,8 +66,8 @@ defmodule JidoTest.Plugin.FSMTest do
 
     test "transitioning into a terminal state flips terminal?" do
       agent = DefaultFSMAgent.new()
-      {agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "processing"}})
-      {agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "completed"}})
+      {:ok, agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "processing"}})
+      {:ok, agent, _} = DefaultFSMAgent.cmd(agent, {Transition, %{to: "completed"}})
 
       assert agent.state.fsm.state == "completed"
       assert agent.state.fsm.terminal? == true
@@ -84,18 +84,18 @@ defmodule JidoTest.Plugin.FSMTest do
 
     test "respects the configured transitions map" do
       agent = ConfiguredFSMAgent.new()
-      {agent, _} = ConfiguredFSMAgent.cmd(agent, {Transition, %{to: "working"}})
+      {:ok, agent, _} = ConfiguredFSMAgent.cmd(agent, {Transition, %{to: "working"}})
       assert agent.state.fsm.state == "working"
 
-      {agent, _} = ConfiguredFSMAgent.cmd(agent, {Transition, %{to: "errored"}})
+      {:ok, agent, _} = ConfiguredFSMAgent.cmd(agent, {Transition, %{to: "errored"}})
       assert agent.state.fsm.state == "errored"
       assert agent.state.fsm.terminal? == true
     end
 
     test "rejects a transition not in the allowed list" do
       agent = ConfiguredFSMAgent.new()
-      {_agent, [%Jido.Agent.Directive.Error{}] = _dirs} =
-        ConfiguredFSMAgent.cmd(agent, {Transition, %{to: "unknown"}})
+      assert {:error, _reason} =
+               ConfiguredFSMAgent.cmd(agent, {Transition, %{to: "unknown"}})
     end
   end
 end

@@ -316,4 +316,35 @@ defmodule JidoTest.ErrorTest do
       assert stacktrace != []
     end
   end
+
+  describe "from_term/1" do
+    test "is idempotent: returns existing structured errors unchanged" do
+      validation = Error.validation_error("v")
+      execution = Error.execution_error("e")
+      routing = Error.routing_error("r")
+      timeout = Error.timeout_error("t")
+
+      assert Error.from_term(validation) === validation
+      assert Error.from_term(execution) === execution
+      assert Error.from_term(routing) === routing
+      assert Error.from_term(timeout) === timeout
+    end
+
+    test "wraps a binary reason as an ExecutionError with that message" do
+      assert %Error.ExecutionError{message: "boom"} = Error.from_term("boom")
+    end
+
+    test "wraps an atom reason as an ExecutionError" do
+      err = Error.from_term(:not_found)
+      assert %Error.ExecutionError{} = err
+      assert err.message == "Action failed"
+      assert err.details.reason == :not_found
+    end
+
+    test "wraps an arbitrary term as an ExecutionError" do
+      err = Error.from_term({:weird, :tuple})
+      assert %Error.ExecutionError{} = err
+      assert err.details.reason == {:weird, :tuple}
+    end
+  end
 end

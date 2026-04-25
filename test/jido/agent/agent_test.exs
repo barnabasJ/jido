@@ -187,23 +187,23 @@ defmodule JidoTest.AgentTest do
   describe "cmd/2" do
     test "executes action module" do
       agent = TestAgents.Basic.new()
-      {updated, _directives} = TestAgents.Basic.cmd(agent, TestActions.NoSchema)
+      {:ok, updated, _directives} = TestAgents.Basic.cmd(agent, TestActions.NoSchema)
       assert updated.state.domain.result == "No params"
     end
 
     test "executes action tuple" do
       agent = TestAgents.Basic.new()
 
-      {updated, _directives} =
+      {:ok, updated, _directives} =
         TestAgents.Basic.cmd(agent, {TestActions.BasicAction, %{value: 42}})
 
       assert updated.state.domain.value == 42
     end
 
-    test "executes list of actions in sequence; each action sees prior slice state" do
+    test "all-or-nothing batch: every action succeeds; slice reflects the last instruction" do
       agent = TestAgents.Basic.new()
 
-      {updated, directives} =
+      {:ok, updated, directives} =
         TestAgents.Basic.cmd(agent, [
           {TestActions.Add, %{value: 5, amount: 3}},
           {TestActions.Add, %{value: 1, amount: 1}}
@@ -214,30 +214,38 @@ defmodule JidoTest.AgentTest do
       assert directives == []
     end
 
+    test "all-or-nothing batch: middle instruction errors halts the batch and returns the input agent unchanged" do
+      agent = TestAgents.Basic.new(state: %{counter: 0})
+
+      assert {:error, %Jido.Error.ExecutionError{}} =
+               TestAgents.Basic.cmd(agent, [
+                 {TestActions.Add, %{value: 5, amount: 3}},
+                 {TestActions.FailingAction, %{reason: "halted"}},
+                 {TestActions.Add, %{value: 1, amount: 1}}
+               ])
+    end
+
     test "handles %Instruction{} struct directly" do
       agent = TestAgents.Basic.new()
 
       {:ok, instruction} =
         Jido.Instruction.new(%{action: TestActions.BasicAction, params: %{value: 99}})
 
-      {updated, _directives} = TestAgents.Basic.cmd(agent, instruction)
+      {:ok, updated, _directives} = TestAgents.Basic.cmd(agent, instruction)
       assert updated.state.domain.value == 99
     end
 
-    test "emits error directive for invalid action params" do
+    test "single-instruction error returns {:error, %Jido.Error{}}" do
       agent = TestAgents.Basic.new()
-      {_agent, directives} = TestAgents.Basic.cmd(agent, {TestActions.BasicAction, %{}})
-
-      assert [%Jido.Agent.Directive.Error{context: :instruction, error: error}] = directives
-      assert error.message == "Instruction failed"
+      assert {:error, %Jido.Error.ExecutionError{}} =
+               TestAgents.Basic.cmd(agent, {TestActions.BasicAction, %{}})
     end
 
-    test "invalid input format returns error directive" do
+    test "invalid input format returns {:error, %ValidationError{}}" do
       agent = TestAgents.Basic.new()
-      {updated, directives} = TestAgents.Basic.cmd(agent, {:unknown, "whatever"})
 
-      assert updated.state == agent.state
-      assert [%Jido.Agent.Directive.Error{context: :normalize}] = directives
+      assert {:error, %Jido.Error.ValidationError{message: "Invalid action"}} =
+               TestAgents.Basic.cmd(agent, {:unknown, "whatever"})
     end
   end
 
@@ -245,11 +253,12 @@ defmodule JidoTest.AgentTest do
     test "passes timeout option to instruction" do
       agent = TestAgents.Basic.new()
 
-      {_updated, directives} =
-        TestAgents.Basic.cmd(agent, {TestActions.SlowAction, %{delay_ms: 200}}, timeout: 10)
-
-      assert [%Jido.Agent.Directive.Error{error: error}] = directives
-      assert error.message == "Instruction failed"
+      assert {:error, %Jido.Error.ExecutionError{}} =
+               TestAgents.Basic.cmd(
+                 agent,
+                 {TestActions.SlowAction, %{delay_ms: 200}},
+                 timeout: 10
+               )
     end
 
     test "passes max_retries option to disable retries" do
@@ -257,57 +266,53 @@ defmodule JidoTest.AgentTest do
 
       start_no_retry = System.monotonic_time(:millisecond)
 
-      {_updated_no_retry, directives_no_retry} =
-        TestAgents.Basic.cmd(
-          agent,
-          {TestActions.SlowAction, %{delay_ms: 200}},
-          timeout: 10,
-          max_retries: 0
-        )
+      assert {:error, %Jido.Error.ExecutionError{}} =
+               TestAgents.Basic.cmd(
+                 agent,
+                 {TestActions.SlowAction, %{delay_ms: 200}},
+                 timeout: 10,
+                 max_retries: 0
+               )
 
       elapsed_no_retry = System.monotonic_time(:millisecond) - start_no_retry
 
       start_default = System.monotonic_time(:millisecond)
 
-      {_updated_default, directives_default} =
-        TestAgents.Basic.cmd(
-          agent,
-          {TestActions.SlowAction, %{delay_ms: 200}},
-          timeout: 10
-        )
+      assert {:error, %Jido.Error.ExecutionError{}} =
+               TestAgents.Basic.cmd(
+                 agent,
+                 {TestActions.SlowAction, %{delay_ms: 200}},
+                 timeout: 10
+               )
 
       elapsed_default = System.monotonic_time(:millisecond) - start_default
 
-      assert [%Jido.Agent.Directive.Error{}] = directives_no_retry
-      assert [%Jido.Agent.Directive.Error{}] = directives_default
       assert elapsed_no_retry < elapsed_default
     end
 
     test "cmd/2 delegates to cmd/3 with empty opts" do
       agent = TestAgents.Basic.new()
 
-      {updated1, directives1} = TestAgents.Basic.cmd(agent, TestActions.NoSchema)
-      {updated2, directives2} = TestAgents.Basic.cmd(agent, TestActions.NoSchema, [])
+      {:ok, updated1, directives1} = TestAgents.Basic.cmd(agent, TestActions.NoSchema)
+      {:ok, updated2, directives2} = TestAgents.Basic.cmd(agent, TestActions.NoSchema, [])
 
       assert updated1.state == updated2.state
       assert directives1 == directives2
     end
 
-    test "opts are merged into all instructions in a list" do
+    test "opts are merged into all instructions; first failure halts" do
       agent = TestAgents.Basic.new()
 
-      {_updated, directives} =
-        TestAgents.Basic.cmd(
-          agent,
-          [
-            {TestActions.SlowAction, %{delay_ms: 200}},
-            {TestActions.SlowAction, %{delay_ms: 200}}
-          ],
-          timeout: 10,
-          max_retries: 0
-        )
-
-      assert [%Jido.Agent.Directive.Error{}, %Jido.Agent.Directive.Error{}] = directives
+      assert {:error, %Jido.Error.ExecutionError{}} =
+               TestAgents.Basic.cmd(
+                 agent,
+                 [
+                   {TestActions.SlowAction, %{delay_ms: 200}},
+                   {TestActions.SlowAction, %{delay_ms: 200}}
+                 ],
+                 timeout: 10,
+                 max_retries: 0
+               )
     end
   end
 
@@ -380,7 +385,7 @@ defmodule JidoTest.AgentTest do
   describe "actions returning effects" do
     test "action can emit signal via directive" do
       agent = TestAgents.Basic.new()
-      {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.EmitAction)
+      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.EmitAction)
 
       assert updated.state.domain.emitted == true
       assert [%Jido.Agent.Directive.Emit{signal: signal}] = directives
@@ -389,7 +394,7 @@ defmodule JidoTest.AgentTest do
 
     test "action can return multiple directives" do
       agent = TestAgents.Basic.new()
-      {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.MultiEffectAction)
+      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.MultiEffectAction)
 
       assert updated.state.domain.triggered == true
       assert length(directives) == 2
@@ -398,7 +403,7 @@ defmodule JidoTest.AgentTest do
 
     test "StateOp.SetState modifies agent state but is not returned as directive" do
       agent = TestAgents.Basic.new()
-      {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.SetStateAction)
+      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.SetStateAction)
 
       # Action return (:primary) goes through non-scoped deep-merge into the slice;
       # SetState attrs (:extra) are applied to full state, so stay top-level.
@@ -409,7 +414,7 @@ defmodule JidoTest.AgentTest do
 
     test "StateOp.ReplaceState replaces state wholesale" do
       agent = TestAgents.Basic.new(state: %{old: "data", counter: 10})
-      {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.ReplaceStateAction)
+      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.ReplaceStateAction)
 
       # ReplaceState wholesale-replaces full agent.state — no slice survives.
       assert updated.state == %{replaced: true, fresh: "state"}
@@ -425,7 +430,7 @@ defmodule JidoTest.AgentTest do
           state: %{domain: %{}, to_delete: 1, also_delete: 2, keep: 3}
         )
 
-      {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.DeleteKeysAction)
+      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.DeleteKeysAction)
 
       refute Map.has_key?(updated.state, :to_delete)
       refute Map.has_key?(updated.state, :also_delete)
@@ -436,7 +441,7 @@ defmodule JidoTest.AgentTest do
     test "StateOp.SetPath sets value at nested path" do
       # Explicit slice layout so :existing sits at top level for the state-op to preserve.
       agent = TestAgents.Basic.new(state: %{domain: %{}, existing: "value"})
-      {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.SetPathAction)
+      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.SetPathAction)
 
       assert updated.state.nested.deep.value == 42
       assert updated.state.existing == "value"
@@ -450,7 +455,7 @@ defmodule JidoTest.AgentTest do
           state: %{domain: %{}, nested: %{to_remove: "gone", keep: "here"}}
         )
 
-      {updated, directives} = TestAgents.Basic.cmd(agent, TestActions.DeletePathAction)
+      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.DeletePathAction)
 
       refute Map.has_key?(updated.state.nested, :to_remove)
       assert updated.state.nested.keep == "here"

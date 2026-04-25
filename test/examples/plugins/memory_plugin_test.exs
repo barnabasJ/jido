@@ -48,7 +48,7 @@ defmodule JidoExampleTest.MemoryPluginTest do
           rev: memory.rev + 1
       }
 
-      {:ok, %{memory: updated_memory}}
+      {:ok, %{memory: updated_memory}, []}
     end
   end
 
@@ -174,7 +174,7 @@ defmodule JidoExampleTest.MemoryPluginTest do
         MemoryAgent.new()
         |> MemAgent.ensure()
 
-      {agent, []} = MemoryAgent.cmd(agent, {UpdateWorldAction, %{key: :location, value: "lab"}})
+      {:ok, agent, []} = MemoryAgent.cmd(agent, {UpdateWorldAction, %{key: :location, value: "lab"}})
 
       assert MemAgent.has_memory?(agent)
       assert MemAgent.get_in_space(agent, :world, :location) == "lab"
@@ -185,8 +185,8 @@ defmodule JidoExampleTest.MemoryPluginTest do
         MemoryAgent.new()
         |> MemAgent.ensure()
 
-      {agent, []} = MemoryAgent.cmd(agent, {UpdateWorldAction, %{key: :x, value: 1}})
-      {agent, []} = MemoryAgent.cmd(agent, {UpdateWorldAction, %{key: :y, value: 2}})
+      {:ok, agent, []} = MemoryAgent.cmd(agent, {UpdateWorldAction, %{key: :x, value: 1}})
+      {:ok, agent, []} = MemoryAgent.cmd(agent, {UpdateWorldAction, %{key: :y, value: 2}})
 
       assert MemAgent.get_in_space(agent, :world, :x) == 1
       assert MemAgent.get_in_space(agent, :world, :y) == 2

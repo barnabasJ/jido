@@ -66,6 +66,8 @@ end
 defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction do
   @moduledoc false
 
+  require Logger
+
   alias Jido.AgentServer
   alias Jido.AgentServer.State
   alias Jido.Observe.Config, as: ObserveConfig
@@ -90,24 +92,23 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction
       |> Map.put(:instruction, instruction)
       |> Map.put(:meta, meta || %{})
 
-    {agent, directives} =
-      state.agent_module.cmd(
-        state.agent,
-        {result_action, execution_payload},
-        ctx: %{jido_instance: state.jido, partition: state.partition, agent_id: state.agent.id},
-        input_signal: input_signal
-      )
+    case state.agent_module.cmd(
+           state.agent,
+           {result_action, execution_payload},
+           ctx: %{jido_instance: state.jido, partition: state.partition, agent_id: state.agent.id},
+           input_signal: input_signal
+         ) do
+      {:ok, agent, directives} ->
+        state = State.update_agent(state, agent)
+        AgentServer.execute_directives(List.wrap(directives), input_signal, state)
 
-    state = State.update_agent(state, agent)
-    AgentServer.execute_directives(List.wrap(directives), input_signal, state)
-  end
+      {:error, reason} ->
+        Logger.error(
+          "RunInstruction settle for #{state.id}: cmd/2 errored — #{inspect(reason)}"
+        )
 
-  defp normalize_result_payload({:ok, result}) do
-    %{
-      status: :ok,
-      result: result,
-      effects: []
-    }
+        {:ok, state}
+    end
   end
 
   defp normalize_result_payload({:ok, result, effects}) do
@@ -123,14 +124,6 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction
       status: :error,
       reason: reason,
       effects: []
-    }
-  end
-
-  defp normalize_result_payload({:error, reason, effects}) do
-    %{
-      status: :error,
-      reason: reason,
-      effects: List.wrap(effects)
     }
   end
 end

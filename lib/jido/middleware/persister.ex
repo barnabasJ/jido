@@ -15,6 +15,12 @@ defmodule Jido.Middleware.Persister do
   `Jido.Persist.hibernate/4`. Hibernate IO runs on the terminate path —
   callers must size the supervisor's shutdown timeout accordingly.
 
+  Per [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md), the
+  middleware returns the tagged tuple from `next.(sig, ctx)` and only
+  appends its own observability directive on the success branch. A chain
+  failure propagates verbatim — Persister is not in the request/response
+  error path.
+
   ## Configuration
 
   Pass options as a per-registration map:
@@ -56,18 +62,17 @@ defmodule Jido.Middleware.Persister do
         case Jido.Persist.thaw(storage, agent_module, key) do
           {:ok, raw_agent} ->
             thawed_agent = apply_reinstate(raw_agent, agent_module)
-            {final_ctx, dirs} = next.(sig, %{ctx | agent: thawed_agent})
 
-            {final_ctx,
-             dirs ++
-               [emit("jido.persist.thaw.completed", %{persistence_key: key})]}
+            append_observability(
+              next.(sig, %{ctx | agent: thawed_agent}),
+              emit("jido.persist.thaw.completed", %{persistence_key: key})
+            )
 
           {:error, reason} ->
-            {final_ctx, dirs} = next.(sig, ctx)
-
-            {final_ctx,
-             dirs ++
-               [emit("jido.persist.thaw.failed", %{reason: reason, persistence_key: key})]}
+            append_observability(
+              next.(sig, ctx),
+              emit("jido.persist.thaw.failed", %{reason: reason, persistence_key: key})
+            )
         end
     end
   end
@@ -87,30 +92,32 @@ defmodule Jido.Middleware.Persister do
         agent_with_cron = Jido.Scheduler.attach_staged_cron_specs(ctx.agent, cron_specs)
         to_serialize = apply_externalize(agent_with_cron, agent_module)
 
-        case Jido.Persist.hibernate(storage, agent_module, key, to_serialize) do
-          :ok ->
-            {final_ctx, dirs} = next.(sig, ctx)
+        observability =
+          case Jido.Persist.hibernate(storage, agent_module, key, to_serialize) do
+            :ok ->
+              emit("jido.persist.hibernate.completed", %{persistence_key: key})
 
-            {final_ctx,
-             dirs ++
-               [emit("jido.persist.hibernate.completed", %{persistence_key: key})]}
+            {:error, reason} ->
+              emit("jido.persist.hibernate.failed", %{
+                reason: reason,
+                persistence_key: key
+              })
+          end
 
-          {:error, reason} ->
-            {final_ctx, dirs} = next.(sig, ctx)
-
-            {final_ctx,
-             dirs ++
-               [
-                 emit("jido.persist.hibernate.failed", %{
-                   reason: reason,
-                   persistence_key: key
-                 })
-               ]}
-        end
+        append_observability(next.(sig, ctx), observability)
     end
   end
 
   def on_signal(sig, ctx, _opts, next), do: next.(sig, ctx)
+
+  # Lifecycle-signal observability emits append to the success directive
+  # list and pass {:error, _} chain returns through unchanged. Persister is
+  # not in the request/response error path; non-lifecycle errors are
+  # someone else's concern.
+  defp append_observability({:ok, ctx, dirs}, observability),
+    do: {:ok, ctx, dirs ++ [observability]}
+
+  defp append_observability({:error, _reason} = err, _observability), do: err
 
   defp emit(type, data), do: %Directive.Emit{signal: Signal.new!(type, data)}
 

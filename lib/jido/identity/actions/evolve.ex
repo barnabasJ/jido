@@ -19,6 +19,6 @@ defmodule Jido.Identity.Actions.Evolve do
   def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
     identity = slice || Jido.Identity.new()
     evolved = Jido.Identity.evolve(identity, Map.to_list(params))
-    {:ok, evolved}
+    {:ok, evolved, []}
   end
 end

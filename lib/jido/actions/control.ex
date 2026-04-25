@@ -44,7 +44,7 @@ defmodule Jido.Actions.Control do
       ]
 
     def run(%Jido.Signal{data: %{reason: reason}}, _slice, _opts, _ctx) do
-      {:ok, %{status: :failed, error: {:cancelled, reason}}}
+      {:ok, %{status: :failed, error: {:cancelled, reason}}, []}
     end
   end
 
@@ -68,7 +68,7 @@ defmodule Jido.Actions.Control do
       schema: []
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}}
+      {:ok, %{}, []}
     end
   end
 
@@ -221,7 +221,7 @@ defmodule Jido.Actions.Control do
           {:ok, %{replied_to: pid}, [directive]}
 
         :error ->
-          {:ok, %{replied_to: nil, warning: "No reply_to found in signal"}}
+          {:ok, %{replied_to: nil, warning: "No reply_to found in signal"}, []}
       end
     end
 

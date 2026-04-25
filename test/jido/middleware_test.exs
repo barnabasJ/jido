@@ -33,23 +33,21 @@ defmodule JidoTest.MiddlewareTest do
     end
 
     test "callback receives signal, ctx, opts, next" do
-      next = fn _sig, ctx -> {ctx, []} end
+      next = fn _sig, ctx -> {:ok, ctx, []} end
       sig = %Jido.Signal{type: "x", source: "/test", id: "1"}
 
-      {ctx, dirs} = PassThrough.on_signal(sig, %{}, %{}, next)
-
+      assert {:ok, %{} = ctx, []} = PassThrough.on_signal(sig, %{}, %{}, next)
       assert ctx == %{}
-      assert dirs == []
     end
 
     test "opts are passed verbatim and let middleware close over per-registration data" do
-      next = fn _sig, ctx -> {ctx, []} end
+      next = fn _sig, ctx -> {:ok, ctx, []} end
       sig = %Jido.Signal{type: "x", source: "/test", id: "1"}
 
-      {ctx, _} = Tagging.on_signal(sig, %{}, %{tag: :hot}, next)
+      {:ok, ctx, _} = Tagging.on_signal(sig, %{}, %{tag: :hot}, next)
       assert ctx.tag == :hot
 
-      {ctx, _} = Tagging.on_signal(sig, %{}, %{tag: :cold}, next)
+      {:ok, ctx, _} = Tagging.on_signal(sig, %{}, %{tag: :cold}, next)
       assert ctx.tag == :cold
     end
   end
@@ -62,8 +60,14 @@ defmodule JidoTest.MiddlewareTest do
       @impl true
       def on_signal(signal, ctx, _opts, next) do
         ctx = Map.update(ctx, :order, [:outer], &(&1 ++ [:outer]))
-        {ctx, dirs} = next.(signal, ctx)
-        {Map.update!(ctx, :order, &(&1 ++ [:outer_after])), dirs}
+
+        case next.(signal, ctx) do
+          {:ok, ctx, dirs} ->
+            {:ok, Map.update!(ctx, :order, &(&1 ++ [:outer_after])), dirs}
+
+          {:error, _} = err ->
+            err
+        end
       end
     end
 
@@ -82,14 +86,40 @@ defmodule JidoTest.MiddlewareTest do
       sig = %Jido.Signal{type: "x", source: "/test", id: "1"}
 
       # Build chain manually: Outer wraps Inner, which wraps the no-op base
-      base = fn _sig, ctx -> {ctx, []} end
+      base = fn _sig, ctx -> {:ok, ctx, []} end
       chain_inner = fn s, c -> Inner.on_signal(s, c, %{}, base) end
       chain_outer = fn s, c -> Outer.on_signal(s, c, %{}, chain_inner) end
 
-      {ctx, _} = chain_outer.(sig, %{order: []})
+      {:ok, ctx, _} = chain_outer.(sig, %{order: []})
 
       # outside-in: outer enters first, inner second, then unwinds outer
       assert ctx.order == [:outer, :inner, :outer_after]
+    end
+  end
+
+  describe "tagged-tuple chain semantics (ADR 0018)" do
+    defmodule Swallow do
+      @moduledoc false
+      use Jido.Middleware
+
+      # Catches `{:error, _}` from `next` and converts it to a success
+      # with no directives, so callers see the success-path selector run.
+      @impl true
+      def on_signal(signal, ctx, _opts, next) do
+        case next.(signal, ctx) do
+          {:error, _reason} -> {:ok, ctx, []}
+          ok -> ok
+        end
+      end
+    end
+
+    test "middleware that swallows {:error, _} returns {:ok, ctx, []}" do
+      sig = %Jido.Signal{type: "x", source: "/test", id: "1"}
+
+      base = fn _sig, _ctx -> {:error, :boom} end
+      chain = fn s, c -> Swallow.on_signal(s, c, %{}, base) end
+
+      assert {:ok, %{}, []} = chain.(sig, %{})
     end
   end
 end

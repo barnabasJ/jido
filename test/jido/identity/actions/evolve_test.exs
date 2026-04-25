@@ -11,7 +11,7 @@ defmodule JidoTest.Identity.Actions.EvolveTest do
 
   describe "run/4" do
     test "initializes identity when slice is nil" do
-      assert {:ok, %Identity{} = evolved} =
+      assert {:ok, %Identity{} = evolved, []} =
                Evolve.run(sig(%{days: 0, years: 0}), nil, %{}, %{})
 
       assert evolved.profile[:age] == 0
@@ -20,7 +20,7 @@ defmodule JidoTest.Identity.Actions.EvolveTest do
     test "evolves identity by years" do
       identity = Identity.new()
 
-      assert {:ok, %Identity{} = evolved} =
+      assert {:ok, %Identity{} = evolved, []} =
                Evolve.run(sig(%{days: 0, years: 5}), identity, %{}, %{})
 
       assert evolved.profile[:age] == 5
@@ -29,7 +29,7 @@ defmodule JidoTest.Identity.Actions.EvolveTest do
     test "evolves identity by days" do
       identity = Identity.new()
 
-      assert {:ok, %Identity{} = evolved} =
+      assert {:ok, %Identity{} = evolved, []} =
                Evolve.run(sig(%{days: 730, years: 0}), identity, %{}, %{})
 
       assert evolved.profile[:age] == 2
@@ -38,7 +38,7 @@ defmodule JidoTest.Identity.Actions.EvolveTest do
     test "evolves identity by combined years and days" do
       identity = Identity.new()
 
-      assert {:ok, %Identity{} = evolved} =
+      assert {:ok, %Identity{} = evolved, []} =
                Evolve.run(sig(%{days: 365, years: 3}), identity, %{}, %{})
 
       assert evolved.profile[:age] == 4
@@ -48,7 +48,7 @@ defmodule JidoTest.Identity.Actions.EvolveTest do
       identity = Identity.new()
       assert identity.rev == 0
 
-      assert {:ok, %Identity{} = evolved} =
+      assert {:ok, %Identity{} = evolved, []} =
                Evolve.run(sig(%{days: 0, years: 1}), identity, %{}, %{})
 
       assert evolved.rev == 1

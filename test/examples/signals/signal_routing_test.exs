@@ -32,7 +32,7 @@ defmodule JidoExampleTest.SignalRoutingTest do
 
     def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       current = Map.get(slice, :counter, 0)
-      {:ok, %{counter: current + amount}}
+      {:ok, %{counter: current + amount}, []}
     end
   end
 
@@ -45,7 +45,7 @@ defmodule JidoExampleTest.SignalRoutingTest do
       ]
 
     def run(%Jido.Signal{data: %{name: name}}, _slice, _opts, _ctx) do
-      {:ok, %{name: name}}
+      {:ok, %{name: name}, []}
     end
   end
 
@@ -67,7 +67,7 @@ defmodule JidoExampleTest.SignalRoutingTest do
         recorded_at: DateTime.utc_now()
       }
 
-      {:ok, %{events: [event | events]}}
+      {:ok, %{events: [event | events]}, []}
     end
   end
 

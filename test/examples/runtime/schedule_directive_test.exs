@@ -40,7 +40,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
         message: tick_signal
       }
 
-      {:ok, %{status: :waiting, timer_id: timer_id, started_at: DateTime.utc_now()}, schedule}
+      {:ok, %{status: :waiting, timer_id: timer_id, started_at: DateTime.utc_now()}, [schedule]}
     end
   end
 
@@ -54,7 +54,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
 
     def run(%Jido.Signal{data: %{timer_id: timer_id}}, slice, _opts, _ctx) do
       tick_count = Map.get(slice, :tick_count, 0) + 1
-      {:ok, %{status: :ticked, tick_count: tick_count, last_tick_timer: timer_id}}
+      {:ok, %{status: :ticked, tick_count: tick_count, last_tick_timer: timer_id}, []}
     end
   end
 
@@ -75,7 +75,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
         message: retry_signal
       }
 
-      {:ok, %{status: :retrying, attempts: 0, max_attempts: max, retry_delay_ms: delay}, schedule}
+      {:ok, %{status: :retrying, attempts: 0, max_attempts: max, retry_delay_ms: delay}, [schedule]}
     end
   end
 
@@ -91,7 +91,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
       delay = Map.get(slice, :retry_delay_ms, 50)
 
       if attempts >= max do
-        {:ok, %{status: :completed, attempts: attempts, result: :success}}
+        {:ok, %{status: :completed, attempts: attempts, result: :success}, []}
       else
         retry_signal = Signal.new!("retry.attempt", %{}, source: "/retry")
 
@@ -100,7 +100,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
           message: retry_signal
         }
 
-        {:ok, %{status: :retrying, attempts: attempts}, schedule}
+        {:ok, %{status: :retrying, attempts: attempts}, [schedule]}
       end
     end
   end
@@ -123,7 +123,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
         message: timeout_signal
       }
 
-      {:ok, %{status: :waiting, request_id: request_id, pending_request: request_id}, schedule}
+      {:ok, %{status: :waiting, request_id: request_id, pending_request: request_id}, [schedule]}
     end
   end
 
@@ -140,9 +140,9 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
       pending = Map.get(slice, :pending_request)
 
       if pending == request_id do
-        {:ok, %{status: :completed, result: result, pending_request: nil}}
+        {:ok, %{status: :completed, result: result, pending_request: nil}, []}
       else
-        {:ok, %{}}
+        {:ok, %{}, []}
       end
     end
   end
@@ -159,9 +159,9 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
       pending = Map.get(slice, :pending_request)
 
       if pending == request_id do
-        {:ok, %{status: :timed_out, pending_request: nil}}
+        {:ok, %{status: :timed_out, pending_request: nil}, []}
       else
-        {:ok, %{}}
+        {:ok, %{}, []}
       end
     end
   end

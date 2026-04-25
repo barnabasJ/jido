@@ -20,7 +20,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       # :counter_plugin is a plugin slice at the top of agent.state, not the
       # user-domain slice the action receives. Read it from the full state.
       current = get_in(ctx.agent.state, [:counter_plugin, :count]) || 0
-      {:ok, %{}, %StateOp.SetPath{path: [:counter_plugin, :count], value: current + amount}}
+      {:ok, %{}, [%StateOp.SetPath{path: [:counter_plugin, :count], value: current + amount}]}
     end
   end
 
@@ -34,7 +34,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     def run(%Jido.Signal{data: %{amount: amount}}, _slice, _opts, ctx) do
       current = get_in(ctx.agent.state, [:counter_plugin, :count]) || 0
-      {:ok, %{}, %StateOp.SetPath{path: [:counter_plugin, :count], value: current - amount}}
+      {:ok, %{}, [%StateOp.SetPath{path: [:counter_plugin, :count], value: current - amount}]}
     end
   end
 
@@ -48,7 +48,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     def run(%Jido.Signal{data: %{name: name}}, _slice, _opts, _ctx) do
       {:ok, %{},
-       %StateOp.SetPath{path: [:greeter_plugin, :last_greeting], value: "Hello, #{name}!"}}
+       [%StateOp.SetPath{path: [:greeter_plugin, :last_greeting], value: "Hello, #{name}!"}]}
     end
   end
 
@@ -61,7 +61,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     alias Jido.Agent.StateOp
 
     def run(%Jido.Signal{data: %{mode: mode}}, _slice, _opts, _ctx) do
-      {:ok, %{}, %StateOp.SetPath{path: [:mode_plugin, :current_mode], value: mode}}
+      {:ok, %{}, [%StateOp.SetPath{path: [:mode_plugin, :current_mode], value: mode}]}
     end
   end
 
@@ -71,7 +71,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       name: "simple_action",
       schema: []
 
-    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{executed: true}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{executed: true}, []}
   end
 
   # =============================================================================
@@ -410,7 +410,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     test "executing an action modifies only its plugin's namespace" do
       agent = MultiPluginAgent.new()
 
-      {updated, _directives} = MultiPluginAgent.cmd(agent, {IncrementAction, %{amount: 5}})
+      {:ok, updated, _directives} = MultiPluginAgent.cmd(agent, {IncrementAction, %{amount: 5}})
 
       assert updated.state[:counter_plugin][:count] == 5
       assert updated.state[:greeter_plugin][:last_greeting] == nil
@@ -419,9 +419,9 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     test "executing multiple actions maintains isolation" do
       agent = MultiPluginAgent.new()
 
-      {agent2, _} = MultiPluginAgent.cmd(agent, {IncrementAction, %{amount: 3}})
-      {agent3, _} = MultiPluginAgent.cmd(agent2, {GreetAction, %{name: "Alice"}})
-      {agent4, _} = MultiPluginAgent.cmd(agent3, {IncrementAction, %{amount: 2}})
+      {:ok, agent2, _} = MultiPluginAgent.cmd(agent, {IncrementAction, %{amount: 3}})
+      {:ok, agent3, _} = MultiPluginAgent.cmd(agent2, {GreetAction, %{name: "Alice"}})
+      {:ok, agent4, _} = MultiPluginAgent.cmd(agent3, {IncrementAction, %{amount: 2}})
 
       assert agent4.state[:counter_plugin][:count] == 5
       assert agent4.state[:greeter_plugin][:last_greeting] == "Hello, Alice!"
@@ -689,7 +689,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     test "executes skill action module" do
       agent = SinglePluginAgent.new()
 
-      {updated, directives} = SinglePluginAgent.cmd(agent, IncrementAction)
+      {:ok, updated, directives} = SinglePluginAgent.cmd(agent, IncrementAction)
 
       assert updated.state[:counter_plugin][:count] == 1
       assert directives == []
@@ -698,7 +698,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     test "executes skill action with params" do
       agent = SinglePluginAgent.new()
 
-      {updated, directives} = SinglePluginAgent.cmd(agent, {IncrementAction, %{amount: 10}})
+      {:ok, updated, directives} = SinglePluginAgent.cmd(agent, {IncrementAction, %{amount: 10}})
 
       assert updated.state[:counter_plugin][:count] == 10
       assert directives == []
@@ -707,7 +707,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     test "executes list of plugin actions" do
       agent = SinglePluginAgent.new()
 
-      {updated, directives} =
+      {:ok, updated, directives} =
         SinglePluginAgent.cmd(agent, [
           {IncrementAction, %{amount: 5}},
           {IncrementAction, %{amount: 3}},
@@ -721,7 +721,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     test "works with actions from multiple skills" do
       agent = MultiPluginAgent.new()
 
-      {updated, _} =
+      {:ok, updated, _} =
         MultiPluginAgent.cmd(agent, [
           {IncrementAction, %{amount: 10}},
           {GreetAction, %{name: "Test"}}
@@ -734,9 +734,9 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     test "state updates persist across multiple cmd calls" do
       agent = SinglePluginAgent.new()
 
-      {agent2, _} = SinglePluginAgent.cmd(agent, {IncrementAction, %{amount: 5}})
-      {agent3, _} = SinglePluginAgent.cmd(agent2, {IncrementAction, %{amount: 3}})
-      {agent4, _} = SinglePluginAgent.cmd(agent3, {DecrementAction, %{amount: 2}})
+      {:ok, agent2, _} = SinglePluginAgent.cmd(agent, {IncrementAction, %{amount: 5}})
+      {:ok, agent3, _} = SinglePluginAgent.cmd(agent2, {IncrementAction, %{amount: 3}})
+      {:ok, agent4, _} = SinglePluginAgent.cmd(agent3, {DecrementAction, %{amount: 2}})
 
       assert agent4.state[:counter_plugin][:count] == 6
     end
@@ -747,7 +747,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       {:ok, instruction} =
         Jido.Instruction.new(%{action: IncrementAction, params: %{amount: 7}})
 
-      {updated, _directives} = SinglePluginAgent.cmd(agent, instruction)
+      {:ok, updated, _directives} = SinglePluginAgent.cmd(agent, instruction)
 
       assert updated.state[:counter_plugin][:count] == 7
     end

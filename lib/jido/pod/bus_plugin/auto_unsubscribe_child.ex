@@ -49,7 +49,7 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
       _ ->
         # Nothing tracked for this tag; log and move on.
         Logger.debug("pod_bus: no subscriptions tracked for #{inspect(tag)}, skipping")
-        {:ok, %{}}
+        {:ok, %{}, []}
     end
   end
 

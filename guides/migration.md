@@ -848,6 +848,96 @@ insert `await_ready/2` between get and first signal send:
 InstanceManager does not wrap `await_ready` automatically — liveness
 vs. readiness is the caller's concern.
 
+## Tagged-tuple return shape (ADR 0018)
+
+### Action and `cmd` return shapes are tagged tuples
+
+**Old:**
+
+- `run/4` returned `{:ok, slice} | {:ok, slice, directive | [directive]} | {:error, reason}`.
+- `cmd/2` returned `{agent, directives}` regardless of outcome.
+- Errors went into `dirs` as `%Directive.Error{}` and were logged.
+
+**New:**
+
+- `run/4` returns `{:ok, slice, [directive]} | {:error, reason}` —
+  always a 3-tuple on success, list of directives even if empty.
+- `cmd/2` returns `{:ok, agent, [directive]} | {:error, reason}`.
+- Multi-instruction `cmd` is **all-or-nothing**: the first error halts
+  the batch, the input agent is returned via the error branch, and no
+  directives execute.
+
+**Recipes:**
+
+- An action that did `{:ok, %{slice | x: 1}}` becomes `{:ok, %{slice | x: 1}, []}`.
+- An action that did `{:ok, slice, %Emit{...}}` becomes `{:ok, slice, [%Emit{...}]}`.
+- An action that did `{:error, reason}` is unchanged. Bare-atom and
+  binary `reason` values are wrapped into `%Jido.Error.ExecutionError{}`
+  by the framework via `Jido.Error.from_term/1`, so consumers always see
+  a structured error.
+- Callers that did `{agent, dirs} = MyAgent.cmd(agent, instructions)` now do:
+
+  ```elixir
+  case MyAgent.cmd(agent, instructions) do
+    {:ok, agent, dirs} -> ...
+    {:error, reason} -> ...
+  end
+  ```
+
+### `cast_and_await/4` selectors no longer need to encode action errors
+
+**Old:** the selector had to read slice fields the action wrote on the
+failure path. If you forgot to write them, the caller hung until timeout.
+
+**New:** the framework delivers `{:error, reason}` directly to the
+caller when the chain returns an error; the selector is skipped. Write
+the selector to handle the success path only.
+
+```elixir
+{:ok, value} =
+  AgentServer.cast_and_await(pid, signal, fn %State{agent: agent} ->
+    case agent.state.app.status do
+      :written -> {:ok, agent.state.app.value}
+      _        -> {:error, :not_yet}
+    end
+  end)
+```
+
+If the action errored, `result` is `{:error, %Jido.Error.ExecutionError{...}}`
+without the selector ever running.
+
+`AgentServer.call/2` is unchanged: it still returns `{:ok, agent}`
+regardless of chain outcome. Use `cast_and_await/4` when you need
+error-aware semantics.
+
+### Middleware
+
+`on_signal/4` and `next.(signal, ctx)` both return the same shape:
+
+```elixir
+{:ok, ctx, [directive]} | {:error, reason}
+```
+
+Middleware that wrapped `next` and matched on `{ctx, dirs}` should
+match on the new shape:
+
+```elixir
+def on_signal(signal, ctx, _opts, next) do
+  case next.(signal, ctx) do
+    {:ok, ctx, dirs} -> {:ok, augment(ctx), dirs}
+    {:error, _} = err -> err
+  end
+end
+```
+
+### `Retry` middleware now triggers on `{:error, _}`, not on Error directives
+
+If you were relying on Retry firing because an action emitted
+`%Directive.Error{}` for logging, that behavior is gone. Retry now fires
+only on `{:error, _}` returns from the chain. To get
+logging-without-retry, emit the `%Error{}` from a different middleware
+on the success path (or use `Logger` directly).
+
 ## Getting Help
 
 - [Jido Documentation](https://hexdocs.pm/jido)

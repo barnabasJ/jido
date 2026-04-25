@@ -5,9 +5,14 @@ defmodule Jido.Action do
   ## Callback shape
 
       run(signal, slice, opts, ctx) ::
-        {:ok, new_slice}
-        | {:ok, new_slice, directives}
+        {:ok, new_slice, [directive]}
         | {:error, reason}
+
+  Always a 3-tuple on success — even when no directives are emitted, the
+  list is empty. There is no `{:ok, slice}` two-arg variant and no
+  `{:error, reason, [directive]}` variant; if it failed, it failed —
+  emit observability via middleware on the failure path. See
+  [ADR 0018](../adr/0018-tagged-tuple-return-shape.md).
 
   - `signal`: the `Jido.Signal.t()` that triggered the action. Action type
     is `signal.type`; payload is `signal.data`. Per-signal runtime ctx is
@@ -23,14 +28,9 @@ defmodule Jido.Action do
     partition, agent_id). Propagates to emitted signals' `extensions[:jido_ctx]`
     by default; middleware can augment or strip before forwarding.
 
-  ## Backwards-compatible callback
-
-  For the duration of the migration to `run/4`, modules that still define
-  `run/2` are accepted and adapted at compile time. The legacy callback
-  receives `signal.data` as `params` and a synthesized `context` map
-  containing `:state` (slice), `:opts` (static opts), `:signal`, and any
-  ctx fields. Mark such modules with `@deprecated` and migrate when
-  convenient.
+  Bare-atom or string `reason` values returned in `{:error, reason}` are
+  wrapped into `%Jido.Error{}` at the cmd boundary via
+  `Jido.Error.from_term/1`, so consumers always see a structured error.
 
   ## Defining an Action
 
@@ -42,7 +42,7 @@ defmodule Jido.Action do
 
         @impl true
         def run(%Jido.Signal{data: %{by: by}}, slice, _opts, _ctx) do
-          {:ok, %{slice | count: (slice[:count] || 0) + by}}
+          {:ok, %{slice | count: (slice[:count] || 0) + by}, []}
         end
       end
 
@@ -356,9 +356,8 @@ defmodule Jido.Action do
   @doc """
   Executes the Action.
 
-  Implementing modules must define `run/4`. During the migration to `run/4`,
-  modules that still define `run/2` are accepted and adapted via
-  `@before_compile`.
+  Implementing modules must define `run/4`, returning
+  `{:ok, new_slice, [directive]} | {:error, reason}`. See module doc.
   """
   @callback run(
               signal :: Jido.Signal.t() | map(),
@@ -366,14 +365,17 @@ defmodule Jido.Action do
               opts :: map(),
               ctx :: map()
             ) ::
-              {:ok, term()} | {:ok, term(), any()} | {:error, any()}
+              {:ok, new_slice :: term(), [Jido.Agent.Directive.t()]}
+              | {:error, term()}
 
   @callback on_before_validate_params(params :: map()) :: {:ok, map()} | {:error, any()}
   @callback on_after_validate_params(params :: map()) :: {:ok, map()} | {:error, any()}
   @callback on_before_validate_output(output :: map()) :: {:ok, map()} | {:error, any()}
   @callback on_after_validate_output(output :: map()) :: {:ok, map()} | {:error, any()}
-  @callback on_after_run(result :: {:ok, map()} | {:error, any()}) ::
-              {:ok, term()} | {:error, any()}
+  @callback on_after_run(
+              result :: {:ok, term(), [Jido.Agent.Directive.t()]} | {:error, any()}
+            ) ::
+              {:ok, term(), [Jido.Agent.Directive.t()]} | {:error, any()}
 
   @optional_callbacks [
     on_before_validate_params: 1,

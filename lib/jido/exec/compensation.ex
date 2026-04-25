@@ -19,10 +19,8 @@ defmodule Jido.Exec.Compensation do
   @type context :: map()
   @type run_opts :: [timeout: non_neg_integer()]
   @type exec_result ::
-          {:ok, map()}
-          | {:ok, map(), any()}
+          {:ok, map(), [Jido.Agent.Directive.t()]}
           | {:error, Exception.t()}
-          | {:error, Exception.t(), any()}
 
   @doc """
   Checks if compensation is enabled for the given action.
@@ -72,37 +70,25 @@ defmodule Jido.Exec.Compensation do
 
   ## Returns
 
-  - `{:error, compensated_error}` or `{:error, compensated_error, directive}` if compensation was attempted
-  - `{:error, original_error}` or `{:error, original_error, directive}` if compensation is disabled
+  - `{:error, compensated_error}` if compensation was attempted
+  - `{:error, original_error}` if compensation is disabled
   """
-  @spec handle_error(
-          action(),
-          params(),
-          context(),
-          Exception.t() | {Exception.t(), any()},
-          run_opts()
-        ) :: exec_result
-  def handle_error(action, params, context, error_or_tuple, opts) do
+  @spec handle_error(action(), params(), context(), Exception.t(), run_opts()) :: exec_result
+  def handle_error(action, params, context, error, opts) do
     Logger.debug("Handle Action Error in handle_error: #{inspect(opts)}")
-    # Extract error and directive if present
-    {error, directive} =
-      case error_or_tuple do
-        {error, directive} -> {error, directive}
-        error -> {error, nil}
-      end
 
     if enabled?(action) do
-      execute_compensation(action, params, context, error, directive, opts)
+      execute_compensation(action, params, context, error, opts)
     else
-      wrap_error_with_directive(error, directive)
+      {:error, error}
     end
   end
 
   # Private functions are exposed to the test suite
   private do
-    @spec execute_compensation(action(), params(), context(), Exception.t(), any(), run_opts()) ::
+    @spec execute_compensation(action(), params(), context(), Exception.t(), run_opts()) ::
             exec_result
-    defp execute_compensation(action, params, context, error, directive, opts) do
+    defp execute_compensation(action, params, context, error, opts) do
       metadata = action.__action_metadata__()
       compensation_opts = metadata[:compensation] || []
       timeout = get_compensation_timeout(opts, compensation_opts)
@@ -151,7 +137,7 @@ defmodule Jido.Exec.Compensation do
         end
 
       cleanup_after_compensation(monitor_ref, ref)
-      handle_task_result(result, error, directive, timeout)
+      handle_task_result(result, error, timeout)
     end
 
     defp wait_for_down(monitor_ref, pid, wait_ms) do
@@ -191,59 +177,45 @@ defmodule Jido.Exec.Compensation do
     @spec handle_task_result(
             {:ok, any()} | {:exit, any()} | :timeout,
             Exception.t(),
-            any(),
             non_neg_integer()
           ) :: exec_result
-    defp handle_task_result({:ok, result}, error, directive, _timeout) do
-      handle_compensation_result(result, error, directive)
+    defp handle_task_result({:ok, result}, error, _timeout) do
+      {:error, build_compensation_error(result, error)}
     end
 
-    defp handle_task_result(:timeout, error, directive, timeout) do
-      build_timeout_error(error, directive, timeout)
+    defp handle_task_result(:timeout, error, timeout) do
+      {:error, build_timeout_error(error, timeout)}
     end
 
-    defp handle_task_result({:exit, reason}, error, directive, _timeout) do
-      build_exit_error(error, directive, reason)
+    defp handle_task_result({:exit, reason}, error, _timeout) do
+      {:error, build_exit_error(error, reason)}
     end
 
-    @spec build_timeout_error(Exception.t(), any(), non_neg_integer()) :: exec_result
-    defp build_timeout_error(error, directive, timeout) do
-      error_result =
-        Error.execution_error(
-          "Compensation timed out after #{timeout}ms for: #{inspect(error)}",
-          %{
-            compensated: false,
-            compensation_error: "Compensation timed out after #{timeout}ms",
-            original_error: error
-          }
-        )
-
-      wrap_error_with_directive(error_result, directive)
+    @spec build_timeout_error(Exception.t(), non_neg_integer()) :: Exception.t()
+    defp build_timeout_error(error, timeout) do
+      Error.execution_error(
+        "Compensation timed out after #{timeout}ms for: #{inspect(error)}",
+        %{
+          compensated: false,
+          compensation_error: "Compensation timed out after #{timeout}ms",
+          original_error: error
+        }
+      )
     end
 
-    @spec build_exit_error(Exception.t(), any(), any()) :: exec_result
-    defp build_exit_error(error, directive, reason) do
+    @spec build_exit_error(Exception.t(), any()) :: Exception.t()
+    defp build_exit_error(error, reason) do
       error_message = Telemetry.extract_safe_error_message(error)
 
-      error_result =
-        Error.execution_error(
-          "Compensation crashed for: #{error_message}",
-          %{
-            compensated: false,
-            compensation_error: "Compensation exited: #{inspect(reason)}",
-            exit_reason: reason,
-            original_error: error
-          }
-        )
-
-      wrap_error_with_directive(error_result, directive)
-    end
-
-    @spec handle_compensation_result(any(), Exception.t(), any()) :: exec_result
-    defp handle_compensation_result(result, original_error, directive) do
-      result
-      |> build_compensation_error(original_error)
-      |> wrap_error_with_directive(directive)
+      Error.execution_error(
+        "Compensation crashed for: #{error_message}",
+        %{
+          compensated: false,
+          compensation_error: "Compensation exited: #{inspect(reason)}",
+          exit_reason: reason,
+          original_error: error
+        }
+      )
     end
 
     @spec build_compensation_error(any(), Exception.t()) :: Exception.t()
@@ -295,9 +267,5 @@ defmodule Jido.Exec.Compensation do
         }
       )
     end
-
-    @spec wrap_error_with_directive(Exception.t(), any()) :: exec_result
-    defp wrap_error_with_directive(error, nil), do: {:error, error}
-    defp wrap_error_with_directive(error, directive), do: {:error, error, directive}
   end
 end

@@ -35,7 +35,7 @@ defmodule JidoExampleTest.PluginBasicsTest do
     def run(%Jido.Signal{data: %{text: text}}, slice, _opts, _ctx) do
       notes = get_in(slice, [:notes, :entries]) || []
       note = %{text: text, added_at: DateTime.utc_now()}
-      {:ok, %{notes: %{entries: [note | notes]}}}
+      {:ok, %{notes: %{entries: [note | notes]}}, []}
     end
   end
 
@@ -46,7 +46,7 @@ defmodule JidoExampleTest.PluginBasicsTest do
       schema: []
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{notes: %{entries: []}}}
+      {:ok, %{notes: %{entries: []}}, []}
     end
   end
 
@@ -165,7 +165,7 @@ defmodule JidoExampleTest.PluginBasicsTest do
     test "cmd/2 updates plugin state directly" do
       agent = NotesAgent.new()
 
-      {agent, []} = NotesAgent.cmd(agent, {AddNoteAction, %{text: "from cmd"}})
+      {:ok, agent, []} = NotesAgent.cmd(agent, {AddNoteAction, %{text: "from cmd"}})
 
       assert length(agent.state.notes.entries) == 1
       [note] = agent.state.notes.entries

@@ -4,7 +4,7 @@ defmodule JidoTest.PluginTestAction do
     name: "plugin_test_action",
     schema: []
 
-  def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
+  def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
 end
 
 defmodule JidoTest.PluginTestAnotherAction do
@@ -13,7 +13,8 @@ defmodule JidoTest.PluginTestAnotherAction do
     name: "plugin_test_another_action",
     schema: [value: [type: :integer, default: 0]]
 
-  def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx), do: {:ok, %{value: value}}
+  def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx),
+    do: {:ok, %{value: value}, []}
 end
 
 defmodule JidoTest.NotAnActionModule do
@@ -39,7 +40,7 @@ defmodule JidoTest.TestActions do
       ]
 
     def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx) do
-      {:ok, %{value: value}}
+      {:ok, %{value: value}, []}
     end
   end
 
@@ -49,8 +50,10 @@ defmodule JidoTest.TestActions do
       name: "no_schema",
       description: "Action with no schema"
 
-    def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx), do: {:ok, %{result: value + 2}}
-    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{result: "No params"}}
+    def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx),
+      do: {:ok, %{result: value + 2}, []}
+
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{result: "No params"}, []}
   end
 
   defmodule Add do
@@ -64,7 +67,7 @@ defmodule JidoTest.TestActions do
       ]
 
     def run(%Jido.Signal{data: %{value: value, amount: amount}}, _slice, _opts, _ctx) do
-      {:ok, %{value: value + amount}}
+      {:ok, %{value: value + amount}, []}
     end
   end
 
@@ -76,7 +79,7 @@ defmodule JidoTest.TestActions do
 
     def run(_signal, _slice, _opts, _ctx) do
       signal = %{type: "test.emitted", data: %{value: 42}}
-      {:ok, %{emitted: true}, Directive.emit(signal)}
+      {:ok, %{emitted: true}, [Directive.emit(signal)]}
     end
   end
 
@@ -103,7 +106,7 @@ defmodule JidoTest.TestActions do
       description: "Action that uses StateOp.SetState"
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{primary: "result"}, %StateOp.SetState{attrs: %{extra: "state"}}}
+      {:ok, %{primary: "result"}, [%StateOp.SetState{attrs: %{extra: "state"}}]}
     end
   end
 
@@ -114,7 +117,7 @@ defmodule JidoTest.TestActions do
       description: "Action that uses StateOp.ReplaceState"
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, %StateOp.ReplaceState{state: %{replaced: true, fresh: "state"}}}
+      {:ok, %{}, [%StateOp.ReplaceState{state: %{replaced: true, fresh: "state"}}]}
     end
   end
 
@@ -125,7 +128,7 @@ defmodule JidoTest.TestActions do
       description: "Action that uses StateOp.DeleteKeys"
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, %StateOp.DeleteKeys{keys: [:to_delete, :also_delete]}}
+      {:ok, %{}, [%StateOp.DeleteKeys{keys: [:to_delete, :also_delete]}]}
     end
   end
 
@@ -136,7 +139,7 @@ defmodule JidoTest.TestActions do
       description: "Action that uses StateOp.SetPath"
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, %StateOp.SetPath{path: [:nested, :deep, :value], value: 42}}
+      {:ok, %{}, [%StateOp.SetPath{path: [:nested, :deep, :value], value: 42}]}
     end
   end
 
@@ -147,7 +150,7 @@ defmodule JidoTest.TestActions do
       description: "Action that uses StateOp.DeletePath"
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, %StateOp.DeletePath{path: [:nested, :to_remove]}}
+      {:ok, %{}, [%StateOp.DeletePath{path: [:nested, :to_remove]}]}
     end
   end
 
@@ -162,7 +165,7 @@ defmodule JidoTest.TestActions do
     def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       slice = if is_map(slice), do: slice, else: %{}
       count = Map.get(slice, :counter, 0)
-      {:ok, Map.put(slice, :counter, count + amount)}
+      {:ok, Map.put(slice, :counter, count + amount), []}
     end
   end
 
@@ -177,7 +180,7 @@ defmodule JidoTest.TestActions do
     def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       slice = if is_map(slice), do: slice, else: %{}
       count = Map.get(slice, :counter, 0)
-      {:ok, Map.put(slice, :counter, count - amount)}
+      {:ok, Map.put(slice, :counter, count - amount), []}
     end
   end
 
@@ -192,7 +195,7 @@ defmodule JidoTest.TestActions do
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       messages = Map.get(slice, :messages, [])
       message = Map.get(params, :message, params)
-      {:ok, %{messages: messages ++ [message]}}
+      {:ok, %{messages: messages ++ [message]}, []}
     end
   end
 
@@ -206,7 +209,7 @@ defmodule JidoTest.TestActions do
 
     def run(%Jido.Signal{data: %{delay_ms: delay}}, _slice, _opts, _ctx) do
       Process.sleep(delay)
-      {:ok, %{processed: true, delay: delay}}
+      {:ok, %{processed: true, delay: delay}, []}
     end
   end
 

@@ -67,7 +67,7 @@ defmodule JidoTest.SignalCtxTest do
 
       @impl true
       def run(_signal, _slice, _opts, ctx) do
-        {:ok, %{trace_id: Map.get(ctx, :trace_id), user: Map.get(ctx, :user)}}
+        {:ok, %{trace_id: Map.get(ctx, :trace_id), user: Map.get(ctx, :user)}, []}
       end
     end
 
@@ -79,12 +79,12 @@ defmodule JidoTest.SignalCtxTest do
         |> SignalCtx.put(:trace_id, "abc-123")
         |> SignalCtx.put(:user, "alice")
 
-      assert {:ok, %{trace_id: "abc-123", user: "alice"}} =
+      assert {:ok, %{trace_id: "abc-123", user: "alice"}, []} =
                Jido.Exec.run(TraceProbe, %{}, %{signal: sig})
     end
 
     test "without an explicit signal, ctx defaults to %{}" do
-      assert {:ok, %{trace_id: nil, user: nil}} =
+      assert {:ok, %{trace_id: nil, user: nil}, []} =
                Jido.Exec.run(TraceProbe, %{}, %{})
     end
   end

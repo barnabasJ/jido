@@ -1,24 +1,27 @@
 defmodule Jido.Middleware.Retry do
   @moduledoc """
-  Retries signals whose pipeline returns `%Jido.Agent.Directive.Error{}` directives.
+  Retries signals whose pipeline returns `{:error, _}`.
 
   ## Configuration
 
     * `:max_attempts` (default `3`) — total attempts including the first.
     * `:pattern` (optional) — signal-type pattern in `Jido.Signal.Router` syntax.
       When set, only matching signals are retried; otherwise every signal that
-      yields an error directive is retried.
+      fails is retried.
 
   Use case: flaky tool calls, transient storage errors, upstream timeouts.
 
   Backoff and jitter are intentionally omitted in this first pass — the
   middleware retries immediately. Higher-level back-pressure belongs in a
   user-defined middleware sitting upstream of this one.
+
+  Retry pattern-matches the chain return per [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md):
+  it fires only on `{:error, _}` returns, never on `%Directive.Error{}`
+  directives that user code emits for logging on the success path.
   """
 
   use Jido.Middleware
 
-  alias Jido.Agent.Directive
   alias Jido.Signal
 
   @impl true
@@ -32,16 +35,14 @@ defmodule Jido.Middleware.Retry do
   end
 
   defp attempt(signal, ctx, next, attempts_left) when attempts_left > 0 do
-    {_new_ctx, dirs} = result = next.(signal, ctx)
+    case next.(signal, ctx) do
+      {:error, _reason} when attempts_left > 1 ->
+        attempt(signal, ctx, next, attempts_left - 1)
 
-    if has_error?(dirs) and attempts_left > 1 do
-      attempt(signal, ctx, next, attempts_left - 1)
-    else
-      result
+      other ->
+        other
     end
   end
-
-  defp has_error?(dirs), do: Enum.any?(dirs, &match?(%Directive.Error{}, &1))
 
   defp applies?(_signal, %{pattern: nil}), do: true
 

@@ -8,7 +8,16 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
     use Jido.Action, name: "write", path: :app, schema: []
 
     def run(%Jido.Signal{data: %{value: v}}, slice, _opts, _ctx) do
-      {:ok, %{slice | value: v, status: :written}}
+      {:ok, %{slice | value: v, status: :written}, []}
+    end
+  end
+
+  defmodule FailingAction do
+    @moduledoc false
+    use Jido.Action, name: "fail", path: :app, schema: []
+
+    def run(_signal, _slice, _opts, _ctx) do
+      {:error, :intentional_action_failure}
     end
   end
 
@@ -23,7 +32,55 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
       ]
 
     def signal_routes(_ctx) do
-      [{"write", JidoTest.AgentServer.AckSubscribeTest.WriteAction}]
+      [
+        {"write", JidoTest.AgentServer.AckSubscribeTest.WriteAction},
+        {"fail", JidoTest.AgentServer.AckSubscribeTest.FailingAction}
+      ]
+    end
+  end
+
+  defmodule FlakyAction do
+    @moduledoc false
+    use Jido.Action, name: "flaky", path: :app, schema: []
+
+    @counter_key {__MODULE__, :counter}
+
+    def reset(name) do
+      :persistent_term.put({@counter_key, name}, :counters.new(1, []))
+    end
+
+    def attempts(name) do
+      :counters.get(:persistent_term.get({@counter_key, name}), 1)
+    end
+
+    def run(%Jido.Signal{data: %{name: name, succeed_after: succeed_after}}, slice, _, _) do
+      counter = :persistent_term.get({@counter_key, name})
+      :counters.add(counter, 1, 1)
+      n = :counters.get(counter, 1)
+
+      if n >= succeed_after do
+        {:ok, %{slice | value: succeed_after, status: :written}, []}
+      else
+        {:error, :transient}
+      end
+    end
+  end
+
+  defmodule RetryingAgent do
+    @moduledoc false
+    use Jido.Agent,
+      name: "retrying_agent",
+      path: :app,
+      schema: [
+        value: [type: :integer, default: 0],
+        status: [type: :atom, default: :idle]
+      ],
+      middleware: [
+        {Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}
+      ]
+
+    def signal_routes(_ctx) do
+      [{"flaky", JidoTest.AgentServer.AckSubscribeTest.FlakyAction}]
     end
   end
 
@@ -64,21 +121,112 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
       assert {:error, :selector_says_no} = result
     end
 
-    test "returns {:error, :timeout} when the agent never produces an ack", %{jido: jido} do
+    test "returns {:error, :timeout} when the selector keeps returning :skip", %{jido: jido} do
       pid = start_server(%{jido: jido}, TestAgent)
       :ok = AgentServer.await_ready(pid)
 
       result =
         AgentServer.cast_and_await(
           pid,
-          signal("does.not.match.any.route"),
+          signal("write", %{value: 1}),
           fn _state -> :skip end,
           timeout: 100
         )
 
-      # The signal still produces an ack (default route fires); selector is required to
-      # return either {:ok, _} or {:error, _}. With :skip it loops; we hit timeout.
+      # Per ADR 0018, ack delivery hands the selector return verbatim. `:skip`
+      # is not a valid ack tuple, so the receive-loop never matches and we hit
+      # the caller-side timeout.
       assert {:error, :timeout} = result
+    end
+
+    test "delivers {:error, %Jido.Error{}} verbatim when the action errors; selector is skipped",
+         %{jido: jido} do
+      pid = start_server(%{jido: jido}, TestAgent)
+      :ok = AgentServer.await_ready(pid)
+
+      result =
+        AgentServer.cast_and_await(
+          pid,
+          signal("fail"),
+          fn _state -> {:ok, :selector_should_be_skipped} end,
+          timeout: 1_000
+        )
+
+      assert {:error, %Jido.Error.ExecutionError{}} = result
+    end
+
+    test "subscribers' selectors run even when the chain returned {:error, _}", %{jido: jido} do
+      pid = start_server(%{jido: jido}, TestAgent)
+      :ok = AgentServer.await_ready(pid)
+
+      caller = self()
+
+      {:ok, ref} =
+        AgentServer.subscribe(
+          pid,
+          "fail",
+          fn _state ->
+            send(caller, :subscriber_ran)
+            :skip
+          end,
+          []
+        )
+
+      :ok = AgentServer.cast(pid, signal("fail"))
+
+      assert_receive :subscriber_ran, 1_000
+      :ok = AgentServer.unsubscribe(pid, ref)
+    end
+
+    test "Retry middleware re-invokes next on {:error, _}; ack fires once with the eventual success",
+         %{jido: jido} do
+      pid = start_server(%{jido: jido}, RetryingAgent)
+      :ok = AgentServer.await_ready(pid)
+
+      key = {:flaky, System.unique_integer([:positive])}
+      FlakyAction.reset(key)
+
+      # The action succeeds on the 4th invocation. Each middleware attempt
+      # calls the action ≥1 time (Exec may also retry), so 3 middleware
+      # attempts × ≥1 invocation comfortably exceeds 4.
+      result =
+        AgentServer.cast_and_await(
+          pid,
+          signal("flaky", %{name: key, succeed_after: 4}),
+          fn %AgentServer.State{agent: agent} ->
+            case agent.state.app.status do
+              :written -> {:ok, agent.state.app.value}
+              _ -> {:error, :not_yet}
+            end
+          end,
+          timeout: 2_000
+        )
+
+      # Eventual success crosses the boundary as a single ack
+      # (Retry retries internally; the outermost return fires the ack once).
+      assert {:ok, 4} = result
+      assert FlakyAction.attempts(key) >= 4
+    end
+
+    test "Retry middleware exhausts max_attempts; ack receives the final {:error, _}",
+         %{jido: jido} do
+      pid = start_server(%{jido: jido}, RetryingAgent)
+      :ok = AgentServer.await_ready(pid)
+
+      key = {:flaky, System.unique_integer([:positive])}
+      FlakyAction.reset(key)
+
+      result =
+        AgentServer.cast_and_await(
+          pid,
+          signal("flaky", %{name: key, succeed_after: 9_999}),
+          fn _state -> {:ok, :should_be_skipped} end,
+          timeout: 2_000
+        )
+
+      assert {:error, %Jido.Error.ExecutionError{}} = result
+      # Three middleware attempts, each may also Exec-retry, so >= 3.
+      assert FlakyAction.attempts(key) >= 3
     end
   end
 

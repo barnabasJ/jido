@@ -5,11 +5,17 @@ defmodule Jido.Middleware do
   Middleware is a single-tier construct: each middleware sits in a chain that
   wraps around a `next` continuation. To affect signal processing the
   middleware either calls `next.(signal, ctx)` (passing through to the rest
-  of the chain) or returns a `{ctx, directives}` tuple directly.
+  of the chain) or returns a tagged tuple directly.
 
   ## Callback shape
 
-      on_signal(signal, ctx, opts, next) :: {map(), [struct()]}
+      on_signal(signal, ctx, opts, next) ::
+        {:ok, ctx, [directive]}
+        | {:error, reason}
+
+  Both `next.(signal, ctx)` and `on_signal/4` return the same shape. The
+  chain's tagged outcome is the source of truth for ack delivery — see
+  [ADR 0018](../adr/0018-tagged-tuple-return-shape.md).
 
   - `signal` — the triggering `Jido.Signal.t()`.
   - `ctx` — per-signal runtime context (user, trace, agent-level identity).
@@ -20,7 +26,8 @@ defmodule Jido.Middleware do
     callback receives the same map every invocation. A bare module
     registration produces `opts = %{}`.
   - `next` — the continuation. The middleware chooses whether (and when) to
-    call `next.(signal, ctx)`; the result is `{new_ctx, directives}`.
+    call `next.(signal, ctx)`; the result is `{:ok, new_ctx, [directive]}`
+    on success or `{:error, reason}` on failure.
 
   ## Defining middleware
 
@@ -30,10 +37,10 @@ defmodule Jido.Middleware do
         @impl true
         def on_signal(signal, ctx, _opts, next) do
           before = System.monotonic_time()
-          {new_ctx, directives} = next.(signal, ctx)
+          result = next.(signal, ctx)
           after_ = System.monotonic_time()
           :telemetry.execute([:my_app, :audit], %{us: after_ - before}, %{type: signal.type})
-          {new_ctx, directives}
+          result
         end
       end
 
@@ -45,8 +52,11 @@ defmodule Jido.Middleware do
               signal :: Jido.Signal.t(),
               ctx :: map(),
               opts :: map(),
-              next :: (Jido.Signal.t(), map() -> {map(), [struct()]})
-            ) :: {map(), [struct()]}
+              next ::
+                (Jido.Signal.t(), map() ->
+                   {:ok, map(), [Jido.Agent.Directive.t()]} | {:error, term()})
+            ) ::
+              {:ok, map(), [Jido.Agent.Directive.t()]} | {:error, term()}
 
   @optional_callbacks on_signal: 4
 

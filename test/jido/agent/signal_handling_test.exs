@@ -135,7 +135,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
       GenServer.stop(pid)
     end
 
-    test "unknown signal type produces routing error directive but does not crash", %{jido: jido} do
+    test "unknown signal type short-circuits with {:error, _} but does not crash", %{jido: jido} do
       {:ok, pid} =
         Jido.AgentServer.start_link(
           agent_module: ActionBasedAgent,
@@ -144,8 +144,8 @@ defmodule JidoTest.Agent.SignalHandlingTest do
         )
 
       signal = Signal.new!("unknown_action", %{}, source: "/test")
-      # Routing failures appear as %Directive.Error{} in the directive stream;
-      # AgentServer.call still resolves with the (unchanged) agent.
+      # Per ADR 0018, the chain returns {:error, %RoutingError{}}; AgentServer.call/2
+      # still replies {:ok, agent} (cast_and_await is the error-aware variant).
       assert {:ok, _agent} = Jido.AgentServer.call(pid, signal)
 
       # The agent should still be functional despite the error
@@ -161,7 +161,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
     test "cmd/2 works directly with action module tuples" do
       agent = ActionBasedAgent.new()
 
-      {updated, _directives} =
+      {:ok, updated, _directives} =
         ActionBasedAgent.cmd(agent, {TestActions.IncrementAction, %{amount: 5}})
 
       assert updated.state.domain.counter == 5

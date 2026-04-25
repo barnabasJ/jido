@@ -29,7 +29,7 @@ defmodule Jido.Signal.Call do
       # Action handling "my.agent.ping"
       def run(_signal, slice, _opts, ctx) do
         emit = Jido.Signal.Call.reply(ctx.signal, "my.agent.ping.reply", %{ok: true})
-        {:ok, %{}, [emit]}
+        {:ok, %{}, List.wrap(emit)}
       end
 
   ## Why not `Jido.AgentServer.call/2`?
@@ -121,7 +121,7 @@ defmodule Jido.Signal.Call do
   lets action code be flexible:
 
       case Jido.Signal.Call.reply(ctx.signal, "my.reply", %{value: 42}) do
-        nil -> {:ok, %{}}
+        nil -> {:ok, %{}, []}
         emit -> {:ok, %{}, [emit]}
       end
   """

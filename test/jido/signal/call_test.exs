@@ -36,7 +36,7 @@ defmodule JidoTest.Signal.CallTest do
     use Jido.Action, name: "silent_action", schema: []
 
     @impl true
-    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
   end
 
   defmodule CallTestAgent do

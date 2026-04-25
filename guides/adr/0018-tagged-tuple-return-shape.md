@@ -1,9 +1,9 @@
 # 0018. Tagged-tuple return shape across action / cmd / middleware
 
-- Status: Accepted
-- Implementation: Pending — tracked by [task 0011](../tasks/0011-tagged-tuple-return-shape.md)
+- Status: Implemented
+- Implementation: Complete
 - Date: 2026-04-25
-- Related commits: (this commit — ADR + task only)
+- Related commits: (the ADR commit), (this implementation commit)
 - Related ADRs: [0014](0014-slice-middleware-plugin.md), [0015](0015-agent-start-is-signal-driven.md), [0016](0016-agent-server-ack-and-subscribe.md), [0009 inline signal processing](0009-inline-signal-processing.md)
 
 ## Context

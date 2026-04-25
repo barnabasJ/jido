@@ -444,6 +444,35 @@ defmodule Jido.Error do
     )
   end
 
+  @doc """
+  Wraps an arbitrary term into a `Jido.Error.t()`.
+
+  Idempotent: a struct that already implements the unified-error shape
+  (`%ValidationError{}`, `%ExecutionError{}`, `%RoutingError{}`, ... or any
+  struct exposing `:message`/`:details`) is returned unchanged. Bare terms
+  are wrapped in an `ExecutionError` so consumers always see a structured
+  error.
+
+  This is the canonical normalization point at the action / middleware
+  boundary — see ADR 0018.
+  """
+  @spec from_term(term()) :: term()
+  def from_term(%ValidationError{} = e), do: e
+  def from_term(%ExecutionError{} = e), do: e
+  def from_term(%RoutingError{} = e), do: e
+  def from_term(%TimeoutError{} = e), do: e
+  def from_term(%CompensationError{} = e), do: e
+  def from_term(%InternalError{} = e), do: e
+  def from_term(%Internal.UnknownError{} = e), do: e
+
+  def from_term(reason) when is_binary(reason) do
+    execution_error(reason, %{})
+  end
+
+  def from_term(reason) do
+    execution_error("Action failed", %{reason: reason})
+  end
+
   defp merge_extra_details(opts, reserved_keys) do
     explicit_details =
       case Keyword.get(opts, :details, %{}) do

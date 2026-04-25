@@ -102,7 +102,7 @@ defmodule JidoExampleTest.ObservabilityTest do
           %{last_result: result}
         end
       )
-      |> then(&{:ok, &1})
+      |> then(&{:ok, &1, []})
     end
   end
 
@@ -132,7 +132,7 @@ defmodule JidoExampleTest.ObservabilityTest do
         end)
 
       result = Task.await(task)
-      {:ok, %{async_result: result}}
+      {:ok, %{async_result: result}, []}
     end
   end
 

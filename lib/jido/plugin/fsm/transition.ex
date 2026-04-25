@@ -34,7 +34,7 @@ defmodule Jido.Plugin.FSM.Transition do
           terminal?: to in terminal_states
       }
 
-      {:ok, new_slice}
+      {:ok, new_slice, []}
     else
       {:error, "invalid FSM transition from #{inspect(from)} to #{inspect(to)}"}
     end

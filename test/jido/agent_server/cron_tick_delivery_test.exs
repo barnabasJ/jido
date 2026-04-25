@@ -26,7 +26,7 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
     def run(_signal, slice, _opts, _ctx) do
       slice = if is_map(slice), do: slice, else: %{}
       count = Map.get(slice, :tick_count, 0)
-      {:ok, Map.put(slice, :tick_count, count + 1)}
+      {:ok, Map.put(slice, :tick_count, count + 1), []}
     end
   end
 

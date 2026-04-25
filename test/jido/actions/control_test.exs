@@ -11,19 +11,21 @@ defmodule JidoTest.Actions.ControlTest do
 
   describe "Cancel" do
     test "sets status to failed with cancelled error" do
-      {:ok, result} = Control.Cancel.run(sig("cancel", %{reason: :cancelled}), %{}, %{}, %{})
+      {:ok, result, []} = Control.Cancel.run(sig("cancel", %{reason: :cancelled}), %{}, %{}, %{})
       assert result == %{status: :failed, error: {:cancelled, :cancelled}}
     end
 
     test "includes custom cancellation reason" do
-      {:ok, result} = Control.Cancel.run(sig("cancel", %{reason: :user_requested}), %{}, %{}, %{})
+      {:ok, result, []} =
+        Control.Cancel.run(sig("cancel", %{reason: :user_requested}), %{}, %{}, %{})
+
       assert result == %{status: :failed, error: {:cancelled, :user_requested}}
     end
   end
 
   describe "Noop" do
     test "returns empty state change" do
-      {:ok, result} = Control.Noop.run(sig("noop"), %{}, %{}, %{})
+      {:ok, result, []} = Control.Noop.run(sig("noop"), %{}, %{}, %{})
       assert result == %{}
     end
   end
@@ -119,7 +121,7 @@ defmodule JidoTest.Actions.ControlTest do
           data: %{signal_type: "response", payload: %{}}
         })
 
-      {:ok, result} = Control.Reply.run(input, %{}, %{}, %{})
+      {:ok, result, []} = Control.Reply.run(input, %{}, %{}, %{})
       assert result == %{replied_to: nil, warning: "No reply_to found in signal"}
     end
 
@@ -131,7 +133,7 @@ defmodule JidoTest.Actions.ControlTest do
           data: %{signal_type: "response", payload: %{}}
         })
 
-      {:ok, result} = Control.Reply.run(input, %{}, %{}, %{})
+      {:ok, result, []} = Control.Reply.run(input, %{}, %{}, %{})
       assert result == %{replied_to: nil, warning: "No reply_to found in signal"}
     end
   end

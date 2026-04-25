@@ -25,7 +25,7 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
       slice = slice || %{}
 
       {:ok, Map.put(slice, :step1_cmd_ran, true),
-       %JidoTest.SetStateDirective{key: :step1_directive_ran, value: true}}
+       [%JidoTest.SetStateDirective{key: :step1_directive_ran, value: true}]}
     end
   end
 
@@ -39,7 +39,8 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
       saw_directive = Map.get(slice, :step1_directive_ran, false)
 
       {:ok,
-       Map.merge(slice, %{step2_saw_cmd_ran: saw_cmd, step2_saw_directive_ran: saw_directive})}
+       Map.merge(slice, %{step2_saw_cmd_ran: saw_cmd, step2_saw_directive_ran: saw_directive}),
+       []}
     end
   end
 

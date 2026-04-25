@@ -6,20 +6,27 @@ defmodule Jido.Agent do
   - `new/1` - Create a new agent
   - `set/2` - Update state directly
   - `validate/2` - Validate agent state against schema
-  - `cmd/2` - Execute actions: `(agent, action) -> {agent, directives}`
+  - `cmd/2` - Execute actions: `(agent, action) -> {:ok, agent, [directive]} | {:error, reason}`
 
   ## Core Pattern
 
   The fundamental operation is `cmd/2`:
 
-      {agent, directives} = MyAgent.cmd(agent, MyAction)
-      {agent, directives} = MyAgent.cmd(agent, {MyAction, %{value: 42}})
-      {agent, directives} = MyAgent.cmd(agent, [Action1, Action2])
+      {:ok, agent, directives} = MyAgent.cmd(agent, MyAction)
+      {:ok, agent, directives} = MyAgent.cmd(agent, {MyAction, %{value: 42}})
+      {:ok, agent, directives} = MyAgent.cmd(agent, [Action1, Action2])
+
+  Multi-instruction `cmd` is **all-or-nothing**: the first `{:error, _}` halts
+  the batch, the input agent is returned unchanged, and no directives execute.
+  See [ADR 0018](../adr/0018-tagged-tuple-return-shape.md).
 
   Key invariants:
-  - The returned `agent` is **always complete** — no "apply directives" step needed
-  - `directives` are **external effects only** — they never modify agent state
-  - `cmd/2` is a **pure function** — given same inputs, always same outputs
+  - On success the returned `agent` is **always complete** — no "apply
+    directives" step needed.
+  - On error the input agent is returned via the caller's error branch;
+    successful prior instructions' slice changes vanish.
+  - `directives` are **external effects only** — they never modify agent state.
+  - `cmd/2` is a **pure function** — given same inputs, always same outputs.
 
   ## Action Formats
 
@@ -39,7 +46,8 @@ defmodule Jido.Agent do
   (see `Jido.Agent.Directive`):
 
   - `%Directive.Emit{}` - Dispatch a signal via `Jido.Signal.Dispatch`
-  - `%Directive.Error{}` - Signal an error (wraps `Jido.Error.t()`)
+  - `%Directive.Error{}` - Observability marker for log channels (no longer
+    produced by the cmd reducer; see ADR 0018)
   - `%Directive.Spawn{}` - Spawn a child process
   - `%Directive.Schedule{}` - Schedule a delayed message
   - `%Directive.RunInstruction{}` - Execute an instruction at runtime and route result to `cmd/2`
@@ -84,9 +92,12 @@ defmodule Jido.Agent do
       #   agent.state.<path>.counter  #=> 10
 
       # Execute actions
-      {agent, directives} = MyAgent.cmd(agent, MyAction)
-      {agent, directives} = MyAgent.cmd(agent, {MyAction, %{value: 42}})
-      {agent, directives} = MyAgent.cmd(agent, [Action1, Action2])
+      {:ok, agent, directives} = MyAgent.cmd(agent, MyAction)
+      {:ok, agent, directives} = MyAgent.cmd(agent, {MyAction, %{value: 42}})
+      {:ok, agent, directives} = MyAgent.cmd(agent, [Action1, Action2])
+
+      # Multi-instruction batches are atomic; the first error aborts the rest
+      {:error, %Jido.Error{}} = MyAgent.cmd(agent, [Action1, Failing, Action2])
 
       # Update state directly (flat attrs are auto-wrapped into the slice)
       {:ok, agent} = MyAgent.set(agent, %{status: :running})
@@ -248,7 +259,7 @@ defmodule Jido.Agent do
   @type directive :: Directive.t()
 
   @type agent_result :: {:ok, t()} | {:error, Error.t()}
-  @type cmd_result :: {t(), [directive()]}
+  @type cmd_result :: {:ok, t(), [directive()]} | {:error, term()}
 
   @agent_config_schema Zoi.object(
                          %{
@@ -800,12 +811,18 @@ defmodule Jido.Agent do
   def __quoted_cmd_function__ do
     quote location: :keep do
       @doc """
-      Execute actions against the agent. Pure: `(agent, action) -> {agent, directives}`
+      Execute actions against the agent. Pure:
+      `(agent, action) -> {:ok, agent, [directive]} | {:error, reason}`.
 
       Actions modify state; directives are external effects. The reducer runs
       each instruction by handing the action its declared slice (per `path:`)
       and writing the returned slice back wholesale (no deep-merge — every
       action returns the full new slice, see ADR 0014).
+
+      Multi-instruction `cmd` is all-or-nothing: the first `{:error, _}` halts
+      the batch and the input agent is returned through the caller's error
+      branch; successful prior instructions' slice changes vanish.
+      See [ADR 0018](../adr/0018-tagged-tuple-return-shape.md).
 
       ## Action Formats
 
@@ -826,12 +843,14 @@ defmodule Jido.Agent do
 
       ## Examples
 
-          {agent, directives} = #{inspect(__MODULE__)}.cmd(agent, MyAction)
-          {agent, directives} = #{inspect(__MODULE__)}.cmd(agent, {MyAction, %{value: 42}})
-          {agent, directives} = #{inspect(__MODULE__)}.cmd(agent, [Action1, Action2])
+          {:ok, agent, directives} = #{inspect(__MODULE__)}.cmd(agent, MyAction)
+          {:ok, agent, directives} = #{inspect(__MODULE__)}.cmd(agent, {MyAction, %{value: 42}})
+          {:ok, agent, directives} = #{inspect(__MODULE__)}.cmd(agent, [Action1, Action2])
+          {:error, %Jido.Error{}} = #{inspect(__MODULE__)}.cmd(agent, FailingAction)
 
           # With per-call options (merged into all instructions)
-          {agent, directives} = #{inspect(__MODULE__)}.cmd(agent, MyAction, timeout: 5000)
+          {:ok, agent, directives} =
+            #{inspect(__MODULE__)}.cmd(agent, MyAction, timeout: 5000)
       """
       @spec cmd(Agent.t(), Agent.action()) :: Agent.cmd_result()
       def cmd(%Agent{} = agent, action), do: cmd(agent, action, [])
@@ -858,21 +877,24 @@ defmodule Jido.Agent do
             __run_cmd_loop__(agent, instructions, jido_instance)
 
           {:error, reason} ->
-            error = Jido.Error.validation_error("Invalid action", %{reason: reason})
-            {agent, [%AgentDirective.Error{error: error, context: :normalize}]}
+            {:error, Jido.Error.validation_error("Invalid action", %{reason: reason})}
         end
       end
 
-      defp __run_cmd_loop__(agent, instructions, jido_instance) do
-        {final_agent, reversed_directives} =
-          Enum.reduce(instructions, {agent, []}, fn instruction, {acc_agent, acc_directives} ->
-            {new_agent, new_directives} =
-              __run_instruction__(acc_agent, instruction, jido_instance)
+      # All-or-nothing batch: the first {:error, _} halts the batch, the
+      # original agent is returned via the caller's error branch, and the
+      # accumulated directives are discarded.
+      defp __run_cmd_loop__(initial_agent, instructions, jido_instance) do
+        Enum.reduce_while(instructions, {:ok, initial_agent, []}, fn
+          instruction, {:ok, acc_agent, acc_dirs} ->
+            case __run_instruction__(acc_agent, instruction, jido_instance) do
+              {:ok, new_agent, new_dirs} ->
+                {:cont, {:ok, new_agent, acc_dirs ++ List.wrap(new_dirs)}}
 
-            {new_agent, Enum.reverse(new_directives) ++ acc_directives}
-          end)
-
-        {final_agent, Enum.reverse(reversed_directives)}
+              {:error, _reason} = err ->
+                {:halt, err}
+            end
+        end)
       end
 
       defp __run_instruction__(agent, %Instruction{action: action} = instruction, jido_instance) do
@@ -891,15 +913,14 @@ defmodule Jido.Agent do
         exec_opts = ObserveConfig.action_exec_opts(jido_instance, instruction.opts)
 
         case Jido.Exec.run(%{instruction | opts: exec_opts}) do
-          {:ok, new_slice} when is_map(new_slice) ->
-            __apply_slice_result__(agent, slice_path, new_slice, [])
-
           {:ok, new_slice, effects} when is_map(new_slice) ->
-            __apply_slice_result__(agent, slice_path, new_slice, List.wrap(effects))
+            {new_agent, dirs} =
+              __apply_slice_result__(agent, slice_path, new_slice, List.wrap(effects))
+
+            {:ok, new_agent, dirs}
 
           {:error, reason} ->
-            error = Jido.Error.execution_error("Instruction failed", details: %{reason: reason})
-            {agent, [%AgentDirective.Error{error: error, context: :instruction}]}
+            {:error, Jido.Error.from_term(reason)}
         end
       end
 

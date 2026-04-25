@@ -83,17 +83,11 @@ defmodule Jido.Exec do
           optional(:monitor_ref) => reference()
         }
 
-  # Execution result types
-  @type exec_success :: {:ok, map()}
-  @type exec_success_dir :: {:ok, map(), any()}
-  @type exec_error :: {:error, Exception.t()}
-  @type exec_error_dir :: {:error, Exception.t(), any()}
+  # Execution result types — see ADR 0018
+  @type exec_success :: {:ok, map(), [Jido.Agent.Directive.t()]}
+  @type exec_error :: {:error, term()}
 
-  @type exec_result ::
-          exec_success
-          | exec_success_dir
-          | exec_error
-          | exec_error_dir
+  @type exec_result :: exec_success | exec_error
 
   @doc """
   Executes a Action synchronously with the given parameters and context.
@@ -118,19 +112,20 @@ defmodule Jido.Exec do
 
   ## Returns
 
-  - `{:ok, result}` if the Action executes successfully.
+  - `{:ok, slice, [directive]}` on success — always a 3-tuple, even when no
+    directives are emitted. See [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md).
   - `{:error, reason}` if an error occurs during execution.
 
   ## Examples
 
       iex> Jido.Exec.run(MyAction, %{input: "value"}, %{user_id: 123})
-      {:ok, %{result: "processed value"}}
+      {:ok, %{result: "processed value"}, []}
 
       iex> Jido.Exec.run(MyAction, %{invalid: "input"}, %{}, timeout: 1000)
       {:error, %Jido.Action.Error{type: :validation_error, message: "Invalid input"}}
 
       iex> Jido.Exec.run(MyAction, %{input: "value"}, %{}, log_level: :debug)
-      {:ok, %{result: "processed value"}}
+      {:ok, %{result: "processed value"}, []}
 
       # Access action metadata in the action:
       # defmodule MyAction do
@@ -141,7 +136,7 @@ defmodule Jido.Exec do
       #
       #   def run(_signal, slice, _opts, ctx) do
       #     metadata = Map.get(ctx, :action_metadata)
-      #     {:ok, %{name: metadata.name, version: metadata.vsn}}
+      #     {:ok, %{name: metadata.name, version: metadata.vsn}, []}
       #   end
       # end
   """
@@ -347,23 +342,8 @@ defmodule Jido.Exec do
           ) :: exec_result
     defp do_run_with_retry(action, params, context, opts, retry_count, max_retries, backoff) do
       case do_run(action, params, context, opts) do
-        {:ok, result} ->
-          {:ok, result}
-
-        {:ok, result, other} ->
-          {:ok, result, other}
-
-        {:error, reason, other} ->
-          maybe_retry(
-            action,
-            params,
-            context,
-            opts,
-            retry_count,
-            max_retries,
-            backoff,
-            {:error, reason, other}
-          )
+        {:ok, result, dirs} ->
+          {:ok, result, dirs}
 
         {:error, reason} ->
           maybe_retry(
@@ -440,17 +420,11 @@ defmodule Jido.Exec do
           end
 
         case result do
-          {:ok, _result} = success ->
-            success
-
-          {:ok, _result, _other} = success ->
+          {:ok, _result, _dirs} = success ->
             success
 
           {:error, %Jido.Action.Error.TimeoutError{}} = timeout_err ->
             timeout_err
-
-          {:error, error, other} ->
-            handle_action_error(action, params, budgeted_context, {error, other}, opts)
 
           {:error, error} ->
             handle_action_error(action, params, budgeted_context, error, opts)
@@ -462,11 +436,11 @@ defmodule Jido.Exec do
             action(),
             params(),
             context(),
-            Exception.t() | {Exception.t(), any()},
+            Exception.t(),
             run_opts()
           ) :: exec_result
-    defp handle_action_error(action, params, context, error_or_tuple, opts) do
-      Compensation.handle_error(action, params, context, error_or_tuple, opts)
+    defp handle_action_error(action, params, context, error, opts) do
+      Compensation.handle_error(action, params, context, error, opts)
     end
 
     @spec execute_action_with_timeout(
@@ -715,38 +689,27 @@ defmodule Jido.Exec do
     defp maybe_put(map, _key, nil), do: map
     defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
-    # Handle successful results with extra data
-    defp handle_action_result({:ok, result, other}, action, log_level, opts) do
-      validate_and_log_success(action, result, log_level, opts, other)
+    # Per ADR 0018, actions return `{:ok, slice, [directive]}` or
+    # `{:error, reason}`. Always a 3-tuple on success, with the directive
+    # list defaulting to []. Anything else is rejected as a contract
+    # violation with a structured ExecutionError.
+
+    defp handle_action_result({:ok, result, dirs}, action, log_level, opts) do
+      validate_and_log_success(action, result, log_level, opts, List.wrap(dirs))
     end
 
-    # Handle successful results
-    defp handle_action_result({:ok, result}, action, log_level, opts) do
-      validate_and_log_success(action, result, log_level, opts, nil)
-    end
-
-    # Handle errors with extra data
-    defp handle_action_result({:error, reason, other}, action, log_level, _opts) do
-      Telemetry.cond_log_error(log_level, action, reason)
-      {:error, reason, other}
-    end
-
-    # Handle exception errors
     defp handle_action_result({:error, %_{} = error}, action, log_level, _opts)
          when is_exception(error) do
       Telemetry.cond_log_error(log_level, action, error)
       {:error, error}
     end
 
-    # Handle generic errors — normalize reason into a well-formed
-    # ExecutionFailureError with a string message and structured details.
     defp handle_action_result({:error, reason}, action, log_level, _opts) do
       Telemetry.cond_log_error(log_level, action, reason)
       {message, details} = extract_error_fields(reason)
       {:error, Error.execution_error(message, details)}
     end
 
-    # Handle unexpected return shapes
     defp handle_action_result(unexpected_result, action, log_level, _opts) do
       error = Error.execution_error("Unexpected return shape: #{inspect(unexpected_result)}")
       Telemetry.cond_log_error(log_level, action, error)
@@ -766,35 +729,16 @@ defmodule Jido.Exec do
     defp extract_error_fields(reason) when is_map(reason), do: {inspect(reason), reason}
     defp extract_error_fields(reason), do: {inspect(reason), %{}}
 
-    # Validate output and log success, with optional extra data
-    defp validate_and_log_success(action, result, log_level, opts, other) do
+    defp validate_and_log_success(action, result, log_level, opts, dirs) do
       case Validator.validate_output(action, result, opts) do
         {:ok, validated_result} ->
-          log_validated_success(action, validated_result, log_level, other)
+          Telemetry.cond_log_end(log_level, action, {:ok, validated_result, dirs})
+          {:ok, validated_result, dirs}
 
         {:error, validation_error} ->
-          log_validation_failure(action, validation_error, log_level, other)
+          Telemetry.cond_log_validation_failure(log_level, action, validation_error)
+          {:error, validation_error}
       end
-    end
-
-    defp log_validated_success(action, validated_result, log_level, nil) do
-      Telemetry.cond_log_end(log_level, action, {:ok, validated_result})
-      {:ok, validated_result}
-    end
-
-    defp log_validated_success(action, validated_result, log_level, other) do
-      Telemetry.cond_log_end(log_level, action, {:ok, validated_result, other})
-      {:ok, validated_result, other}
-    end
-
-    defp log_validation_failure(action, validation_error, log_level, nil) do
-      Telemetry.cond_log_validation_failure(log_level, action, validation_error)
-      {:error, validation_error}
-    end
-
-    defp log_validation_failure(action, validation_error, log_level, other) do
-      Telemetry.cond_log_validation_failure(log_level, action, validation_error)
-      {:error, validation_error, other}
     end
 
     # Handle exceptions raised during action execution

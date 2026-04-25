@@ -66,7 +66,7 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
     else
       {:error, reason} ->
         Logger.warning("pod_bus: skipped auto-subscribe — #{reason}")
-        {:ok, %{}}
+        {:ok, %{}, []}
     end
   end
 

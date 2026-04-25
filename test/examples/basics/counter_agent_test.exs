@@ -29,7 +29,7 @@ defmodule JidoExampleTest.CounterAgentTest do
 
     def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       current = Map.get(slice, :counter, 0)
-      {:ok, %{counter: current + amount}}
+      {:ok, %{counter: current + amount}, []}
     end
   end
 
@@ -43,7 +43,7 @@ defmodule JidoExampleTest.CounterAgentTest do
 
     def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       current = Map.get(slice, :counter, 0)
-      {:ok, %{counter: current - amount}}
+      {:ok, %{counter: current - amount}, []}
     end
   end
 
@@ -54,7 +54,7 @@ defmodule JidoExampleTest.CounterAgentTest do
       schema: []
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{counter: 0}}
+      {:ok, %{counter: 0}, []}
     end
   end
 
@@ -98,7 +98,8 @@ defmodule JidoExampleTest.CounterAgentTest do
     test "cmd/2 returns updated immutable agent" do
       agent = CounterAgent.new()
 
-      {updated_agent, directives} = CounterAgent.cmd(agent, {IncrementAction, %{amount: 5}})
+      {:ok, updated_agent, directives} =
+        CounterAgent.cmd(agent, {IncrementAction, %{amount: 5}})
 
       assert updated_agent.state.domain.counter == 5
       assert directives == []
@@ -108,7 +109,7 @@ defmodule JidoExampleTest.CounterAgentTest do
     test "cmd/2 with default action params" do
       agent = CounterAgent.new(state: %{counter: 10})
 
-      {updated_agent, _directives} = CounterAgent.cmd(agent, IncrementAction)
+      {:ok, updated_agent, _directives} = CounterAgent.cmd(agent, IncrementAction)
 
       assert updated_agent.state.domain.counter == 11
     end
@@ -116,9 +117,9 @@ defmodule JidoExampleTest.CounterAgentTest do
     test "multiple cmd/2 calls chain state updates" do
       agent = CounterAgent.new()
 
-      {agent, []} = CounterAgent.cmd(agent, {IncrementAction, %{amount: 10}})
-      {agent, []} = CounterAgent.cmd(agent, {IncrementAction, %{amount: 5}})
-      {agent, []} = CounterAgent.cmd(agent, {DecrementAction, %{amount: 3}})
+      {:ok, agent, []} = CounterAgent.cmd(agent, {IncrementAction, %{amount: 10}})
+      {:ok, agent, []} = CounterAgent.cmd(agent, {IncrementAction, %{amount: 5}})
+      {:ok, agent, []} = CounterAgent.cmd(agent, {DecrementAction, %{amount: 3}})
 
       assert agent.state.domain.counter == 12
     end
@@ -126,7 +127,7 @@ defmodule JidoExampleTest.CounterAgentTest do
     test "cmd/2 with list of actions executes all in sequence" do
       agent = CounterAgent.new()
 
-      {agent, directives} =
+      {:ok, agent, directives} =
         CounterAgent.cmd(agent, [
           {IncrementAction, %{amount: 10}},
           {IncrementAction, %{amount: 5}},
@@ -140,7 +141,7 @@ defmodule JidoExampleTest.CounterAgentTest do
     test "reset action restores default value" do
       agent = CounterAgent.new(state: %{counter: 100})
 
-      {agent, []} = CounterAgent.cmd(agent, ResetAction)
+      {:ok, agent, []} = CounterAgent.cmd(agent, ResetAction)
 
       assert agent.state.domain.counter == 0
     end
@@ -150,7 +151,7 @@ defmodule JidoExampleTest.CounterAgentTest do
     test "action with valid params succeeds" do
       agent = CounterAgent.new()
 
-      {agent, []} = CounterAgent.cmd(agent, {IncrementAction, %{amount: 42}})
+      {:ok, agent, []} = CounterAgent.cmd(agent, {IncrementAction, %{amount: 42}})
 
       assert agent.state.domain.counter == 42
     end
@@ -158,7 +159,7 @@ defmodule JidoExampleTest.CounterAgentTest do
     test "action uses default when param omitted" do
       agent = CounterAgent.new()
 
-      {agent, []} = CounterAgent.cmd(agent, {IncrementAction, %{}})
+      {:ok, agent, []} = CounterAgent.cmd(agent, {IncrementAction, %{}})
 
       assert agent.state.domain.counter == 1
     end

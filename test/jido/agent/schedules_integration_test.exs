@@ -9,7 +9,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
 
     def run(_signal, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
-      {:ok, %{tick_count: count + 1}}
+      {:ok, %{tick_count: count + 1}, []}
     end
   end
 

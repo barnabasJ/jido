@@ -46,7 +46,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
 
     def run(%Jido.Signal{data: %{amount: amount}}, _slice, _opts, _ctx) do
       if amount > 0 do
-        {:ok, %{validated: true, amount: amount}}
+        {:ok, %{validated: true, amount: amount}, []}
       else
         {:error, Jido.Error.validation_error("Amount must be positive", field: :amount)}
       end
@@ -67,7 +67,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       if attempts <= fail_count do
         {:error, Jido.Error.execution_error("Simulated failure", details: %{attempt: attempts})}
       else
-        {:ok, %{attempts: attempts, status: :success, result: "completed"}}
+        {:ok, %{attempts: attempts, status: :success, result: "completed"}, []}
       end
     end
   end
@@ -79,7 +79,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       schema: []
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{status: :recovered, error: nil, error_context: nil}}
+      {:ok, %{status: :recovered, error: nil, error_context: nil}, []}
     end
   end
 
@@ -100,7 +100,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       current_attempts = Map.get(slice, :attempts, 0)
 
       {:ok, %{status: :failed, error: message, error_context: ctx, attempts: current_attempts},
-       error_directive}
+       [error_directive]}
     end
   end
 
@@ -116,7 +116,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       attempts = Map.get(slice, :attempts, 0) + 1
 
       if attempts >= max do
-        {:ok, %{status: :exhausted, attempts: attempts, result: :max_retries_reached}}
+        {:ok, %{status: :exhausted, attempts: attempts, result: :max_retries_reached}, []}
       else
         retry_signal = Signal.new!("retry", %{}, source: "/retry")
 
@@ -125,7 +125,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
           message: retry_signal
         }
 
-        {:ok, %{status: :retrying, attempts: attempts}, schedule}
+        {:ok, %{status: :retrying, attempts: attempts}, [schedule]}
       end
     end
   end
@@ -156,10 +156,10 @@ defmodule JidoExampleTest.ErrorHandlingTest do
 
       cond do
         attempts >= stored_succeed ->
-          {:ok, %{status: :success, attempts: attempts, result: "finally succeeded"}}
+          {:ok, %{status: :success, attempts: attempts, result: "finally succeeded"}, []}
 
         attempts >= stored_max ->
-          {:ok, %{status: :exhausted, attempts: attempts, result: :max_retries_reached}}
+          {:ok, %{status: :exhausted, attempts: attempts, result: :max_retries_reached}, []}
 
         true ->
           retry_signal = Signal.new!("retry", %{}, source: "/retry")
@@ -175,7 +175,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
              attempts: attempts,
              stored_max_attempts: stored_max,
              stored_succeed_on: stored_succeed
-           }, schedule}
+           }, [schedule]}
       end
     end
   end
@@ -216,21 +216,20 @@ defmodule JidoExampleTest.ErrorHandlingTest do
   # ===========================================================================
 
   describe "action returning {:error, reason}" do
-    test "produces error directive when validation fails" do
+    test "produces error when validation fails" do
       agent = ErrorHandlingAgent.new()
 
-      {updated_agent, directives} =
-        ErrorHandlingAgent.cmd(agent, {ValidateAction, %{amount: -5}})
+      assert {:error, error} =
+               ErrorHandlingAgent.cmd(agent, {ValidateAction, %{amount: -5}})
 
-      assert updated_agent.state.domain.validated == false
-      assert [%Directive.Error{context: :instruction, error: error}] = directives
-      assert error.message == "Instruction failed"
+      assert %Jido.Error.ValidationError{} = error
+      assert error.message == "Amount must be positive"
     end
 
     test "succeeds when validation passes" do
       agent = ErrorHandlingAgent.new()
 
-      {updated_agent, directives} =
+      {:ok, updated_agent, directives} =
         ErrorHandlingAgent.cmd(agent, {ValidateAction, %{amount: 100}})
 
       assert updated_agent.state.domain.validated == true
@@ -243,7 +242,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
     test "action can emit error directive with context" do
       agent = ErrorHandlingAgent.new()
 
-      {updated_agent, directives} =
+      {:ok, updated_agent, directives} =
         ErrorHandlingAgent.cmd(
           agent,
           {TrackErrorAction, %{error_message: "Something broke", error_context: :processing}}
@@ -258,14 +257,14 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       assert error.message == "Something broke"
     end
 
-    test "error directive includes Jido.Error with details" do
+    test "error from {:error, reason} return is surfaced as cmd error" do
       agent = ErrorHandlingAgent.new()
 
-      {_agent, directives} =
-        ErrorHandlingAgent.cmd(agent, {RetryableAction, %{fail_count: 1}})
+      assert {:error, error} =
+               ErrorHandlingAgent.cmd(agent, {RetryableAction, %{fail_count: 1}})
 
-      assert [%Directive.Error{error: error}] = directives
-      assert error.message == "Instruction failed"
+      assert %Jido.Error.ExecutionError{} = error
+      assert error.message == "Simulated failure"
     end
   end
 
@@ -295,7 +294,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
           state: %{status: :failed, error: "previous error", error_context: :old}
         )
 
-      {updated_agent, directives} = ErrorHandlingAgent.cmd(agent, RecoverAction)
+      {:ok, updated_agent, directives} = ErrorHandlingAgent.cmd(agent, RecoverAction)
 
       assert updated_agent.state.domain.status == :recovered
       assert updated_agent.state.domain.error == nil
@@ -322,7 +321,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
     test "agent state tracks error information" do
       agent = ErrorHandlingAgent.new()
 
-      {updated_agent, _directives} =
+      {:ok, updated_agent, _directives} =
         ErrorHandlingAgent.cmd(
           agent,
           {TrackErrorAction, %{error_message: "Database connection failed", error_context: :db}}
@@ -336,7 +335,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
     test "error state preserved across operations" do
       agent = ErrorHandlingAgent.new()
 
-      {agent_with_error, _} =
+      {:ok, agent_with_error, _} =
         ErrorHandlingAgent.cmd(
           agent,
           {TrackErrorAction, %{error_message: "API timeout", error_context: :api}}
@@ -388,15 +387,15 @@ defmodule JidoExampleTest.ErrorHandlingTest do
     test "pure cmd/2 tracks attempt count correctly" do
       agent = ErrorHandlingAgent.new()
 
-      {agent, _} = ErrorHandlingAgent.cmd(agent, {BoundedRetryAction, %{max_attempts: 3}})
+      {:ok, agent, _} = ErrorHandlingAgent.cmd(agent, {BoundedRetryAction, %{max_attempts: 3}})
       assert agent.state.domain.attempts == 1
       assert agent.state.domain.status == :retrying
 
-      {agent, _} = ErrorHandlingAgent.cmd(agent, {BoundedRetryAction, %{max_attempts: 3}})
+      {:ok, agent, _} = ErrorHandlingAgent.cmd(agent, {BoundedRetryAction, %{max_attempts: 3}})
       assert agent.state.domain.attempts == 2
       assert agent.state.domain.status == :retrying
 
-      {agent, _} = ErrorHandlingAgent.cmd(agent, {BoundedRetryAction, %{max_attempts: 3}})
+      {:ok, agent, _} = ErrorHandlingAgent.cmd(agent, {BoundedRetryAction, %{max_attempts: 3}})
       assert agent.state.domain.attempts == 3
       assert agent.state.domain.status == :exhausted
       assert agent.state.domain.result == :max_retries_reached
