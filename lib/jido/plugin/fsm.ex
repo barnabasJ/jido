@@ -60,7 +60,7 @@ defmodule Jido.Plugin.FSM do
   }
   @default_terminal_states ["completed", "failed"]
 
-  use Jido.Plugin,
+  use Jido.Slice,
     name: "fsm",
     path: :fsm,
     actions: [Jido.Plugin.FSM.Transition],
