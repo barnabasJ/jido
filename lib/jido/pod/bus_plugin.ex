@@ -4,14 +4,14 @@ defmodule Jido.Pod.BusPlugin do
 
   When a pod child boots, `Jido.Pod.Runtime` passes the pod as the child's
   parent, so the child emits `jido.agent.child.started` back to the pod
-  during its post-init hook. This plugin routes that signal to an action
-  that subscribes the child's pid to every path declared by the child
-  agent's `signal_routes/0`, against the bus named in the plugin's config.
+  during its post-init hook. This slice routes that signal to an action that
+  subscribes the child's pid to every path declared by the child agent's
+  `signal_routes/0`, against the bus named in the slice's config.
 
-  The plugin does not start the bus — the caller is responsible for
-  starting `Jido.Signal.Bus` (or wiring one up via a Jido instance).
-  The plugin assumes it already exists and is addressable by the
-  `bus` atom at subscription time.
+  The slice does not start the bus — the caller is responsible for starting
+  `Jido.Signal.Bus` (or wiring one up via a Jido instance). The slice
+  assumes the bus already exists and is addressable by the configured atom
+  at subscription time.
 
   ## Usage
 
@@ -25,63 +25,44 @@ defmodule Jido.Pod.BusPlugin do
           }
       end
 
-  With the pod running, publishing a signal to `:fulfillment_bus` on a
-  path that matches one of the children's `signal_routes:` will be
-  dispatched to that child by the bus — no manual `Bus.subscribe/3`
-  calls required.
-
-  ## Scope
-
-  This plugin handles pod children started via the pod's own `ensure_node`
-  / `reconcile` path (which uses `Jido.Agent.InstanceManager`). It relies
-  on `jido.agent.child.started` being emitted, which `Jido.Pod.Runtime`
-  already takes care of on the parent-adoption path.
-
   ## Routes
 
-  The plugin uses the `signal_routes/1` callback (rather than the
-  compile-time `signal_routes:` option) so the route is added to the
-  agent's signal router **without** the plugin name prefix — we're
-  hooking a system signal (`jido.agent.child.started`) that isn't in
-  our plugin's namespace.
+  The slice's `signal_routes:` are framework-namespaced (`jido.agent.*`) and
+  are added to the agent's signal router **without** the slice's own prefix —
+  see `Jido.Plugin.Routes.expand_route/2`, which leaves `jido.*` routes
+  unprefixed.
   """
 
   alias Jido.Pod.BusPlugin.AutoSubscribeChild
   alias Jido.Pod.BusPlugin.AutoUnsubscribeChild
 
-  use Jido.Plugin,
+  use Jido.Slice,
     name: "pod_bus",
     description: "Auto-subscribes pod children to a named signal bus.",
-    state_key: :__bus_wiring__,
+    path: :pod_bus,
     actions: [AutoSubscribeChild, AutoUnsubscribeChild],
+    signal_routes: [
+      {"jido.agent.child.started", AutoSubscribeChild},
+      {"jido.agent.child.exit", AutoUnsubscribeChild}
+    ],
     schema:
       Zoi.object(%{
         bus:
-          Zoi.atom(description: "Name of the Jido.Signal.Bus to subscribe children on."),
+          Zoi.atom(description: "Name of the Jido.Signal.Bus to subscribe children on.")
+          |> Zoi.refine({__MODULE__, :validate_bus_atom, []}),
         subscriptions:
           Zoi.map(description: "Per-tag subscription-id lists, used for cleanup on child.exit.")
           |> Zoi.default(%{})
       }),
     capabilities: [:bus_wiring]
 
-  @impl Jido.Plugin
-  def mount(_agent, %{bus: bus}) when is_atom(bus) and not is_nil(bus) do
-    {:ok, %{bus: bus, subscriptions: %{}}}
-  end
+  @doc false
+  @spec validate_bus_atom(atom(), keyword()) :: :ok | {:error, String.t()}
+  def validate_bus_atom(nil, _opts),
+    do: {:error, "Jido.Pod.BusPlugin requires a `:bus` atom; got nil"}
 
-  def mount(_agent, config) do
-    {:error,
-     "Jido.Pod.BusPlugin requires a `:bus` atom in its config, got: #{inspect(config)}"}
-  end
+  def validate_bus_atom(value, _opts) when is_atom(value), do: :ok
 
-  @impl Jido.Plugin
-  def signal_routes(_config) do
-    # Returned routes are added to the agent's signal router unprefixed —
-    # we want to match system signals (`jido.agent.child.started`,
-    # `jido.agent.child.exit`) verbatim, not under a `pod_bus.` prefix.
-    [
-      {"jido.agent.child.started", AutoSubscribeChild},
-      {"jido.agent.child.exit", AutoUnsubscribeChild}
-    ]
-  end
+  def validate_bus_atom(other, _opts),
+    do: {:error, "Jido.Pod.BusPlugin requires a `:bus` atom; got #{inspect(other)}"}
 end

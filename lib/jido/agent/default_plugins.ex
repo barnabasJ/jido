@@ -7,7 +7,7 @@ defmodule Jido.Agent.DefaultPlugins do
 
   1. **Package level** — Jido ships sensible defaults
   2. **Jido instance level** — `use Jido, default_plugins: [...]` or app config
-  3. **Agent level** — `default_plugins: %{state_key: false | Module | {Module, config}}`
+  3. **Agent level** — `default_plugins: %{path => false | Module | {Module, config}}`
 
   ## Framework Defaults
 
@@ -25,23 +25,23 @@ defmodule Jido.Agent.DefaultPlugins do
 
   ## Agent-Level Override
 
-  Agents use a map keyed by the default plugin's `state_key` atom:
+  Agents use a map keyed by the default plugin's `path` atom:
 
       use Jido.Agent,
         name: "my_agent",
-        default_plugins: %{__thread__: false}
+        default_plugins: %{thread: false}
 
   To replace a default with a custom implementation:
 
       use Jido.Agent,
         name: "my_agent",
-        default_plugins: %{__thread__: MyApp.CustomThreadPlugin}
+        default_plugins: %{thread: MyApp.CustomThreadPlugin}
 
   Or with configuration:
 
       use Jido.Agent,
         name: "my_agent",
-        default_plugins: %{__thread__: {MyApp.CustomThreadPlugin, %{max_entries: 100}}}
+        default_plugins: %{thread: {MyApp.CustomThreadPlugin, %{max_entries: 100}}}
 
   Or disable all defaults:
 
@@ -92,9 +92,9 @@ defmodule Jido.Agent.DefaultPlugins do
 
   - `nil` — no overrides, use all defaults as-is
   - `false` — disable all defaults
-  - `%{state_key => false}` — exclude the default plugin with that state_key
-  - `%{state_key => Module}` — replace with a different module
-  - `%{state_key => {Module, config}}` — replace with module and config
+  - `%{path => false}` — exclude the default plugin with that path
+  - `%{path => Module}` — replace with a different module
+  - `%{path => {Module, config}}` — replace with module and config
   """
   @spec apply_agent_overrides([module() | {module(), map()}], nil | false | map()) ::
           [module() | {module(), map() | keyword()}]
@@ -102,14 +102,14 @@ defmodule Jido.Agent.DefaultPlugins do
   def apply_agent_overrides(_defaults, false), do: []
 
   def apply_agent_overrides(defaults, overrides) when is_map(overrides) do
-    default_state_keys = build_state_key_index(defaults)
-    validate_override_keys!(overrides, default_state_keys)
+    default_paths = build_path_index(defaults)
+    validate_override_keys!(overrides, default_paths)
 
     Enum.flat_map(defaults, fn plugin_decl ->
       mod = extract_module(plugin_decl)
-      state_key = mod.state_key()
+      path = mod.path()
 
-      case Map.get(overrides, state_key) do
+      case Map.get(overrides, path) do
         nil -> [plugin_decl]
         false -> []
         replacement when is_atom(replacement) -> [replacement]
@@ -118,19 +118,19 @@ defmodule Jido.Agent.DefaultPlugins do
     end)
   end
 
-  defp build_state_key_index(defaults) do
+  defp build_path_index(defaults) do
     Enum.map(defaults, fn
-      mod when is_atom(mod) -> {mod.state_key(), mod}
-      {mod, _config} -> {mod.state_key(), mod}
+      mod when is_atom(mod) -> {mod.path(), mod}
+      {mod, _config} -> {mod.path(), mod}
     end)
     |> Map.new(fn {key, mod} -> {key, mod} end)
   end
 
-  defp validate_override_keys!(overrides, default_state_keys) do
-    invalid_keys = Map.keys(overrides) -- Map.keys(default_state_keys)
+  defp validate_override_keys!(overrides, default_paths) do
+    invalid_keys = Map.keys(overrides) -- Map.keys(default_paths)
 
     if invalid_keys != [] do
-      valid_keys = Map.keys(default_state_keys) |> Enum.map(&inspect/1) |> Enum.join(", ")
+      valid_keys = Map.keys(default_paths) |> Enum.map(&inspect/1) |> Enum.join(", ")
 
       raise CompileError,
         description:

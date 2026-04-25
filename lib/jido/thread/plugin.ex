@@ -1,47 +1,52 @@
 defmodule Jido.Thread.Plugin do
   @moduledoc """
-  Default singleton plugin for thread state management.
+  Default singleton slice for thread state management.
 
-  Declares ownership of the `:__thread__` state key in agent state.
-  This plugin does not initialize a thread by default — threads are
-  created on demand via `Jido.Thread.Agent.ensure/2`.
+  Owns the `:thread` slice key in agent state. The slice does not initialize
+  a thread by default — threads are attached on demand via
+  `Jido.Thread.Agent.ensure/2`.
 
   ## Singleton
 
-  This plugin is a singleton — it cannot be aliased or duplicated.
-  It is automatically included as a default plugin for all agents
-  unless explicitly disabled:
+  This slice is a singleton — it cannot be aliased or duplicated. It is
+  automatically included as a default plugin for all agents unless explicitly
+  disabled:
 
       use Jido.Agent,
         name: "minimal",
-        default_plugins: %{__thread__: false}
+        default_plugins: %{thread: false}
 
   ## State Key
 
-  The thread is stored at `agent.state[:__thread__]` as a `Jido.Thread` struct.
+  The thread is stored at `agent.state.thread` as a `Jido.Thread` struct.
   Access helpers are provided by `Jido.Thread.Agent`.
+
+  ## Persistence
+
+  When `Jido.Middleware.Persister` is attached, `externalize/1` strips a
+  `Jido.Thread` down to the small pointer (`%{id, rev}`) that is written to
+  the checkpoint. `reinstate/1` is a passthrough today — actual rehydration
+  happens via the existing `Jido.Persist.thaw/3` path, which is collapsed
+  into the middleware in a later commit.
   """
 
-  use Jido.Plugin,
+  alias Jido.Thread
+
+  use Jido.Slice,
     name: "thread",
-    state_key: :__thread__,
+    path: :thread,
     actions: [],
     singleton: true,
     description: "Thread state management for agent conversation history.",
     capabilities: [:thread]
 
-  alias Jido.Thread
+  @behaviour Jido.Persist.Transform
 
-  @impl Jido.Plugin
-  def mount(_agent, _config), do: {:ok, nil}
+  @impl Jido.Persist.Transform
+  def externalize(%Thread{id: id, rev: rev}), do: %{id: id, rev: rev}
+  def externalize(nil), do: nil
+  def externalize(other), do: other
 
-  @impl Jido.Plugin
-  def on_checkpoint(%Thread{id: id, rev: rev}, _ctx) do
-    {:externalize, :thread, %{id: id, rev: rev}}
-  end
-
-  def on_checkpoint(nil, _ctx), do: :keep
-
-  @impl Jido.Plugin
-  def on_restore(_pointer, _ctx), do: {:ok, nil}
+  @impl Jido.Persist.Transform
+  def reinstate(value), do: value
 end

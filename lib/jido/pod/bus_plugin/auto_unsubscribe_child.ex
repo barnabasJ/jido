@@ -29,7 +29,7 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
   def run(%Jido.Signal{data: %{tag: tag}}, agent_state, _opts, _ctx) do
     with {:ok, bus} <- fetch_bus(agent_state),
          sub_ids when is_list(sub_ids) <-
-           get_in(agent_state, [:__bus_wiring__, :subscriptions, tag]) do
+           get_in(agent_state, [:pod_bus, :subscriptions, tag]) do
       for sub_id <- sub_ids do
         case Bus.unsubscribe(bus, sub_id) do
           :ok ->
@@ -44,7 +44,7 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
 
       # Clear the per-tag entry from plugin state.
       {:ok, %{},
-       [%DeletePath{path: [:__bus_wiring__, :subscriptions, tag]}]}
+       [%DeletePath{path: [:pod_bus, :subscriptions, tag]}]}
     else
       _ ->
         # Nothing tracked for this tag; log and move on.
@@ -54,7 +54,7 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
   end
 
   defp fetch_bus(agent_state) do
-    case get_in(agent_state, [:__bus_wiring__, :bus]) do
+    case get_in(agent_state, [:pod_bus, :bus]) do
       bus when is_atom(bus) and not is_nil(bus) -> {:ok, bus}
       _ -> {:error, :no_bus}
     end

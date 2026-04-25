@@ -2,7 +2,7 @@ defmodule Jido.Memory do
   @moduledoc """
   An agent's mutable cognitive substrate — what the agent currently believes and wants.
 
-  Memory is stored under the reserved key `:__memory__` in `agent.state`. It
+  Memory is stored under the reserved key `:memory` in `agent.state`. It
   complements Thread (append-only episodic log) and Strategy (execution control)
   as the third pillar of agent cognition.
 

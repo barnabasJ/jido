@@ -1,10 +1,18 @@
 defmodule Jido.Pod.Plugin do
   @moduledoc """
-  Default singleton plugin for pod-wrapped agents.
+  Default singleton slice for pod-wrapped agents.
 
-  The plugin reserves the `:__pod__` state slice and persists the resolved
-  topology snapshot as ordinary agent state, which lets the existing
-  `Persist` and `Storage` adapters continue to work unchanged.
+  Owns the `:pod` slice key in agent state. Persists the resolved topology
+  snapshot as ordinary slice state so existing `Persist` and `Storage`
+  adapters keep working unchanged.
+
+  ## Initial state
+
+  Schema defaults seed the slice with `%{topology: nil, topology_version: 1,
+  mutation: %{...}, metadata: %{}}`. The owning agent module (typically built
+  via `use Jido.Pod`) is responsible for filling in `:topology` from its
+  declared topology — usually by passing
+  `state: %{pod: %{topology: ..., topology_version: ...}}` to `Agent.new/1`.
   """
 
   alias Jido.Pod.Actions.Mutate, as: MutateAction
@@ -12,14 +20,18 @@ defmodule Jido.Pod.Plugin do
   alias Jido.Pod.Actions.QueryTopology
   alias Jido.Pod.Topology
 
-  @state_key :__pod__
+  @path :pod
   @capability :pod
 
-  use Jido.Plugin,
+  use Jido.Slice,
     name: "pod",
-    state_key: @state_key,
+    path: @path,
     actions: [MutateAction, QueryNodes, QueryTopology],
-    signal_routes: [{"mutate", MutateAction}],
+    signal_routes: [
+      {"mutate", MutateAction},
+      {"jido.pod.query.nodes", QueryNodes},
+      {"jido.pod.query.topology", QueryTopology}
+    ],
     schema:
       Zoi.object(%{
         topology: Zoi.any(description: "Resolved pod topology.") |> Zoi.optional(),
@@ -34,22 +46,18 @@ defmodule Jido.Pod.Plugin do
           })
           |> Zoi.default(%{id: nil, status: :idle, report: nil, error: nil}),
         metadata:
-          Zoi.map(description: "Pod-level runtime metadata owned by the plugin.")
+          Zoi.map(description: "Pod-level runtime metadata owned by the slice.")
           |> Zoi.default(%{})
       }),
     capabilities: [@capability],
     singleton: true
 
   @doc false
-  @spec state_key_atom() :: atom()
-  def state_key_atom, do: @state_key
-
-  @doc false
   @spec capability() :: atom()
   def capability, do: @capability
 
   @doc """
-  Builds the canonical default state for a pod plugin.
+  Builds the canonical default state for a pod slice.
   """
   @spec build_state(module() | Topology.t(), map()) :: {:ok, map()} | {:error, term()}
   def build_state(%Topology{} = topology, overrides) when is_map(overrides) do
@@ -71,36 +79,9 @@ defmodule Jido.Pod.Plugin do
       true ->
         {:error,
          Jido.Error.validation_error(
-           "#{inspect(agent_module)} does not export topology/0 required by pod plugins."
+           "#{inspect(agent_module)} does not export topology/0 required by pod slices."
          )}
     end
-  end
-
-  @impl Jido.Plugin
-  def signal_routes(_config) do
-    # Unprefixed introspection routes — `jido.pod.query.*` lives in the
-    # system namespace, not the plugin's `pod.` prefix. Actions reply via
-    # `Jido.Signal.Call.reply/3` so callers do not need to read the pod's
-    # agent state directly.
-    [
-      {"jido.pod.query.nodes", QueryNodes},
-      {"jido.pod.query.topology", QueryTopology}
-    ]
-  end
-
-  @impl true
-  def mount(%{agent_module: agent_module}, config) when is_map(config) do
-    topology = Map.get(config, :topology, agent_module)
-    metadata = Map.get(config, :metadata, %{})
-    build_state(topology, %{metadata: metadata})
-  end
-
-  def mount(agent, _config) do
-    {:error,
-     Jido.Error.validation_error(
-       "Pod plugin mount expected an agent struct with agent_module.",
-       details: %{agent: agent}
-     )}
   end
 
   defp deep_merge(left, right) do

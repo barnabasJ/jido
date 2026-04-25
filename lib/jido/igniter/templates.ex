@@ -69,25 +69,22 @@ defmodule Jido.Igniter.Templates do
   @spec plugin_template(
           module :: String.t(),
           name :: String.t(),
-          state_key :: String.t(),
-          signal_patterns :: [String.t()]
+          path :: String.t(),
+          signal_routes :: [String.t()]
         ) :: String.t()
-  def plugin_template(module, name, state_key, signal_patterns) do
-    patterns_str = Enum.map_join(signal_patterns, ", ", &~s("#{&1}"))
+  def plugin_template(module, name, path, signal_routes) do
+    routes_str =
+      signal_routes
+      |> Enum.map_join(", ", &~s({"#{&1}", :todo}))
 
     """
     defmodule #{module} do
       use Jido.Plugin,
         name: "#{name}",
-        state_key: :#{state_key},
+        path: :#{path},
         actions: [],
         schema: Zoi.object(%{}),
-        signal_patterns: [#{patterns_str}]
-
-      @impl Jido.Plugin
-      def signal_routes(_config) do
-        []
-      end
+        signal_routes: [#{routes_str}]
     end
     """
   end
@@ -110,12 +107,6 @@ defmodule Jido.Igniter.Templates do
           spec = #{alias_name}.plugin_spec(%{})
           assert spec.module == #{alias_name}
           assert spec.name == #{alias_name}.name()
-        end
-      end
-
-      describe "mount/2" do
-        test "returns default state" do
-          assert {:ok, %{}} = #{alias_name}.mount(nil, %{})
         end
       end
     end

@@ -20,7 +20,7 @@ defmodule Jido.Pod.Runtime do
 
   defguardp is_node_name(name) when is_atom(name) or is_binary(name)
 
-  @pod_state_key Plugin.state_key_atom()
+  @pod_state_key Plugin.path()
 
   @doc """
   Returns the pod's current topology + per-node runtime snapshots.

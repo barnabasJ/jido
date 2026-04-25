@@ -10,7 +10,7 @@ defmodule Jido.Pod.TopologyState do
   alias Jido.Signal
   alias Jido.Signal.Call
 
-  @pod_state_key Plugin.state_key_atom()
+  @pod_state_key Plugin.path()
 
   @spec pod_plugin_instance(module()) :: {:ok, PluginInstance.t()} | {:error, term()}
   def pod_plugin_instance(agent_module) when is_atom(agent_module) do

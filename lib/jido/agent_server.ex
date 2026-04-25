@@ -1735,6 +1735,14 @@ defmodule Jido.AgentServer do
   end
 
   defp start_plugin_spec_children(state, plugin_module, config) do
+    if function_exported?(plugin_module, :child_spec, 1) do
+      do_start_plugin_spec_children(state, plugin_module, config)
+    else
+      state
+    end
+  end
+
+  defp do_start_plugin_spec_children(state, plugin_module, config) do
     case plugin_module.child_spec(config) do
       nil ->
         state

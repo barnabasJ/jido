@@ -184,16 +184,22 @@ defmodule Jido.Plugin.Routes do
   end
 
   defp expand_route({path, target}, prefix) do
-    {prefix_path(prefix, path), target, []}
+    {effective_path(prefix, path), target, []}
   end
 
   defp expand_route({path, target, opts}, prefix) when is_list(opts) do
-    {prefix_path(prefix, path), target, opts}
+    {effective_path(prefix, path), target, opts}
   end
 
   defp expand_route({path, target, priority}, prefix) when is_integer(priority) do
-    {prefix_path(prefix, path), target, [priority: priority]}
+    {effective_path(prefix, path), target, [priority: priority]}
   end
+
+  # Routes living in the framework's own `jido.*` namespace are absolute —
+  # they are added to the agent's signal router verbatim, without the
+  # plugin's `route_prefix`. Plugin-namespaced routes get the standard prefix.
+  defp effective_path(_prefix, "jido." <> _ = absolute), do: absolute
+  defp effective_path(prefix, path), do: prefix_path(prefix, path)
 
   defp expand_legacy_routes(manifest, prefix) do
     patterns = manifest.signal_patterns || []

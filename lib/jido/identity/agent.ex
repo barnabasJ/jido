@@ -2,13 +2,13 @@ defmodule Jido.Identity.Agent do
   @moduledoc """
   Helper for managing Identity in agent state.
 
-  Identity is stored at the reserved key `:__identity__` in `agent.state`.
+  Identity is stored at the reserved key `:identity` in `agent.state`.
   """
 
   alias Jido.Agent
   alias Jido.Identity
 
-  @key :__identity__
+  @key :identity
 
   @doc "Returns the reserved key for identity storage"
   @spec key() :: atom()

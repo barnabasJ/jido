@@ -2,8 +2,8 @@ defmodule Jido.Memory.Agent do
   @moduledoc """
   Helper for managing Memory in agent state.
 
-  Memory is stored at the reserved key `:__memory__` in `agent.state`.
-  This follows the same pattern as `:__thread__` for thread state.
+  Memory is stored at the reserved key `:memory` in `agent.state`.
+  This follows the same pattern as `:thread` for thread state.
 
   Provides generic space operations only. Domain-specific wrappers
   (world model, task lists, etc.) should be built in your own modules
@@ -28,7 +28,7 @@ defmodule Jido.Memory.Agent do
   alias Jido.Memory
   alias Jido.Memory.Space
 
-  @key :__memory__
+  @key :memory
 
   # --- Container Operations ---
 

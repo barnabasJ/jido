@@ -46,11 +46,11 @@ if Code.ensure_loaded?(Igniter) do
       module_name = positional[:module]
       module = IgniterModule.parse(module_name)
       name = Helpers.module_to_name(module_name)
-      state_key = name
+      path = name
 
       signal_patterns = Helpers.parse_list(options[:signals])
 
-      contents = Templates.plugin_template(inspect(module), name, state_key, signal_patterns)
+      contents = Templates.plugin_template(inspect(module), name, path, signal_patterns)
 
       test_module_name = "JidoTest.#{module_name |> String.replace(~r/^.*?\./, "")}"
       test_module = IgniterModule.parse(test_module_name)

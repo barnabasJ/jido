@@ -2,7 +2,7 @@ defmodule Jido.Thread.Agent do
   @moduledoc """
   Helper for managing Thread in agent state.
 
-  Thread is stored at the reserved key `:__thread__` in `agent.state`.
+  Thread is stored at the reserved key `:thread` in `agent.state`.
 
   ## Example
 
@@ -21,7 +21,7 @@ defmodule Jido.Thread.Agent do
   alias Jido.Agent
   alias Jido.Thread
 
-  @key :__thread__
+  @key :thread
 
   @doc "Returns the reserved key for thread storage"
   @spec key() :: atom()

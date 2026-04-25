@@ -645,11 +645,9 @@ defmodule Jido.Agent do
   @spec __quoted_new_function__() :: Macro.t()
   def __quoted_new_function__ do
     new_fn = __quoted_new_fn_definition__()
-    mount_plugins_fn = __quoted_mount_plugins_definition__()
 
     quote location: :keep do
       unquote(new_fn)
-      unquote(mount_plugins_fn)
     end
   end
 
@@ -681,7 +679,7 @@ defmodule Jido.Agent do
             other -> to_string(other)
           end
 
-        agent = %Agent{
+        %Agent{
           id: id,
           agent_module: __MODULE__,
           name: name(),
@@ -692,39 +690,29 @@ defmodule Jido.Agent do
           schema: schema(),
           state: initial_state
         }
-
-        # Run plugin mount hooks (pure initialization)
-        __mount_plugins__(agent)
       end
 
+      # Seeds the initial agent state from declared slices. The agent's own
+      # slice (under `path()`) gets schema defaults plus user-supplied state.
+      # Each declared plugin/slice gets `(plugin_config + user-supplied
+      # state_for_path)` shallow-merged, then validated through the slice's
+      # Zoi schema if present. See ADR 0014 (no deep-merge, no mount/2).
       defp __build_initial_state__(opts) do
-        # Build initial state from base schema defaults
-        base_defaults = AgentState.defaults_from_schema(@validated_opts[:schema])
-
-        # Nest user-domain defaults under the agent's declared slice path.
-        base_defaults = %{path() => base_defaults}
-
-        # Build plugin defaults nested under their state_keys
-        # Skip plugins with nil schema (they manage their own state lifecycle)
-        plugin_defaults =
-          @plugin_specs
-          |> Enum.reject(fn spec -> spec.schema == nil end)
-          |> Enum.map(fn spec ->
-            plugin_state_defaults = Jido.Agent.Schema.defaults_from_zoi_schema(spec.schema)
-            {spec.state_key, plugin_state_defaults}
-          end)
-          |> Map.new()
-
-        schema_defaults = Map.merge(base_defaults, plugin_defaults)
-
-        # Ergonomic auto-wrap (ADR 0014): if the user passes a flat map like
-        # `state: %{counter: 5}` we treat it as "my domain slice" and nest it
-        # under the agent's path. If they pass an explicit slice layout
-        # like `state: %{<path>: %{...}, <plugin_state_key>: %{...}}` we take
-        # it as-is.
         user_state = __wrap_user_state__(opts[:state] || %{})
 
-        DeepMerge.deep_merge(schema_defaults, user_state)
+        own_path = path()
+        own_user = Map.get(user_state, own_path, %{})
+        own_slice = Jido.Agent.__seed_own_slice__(@validated_opts[:schema], own_user)
+
+        plugin_slices =
+          Enum.reduce(@plugin_instances, %{}, fn instance, acc ->
+            user_for_slice = Map.get(user_state, instance.state_key, %{})
+            merged_input = Map.merge(instance.config || %{}, user_for_slice)
+            slice = Jido.Agent.__seed_plugin_slice__(instance.module, merged_input)
+            Map.put(acc, instance.state_key, slice)
+          end)
+
+        Map.put(plugin_slices, own_path, own_slice)
       end
 
       defp __wrap_user_state__(%{} = user_state) do
@@ -746,35 +734,48 @@ defmodule Jido.Agent do
     end
   end
 
-  defp __quoted_mount_plugins_definition__ do
-    quote location: :keep do
-      defp __mount_plugins__(agent) do
-        Enum.reduce(@plugin_specs, agent, fn spec, agent_acc ->
-          __mount_single_plugin__(agent_acc, spec)
-        end)
-      end
+  @doc false
+  @spec __seed_own_slice__(term(), map()) :: map()
+  def __seed_own_slice__([], user_value), do: user_value
 
-      defp __mount_single_plugin__(agent_acc, spec) do
-        mod = spec.module
-        config = spec.config || %{}
+  def __seed_own_slice__(nil, user_value), do: user_value
 
-        case mod.mount(agent_acc, config) do
-          {:ok, plugin_state} when is_map(plugin_state) ->
-            current_plugin_state = Map.get(agent_acc.state, spec.state_key, %{})
-            merged_plugin_state = Map.merge(current_plugin_state, plugin_state)
-            new_state = Map.put(agent_acc.state, spec.state_key, merged_plugin_state)
-            %{agent_acc | state: new_state}
+  def __seed_own_slice__(schema, user_value) when is_list(schema) do
+    defaults = Jido.Agent.State.defaults_from_schema(schema)
+    Map.merge(defaults, user_value)
+  end
 
-          {:ok, nil} ->
-            agent_acc
+  def __seed_own_slice__(schema, user_value) do
+    case Zoi.parse(schema, user_value) do
+      {:ok, validated} ->
+        validated
 
-          {:error, reason} ->
-            raise Jido.Error.internal_error(
-                    "Plugin mount failed for #{inspect(mod)}",
-                    %{plugin: mod, reason: reason}
-                  )
+      {:error, errors} ->
+        raise Jido.Agent.SliceValidationError,
+          path: nil,
+          module: nil,
+          errors: errors
+    end
+  end
+
+  @doc false
+  @spec __seed_plugin_slice__(module(), map()) :: term()
+  def __seed_plugin_slice__(plugin_module, %{} = merged_input) do
+    case plugin_module.schema() do
+      nil ->
+        if map_size(merged_input) == 0, do: nil, else: merged_input
+
+      schema ->
+        case Zoi.parse(schema, merged_input) do
+          {:ok, validated} ->
+            validated
+
+          {:error, errors} ->
+            raise Jido.Agent.SliceValidationError,
+              path: plugin_module.path(),
+              module: plugin_module,
+              errors: errors
         end
-      end
     end
   end
 
@@ -1082,23 +1083,16 @@ defmodule Jido.Agent do
                         %{spec | state_key: instance.state_key}
                       end)
 
-        # Validate unique state_keys (now derived from instances)
+        # Validate unique slice paths across the agent and every declared
+        # plugin. Path = agent.path() ++ each plugin.path(). A duplicate
+        # raises Jido.Agent.PathConflictError at Agent.new/1 today, but we
+        # fail fast at compile time when the conflict is statically known.
         @plugin_state_keys Enum.map(@plugin_instances, & &1.state_key)
-        @duplicate_keys @plugin_state_keys -- Enum.uniq(@plugin_state_keys)
-        if @duplicate_keys != [] do
+        @all_slice_paths [@validated_opts.path | @plugin_state_keys]
+        @duplicate_paths @all_slice_paths -- Enum.uniq(@all_slice_paths)
+        if @duplicate_paths != [] do
           raise CompileError,
-            description: "Duplicate plugin state_keys: #{inspect(@duplicate_keys)}",
-            file: __ENV__.file,
-            line: __ENV__.line
-        end
-
-        # Validate no collision with base schema keys
-        @base_schema_keys Jido.Agent.Schema.known_keys(@validated_opts[:schema])
-        @colliding_keys Enum.filter(@plugin_state_keys, &(&1 in @base_schema_keys))
-        if @colliding_keys != [] do
-          raise CompileError,
-            description:
-              "Plugin state_keys collide with agent schema: #{inspect(@colliding_keys)}",
+            description: "Duplicate slice paths: #{inspect(Enum.uniq(@duplicate_paths))}",
             file: __ENV__.file,
             line: __ENV__.line
         end

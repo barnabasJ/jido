@@ -2,7 +2,7 @@ defmodule Jido.Identity do
   @moduledoc """
   A first-class agent primitive representing who the agent is.
 
-  Identity is stored at the `:__identity__` key in agent state and captures
+  Identity is stored at the `:identity` key in agent state and captures
   lifecycle facts (profile).
 
   Identity is immutable — updates produce a new struct with a bumped revision.

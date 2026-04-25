@@ -100,7 +100,7 @@ defmodule JidoTest.TestAgents do
     @moduledoc false
     use Jido.Plugin,
       name: "test_routes_plugin",
-      state_key: :test_routes,
+      path: :test_routes,
       actions: [JidoTest.PluginTestAction],
       signal_routes: [
         {"post", JidoTest.PluginTestAction},
@@ -112,7 +112,7 @@ defmodule JidoTest.TestAgents do
     @moduledoc false
     use Jido.Plugin,
       name: "priority_plugin",
-      state_key: :priority,
+      path: :priority,
       actions: [JidoTest.PluginTestAction],
       signal_routes: [
         {"action", JidoTest.PluginTestAction, priority: 5}

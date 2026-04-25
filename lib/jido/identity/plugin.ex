@@ -1,32 +1,33 @@
 defmodule Jido.Identity.Plugin do
   @moduledoc """
-  Default singleton plugin for identity state management.
-  Declares ownership of the `:__identity__` state key in agent state.
-  This plugin does not initialize an identity by default — identities are
-  created on demand via `Jido.Identity.Agent.ensure/2`.
+  Default singleton slice for identity state management.
+
+  Owns the `:identity` slice key in agent state. The slice does not
+  initialize an identity by default — identities are created on demand via
+  `Jido.Identity.Agent.ensure/2`.
 
   ## Singleton
-  This plugin is a singleton — it cannot be aliased or duplicated.
-  It is automatically included as a default plugin for all agents
-  unless explicitly disabled:
+
+  This slice is a singleton — it cannot be aliased or duplicated. It is
+  automatically included as a default plugin for all agents unless explicitly
+  disabled:
 
       use Jido.Agent,
         name: "minimal",
-        default_plugins: %{__identity__: false}
+        default_plugins: %{identity: false}
 
   ## State Key
-  The identity is stored at `agent.state[:__identity__]` as a `Jido.Identity` struct.
-  Access helpers are provided by `Jido.Identity.Agent` and related modules.
+
+  The identity is stored at `agent.state.identity` as a `Jido.Identity`
+  struct. Access helpers are provided by `Jido.Identity.Agent` and related
+  modules.
   """
 
-  use Jido.Plugin,
+  use Jido.Slice,
     name: "identity",
-    state_key: :__identity__,
+    path: :identity,
     actions: [],
     singleton: true,
     description: "Identity state management for agent self-model.",
     capabilities: [:identity]
-
-  @impl Jido.Plugin
-  def mount(_agent, _config), do: {:ok, nil}
 end

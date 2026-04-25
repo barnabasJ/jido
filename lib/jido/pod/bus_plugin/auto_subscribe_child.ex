@@ -4,7 +4,7 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
   signal the pod receives.
 
   Reads the child's module and pid out of the signal data, pulls the
-  target bus out of the plugin's state slice (`:__bus_wiring__`), and
+  target bus out of the slice's state (`:pod_bus`), and
   calls `Jido.Signal.Bus.subscribe/3` once per path declared by the
   child's `signal_routes/0`. The returned subscription ids are written
   back to the plugin's state so `AutoUnsubscribeChild` can undo them
@@ -62,7 +62,7 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
       # This matches the agent's "state changes as directives" contract
       # instead of relying on DeepMerge semantics on the returned result.
       {:ok, %{},
-       [%SetPath{path: [:__bus_wiring__, :subscriptions, params.tag], value: sub_ids}]}
+       [%SetPath{path: [:pod_bus, :subscriptions, params.tag], value: sub_ids}]}
     else
       {:error, reason} ->
         Logger.warning("pod_bus: skipped auto-subscribe — #{reason}")
@@ -71,9 +71,9 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
   end
 
   defp fetch_bus(agent_state) do
-    case get_in(agent_state, [:__bus_wiring__, :bus]) do
+    case get_in(agent_state, [:pod_bus, :bus]) do
       bus when is_atom(bus) and not is_nil(bus) -> {:ok, bus}
-      _ -> {:error, "no :bus configured under :__bus_wiring__"}
+      _ -> {:error, "no :bus configured under :pod_bus slice"}
     end
   end
 

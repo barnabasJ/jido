@@ -3,7 +3,7 @@ defmodule Jido.Pod do
   Pod wrapper macro and runtime helpers.
 
   A pod is just a `Jido.Agent` with a canonical topology and a singleton pod
-  plugin mounted under the reserved `:__pod__` state key.
+  slice mounted under the `:pod` slice key.
   """
 
   alias Jido.Agent
@@ -94,6 +94,31 @@ defmodule Jido.Pod do
       @doc "Returns true for pod-wrapped agent modules."
       @spec pod?() :: true
       def pod?, do: true
+
+      defoverridable new: 1
+
+      @doc """
+      Pod-wrapped `new/1`. Seeds the `:pod` slice with the agent module's
+      canonical topology before delegating to the base `Agent.new/1`. User
+      state at `state: %{pod: %{...}}` shallow-overrides the topology fields.
+      """
+      def new(opts \\ []) do
+        opts_map = if is_list(opts), do: Map.new(opts), else: opts
+        user_state = Map.get(opts_map, :state, %{})
+
+        pod_seed = %{topology: topology(), topology_version: topology().version}
+
+        existing_pod = Map.get(user_state, :pod, %{})
+        new_pod = Map.merge(pod_seed, existing_pod)
+        new_state = Map.put(user_state, :pod, new_pod)
+
+        opts_with_pod_state =
+          opts_map
+          |> Map.put(:state, new_state)
+          |> Map.to_list()
+
+        super(opts_with_pod_state)
+      end
     end
   end
 

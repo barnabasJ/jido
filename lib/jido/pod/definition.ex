@@ -6,7 +6,7 @@ defmodule Jido.Pod.Definition do
   alias Jido.Pod.Plugin
   alias Jido.Pod.Topology
 
-  @pod_state_key Plugin.state_key_atom()
+  @pod_state_key Plugin.path()
   @pod_capability Plugin.capability()
 
   def expand_aliases_in_ast(ast, caller_env) do

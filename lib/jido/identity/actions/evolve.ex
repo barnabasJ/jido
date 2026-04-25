@@ -2,13 +2,14 @@ defmodule Jido.Identity.Actions.Evolve do
   @moduledoc """
   Evolves agent identity over simulated time.
 
-  This action advances an agent's identity through simulated time periods,
-  allowing the identity to accumulate experiences and changes over days or years.
-  The identity must already exist in the agent's state under the `__identity__` key.
+  Advances the identity slice through simulated time, accumulating
+  experiences and changes over days or years. Operates on the `:identity`
+  slice — see `Jido.Identity.Plugin`.
   """
 
   use Jido.Action,
     name: "identity_evolve",
+    path: :identity,
     description: "Evolve agent identity over simulated time",
     schema: [
       days: [type: :integer, default: 0, doc: "Days of simulated time to add"],
@@ -16,8 +17,8 @@ defmodule Jido.Identity.Actions.Evolve do
     ]
 
   def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
-    identity = Map.get(slice, :__identity__, Jido.Identity.new())
+    identity = slice || Jido.Identity.new()
     evolved = Jido.Identity.evolve(identity, Map.to_list(params))
-    {:ok, %{__identity__: evolved}}
+    {:ok, evolved}
   end
 end

@@ -24,10 +24,10 @@ defmodule Jido.Persist do
 
   ## hibernate Flow
 
-  1. Extract thread from `agent.state[:__thread__]`
+  1. Extract thread from `agent.state[:thread]`
   2. Flush only missing thread entries via `adapter.append_thread/3`
   3. Call `agent_module.checkpoint/2` if implemented, else use default
-  4. **Enforce invariant**: Remove `:__thread__` from state, store only thread pointer
+  4. **Enforce invariant**: Remove `:thread` from state, store only thread pointer
   5. Call `adapter.put_checkpoint/3`
 
   ## thaw/3 Flow
@@ -365,7 +365,7 @@ defmodule Jido.Persist do
       checkpoint
       |> Map.get(:state, %{})
       |> ensure_state_map()
-      |> Map.delete(:__thread__)
+      |> Map.delete(:thread)
       |> maybe_put_scheduler_manifest(scheduler_key, scheduler_manifest)
 
     thread_pointer =
@@ -391,7 +391,7 @@ defmodule Jido.Persist do
       version: 1,
       agent_module: agent_module,
       id: agent.id,
-      state: Map.delete(agent.state, :__thread__),
+      state: Map.delete(agent.state, :thread),
       thread: thread_pointer
     }
   end
@@ -514,7 +514,7 @@ defmodule Jido.Persist do
 
   @spec attach_thread(agent(), Thread.t()) :: agent()
   defp attach_thread(agent, thread) do
-    %{agent | state: Map.put(agent.state, :__thread__, thread)}
+    %{agent | state: Map.put(agent.state, :thread, thread)}
   end
 
   @spec maybe_put_scheduler_manifest(map(), atom(), map()) :: map()
@@ -555,7 +555,7 @@ defmodule Jido.Persist do
       checkpoint
       |> Map.get(:state, %{})
       |> ensure_state_map()
-      |> Map.delete(:__thread__)
+      |> Map.delete(:thread)
       |> maybe_put_scheduler_manifest(scheduler_key, scheduler_manifest)
 
     Map.put(checkpoint, :state, updated_state)

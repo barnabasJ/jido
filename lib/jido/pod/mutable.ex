@@ -13,7 +13,7 @@ defmodule Jido.Pod.Mutable do
   alias Jido.Signal
 
   @mutation_lock_table :jido_pod_mutation_locks
-  @pod_state_key Plugin.state_key_atom()
+  @pod_state_key Plugin.path()
 
   @spec mutate(AgentServer.server(), [Mutation.t() | term()], keyword()) ::
           {:ok, Jido.Pod.mutation_report()} | {:error, Jido.Pod.mutation_report() | term()}
