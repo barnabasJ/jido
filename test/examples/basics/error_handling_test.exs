@@ -61,7 +61,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         fail_count: [type: :integer, default: 0]
       ]
 
-    def run(%Jido.Signal{data: %{fail_count: fail_count}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{fail_count: fail_count}}, slice, _opts, _ctx) do
       attempts = Map.get(slice, :attempts, 0) + 1
 
       if attempts <= fail_count do
@@ -92,7 +92,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         error_context: [type: :atom, default: :unknown]
       ]
 
-    def run(%Jido.Signal{data: %{error_message: message, error_context: ctx}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{error_message: message, error_context: ctx}}, slice, _opts, _ctx) do
       error = Jido.Error.execution_error(message)
 
       error_directive = %Directive.Error{error: error, context: ctx}
@@ -112,7 +112,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         max_attempts: [type: :integer, default: 3]
       ]
 
-    def run(%Jido.Signal{data: %{max_attempts: max}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{max_attempts: max}}, slice, _opts, _ctx) do
       attempts = Map.get(slice, :attempts, 0) + 1
 
       if attempts >= max do
@@ -139,7 +139,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         succeed_on: [type: :integer, default: 3]
       ]
 
-    def run(%Jido.Signal{data: %{max_attempts: max, succeed_on: succeed_on}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{max_attempts: max, succeed_on: succeed_on}}, slice, _opts, _ctx) do
       attempts = Map.get(slice, :attempts, 0) + 1
 
       stored_max =
@@ -188,6 +188,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
     @moduledoc false
     use Jido.Agent,
       name: "error_handling_agent",
+      path: :domain,
       schema: [
         status: [type: :atom, default: :idle],
         validated: [type: :boolean, default: false],
@@ -221,7 +222,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       {updated_agent, directives} =
         ErrorHandlingAgent.cmd(agent, {ValidateAction, %{amount: -5}})
 
-      assert updated_agent.state.__domain__.validated == false
+      assert updated_agent.state.domain.validated == false
       assert [%Directive.Error{context: :instruction, error: error}] = directives
       assert error.message == "Instruction failed"
     end
@@ -232,8 +233,8 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       {updated_agent, directives} =
         ErrorHandlingAgent.cmd(agent, {ValidateAction, %{amount: 100}})
 
-      assert updated_agent.state.__domain__.validated == true
-      assert updated_agent.state.__domain__.amount == 100
+      assert updated_agent.state.domain.validated == true
+      assert updated_agent.state.domain.amount == 100
       assert directives == []
     end
   end
@@ -248,8 +249,8 @@ defmodule JidoExampleTest.ErrorHandlingTest do
           {TrackErrorAction, %{error_message: "Something broke", error_context: :processing}}
         )
 
-      assert updated_agent.state.__domain__.status == :failed
-      assert updated_agent.state.__domain__.error == "Something broke"
+      assert updated_agent.state.domain.status == :failed
+      assert updated_agent.state.domain.error == "Something broke"
       assert updated_agent.state.error_context == :processing
 
       assert [%Directive.Error{error: error, context: :processing}] = directives
@@ -278,14 +279,14 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       eventually_state(
         pid,
         fn state ->
-          state.agent.state.__domain__.status in [:exhausted, :success] and
-            state.agent.state.__domain__.attempts >= 3
+          state.agent.state.domain.status in [:exhausted, :success] and
+            state.agent.state.domain.attempts >= 3
         end,
         timeout: 2_000
       )
 
       {:ok, state} = AgentServer.state(pid)
-      assert state.agent.state.__domain__.attempts >= 3
+      assert state.agent.state.domain.attempts >= 3
     end
 
     test "recovery action clears error state" do
@@ -296,8 +297,8 @@ defmodule JidoExampleTest.ErrorHandlingTest do
 
       {updated_agent, directives} = ErrorHandlingAgent.cmd(agent, RecoverAction)
 
-      assert updated_agent.state.__domain__.status == :recovered
-      assert updated_agent.state.__domain__.error == nil
+      assert updated_agent.state.domain.status == :recovered
+      assert updated_agent.state.domain.error == nil
       assert updated_agent.state.error_context == nil
       assert directives == []
     end
@@ -312,8 +313,8 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       recover_signal = Signal.new!("recover", %{}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, recover_signal)
 
-      assert agent.state.__domain__.status == :recovered
-      assert agent.state.__domain__.error == nil
+      assert agent.state.domain.status == :recovered
+      assert agent.state.domain.error == nil
     end
   end
 
@@ -327,8 +328,8 @@ defmodule JidoExampleTest.ErrorHandlingTest do
           {TrackErrorAction, %{error_message: "Database connection failed", error_context: :db}}
         )
 
-      assert updated_agent.state.__domain__.status == :failed
-      assert updated_agent.state.__domain__.error == "Database connection failed"
+      assert updated_agent.state.domain.status == :failed
+      assert updated_agent.state.domain.error == "Database connection failed"
       assert updated_agent.state.error_context == :db
     end
 
@@ -341,7 +342,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
           {TrackErrorAction, %{error_message: "API timeout", error_context: :api}}
         )
 
-      assert agent_with_error.state.__domain__.error == "API timeout"
+      assert agent_with_error.state.domain.error == "API timeout"
       assert agent_with_error.state.error_context == :api
     end
   end
@@ -356,15 +357,15 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       eventually_state(
         pid,
         fn state ->
-          state.agent.state.__domain__.status == :exhausted and
-            state.agent.state.__domain__.attempts >= 3
+          state.agent.state.domain.status == :exhausted and
+            state.agent.state.domain.attempts >= 3
         end,
         timeout: 2_000
       )
 
       {:ok, state} = AgentServer.state(pid)
-      assert state.agent.state.__domain__.attempts >= 3
-      assert state.agent.state.__domain__.result == :max_retries_reached
+      assert state.agent.state.domain.attempts >= 3
+      assert state.agent.state.domain.result == :max_retries_reached
     end
 
     test "retry succeeds before max_attempts", %{jido: jido} do
@@ -375,30 +376,30 @@ defmodule JidoExampleTest.ErrorHandlingTest do
 
       eventually_state(
         pid,
-        fn state -> state.agent.state.__domain__.status == :success end,
+        fn state -> state.agent.state.domain.status == :success end,
         timeout: 2_000
       )
 
       {:ok, state} = AgentServer.state(pid)
-      assert state.agent.state.__domain__.attempts == 3
-      assert state.agent.state.__domain__.result == "finally succeeded"
+      assert state.agent.state.domain.attempts == 3
+      assert state.agent.state.domain.result == "finally succeeded"
     end
 
     test "pure cmd/2 tracks attempt count correctly" do
       agent = ErrorHandlingAgent.new()
 
       {agent, _} = ErrorHandlingAgent.cmd(agent, {BoundedRetryAction, %{max_attempts: 3}})
-      assert agent.state.__domain__.attempts == 1
-      assert agent.state.__domain__.status == :retrying
+      assert agent.state.domain.attempts == 1
+      assert agent.state.domain.status == :retrying
 
       {agent, _} = ErrorHandlingAgent.cmd(agent, {BoundedRetryAction, %{max_attempts: 3}})
-      assert agent.state.__domain__.attempts == 2
-      assert agent.state.__domain__.status == :retrying
+      assert agent.state.domain.attempts == 2
+      assert agent.state.domain.status == :retrying
 
       {agent, _} = ErrorHandlingAgent.cmd(agent, {BoundedRetryAction, %{max_attempts: 3}})
-      assert agent.state.__domain__.attempts == 3
-      assert agent.state.__domain__.status == :exhausted
-      assert agent.state.__domain__.result == :max_retries_reached
+      assert agent.state.domain.attempts == 3
+      assert agent.state.domain.status == :exhausted
+      assert agent.state.domain.result == :max_retries_reached
     end
   end
 end

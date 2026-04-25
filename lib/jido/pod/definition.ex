@@ -136,10 +136,10 @@ defmodule Jido.Pod.Definition do
           file: caller_env.file,
           line: caller_env.line
 
-      instance.state_key != @pod_state_key ->
+      instance.path != @pod_state_key ->
         raise CompileError,
           description:
-            "#{inspect(mod)} must use state_key #{@pod_state_key} to replace the pod plugin.",
+            "#{inspect(mod)} must use path: #{inspect(@pod_state_key)} to replace the pod plugin.",
           file: caller_env.file,
           line: caller_env.line
 

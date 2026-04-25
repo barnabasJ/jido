@@ -10,9 +10,9 @@ defmodule JidoTest.Identity.Actions.EvolveTest do
   end
 
   describe "run/4" do
-    test "initializes identity when missing" do
-      assert {:ok, %{__identity__: evolved}} =
-               Evolve.run(sig(%{days: 0, years: 0}), %{}, %{}, %{})
+    test "initializes identity when slice is nil" do
+      assert {:ok, %Identity{} = evolved} =
+               Evolve.run(sig(%{days: 0, years: 0}), nil, %{}, %{})
 
       assert evolved.profile[:age] == 0
     end
@@ -20,8 +20,8 @@ defmodule JidoTest.Identity.Actions.EvolveTest do
     test "evolves identity by years" do
       identity = Identity.new()
 
-      assert {:ok, %{__identity__: evolved}} =
-               Evolve.run(sig(%{days: 0, years: 5}), %{__identity__: identity}, %{}, %{})
+      assert {:ok, %Identity{} = evolved} =
+               Evolve.run(sig(%{days: 0, years: 5}), identity, %{}, %{})
 
       assert evolved.profile[:age] == 5
     end
@@ -29,8 +29,8 @@ defmodule JidoTest.Identity.Actions.EvolveTest do
     test "evolves identity by days" do
       identity = Identity.new()
 
-      assert {:ok, %{__identity__: evolved}} =
-               Evolve.run(sig(%{days: 730, years: 0}), %{__identity__: identity}, %{}, %{})
+      assert {:ok, %Identity{} = evolved} =
+               Evolve.run(sig(%{days: 730, years: 0}), identity, %{}, %{})
 
       assert evolved.profile[:age] == 2
     end
@@ -38,19 +38,18 @@ defmodule JidoTest.Identity.Actions.EvolveTest do
     test "evolves identity by combined years and days" do
       identity = Identity.new()
 
-      assert {:ok, %{__identity__: evolved}} =
-               Evolve.run(sig(%{days: 365, years: 3}), %{__identity__: identity}, %{}, %{})
+      assert {:ok, %Identity{} = evolved} =
+               Evolve.run(sig(%{days: 365, years: 3}), identity, %{}, %{})
 
       assert evolved.profile[:age] == 4
     end
 
     test "bumps rev on evolve" do
       identity = Identity.new()
-
       assert identity.rev == 0
 
-      assert {:ok, %{__identity__: evolved}} =
-               Evolve.run(sig(%{days: 0, years: 1}), %{__identity__: identity}, %{}, %{})
+      assert {:ok, %Identity{} = evolved} =
+               Evolve.run(sig(%{days: 0, years: 1}), identity, %{}, %{})
 
       assert evolved.rev == 1
     end

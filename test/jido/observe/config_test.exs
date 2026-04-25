@@ -100,7 +100,6 @@ defmodule JidoTest.Observe.ConfigTest do
     test "returns default list" do
       types = Config.interesting_signal_types(nil)
       assert is_list(types)
-      assert "jido.strategy.init" in types
     end
 
     test "falls back to defaults when list contains non-strings" do
@@ -344,8 +343,11 @@ defmodule JidoTest.Observe.ConfigTest do
   end
 
   describe "interesting_signal_type?/2" do
-    test "returns true for configured types" do
-      assert Config.interesting_signal_type?(nil, "jido.strategy.init")
+    test "returns true for types listed in interesting_signal_types config" do
+      Application.put_env(:jido, :telemetry, interesting_signal_types: ["my.app.event"])
+      on_exit(fn -> Application.delete_env(:jido, :telemetry) end)
+
+      assert Config.interesting_signal_type?(nil, "my.app.event")
     end
 
     test "returns false for unknown types" do

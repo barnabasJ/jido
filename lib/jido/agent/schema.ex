@@ -8,14 +8,14 @@ defmodule Jido.Agent.Schema do
   @doc """
   Merges the agent's base schema with plugin schemas.
 
-  Each plugin's schema is nested under its `state_key`.
+  Each plugin's schema is nested under its `path`.
   Returns a Zoi object schema with base fields + plugin fields.
 
   ## Examples
 
       base = Zoi.object(%{mode: Zoi.atom()})
-      plugins = [%Spec{state_key: :calc, schema: Zoi.object(%{x: Zoi.integer()})}]
-      
+      plugins = [%Spec{path: :calc, schema: Zoi.object(%{x: Zoi.integer()})}]
+
       # Returns:
       # Zoi.object(%{
       #   mode: Zoi.atom(),
@@ -30,7 +30,7 @@ defmodule Jido.Agent.Schema do
     plugin_fields =
       plugin_specs
       |> Enum.filter(& &1.schema)
-      |> Enum.map(fn spec -> {spec.state_key, spec.schema} end)
+      |> Enum.map(fn spec -> {spec.path, spec.schema} end)
       |> Map.new()
 
     case base_schema do

@@ -591,7 +591,13 @@ defmodule Jido.Pod.Runtime do
          opts
        ) do
     if is_pid(snapshot.running_pid) do
-      {:ok, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}
+      with {:ok, parent_pid} <- resolve_parent_pid(server_pid, topology, name, report) do
+        # adopt_child re-attaches the orphaned child runtime *and* tracks it
+        # in the parent's children map. Replaces the older adopt_parent + manual
+        # ChildInfo dance.
+        _ = AgentServer.adopt_child(parent_pid, snapshot.running_pid, name, node.meta || %{})
+        {:ok, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}
+      end
     else
       initial_state = node_initial_state(requested_names, name, node, opts)
       key = node_key(state, name)
@@ -648,8 +654,13 @@ defmodule Jido.Pod.Runtime do
        ) do
     with :ok <- ensure_pod_recursion_safe(node, state, opts) do
       if is_pid(snapshot.running_pid) do
-        with {:ok, _nested_report} <-
+        with {:ok, parent_pid} <- resolve_parent_pid(server_pid, topology, name, report),
+             {:ok, _nested_report} <-
                reconcile_nested_pod(snapshot.running_pid, node, state, opts) do
+          # Re-adopt the orphaned nested pod into this parent's children map.
+          # adopt_child handles both the live runtime parent attach and the
+          # parent's local %ChildInfo{} tracking in one shot.
+          _ = AgentServer.adopt_child(parent_pid, snapshot.running_pid, name, node.meta || %{})
           {:ok, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}
         end
       else
@@ -784,6 +795,21 @@ defmodule Jido.Pod.Runtime do
 
       nil ->
         with {:ok, child_runtime} <- AgentServer.state(child_pid) do
+          # Re-attach the orphaned child to this pod via the adopt_parent
+          # round-trip. Without this, the child's runtime keeps `parent: nil`
+          # and `parent_matches?/2` returns false even though we hold its
+          # %ChildInfo{} on our side.
+          parent_ref =
+            ParentRef.new!(%{
+              pid: self(),
+              id: state.id,
+              partition: state.partition,
+              tag: name,
+              meta: meta || %{}
+            })
+
+          _ = AgentServer.adopt_parent(child_pid, parent_ref)
+
           child_info =
             ChildInfo.new!(%{
               pid: child_pid,

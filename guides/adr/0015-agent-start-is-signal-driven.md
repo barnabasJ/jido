@@ -1,9 +1,9 @@
 # 0015. Agent start is signal-driven; no thaw distinction
 
-- Status: Proposed
-- Implementation: Pending
+- Status: Implemented
+- Implementation: Complete
 - Date: 2026-04-23
-- Related commits: `ed6abf4`, `be37376`, `30def1e` (carryover from [0007](0007-agent-lifecycle-is-signal-driven.md))
+- Related commits: 209160d, (this commit). Earlier carryover from [0007](0007-agent-lifecycle-is-signal-driven.md): `ed6abf4`, `be37376`, `30def1e`.
 - Supersedes: [0007](0007-agent-lifecycle-is-signal-driven.md)
 
 ## Context

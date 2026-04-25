@@ -32,6 +32,7 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
     @moduledoc false
     use Jido.Agent,
       name: "full_agent",
+      path: :domain,
       description: "Agent with all three default plugins for persistence testing",
       schema: [
         counter: [type: :integer, default: 0],
@@ -65,11 +66,11 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
       {:ok, restored} = Persist.thaw(storage(table), FullAgent, "identity-1")
 
       assert IdentityAgent.has_identity?(restored)
-      assert restored.state.__identity__.profile[:age] == 5
-      assert restored.state.__identity__.profile[:origin] == :test
+      assert restored.state.identity.profile[:age] == 5
+      assert restored.state.identity.profile[:origin] == :test
 
-      assert restored.state.__domain__.counter == 10
-      assert restored.state.__domain__.status == :active
+      assert restored.state.domain.counter == 10
+      assert restored.state.domain.status == :active
     end
   end
 
@@ -95,7 +96,7 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
       assert length(tasks_space.data) == 1
       assert Enum.at(tasks_space.data, 0).id == "t1"
 
-      assert restored.state.__domain__.counter == 5
+      assert restored.state.domain.counter == 5
     end
   end
 
@@ -120,8 +121,8 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
 
       # Identity preserved
       assert IdentityAgent.has_identity?(restored)
-      assert restored.state.__identity__.profile[:age] == 3
-      assert restored.state.__identity__.profile[:origin] == :spawned
+      assert restored.state.identity.profile[:age] == 3
+      assert restored.state.identity.profile[:origin] == :spawned
 
       # Memory preserved
       assert MemoryAgent.has_memory?(restored)
@@ -136,8 +137,8 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
       assert Thread.entry_count(rehydrated_thread) == 2
 
       # Regular state preserved
-      assert restored.state.__domain__.counter == 42
-      assert restored.state.__domain__.status == :processing
+      assert restored.state.domain.counter == 42
+      assert restored.state.domain.status == :processing
     end
   end
 
@@ -151,7 +152,7 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, restored} = Persist.thaw(storage(table), FullAgent, "no-plugins-1")
 
-      assert restored.state.__domain__.counter == 7
+      assert restored.state.domain.counter == 7
       refute IdentityAgent.has_identity?(restored)
       refute MemoryAgent.has_memory?(restored)
       refute ThreadAgent.has_thread?(restored)

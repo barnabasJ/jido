@@ -9,8 +9,8 @@ defmodule JidoTest.Memory.PluginTest do
       assert MemoryPlugin.name() == "memory"
     end
 
-    test "state_key is :__memory__" do
-      assert MemoryPlugin.state_key() == :__memory__
+    test "path is :memory" do
+      assert MemoryPlugin.path() == :memory
     end
 
     test "is singleton" do
@@ -30,54 +30,33 @@ defmodule JidoTest.Memory.PluginTest do
     end
   end
 
-  describe "mount/2" do
-    test "returns {:ok, nil} (does not create memory)" do
-      assert {:ok, nil} = MemoryPlugin.mount(nil, %{})
-    end
-  end
-
   describe "manifest" do
     test "singleton is true in manifest" do
       manifest = MemoryPlugin.manifest()
       assert manifest.singleton == true
     end
 
-    test "state_key is :__memory__ in manifest" do
+    test "path is :memory in manifest" do
       manifest = MemoryPlugin.manifest()
-      assert manifest.state_key == :__memory__
-    end
-  end
-
-  describe "on_checkpoint/2" do
-    test "keeps memory struct" do
-      memory = Memory.new(id: "m-1")
-      assert :keep = MemoryPlugin.on_checkpoint(memory, %{})
-    end
-
-    test "keeps nil state" do
-      assert :keep = MemoryPlugin.on_checkpoint(nil, %{})
+      assert manifest.path == :memory
     end
   end
 
   describe "agent integration" do
     defmodule AgentWithMemory do
-      use Jido.Agent, name: "memory_plugin_test_agent"
+      use Jido.Agent, name: "memory_plugin_test_agent", path: :domain
     end
 
     defmodule AgentWithoutMemory do
       use Jido.Agent,
         name: "memory_plugin_test_no_memory",
-        default_plugins: %{__memory__: false}
+        path: :domain,
+        default_plugins: %{memory: false}
     end
 
     test "agent includes memory plugin by default" do
       modules = AgentWithMemory.plugins()
       assert Jido.Memory.Plugin in modules
-    end
-
-    test "agent state does not contain :__memory__ key initially" do
-      agent = AgentWithMemory.new()
-      refute Map.has_key?(agent.state, :__memory__)
     end
 
     test "agent can disable memory plugin" do

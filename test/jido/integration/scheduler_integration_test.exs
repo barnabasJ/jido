@@ -25,7 +25,7 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
     @moduledoc false
     use Jido.Action, name: "plugin_tick", schema: []
 
-    def run(_signal, slice, _opts, ctx) do
+    def run(_signal, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
       ticks = Map.get(slice, :ticks, [])
       {:ok, %{tick_count: count + 1, ticks: ticks ++ [%{source: :plugin_schedule}]}}
@@ -36,7 +36,7 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
     @moduledoc false
     use Jido.Plugin,
       name: "scheduler_integration_plugin",
-      state_key: :scheduler_integration_plugin,
+      path: :scheduler_integration_plugin,
       actions: [PluginTickAction],
       schedules: [
         {"* * * * * * *", PluginTickAction}
@@ -47,6 +47,8 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "scheduler_integration_plugin_agent",
+
+      path: :domain,
       schema: [
         tick_count: [type: :integer, default: 0],
         ticks: [type: {:list, :any}, default: []]
@@ -91,7 +93,7 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
       assert state_during_outage.cron_jobs[:heartbeat] == job_pid
       assert Process.alive?(job_pid)
 
-      baseline = state_during_outage.agent.state.__domain__.tick_count
+      baseline = state_during_outage.agent.state.domain.tick_count
 
       # Restore working database
       Application.put_env(:jido, :time_zone_database, TimeZoneInfo.TimeZoneDatabase)

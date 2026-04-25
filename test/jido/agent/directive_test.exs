@@ -2,7 +2,6 @@ defmodule JidoTest.Agent.DirectiveTest do
   use ExUnit.Case, async: true
 
   alias Jido.Agent.Directive
-  alias Jido.AgentServer.ParentRef
 
   describe "emit/2" do
     test "creates Emit directive without dispatch" do
@@ -188,52 +187,6 @@ defmodule JidoTest.Agent.DirectiveTest do
       assert opts[:target] == pid
       assert opts[:delivery_mode] == :sync
       assert opts[:timeout] == 10_000
-    end
-  end
-
-  describe "emit_to_parent/3" do
-    test "returns nil when agent has no parent" do
-      agent = %{state: %{}}
-      assert Directive.emit_to_parent(agent, %{type: "test"}) == nil
-    end
-
-    test "returns nil when parent ref is missing pid" do
-      agent = %{state: %{__parent__: %{}}}
-      assert Directive.emit_to_parent(agent, %{type: "test"}) == nil
-    end
-
-    test "returns nil when the agent is orphaned" do
-      agent = %{state: %{__orphaned_from__: %{id: "former-parent"}}}
-      assert Directive.emit_to_parent(agent, %{type: "test"}) == nil
-    end
-
-    test "creates Emit directive when parent is present" do
-      parent_pid = self()
-
-      parent_ref =
-        ParentRef.new!(%{pid: parent_pid, id: "parent-123", tag: :child})
-
-      agent = %{state: %{__parent__: parent_ref}}
-      signal = %{type: "child.result"}
-
-      directive = Directive.emit_to_parent(agent, signal)
-
-      assert %Directive.Emit{signal: ^signal, dispatch: {:pid, opts}} = directive
-      assert opts[:target] == parent_pid
-    end
-
-    test "passes extra options to emit_to_pid" do
-      parent_pid = self()
-
-      parent_ref =
-        ParentRef.new!(%{pid: parent_pid, id: "parent-123", tag: :child})
-
-      agent = %{state: %{__parent__: parent_ref}}
-
-      directive = Directive.emit_to_parent(agent, %{type: "test"}, delivery_mode: :sync)
-
-      {:pid, opts} = directive.dispatch
-      assert opts[:delivery_mode] == :sync
     end
   end
 

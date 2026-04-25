@@ -9,8 +9,8 @@ defmodule JidoTest.Identity.PluginTest do
       assert IdentityPlugin.name() == "identity"
     end
 
-    test "state_key is :__identity__" do
-      assert IdentityPlugin.state_key() == :__identity__
+    test "state_key is :identity" do
+      assert IdentityPlugin.path() == :identity
     end
 
     test "is singleton" do
@@ -30,33 +30,28 @@ defmodule JidoTest.Identity.PluginTest do
     end
   end
 
-  describe "mount/2" do
-    test "returns {:ok, nil} (does not create an identity)" do
-      assert {:ok, nil} = IdentityPlugin.mount(nil, %{})
-    end
-  end
-
   describe "manifest" do
     test "singleton is true in manifest" do
       manifest = IdentityPlugin.manifest()
       assert manifest.singleton == true
     end
 
-    test "state_key is :__identity__ in manifest" do
+    test "state_key is :identity in manifest" do
       manifest = IdentityPlugin.manifest()
-      assert manifest.state_key == :__identity__
+      assert manifest.path == :identity
     end
   end
 
   describe "agent integration" do
     defmodule AgentWithIdentity do
-      use Jido.Agent, name: "identity_plugin_test_agent"
+      use Jido.Agent, name: "identity_plugin_test_agent", path: :domain
     end
 
     defmodule AgentWithoutIdentity do
       use Jido.Agent,
         name: "identity_plugin_test_no_identity",
-        default_plugins: %{__identity__: false}
+        path: :domain,
+        default_plugins: %{identity: false}
     end
 
     test "agent includes identity plugin by default" do
@@ -64,9 +59,9 @@ defmodule JidoTest.Identity.PluginTest do
       assert Jido.Identity.Plugin in modules
     end
 
-    test "agent state does not contain :__identity__ key initially" do
+    test "agent.state[:identity] starts nil (no auto-init)" do
       agent = AgentWithIdentity.new()
-      refute Map.has_key?(agent.state, :__identity__)
+      assert Map.get(agent.state, :identity) == nil
     end
 
     test "agent can disable identity plugin" do

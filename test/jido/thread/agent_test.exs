@@ -13,8 +13,8 @@ defmodule JidoTest.Thread.AgentTest do
   end
 
   describe "key/0" do
-    test "returns :__thread__" do
-      assert ThreadAgent.key() == :__thread__
+    test "returns :thread" do
+      assert ThreadAgent.key() == :thread
     end
   end
 
@@ -32,7 +32,7 @@ defmodule JidoTest.Thread.AgentTest do
 
     test "returns thread when present" do
       thread = Thread.new(id: "test-thread")
-      agent = %{create_agent() | state: %{__thread__: thread}}
+      agent = %{create_agent() | state: %{thread: thread}}
       assert ThreadAgent.get(agent) == thread
     end
   end
@@ -44,7 +44,7 @@ defmodule JidoTest.Thread.AgentTest do
 
       updated = ThreadAgent.put(agent, thread)
 
-      assert updated.state[:__thread__] == thread
+      assert updated.state[:thread] == thread
       assert ThreadAgent.get(updated) == thread
     end
 
@@ -55,7 +55,7 @@ defmodule JidoTest.Thread.AgentTest do
       updated = ThreadAgent.put(agent, thread)
 
       assert updated.state[:foo] == :bar
-      assert updated.state[:__thread__] == thread
+      assert updated.state[:thread] == thread
     end
   end
 

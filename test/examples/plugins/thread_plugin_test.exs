@@ -6,7 +6,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
   - Every agent gets `Jido.Thread.Plugin` automatically (default singleton plugin)
   - Using `Jido.Thread.Agent` helpers: `ensure/2`, `append/3`, `get/1`, `has_thread?/1`
   - Actions that build conversation history using Thread
-  - Disabling the thread plugin with `default_plugins: %{__thread__: false}`
+  - Disabling the thread plugin with `default_plugins: %{thread: false}`
   - The strategy layer auto-tracks instruction_start/instruction_end when thread exists
 
   Run with: mix test --include example
@@ -33,9 +33,9 @@ defmodule JidoExampleTest.ThreadPluginTest do
         content: [type: :string, required: true]
       ]
 
-    def run(%Jido.Signal{data: %{role: role, content: content}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{role: role, content: content}}, slice, _opts, _ctx) do
       thread =
-        case Map.get(slice, :__thread__) do
+        case Map.get(slice, :thread) do
           nil -> Thread.new()
           existing -> existing
         end
@@ -43,7 +43,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
       entry = %{kind: :message, payload: %{role: role, content: content}}
       updated_thread = Thread.append(thread, entry)
 
-      {:ok, %{__thread__: updated_thread, last_role: role}}
+      {:ok, %{thread: updated_thread, last_role: role}}
     end
   end
 
@@ -53,8 +53,8 @@ defmodule JidoExampleTest.ThreadPluginTest do
       name: "summarize",
       schema: []
 
-    def run(_signal, slice, _opts, ctx) do
-      thread = Map.get(slice, :__thread__)
+    def run(_signal, slice, _opts, _ctx) do
+      thread = Map.get(slice, :thread)
 
       message_count =
         case thread do
@@ -74,6 +74,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
     @moduledoc false
     use Jido.Agent,
       name: "chat_agent",
+      path: :domain,
       description: "Agent with default thread plugin for conversation history",
       schema: [
         last_role: [type: :string, default: nil],
@@ -92,8 +93,10 @@ defmodule JidoExampleTest.ThreadPluginTest do
     @moduledoc false
     use Jido.Agent,
       name: "stateless_agent",
+
+      path: :domain,
       description: "Agent with thread plugin explicitly disabled",
-      default_plugins: %{__thread__: false},
+      default_plugins: %{thread: false},
       schema: [
         value: [type: :integer, default: 0]
       ]
@@ -130,7 +133,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
       {agent, []} =
         ChatAgent.cmd(agent, {RecordMessageAction, %{role: "user", content: "hello"}})
 
-      assert agent.state.__domain__.last_role == "user"
+      assert agent.state.domain.last_role == "user"
       assert ThreadAgent.has_thread?(agent)
 
       messages = Thread.filter_by_kind(ThreadAgent.get(agent), :message)
@@ -167,16 +170,16 @@ defmodule JidoExampleTest.ThreadPluginTest do
       assert length(instruction_starts) > 0
 
       {agent, []} = ChatAgent.cmd(agent, SummarizeAction)
-      assert agent.state.__domain__.summary == "3 messages in thread"
+      assert agent.state.domain.summary == "3 messages in thread"
     end
   end
 
   describe "disabling thread plugin" do
-    test "agent with default_plugins: %{__thread__: false} has no thread capability" do
+    test "agent with default_plugins: %{thread: false} has no thread capability" do
       agent = StatelessAgent.new()
 
       refute ThreadAgent.has_thread?(agent)
-      refute Map.has_key?(agent.state, :__thread__)
+      refute Map.has_key?(agent.state, :thread)
     end
   end
 
@@ -224,7 +227,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
       {:ok, agent} =
         AgentServer.call(pid, signal("summarize"))
 
-      assert agent.state.__domain__.summary == "2 messages in thread"
+      assert agent.state.domain.summary == "2 messages in thread"
     end
   end
 end

@@ -15,7 +15,7 @@ defmodule JidoExampleTest.ReactPluginTest do
 
   ## Primitives used
 
-  - Plugin surface: `:__react__` slice, actions, `signal_routes/1`.
+  - Plugin surface: `:react` slice, actions, `signal_routes/1`.
   - Self-dispatch: `%Jido.Agent.Directive.Emit{dispatch: nil}` falls back to
     `send(self(), {:signal, ...})` in `directive_executors`, re-entering the
     mailbox and re-routing via `signal_router`. Load-bearing for the loop.
@@ -30,7 +30,7 @@ defmodule JidoExampleTest.ReactPluginTest do
 
       signal "react.user_query" {query}
         → action ReAct.StartQuery
-            writes :__react__.messages = [{:user, query}]
+            writes :react.messages = [{:user, query}]
             emits %Directive.SpawnTask{
               task: fn -> LLM.call(messages) end,
               timeout: 20_000,
@@ -42,7 +42,7 @@ defmodule JidoExampleTest.ReactPluginTest do
         → action ReAct.LLMEmitted
             branches:
               * tool_calls present:
-                  appends assistant message to :__react__.messages
+                  appends assistant message to :react.messages
                   emits one %Directive.SpawnTask per tool_call
                     on_success: "tool.result"
                     on_timeout: "tool.timeout"
@@ -52,7 +52,7 @@ defmodule JidoExampleTest.ReactPluginTest do
 
       signal "tool.result" {tool_id, result}
         → action ReAct.ToolCompleted
-            appends tool message to :__react__.messages
+            appends tool message to :react.messages
             emits %Directive.SpawnTask (next LLM call — loops back)
 
       signal "tool.timeout" {tool_id}
@@ -68,7 +68,7 @@ defmodule JidoExampleTest.ReactPluginTest do
       defmodule Jido.Plugin.ReAct do
         use Jido.Plugin,
           name: "react",
-          state_key: :__react__,
+          path: :react,
           schema: [
             messages: [type: {:list, :map}, default: []],
             step: [type: :atom, default: :idle],
@@ -98,6 +98,8 @@ defmodule JidoExampleTest.ReactPluginTest do
       defmodule MyReActAgent do
         use Jido.Agent,
           name: "react_agent",
+
+          path: :domain,
           plugins:    [Jido.Plugin.ReAct],
           middleware: [
             Jido.Middleware.Logger,
@@ -125,7 +127,7 @@ defmodule JidoExampleTest.ReactPluginTest do
         assert_signal_emitted("react.done", timeout: 5_000,
           match: %{data: %{answer: answer}} when is_binary(answer))
 
-        state = Agent.state(agent)[:__react__]
+        state = Agent.state(agent)[:react]
         assert state.step == :done
         assert length(state.messages) >= 3   # user + assistant + tool + assistant
       end

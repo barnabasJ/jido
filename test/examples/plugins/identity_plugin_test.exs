@@ -8,7 +8,7 @@ defmodule JidoExampleTest.IdentityPluginTest do
   - Snapshot for sharing identity with other agents
   - Evolving identity over simulated time via `Jido.Identity.evolve/2` and the Evolve action
   - Replacing the default Identity.Plugin with a custom implementation
-  - Disabling the identity plugin with `default_plugins: %{__identity__: false}`
+  - Disabling the identity plugin with `default_plugins: %{identity: false}`
 
   Run with: mix test --include example
   """
@@ -29,7 +29,7 @@ defmodule JidoExampleTest.IdentityPluginTest do
     @moduledoc false
     use Jido.Plugin,
       name: "custom_identity",
-      state_key: :__identity__,
+      path: :identity,
       actions: [],
       description: "Custom identity plugin that auto-initializes with config."
 
@@ -49,6 +49,8 @@ defmodule JidoExampleTest.IdentityPluginTest do
     @moduledoc false
     use Jido.Agent,
       name: "web_crawler",
+
+      path: :domain,
       description: "Agent with identity for capability-based routing",
       schema: []
 
@@ -63,9 +65,11 @@ defmodule JidoExampleTest.IdentityPluginTest do
     @moduledoc false
     use Jido.Agent,
       name: "pre_configured",
+
+      path: :domain,
       description: "Agent with custom identity plugin that auto-initializes",
       default_plugins: %{
-        __identity__: {CustomIdentityPlugin, %{profile: %{age: 5, origin: :spawned}}}
+        identity: {CustomIdentityPlugin, %{profile: %{age: 5, origin: :spawned}}}
       },
       schema: [
         status: [type: :atom, default: :idle]
@@ -76,8 +80,10 @@ defmodule JidoExampleTest.IdentityPluginTest do
     @moduledoc false
     use Jido.Agent,
       name: "no_identity",
+
+      path: :domain,
       description: "Agent with identity plugin disabled",
-      default_plugins: %{__identity__: false},
+      default_plugins: %{identity: false},
       schema: [
         value: [type: :integer, default: 0]
       ]
@@ -185,7 +191,7 @@ defmodule JidoExampleTest.IdentityPluginTest do
       agent = NoIdentityAgent.new()
 
       refute IdentityAgent.has_identity?(agent)
-      refute Map.has_key?(agent.state, :__identity__)
+      refute Map.has_key?(agent.state, :identity)
 
       specs = NoIdentityAgent.plugin_specs()
       modules = Enum.map(specs, & &1.module)

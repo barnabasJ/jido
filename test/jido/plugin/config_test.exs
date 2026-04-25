@@ -7,7 +7,7 @@ defmodule JidoTest.Plugin.ConfigTest do
     @moduledoc false
     use Jido.Plugin,
       name: "no_otp_app",
-      state_key: :no_otp_app,
+      path: :no_otp_app,
       actions: [JidoTest.PluginTestAction]
   end
 
@@ -15,7 +15,7 @@ defmodule JidoTest.Plugin.ConfigTest do
     @moduledoc false
     use Jido.Plugin,
       name: "with_otp_app",
-      state_key: :with_otp_app,
+      path: :with_otp_app,
       otp_app: :jido,
       actions: [JidoTest.PluginTestAction]
   end
@@ -24,7 +24,7 @@ defmodule JidoTest.Plugin.ConfigTest do
     @moduledoc false
     use Jido.Plugin,
       name: "with_schema",
-      state_key: :with_schema,
+      path: :with_schema,
       otp_app: :jido,
       actions: [JidoTest.PluginTestAction],
       config_schema:

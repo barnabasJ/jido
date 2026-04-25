@@ -7,7 +7,7 @@ defmodule JidoTest.Plugin.InstanceTest do
     @moduledoc false
     use Jido.Plugin,
       name: "test_plugin",
-      state_key: :test,
+      path: :test,
       actions: [JidoTest.PluginTestAction],
       schema: Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
   end
@@ -16,7 +16,7 @@ defmodule JidoTest.Plugin.InstanceTest do
     @moduledoc false
     use Jido.Plugin,
       name: "slack",
-      state_key: :slack,
+      path: :slack,
       actions: [JidoTest.PluginTestAction],
       schema: Zoi.object(%{token: Zoi.string() |> Zoi.optional()})
   end
@@ -25,7 +25,7 @@ defmodule JidoTest.Plugin.InstanceTest do
     @moduledoc false
     use Jido.Plugin,
       name: "singleton_plugin",
-      state_key: :singleton_state,
+      path: :singleton_state,
       actions: [JidoTest.PluginTestAction],
       singleton: true
   end
@@ -37,7 +37,7 @@ defmodule JidoTest.Plugin.InstanceTest do
       assert instance.module == TestPlugin
       assert instance.as == nil
       assert instance.config == %{}
-      assert instance.state_key == :test
+      assert instance.path == :test
       assert instance.route_prefix == "test_plugin"
       assert instance.manifest.name == "test_plugin"
     end
@@ -48,7 +48,7 @@ defmodule JidoTest.Plugin.InstanceTest do
       assert instance.module == TestPlugin
       assert instance.as == nil
       assert instance.config == %{custom: "value"}
-      assert instance.state_key == :test
+      assert instance.path == :test
       assert instance.route_prefix == "test_plugin"
     end
 
@@ -58,7 +58,7 @@ defmodule JidoTest.Plugin.InstanceTest do
       assert instance.module == TestPlugin
       assert instance.as == nil
       assert instance.config == %{custom: "value", other: 123}
-      assert instance.state_key == :test
+      assert instance.path == :test
       assert instance.route_prefix == "test_plugin"
     end
 
@@ -68,7 +68,7 @@ defmodule JidoTest.Plugin.InstanceTest do
       assert instance.module == SlackPlugin
       assert instance.as == :support
       assert instance.config == %{token: "support-token"}
-      assert instance.state_key == :slack_support
+      assert instance.path == :slack_support
       assert instance.route_prefix == "support.slack"
     end
 
@@ -78,7 +78,7 @@ defmodule JidoTest.Plugin.InstanceTest do
       assert instance.module == SlackPlugin
       assert instance.as == :sales
       assert instance.config == %{}
-      assert instance.state_key == :slack_sales
+      assert instance.path == :slack_sales
       assert instance.route_prefix == "sales.slack"
     end
 
@@ -87,20 +87,20 @@ defmodule JidoTest.Plugin.InstanceTest do
 
       assert instance.manifest.module == TestPlugin
       assert instance.manifest.name == "test_plugin"
-      assert instance.manifest.state_key == :test
+      assert instance.manifest.path == :test
     end
   end
 
-  describe "derive_state_key/2" do
+  describe "derive_path/2" do
     test "returns base key when as is nil" do
-      assert Instance.derive_state_key(:slack, nil) == :slack
-      assert Instance.derive_state_key(:database, nil) == :database
+      assert Instance.derive_path(:slack, nil) == :slack
+      assert Instance.derive_path(:database, nil) == :database
     end
 
     test "appends alias to base key" do
-      assert Instance.derive_state_key(:slack, :support) == :slack_support
-      assert Instance.derive_state_key(:slack, :sales) == :slack_sales
-      assert Instance.derive_state_key(:database, :primary) == :database_primary
+      assert Instance.derive_path(:slack, :support) == :slack_support
+      assert Instance.derive_path(:slack, :sales) == :slack_sales
+      assert Instance.derive_path(:database, :primary) == :database_primary
     end
   end
 
@@ -123,13 +123,13 @@ defmodule JidoTest.Plugin.InstanceTest do
       sales_instance = Instance.new({SlackPlugin, as: :sales})
       default_instance = Instance.new(SlackPlugin)
 
-      assert support_instance.state_key == :slack_support
-      assert sales_instance.state_key == :slack_sales
-      assert default_instance.state_key == :slack
+      assert support_instance.path == :slack_support
+      assert sales_instance.path == :slack_sales
+      assert default_instance.path == :slack
 
-      assert support_instance.state_key != sales_instance.state_key
-      assert support_instance.state_key != default_instance.state_key
-      assert sales_instance.state_key != default_instance.state_key
+      assert support_instance.path != sales_instance.path
+      assert support_instance.path != default_instance.path
+      assert sales_instance.path != default_instance.path
     end
 
     test "same plugin with different :as values get different route prefixes" do
@@ -157,7 +157,7 @@ defmodule JidoTest.Plugin.InstanceTest do
 
       assert instance.module == SingletonPlugin
       assert instance.as == nil
-      assert instance.state_key == :singleton_state
+      assert instance.path == :singleton_state
     end
 
     test "singleton plugin with config map works (no alias)" do

@@ -18,7 +18,7 @@ defmodule JidoTest.AgentServerStopLogTest do
 
   defmodule TestAgent do
     @moduledoc false
-    use Jido.Agent, name: "test_agent", schema: []
+    use Jido.Agent, name: "test_agent", path: :domain, schema: []
 
     def signal_routes(_ctx) do
       [{"stop_test", StopTestAction}]
@@ -39,7 +39,7 @@ defmodule JidoTest.AgentServerStopLogTest do
   test "Stop directive with normal reason logs warning", %{jido: jido} do
     log =
       capture_log(fn ->
-        {:ok, pid} = AgentServer.start_link(agent: TestAgent, jido: jido)
+        {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
         ref = Process.monitor(pid)
 
         signal = Signal.new!("stop_test", %{}, source: "/test")

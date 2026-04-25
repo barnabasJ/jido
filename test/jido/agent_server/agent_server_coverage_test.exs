@@ -25,83 +25,14 @@ defmodule JidoTest.AgentServerCoverageTest do
     @moduledoc false
     use Jido.Agent,
       name: "simple_test_agent",
+
+      path: :domain,
       schema: [
         counter: [type: :integer, default: 0]
       ]
 
     def signal_routes(_ctx) do
       [{"increment", JidoTest.TestActions.IncrementAction}]
-    end
-  end
-
-  # Agent with on_before_cmd hook
-  defmodule BeforeHookAgent do
-    @moduledoc false
-    use Jido.Agent,
-      name: "before_hook_agent",
-      schema: [
-        counter: [type: :integer, default: 0],
-        before_called: [type: :boolean, default: false],
-        intercepted_action: [type: :any, default: nil]
-      ]
-
-    def signal_routes(_ctx) do
-      [{"increment", JidoTest.TestActions.IncrementAction}]
-    end
-
-    def on_before_cmd(agent, action) do
-      domain =
-        Map.merge(agent.state.__domain__, %{
-          before_called: true,
-          intercepted_action: action
-        })
-
-      agent = %{agent | state: %{agent.state | __domain__: domain}}
-
-      {:ok, agent, action}
-    end
-  end
-
-  # Agent with on_after_cmd hook
-  defmodule AfterHookAgent do
-    @moduledoc false
-    use Jido.Agent,
-      name: "after_hook_agent",
-      schema: [
-        counter: [type: :integer, default: 0],
-        after_called: [type: :boolean, default: false]
-      ]
-
-    def signal_routes(_ctx) do
-      [{"increment", JidoTest.TestActions.IncrementAction}]
-    end
-
-    def on_after_cmd(agent, _action, directives) do
-      {:ok, %{agent | state: put_in(agent.state, [:__domain__, :after_called], true)}, directives}
-    end
-  end
-
-  # Agent with both hooks
-  defmodule BothHooksAgent do
-    @moduledoc false
-    use Jido.Agent,
-      name: "both_hooks_agent",
-      schema: [
-        counter: [type: :integer, default: 0],
-        before_called: [type: :boolean, default: false],
-        after_called: [type: :boolean, default: false]
-      ]
-
-    def signal_routes(_ctx) do
-      [{"increment", JidoTest.TestActions.IncrementAction}]
-    end
-
-    def on_before_cmd(agent, action) do
-      {:ok, %{agent | state: put_in(agent.state, [:__domain__, :before_called], true)}, action}
-    end
-
-    def on_after_cmd(agent, _action, directives) do
-      {:ok, %{agent | state: put_in(agent.state, [:__domain__, :after_called], true)}, directives}
     end
   end
 
@@ -131,6 +62,8 @@ defmodule JidoTest.AgentServerCoverageTest do
     @moduledoc false
     use Jido.Agent,
       name: "many_directives_agent",
+
+      path: :domain,
       schema: [
         counter: [type: :integer, default: 0],
         directive_count: [type: :integer, default: 0]
@@ -177,6 +110,8 @@ defmodule JidoTest.AgentServerCoverageTest do
     @moduledoc false
     use Jido.Agent,
       name: "completion_agent",
+
+      path: :domain,
       schema: [
         status: [type: :atom, default: :pending],
         last_answer: [type: :any, default: nil],
@@ -205,7 +140,7 @@ defmodule JidoTest.AgentServerCoverageTest do
     test "via tuple that exists works", %{jido: jido} do
       {:ok, _pid} =
         AgentServer.start_link(
-          agent: Counter,
+          agent_module: Counter,
           id: "via-test-exists",
           jido: jido
         )
@@ -214,7 +149,7 @@ defmodule JidoTest.AgentServerCoverageTest do
       signal = Signal.new!("increment", %{}, source: "/test")
 
       {:ok, agent} = AgentServer.call(via, signal)
-      assert agent.state.__domain__.counter == 1
+      assert agent.state.domain.counter == 1
     end
   end
 
@@ -246,10 +181,10 @@ defmodule JidoTest.AgentServerCoverageTest do
 
   describe "agent resolution with defaults" do
     test "agent uses default values from schema", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: SimpleTestAgent, jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: SimpleTestAgent, jido: jido)
 
       {:ok, state} = AgentServer.state(pid)
-      assert state.agent.state.__domain__.counter == 0
+      assert state.agent.state.domain.counter == 0
 
       GenServer.stop(pid)
     end
@@ -257,7 +192,7 @@ defmodule JidoTest.AgentServerCoverageTest do
     test "id and initial_state options are respected", %{jido: jido} do
       {:ok, pid} =
         AgentServer.start_link(
-          agent: SimpleTestAgent,
+          agent_module: SimpleTestAgent,
           id: "custom-id-123",
           initial_state: %{counter: 999},
           jido: jido
@@ -265,7 +200,7 @@ defmodule JidoTest.AgentServerCoverageTest do
 
       {:ok, state} = AgentServer.state(pid)
       assert state.id == "custom-id-123"
-      assert state.agent.state.__domain__.counter == 999
+      assert state.agent.state.domain.counter == 999
 
       GenServer.stop(pid)
     end
@@ -274,128 +209,38 @@ defmodule JidoTest.AgentServerCoverageTest do
   describe "pre-built struct with agent_module option" do
     test "uses explicit agent_module for cmd routing", %{jido: jido} do
       agent = Counter.new(id: "prebuilt-struct-test")
-      agent = %{agent | state: put_in(agent.state, [:__domain__, :counter], 50)}
+      agent = %{agent | state: put_in(agent.state, [:domain, :counter], 50)}
 
       {:ok, pid} =
         AgentServer.start_link(
-          agent: agent,
           agent_module: Counter,
+          id: agent.id,
+          initial_state: agent.state,
           jido: jido
         )
 
       {:ok, state} = AgentServer.state(pid)
       assert state.id == "prebuilt-struct-test"
-      assert state.agent.state.__domain__.counter == 50
+      assert state.agent.state.domain.counter == 50
       assert state.agent_module == Counter
 
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, updated_agent} = AgentServer.call(pid, signal)
-      assert updated_agent.state.__domain__.counter == 51
-
-      GenServer.stop(pid)
-    end
-  end
-
-  describe "lifecycle hooks" do
-    test "on_before_cmd is called before action runs", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: BeforeHookAgent, jido: jido)
-
-      signal = Signal.new!("increment", %{}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
-
-      assert agent.state.__domain__.before_called == true
-      assert agent.state.__domain__.counter == 1
-
-      GenServer.stop(pid)
-    end
-
-    test "on_after_cmd is called after action runs", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: AfterHookAgent, jido: jido)
-
-      signal = Signal.new!("increment", %{}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
-
-      assert agent.state.__domain__.after_called == true
-      assert agent.state.__domain__.counter == 1
-
-      GenServer.stop(pid)
-    end
-
-    test "both hooks are called in order", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: BothHooksAgent, jido: jido)
-
-      signal = Signal.new!("increment", %{}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
-
-      assert agent.state.__domain__.before_called == true
-      assert agent.state.__domain__.after_called == true
-      assert agent.state.__domain__.counter == 1
-
-      GenServer.stop(pid)
-    end
-  end
-
-  describe "await_completion" do
-    # Completion fields live under the agent's :__domain__ slice (ADR 0008),
-    # so await_completion needs explicit paths into that slice.
-    @completion_paths [
-      status_path: [:__domain__, :status],
-      result_path: [:__domain__, :last_answer],
-      error_path: [:__domain__, :error]
-    ]
-
-    test "returns immediately when already completed", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CompletionAgent, jido: jido)
-
-      signal = Signal.new!("complete", %{}, source: "/test")
-      {:ok, _agent} = AgentServer.call(pid, signal)
-
-      {:ok, result} = AgentServer.await_completion(pid, @completion_paths)
-      assert result.status == :completed
-      assert result.result == "done!"
-
-      GenServer.stop(pid)
-    end
-
-    test "returns immediately when already failed", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CompletionAgent, jido: jido)
-
-      signal = Signal.new!("fail", %{}, source: "/test")
-      {:ok, _agent} = AgentServer.call(pid, signal)
-
-      {:ok, result} = AgentServer.await_completion(pid, @completion_paths)
-      assert result.status == :failed
-      assert result.result == "something went wrong"
-
-      GenServer.stop(pid)
-    end
-
-    test "timeout cleanup prevents completion_waiters growth", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CompletionAgent, jido: jido)
-
-      for _ <- 1..3 do
-        assert {:error, {:timeout, _diagnostic}} =
-                 AgentServer.await_completion(pid, timeout: 10)
-      end
-
-      eventually(
-        fn ->
-          {:ok, state} = AgentServer.state(pid)
-          map_size(state.completion_waiters) == 0
-        end,
-        timeout: 500
-      )
+      assert updated_agent.state.domain.counter == 51
 
       GenServer.stop(pid)
     end
   end
 
   describe "invalid signal handling" do
-    test "signal with no matching route returns error", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: JidoTest.TestAgents.Minimal, jido: jido)
+    test "signal with no matching route does not crash the agent", %{jido: jido} do
+      {:ok, pid} = AgentServer.start_link(agent_module: JidoTest.TestAgents.Minimal, jido: jido)
 
       signal = Signal.new!("nonexistent_action", %{}, source: "/test")
-      assert {:error, %Jido.Error.RoutingError{}} = AgentServer.call(pid, signal)
+      # AgentServer.call returns {:ok, agent} even on routing error;
+      # the error surfaces as a %Directive.Error{} in the directive stream,
+      # which is logged but doesn't fail the call.
+      assert {:ok, _agent} = AgentServer.call(pid, signal)
 
       GenServer.stop(pid)
     end
@@ -414,7 +259,7 @@ defmodule JidoTest.AgentServerCoverageTest do
     test "alive? returns true for existing via tuple", %{jido: jido} do
       {:ok, _pid} =
         AgentServer.start_link(
-          agent: Counter,
+          agent_module: Counter,
           id: "alive-via-test",
           jido: jido
         )

@@ -6,7 +6,7 @@ defmodule JidoTest.Pod.TopologyTest do
 
   defmodule WorkerAgent do
     @moduledoc false
-    use Jido.Agent, name: "pod_topology_worker"
+    use Jido.Agent, name: "pod_topology_worker", path: :domain
   end
 
   test "normalizes tuple shorthand links into canonical link structs" do

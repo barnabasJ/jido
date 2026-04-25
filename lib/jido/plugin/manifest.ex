@@ -17,10 +17,7 @@ defmodule Jido.Plugin.Manifest do
   - `vsn` - Optional version string
   - `capabilities` - List of atoms describing what the plugin provides
   - `requires` - List of requirements like `{:config, :token}`, `{:app, :req}`, `{:plugin, :http}`
-  - `state_key` - Atom key for plugin state in agent
-  - `path` - Atom key for slice state in agent (Slice equivalent of `state_key`;
-    populated alongside `state_key` for the duration of the Plugin → Slice
-    migration). New code should prefer reading `path`.
+  - `path` - Atom key for slice state in agent
   - `schema` - Zoi schema for plugin state
   - `config_schema` - Zoi schema for per-agent config
   - `actions` - List of action modules
@@ -48,13 +45,7 @@ defmodule Jido.Plugin.Manifest do
               requires:
                 Zoi.list(Zoi.any(), description: "Requirements like {:config, :key}")
                 |> Zoi.default([]),
-              state_key: Zoi.atom(description: "Key for plugin state in agent"),
-              path:
-                Zoi.atom(
-                  description:
-                    "Key for slice state in agent (Slice naming; populated alongside state_key during Plugin → Slice migration)"
-                )
-                |> Zoi.optional(),
+              path: Zoi.atom(description: "Slice key in agent.state owned by this plugin"),
               schema: Zoi.any(description: "Zoi schema for plugin state") |> Zoi.optional(),
               config_schema:
                 Zoi.any(description: "Zoi schema for per-agent config") |> Zoi.optional(),

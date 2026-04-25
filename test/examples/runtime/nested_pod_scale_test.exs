@@ -42,6 +42,7 @@ defmodule JidoExampleTest.NestedPodScaleTest do
     @moduledoc false
     use Jido.Agent,
       name: "example_nested_scale_worker",
+      path: :domain,
       schema: [
         role: [type: :string, default: "worker"]
       ]

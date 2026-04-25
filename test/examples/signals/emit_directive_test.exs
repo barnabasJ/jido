@@ -34,7 +34,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         total: [type: :integer, required: true]
       ]
 
-    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       orders = Map.get(slice, :orders, [])
 
       order = %{
@@ -108,6 +108,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
     @moduledoc false
     use Jido.Agent,
       name: "order_agent",
+      path: :domain,
       schema: [
         orders: [type: {:list, :map}, default: []],
         last_order_id: [type: :string, default: nil],
@@ -132,7 +133,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         amount: [type: :integer, default: 1]
       ]
 
-    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       current = Map.get(slice, :count, 0)
       new_count = current + amount
 
@@ -156,7 +157,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         count: [type: :integer, required: true]
       ]
 
-    def run(%Jido.Signal{data: %{previous_count: previous_count, count: count}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{previous_count: previous_count, count: count}}, slice, _opts, _ctx) do
       if is_pid(slice.observer),
         do: send(slice.observer, {:print_count, previous_count, count})
 
@@ -168,6 +169,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
     @moduledoc false
     use Jido.Agent,
       name: "internal_emit_agent",
+      path: :domain,
       schema: [
         count: [type: :integer, default: 0],
         observer: [type: :any, default: nil],
@@ -209,8 +211,8 @@ defmodule JidoExampleTest.EmitDirectiveTest do
 
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.__domain__.last_order_id == "ORD-001"
-      assert length(agent.state.__domain__.orders) == 1
+      assert agent.state.domain.last_order_id == "ORD-001"
+      assert length(agent.state.domain.orders) == 1
 
       eventually(
         fn ->
@@ -262,8 +264,8 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         )
 
       {:ok, state} = AgentServer.state(pid)
-      assert state.agent.state.__domain__.last_order_id == "ORD-100"
-      assert state.agent.state.__domain__.last_payment.status == :success
+      assert state.agent.state.domain.last_order_id == "ORD-100"
+      assert state.agent.state.domain.last_payment.status == :success
 
       eventually(
         fn ->
@@ -298,7 +300,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
       signal = Signal.new!("multi_emit", %{event_count: 5}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.__domain__.emitted_count == 5
+      assert agent.state.domain.emitted_count == 5
 
       eventually(
         fn ->

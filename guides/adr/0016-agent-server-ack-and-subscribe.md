@@ -1,9 +1,9 @@
 # 0016. Waiting on agents: ack + subscribe on AgentServer
 
-- Status: Proposed
-- Implementation: Pending
+- Status: Implemented
+- Implementation: Complete
 - Date: 2026-04-23
-- Related commits: —
+- Related commits: f48e3f2, (this commit)
 - Supersedes: [0010](0010-waiting-via-ack-and-subscribe.md)
 
 ## Context

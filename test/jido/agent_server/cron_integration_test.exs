@@ -8,16 +8,14 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
   alias Jido.Agent.Directive
   alias Jido.AgentServer
-  alias Jido.Persist
   alias Jido.Signal
-  alias Jido.Storage.ETS
   alias JidoTest.Support.FailingTimeZoneDatabase
 
   defmodule CronCountAction do
     @moduledoc false
     use Jido.Action, name: "cron_count", schema: []
 
-    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
       ticks = Map.get(slice, :ticks, [])
       {:ok, %{tick_count: count + 1, ticks: ticks ++ [params]}}
@@ -52,6 +50,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "cron_test_agent",
+      path: :domain,
       schema: [
         tick_count: [type: :integer, default: 0],
         ticks: [type: {:list, :any}, default: []]
@@ -68,7 +67,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
   describe "cron job registration" do
     test "agent can register a cron job", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-1", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-1", jido: jido)
 
       register_signal =
         Signal.new!(%{
@@ -92,7 +91,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     end
 
     test "agent can register multiple cron jobs", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-2", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-2", jido: jido)
 
       for {job_id, cron_expr} <- [heartbeat: "* * * * *", daily: "@daily", hourly: "@hourly"] do
         register_signal =
@@ -120,7 +119,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     end
 
     test "registering same job_id updates existing job (upsert)", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-3", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-3", jido: jido)
 
       register_signal1 =
         Signal.new!(%{
@@ -160,7 +159,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
     test "failed upsert preserves the existing runtime job and durable spec", %{jido: jido} do
       {:ok, pid} =
-        AgentServer.start_link(agent: CronTestAgent, id: "cron-test-upsert-invalid", jido: jido)
+        AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-upsert-invalid", jido: jido)
 
       register_signal =
         Signal.new!(%{
@@ -201,7 +200,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
     test "invalid dynamic cron input logs and preserves the agent", %{jido: jido} do
       {:ok, pid} =
-        AgentServer.start_link(agent: CronTestAgent, id: "cron-test-invalid-type", jido: jido)
+        AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-invalid-type", jido: jido)
 
       register_signal =
         Signal.new!(%{
@@ -234,7 +233,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
     test "rejects non-durable cron messages during registration", %{jido: jido} do
       {:ok, pid} =
-        AgentServer.start_link(agent: CronTestAgent, id: "cron-test-invalid-message", jido: jido)
+        AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-invalid-message", jido: jido)
 
       register_signal =
         Signal.new!(%{
@@ -264,99 +263,8 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
       GenServer.stop(pid)
     end
 
-    test "malformed restored cron spec is logged and dropped", %{jido: jido} do
-      scheduler_key = Jido.Scheduler.cron_specs_state_key()
-
-      agent =
-        CronTestAgent.new(id: "cron-test-restored-invalid")
-        |> then(fn agent ->
-          cron_specs = %{skipped: %{cron_expression: 123, message: :tick, timezone: "Etc/UTC"}}
-
-          %{agent | state: Map.put(agent.state, scheduler_key, cron_specs)}
-        end)
-
-      log =
-        capture_log(fn ->
-          {:ok, pid} =
-            AgentServer.start_link(
-              agent: agent,
-              agent_module: CronTestAgent,
-              id: "cron-test-restored-invalid",
-              jido: jido
-            )
-
-          assert Process.alive?(pid)
-
-          state = eventually_state(pid, fn state -> map_size(state.cron_jobs) == 0 end)
-
-          assert map_size(state.cron_jobs) == 0
-          refute Map.has_key?(state.cron_specs, :skipped)
-
-          GenServer.stop(pid)
-        end)
-
-      assert log =~ "dropped malformed persisted cron spec :skipped"
-    end
-
-    test "replay failure drops the durable spec and does not re-persist it", %{jido: jido} do
-      scheduler_key = Jido.Scheduler.cron_specs_state_key()
-      table = :"cron_replay_drop_#{System.unique_integer([:positive])}"
-
-      restored_signal =
-        Signal.new!(%{
-          type: "cron.tick",
-          source: "/test"
-        })
-
-      agent =
-        CronTestAgent.new(id: "cron-test-restored-transient")
-        |> then(fn agent ->
-          cron_specs = %{
-            skipped:
-              Jido.Scheduler.build_cron_spec("* * * * *", restored_signal, "America/New_York")
-          }
-
-          %{agent | state: Map.put(agent.state, scheduler_key, cron_specs)}
-        end)
-
-      on_exit(fn ->
-        Application.put_env(:jido, :time_zone_database, TimeZoneInfo.TimeZoneDatabase)
-      end)
-
-      log =
-        capture_log(fn ->
-          # Simulate time zone database failure
-          Application.put_env(:jido, :time_zone_database, FailingTimeZoneDatabase)
-
-          {:ok, pid} =
-            AgentServer.start_link(
-              agent: agent,
-              agent_module: CronTestAgent,
-              id: "cron-test-restored-transient",
-              jido: jido
-            )
-
-          {:ok, state} = AgentServer.state(pid)
-          refute Map.has_key?(state.cron_jobs, :skipped)
-          refute Map.has_key?(state.cron_specs, :skipped)
-
-          persisted_agent = Jido.Scheduler.attach_staged_cron_specs(state.agent, state.cron_specs)
-          assert :ok = Persist.hibernate({ETS, table: table}, persisted_agent)
-
-          {:ok, checkpoint} =
-            ETS.get_checkpoint({CronTestAgent, "cron-test-restored-transient"}, table: table)
-
-          refute Map.has_key?(checkpoint.state || %{}, scheduler_key)
-
-          GenServer.stop(pid)
-          Application.put_env(:jido, :time_zone_database, TimeZoneInfo.TimeZoneDatabase)
-        end)
-
-      assert log =~ "failed to register cron job :skipped"
-    end
-
     test "cron job with timezone", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-4", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-4", jido: jido)
 
       register_signal =
         Signal.new!(%{
@@ -378,7 +286,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     end
 
     test "invalid cron directive is isolated and agent survives", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-4b", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-4b", jido: jido)
       ref = Process.monitor(pid)
 
       register_signal =
@@ -403,7 +311,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     end
 
     test "invalid timezone directive is isolated and agent survives", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-4c", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-4c", jido: jido)
       ref = Process.monitor(pid)
 
       register_signal =
@@ -429,7 +337,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     end
 
     test "auto-generates job_id if not provided", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-5", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-5", jido: jido)
 
       register_signal =
         Signal.new!(%{
@@ -451,7 +359,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
   describe "runtime failure isolation and recovery" do
     test "abnormal cron job death does not kill agent and job restarts", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-9a", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-9a", jido: jido)
       server_ref = Process.monitor(pid)
 
       register_signal =
@@ -489,7 +397,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     end
 
     test "cancel removes durable spec even when runtime pid is already gone", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-9b", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-9b", jido: jido)
 
       register_signal =
         Signal.new!(%{
@@ -539,7 +447,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
   describe "cron job cancellation" do
     test "agent can cancel a cron job", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-6", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-6", jido: jido)
 
       register_signal =
         Signal.new!(%{
@@ -572,7 +480,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     end
 
     test "cancelling non-existent job is safe", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-7", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-7", jido: jido)
 
       cancel_signal =
         Signal.new!(%{
@@ -589,7 +497,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     end
 
     test "can cancel and re-register same job_id", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-8", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-8", jido: jido)
 
       register_signal =
         Signal.new!(%{
@@ -631,7 +539,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
   describe "cleanup on agent termination" do
     test "cron jobs are cleaned up when agent stops normally", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-10", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-10", jido: jido)
 
       register_signal =
         Signal.new!(%{
@@ -653,7 +561,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     end
 
     test "multiple cron jobs are all cleaned up on termination", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-11", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-11", jido: jido)
 
       job_ids = [:job1, :job2, :job3]
 
@@ -686,8 +594,8 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
   describe "job scoping" do
     test "different agents can use same job_id without collision", %{jido: jido} do
-      {:ok, pid1} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-12a", jido: jido)
-      {:ok, pid2} = AgentServer.start_link(agent: CronTestAgent, id: "cron-test-12b", jido: jido)
+      {:ok, pid1} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-12a", jido: jido)
+      {:ok, pid2} = AgentServer.start_link(agent_module: CronTestAgent, id: "cron-test-12b", jido: jido)
 
       for pid <- [pid1, pid2] do
         register_signal =

@@ -225,13 +225,7 @@ defmodule Jido.Storage.ETS do
   end
 
   defp ensure_table(name, extra_opts) do
-    case :ets.whereis(name) do
-      :undefined ->
-        :ets.new(name, [:named_table, :public, read_concurrency: true] ++ extra_opts)
-
-      _ref ->
-        :ok
-    end
+    Jido.Storage.ETS.TableOwner.ensure(name, extra_opts)
   rescue
     ArgumentError -> :ok
   end

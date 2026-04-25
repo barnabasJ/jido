@@ -7,7 +7,8 @@ defmodule Jido.Application do
     Jido.Telemetry.setup()
 
     children = [
-      {Task.Supervisor, name: Jido.Action.TaskSupervisor}
+      {Task.Supervisor, name: Jido.Action.TaskSupervisor},
+      Jido.Storage.ETS.TableOwner
     ]
 
     register_signal_extensions()

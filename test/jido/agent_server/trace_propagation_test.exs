@@ -21,6 +21,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
     @moduledoc false
     use Jido.Agent,
       name: "traced_agent",
+      path: :domain,
       schema: [
         counter: [type: :integer, default: 0],
         received_signals: [type: {:list, :any}, default: []]
@@ -48,7 +49,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
         nil
       )
 
-      {:ok, pid} = AgentServer.start_link(agent: TracedAgent, jido: context.jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: TracedAgent, jido: context.jido)
       signal = Signal.new!("increment", %{}, source: "/test")
 
       assert Trace.get(signal) == nil
@@ -76,7 +77,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
         nil
       )
 
-      {:ok, pid} = AgentServer.start_link(agent: TracedAgent, jido: context.jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: TracedAgent, jido: context.jido)
 
       ctx = Trace.new_root()
       signal = Signal.new!("increment", %{}, source: "/test")
@@ -109,7 +110,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
         nil
       )
 
-      {:ok, pid} = AgentServer.start_link(agent: TracedAgent, jido: context.jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: TracedAgent, jido: context.jido)
 
       ctx = Trace.new_root()
       signal = Signal.new!("emit", %{}, source: "/test")
@@ -139,7 +140,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
         nil
       )
 
-      {:ok, pid} = AgentServer.start_link(agent: TracedAgent, jido: context.jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: TracedAgent, jido: context.jido)
 
       parent_ctx = Trace.new_root()
       child_ctx = Trace.child_of(parent_ctx, "parent-signal-id")
@@ -159,6 +160,8 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
     end
 
     test "directive telemetry includes trace fields", context do
+      {:ok, pid} = AgentServer.start_link(agent_module: TracedAgent, jido: context.jido)
+
       test_pid = self()
       handler_id = "trace-directive-metadata-#{:erlang.unique_integer()}"
 
@@ -171,20 +174,27 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
         nil
       )
 
-      {:ok, pid} = AgentServer.start_link(agent: TracedAgent, jido: context.jido)
-
       ctx = Trace.new_root()
       signal = Signal.new!("emit", %{}, source: "/test")
       {:ok, traced_signal} = Trace.put(signal, ctx)
 
       {:ok, _agent} = AgentServer.call(pid, traced_signal)
 
-      assert_receive {:telemetry, metadata}, 1000
+      metadata = wait_for_trace(ctx.trace_id)
       assert metadata[:jido_trace_id] == ctx.trace_id
       assert metadata[:jido_span_id] == ctx.span_id
 
       :telemetry.detach(handler_id)
       GenServer.stop(pid)
+    end
+
+    defp wait_for_trace(trace_id) do
+      receive do
+        {:telemetry, %{jido_trace_id: ^trace_id} = metadata} -> metadata
+        {:telemetry, _other} -> wait_for_trace(trace_id)
+      after
+        1000 -> flunk("did not receive directive telemetry for trace #{trace_id}")
+      end
     end
   end
 end

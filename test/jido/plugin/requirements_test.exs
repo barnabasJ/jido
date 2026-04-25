@@ -8,7 +8,7 @@ defmodule JidoTest.Plugin.RequirementsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "no_requires",
-      state_key: :no_requires,
+      path: :no_requires,
       actions: [JidoTest.PluginTestAction]
   end
 
@@ -16,7 +16,7 @@ defmodule JidoTest.Plugin.RequirementsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "config_requires",
-      state_key: :config_requires,
+      path: :config_requires,
       actions: [JidoTest.PluginTestAction],
       requires: [
         {:config, :token},
@@ -28,7 +28,7 @@ defmodule JidoTest.Plugin.RequirementsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "app_requires",
-      state_key: :app_requires,
+      path: :app_requires,
       actions: [JidoTest.PluginTestAction],
       requires: [
         {:app, :elixir}
@@ -39,7 +39,7 @@ defmodule JidoTest.Plugin.RequirementsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "missing_app_requires",
-      state_key: :missing_app_requires,
+      path: :missing_app_requires,
       actions: [JidoTest.PluginTestAction],
       requires: [
         {:app, :nonexistent_app_xyz}
@@ -50,7 +50,7 @@ defmodule JidoTest.Plugin.RequirementsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "plugin_requires",
-      state_key: :plugin_requires,
+      path: :plugin_requires,
       actions: [JidoTest.PluginTestAction],
       requires: [
         {:plugin, "no_requires"}
@@ -61,7 +61,7 @@ defmodule JidoTest.Plugin.RequirementsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "mixed_requires",
-      state_key: :mixed_requires,
+      path: :mixed_requires,
       actions: [JidoTest.PluginTestAction],
       requires: [
         {:config, :api_key},

@@ -28,6 +28,7 @@ defmodule JidoExampleTest.PersistenceStorageTest do
     @moduledoc false
     use Jido.Agent,
       name: "persistable_agent",
+      path: :domain,
       description: "An agent demonstrating persistence with ETS storage",
       schema: [
         counter: [type: :integer, default: 0],
@@ -58,8 +59,8 @@ defmodule JidoExampleTest.PersistenceStorageTest do
       {:ok, restored} = Persist.thaw(storage(table), PersistableAgent, "rt-1")
 
       assert restored.id == "rt-1"
-      assert restored.state.__domain__.counter == 42
-      assert restored.state.__domain__.status == :active
+      assert restored.state.domain.counter == 42
+      assert restored.state.domain.status == :active
       assert restored.state.notes == ["hello"]
     end
 
@@ -75,14 +76,14 @@ defmodule JidoExampleTest.PersistenceStorageTest do
       agent = PersistableAgent.new(id: "mutate-1")
 
       agent = %{agent | state: %{agent.state | counter: 1}}
-      agent = %{agent | state: %{agent.state | counter: agent.state.__domain__.counter + 9}}
+      agent = %{agent | state: %{agent.state | counter: agent.state.domain.counter + 9}}
       agent = %{agent | state: %{agent.state | status: :processing, notes: ["step1", "step2"]}}
 
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, restored} = Persist.thaw(storage(table), PersistableAgent, "mutate-1")
 
-      assert restored.state.__domain__.counter == 10
-      assert restored.state.__domain__.status == :processing
+      assert restored.state.domain.counter == 10
+      assert restored.state.domain.status == :processing
       assert restored.state.notes == ["step1", "step2"]
     end
   end
@@ -97,12 +98,12 @@ defmodule JidoExampleTest.PersistenceStorageTest do
         |> Thread.append(%{kind: :message, payload: %{content: "hello"}})
         |> Thread.append(%{kind: :message, payload: %{content: "world"}})
 
-      agent = %{agent | state: Map.put(agent.state, :__thread__, thread)}
+      agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
       :ok = Persist.hibernate(storage(table), agent)
 
       {:ok, checkpoint} = ETS.get_checkpoint({PersistableAgent, "thread-1"}, table: table)
-      refute Map.has_key?(checkpoint.state, :__thread__)
+      refute Map.has_key?(checkpoint.state, :thread)
       assert checkpoint.thread == %{id: "thread-flush-1", rev: 2}
 
       {:ok, stored_thread} = ETS.load_thread("thread-flush-1", table: table)
@@ -119,14 +120,14 @@ defmodule JidoExampleTest.PersistenceStorageTest do
         |> Thread.append(%{kind: :message, payload: %{role: "user", content: "question"}})
         |> Thread.append(%{kind: :message, payload: %{role: "assistant", content: "answer"}})
 
-      agent = %{agent | state: Map.put(agent.state, :__thread__, thread)}
+      agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, restored} = Persist.thaw(storage(table), PersistableAgent, "thread-2")
 
-      assert restored.state.__domain__.counter == 7
+      assert restored.state.domain.counter == 7
 
-      rehydrated = restored.state[:__thread__]
+      rehydrated = restored.state[:thread]
       assert rehydrated.id == "thread-restore-1"
       assert Thread.entry_count(rehydrated) == 2
     end
@@ -148,10 +149,10 @@ defmodule JidoExampleTest.PersistenceStorageTest do
       {:ok, restored_a} = Persist.thaw(storage(table), PersistableAgent, "multi-a")
       {:ok, restored_b} = Persist.thaw(storage(table), PersistableAgent, "multi-b")
 
-      assert restored_a.state.__domain__.counter == 100
-      assert restored_a.state.__domain__.status == :done
+      assert restored_a.state.domain.counter == 100
+      assert restored_a.state.domain.status == :done
 
-      assert restored_b.state.__domain__.counter == 200
+      assert restored_b.state.domain.counter == 200
       assert restored_b.state.notes == ["important"]
     end
   end

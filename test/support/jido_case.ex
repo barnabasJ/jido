@@ -115,7 +115,7 @@ defmodule JidoTest.Case do
   def start_server(context, agent, opts \\ []) do
     opts = Keyword.put_new(opts, :jido, context.jido)
     opts = Keyword.put_new(opts, :id, unique_id())
-    {:ok, pid} = Jido.AgentServer.start_link([agent: agent] ++ opts)
+    {:ok, pid} = Jido.AgentServer.start_link([agent_module: agent] ++ opts)
 
     ExUnit.Callbacks.on_exit(fn ->
       if Process.alive?(pid) do

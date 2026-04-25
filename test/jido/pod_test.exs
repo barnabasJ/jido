@@ -10,14 +10,15 @@ defmodule JidoTest.PodTest do
   defmodule WorkerAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "pod_test_worker"
+      name: "pod_test_worker",
+      path: :domain
   end
 
   defmodule CustomPodPlugin do
     @moduledoc false
     use Jido.Plugin,
       name: "custom_pod",
-      state_key: :__pod__,
+      path: :pod,
       actions: [],
       schema:
         Zoi.object(%{
@@ -27,18 +28,13 @@ defmodule JidoTest.PodTest do
         }),
       capabilities: [:pod],
       singleton: true
-
-    @impl true
-    def mount(agent, _config) do
-      Plugin.build_state(agent.agent_module, %{metadata: %{custom: true}})
-    end
   end
 
   defmodule UserPlugin do
     @moduledoc false
     use Jido.Plugin,
       name: "pod_test_user_plugin",
-      state_key: :pod_test_user_plugin,
+      path: :pod_test_user_plugin,
       actions: [],
       schema: Zoi.object(%{}),
       capabilities: []
@@ -67,7 +63,7 @@ defmodule JidoTest.PodTest do
       topology: %{
         worker: %{agent: WorkerAgent, manager: :worker_nodes}
       },
-      default_plugins: %{__pod__: CustomPodPlugin}
+      default_plugins: %{pod: CustomPodPlugin}
   end
 
   test "use Jido.Pod wraps an agent module with a canonical topology" do
@@ -77,7 +73,7 @@ defmodule JidoTest.PodTest do
     assert %Node{activation: :eager, module: WorkerAgent} = ExamplePod.topology().nodes.planner
 
     assert Enum.any?(ExamplePod.plugin_instances(), fn instance ->
-             instance.module == Plugin and instance.state_key == :__pod__
+             instance.module == Plugin and instance.path == :pod
            end)
   end
 
@@ -89,14 +85,14 @@ defmodule JidoTest.PodTest do
     assert {:ok, %Topology{name: "empty_pod", nodes: %{}}} = Pod.fetch_topology(agent)
   end
 
-  test "default_plugins can replace the reserved __pod__ plugin" do
+  test "default_plugins can replace the reserved pod plugin" do
     assert Enum.any?(CustomPluginPod.plugin_instances(), fn instance ->
-             instance.module == CustomPodPlugin and instance.state_key == :__pod__
+             instance.module == CustomPodPlugin and instance.path == :pod
            end)
 
     agent = CustomPluginPod.new()
 
-    assert {:ok, %{metadata: %{custom: true}}} = Pod.fetch_state(agent)
+    assert {:ok, %{metadata: %{}}} = Pod.fetch_state(agent)
     assert {:ok, %Topology{name: "custom_plugin_pod"}} = Pod.fetch_topology(agent)
   end
 
@@ -117,12 +113,12 @@ defmodule JidoTest.PodTest do
     """)
 
     assert Enum.any?(pod_mod.plugin_instances(), fn instance ->
-             instance.module == UserPlugin and instance.state_key == :pod_test_user_plugin
+             instance.module == UserPlugin and instance.path == :pod_test_user_plugin
            end)
   end
 
-  test "disabling the reserved __pod__ plugin raises at compile time" do
-    message = ~r/Jido.Pod requires a singleton pod plugin under __pod__/
+  test "disabling the reserved pod plugin raises at compile time" do
+    message = ~r/Jido.Pod requires a singleton pod plugin under pod/
 
     assert_raise CompileError, message, fn ->
       Code.compile_string("""
@@ -130,7 +126,7 @@ defmodule JidoTest.PodTest do
         use Jido.Pod,
           name: "disabled_pod",
           topology: %{worker: %{agent: #{inspect(WorkerAgent)}, manager: :workers}},
-          default_plugins: %{__pod__: false}
+          default_plugins: %{pod: false}
       end
       """)
     end

@@ -16,14 +16,14 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
     @moduledoc false
     use Jido.Action, name: "emit_three"
 
-    def run(_signal, _slice, _opts, _ctx) do
+    def run(_signal, slice, _opts, _ctx) do
       directives = [
         %JidoTest.SetStateDirective{key: :d1_ran, value: true},
         %JidoTest.SetStateDirective{key: :d2_ran, value: true},
         %JidoTest.SetStateDirective{key: :d3_ran, value: true}
       ]
 
-      {:ok, %{cmd_ran: true}, directives}
+      {:ok, Map.put(slice || %{}, :cmd_ran, true), directives}
     end
   end
 
@@ -31,14 +31,17 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
     @moduledoc false
     use Jido.Action, name: "observe"
 
-    def run(_signal, slice, _opts, ctx) do
-      {:ok,
-       %{
-         saw_cmd: Map.get(slice, :cmd_ran, false),
-         saw_d1: Map.get(slice, :d1_ran, false),
-         saw_d2: Map.get(slice, :d2_ran, false),
-         saw_d3: Map.get(slice, :d3_ran, false)
-       }}
+    def run(_signal, slice, _opts, _ctx) do
+      slice = slice || %{}
+
+      observation = %{
+        saw_cmd: Map.get(slice, :cmd_ran, false),
+        saw_d1: Map.get(slice, :d1_ran, false),
+        saw_d2: Map.get(slice, :d2_ran, false),
+        saw_d3: Map.get(slice, :d3_ran, false)
+      }
+
+      {:ok, Map.merge(slice, observation)}
     end
   end
 
@@ -46,6 +49,7 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
     @moduledoc false
     use Jido.Agent,
       name: "atomicity_agent",
+      path: :domain,
       schema: [
         cmd_ran: [type: :boolean, default: false],
         d1_ran: [type: :boolean, default: false],
@@ -73,11 +77,11 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
       Jido.AgentServer.cast(pid, signal("observe", %{}))
 
       eventually_state(pid, fn state ->
-        state.agent.state.__domain__.saw_d3
+        state.agent.state.domain.saw_d3
       end)
 
       {:ok, state} = Jido.AgentServer.state(pid)
-      domain = state.agent.state.__domain__
+      domain = state.agent.state.domain
 
       assert domain.cmd_ran
       assert domain.d1_ran

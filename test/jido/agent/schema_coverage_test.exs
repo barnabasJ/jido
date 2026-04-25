@@ -189,7 +189,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       plugin_spec = %Jido.Plugin.Spec{
         module: MyPlugin,
         name: "plugin_one",
-        state_key: :plugin_one,
+        path: :plugin_one,
         schema: Zoi.map(%{value: Zoi.integer()}),
         actions: [],
         config: %{}
@@ -207,7 +207,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       plugin_spec = %Jido.Plugin.Spec{
         module: MyPlugin,
         name: "my_plugin",
-        state_key: :data,
+        path: :data,
         schema: Zoi.map(%{count: Zoi.integer(), name: Zoi.string()}),
         actions: [],
         config: %{}
@@ -225,7 +225,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       plugin_spec = %Jido.Plugin.Spec{
         module: MyPlugin,
         name: "my_plugin",
-        state_key: :plugin_data,
+        path: :plugin_data,
         schema: Zoi.map(%{x: Zoi.integer()}),
         actions: [],
         config: %{}
@@ -244,7 +244,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       plugin_spec = %Jido.Plugin.Spec{
         module: MyPlugin,
         name: "plugin",
-        state_key: :plugin,
+        path: :plugin,
         schema: Zoi.map(%{plugin_val: Zoi.integer()}),
         actions: [],
         config: %{}
@@ -263,7 +263,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       plugin_spec = %Jido.Plugin.Spec{
         module: MyPlugin,
         name: "plugin",
-        state_key: :plugin,
+        path: :plugin,
         schema: Zoi.map(%{plugin_val: Zoi.integer()}),
         actions: [],
         config: %{}
@@ -282,7 +282,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       plugin_spec = %Jido.Plugin.Spec{
         module: MyPlugin,
         name: "plugin",
-        state_key: :plugin,
+        path: :plugin,
         schema: Zoi.map(%{plugin_val: Zoi.integer()}),
         actions: [],
         config: %{}
@@ -301,7 +301,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       plugin_spec = %Jido.Plugin.Spec{
         module: MyPlugin,
         name: "plugin",
-        state_key: :plugin,
+        path: :plugin,
         schema: Zoi.map(%{plugin_val: Zoi.integer()}),
         actions: [],
         config: %{}
@@ -320,7 +320,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       plugin1 = %Jido.Plugin.Spec{
         module: PluginA,
         name: "plugin_a",
-        state_key: :plugin_a,
+        path: :plugin_a,
         schema: Zoi.map(%{a: Zoi.integer()}),
         actions: [],
         config: %{}
@@ -329,7 +329,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       plugin2 = %Jido.Plugin.Spec{
         module: PluginB,
         name: "plugin_b",
-        state_key: :plugin_b,
+        path: :plugin_b,
         schema: Zoi.map(%{b: Zoi.string()}),
         actions: [],
         config: %{}
@@ -347,7 +347,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       plugin_without_schema = %Jido.Plugin.Spec{
         module: PluginA,
         name: "plugin_a",
-        state_key: :plugin_a,
+        path: :plugin_a,
         schema: nil,
         actions: [],
         config: %{}
@@ -379,7 +379,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
           %Jido.Plugin.Spec{
             module: Module.concat(Plugin, "S#{i}"),
             name: "plugin_#{i}",
-            state_key: String.to_atom("s#{i}"),
+            path: String.to_atom("s#{i}"),
             schema: Zoi.map(%{value: Zoi.integer()}),
             actions: [],
             config: %{}
@@ -401,7 +401,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
         %Jido.Plugin.Spec{
           module: PluginA,
           name: "plugin_a",
-          state_key: :a,
+          path: :a,
           schema: Zoi.map(%{x: Zoi.integer()}),
           actions: [],
           config: %{}
@@ -409,7 +409,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
         %Jido.Plugin.Spec{
           module: PluginB,
           name: "plugin_b",
-          state_key: :b,
+          path: :b,
           schema: nil,
           actions: [],
           config: %{}
@@ -417,7 +417,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
         %Jido.Plugin.Spec{
           module: PluginC,
           name: "plugin_c",
-          state_key: :c,
+          path: :c,
           schema: Zoi.map(%{y: Zoi.string()}),
           actions: [],
           config: %{}

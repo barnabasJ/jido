@@ -1019,10 +1019,19 @@ defmodule Jido.AgentServer do
          :ok <- maybe_register_global(options, state) do
       state = maybe_monitor_parent(state)
 
-      # Persister middleware (if declared) blocks on thaw IO during this
-      # pass and replaces ctx.agent with the rehydrated struct. Downstream
-      # state.agent reflects post-thaw state.
+      # Build the signal router before we emit lifecycle signals. The
+      # Persister middleware (if declared) blocks on thaw IO during the
+      # starting signal and replaces ctx.agent with the rehydrated struct;
+      # downstream state.agent reflects post-thaw state. Plugin children /
+      # subscriptions / cron jobs still bring up in handle_continue/2.
+      signal_router = SignalRouter.build(state)
+      state = %{state | signal_router: signal_router}
+
       state = emit_through_chain(state, lifecycle_starting_signal(state))
+      # Persister middleware may have thawed an agent with staged cron specs
+      # in its state. Extract them onto state.cron_specs so the post_init
+      # phase can register them.
+      state = extract_thawed_cron_specs(state)
       state = emit_through_chain(state, partition_assigned_signal(state))
 
       {:ok, state, {:continue, :post_init}}
@@ -1091,9 +1100,6 @@ defmodule Jido.AgentServer do
 
   @impl true
   def handle_continue(:post_init, state) do
-    signal_router = SignalRouter.build(state)
-    state = %{state | signal_router: signal_router}
-
     state = start_plugin_children(state)
     state = start_plugin_subscriptions(state)
 
@@ -1658,6 +1664,7 @@ defmodule Jido.AgentServer do
       parent: state.parent,
       orphaned_from: state.orphaned_from,
       jido: state.jido,
+      cron_specs: state.cron_specs,
       __signal_router__: state.signal_router
     }
 
@@ -2086,9 +2093,16 @@ defmodule Jido.AgentServer do
       config = spec.config || %{}
 
       subscriptions =
-        if function_exported?(spec.module, :subscriptions, 2),
-          do: spec.module.subscriptions(config, context),
-          else: []
+        cond do
+          function_exported?(spec.module, :subscriptions, 2) ->
+            spec.module.subscriptions(config, context)
+
+          function_exported?(spec.module, :subscriptions, 0) ->
+            spec.module.subscriptions()
+
+          true ->
+            []
+        end
 
       Enum.reduce(subscriptions, acc_state, fn {sensor_module, sensor_config}, inner_state ->
         start_subscription_sensor(inner_state, spec.module, sensor_module, sensor_config, context)
@@ -2157,6 +2171,31 @@ defmodule Jido.AgentServer do
     Enum.reduce(schedules, state, fn schedule_spec, acc_state ->
       register_schedule(acc_state, schedule_spec)
     end)
+  end
+
+  # Pulls staged cron specs (from a thawed agent's state) up onto state.cron_specs
+  # and classifies them. Invalid specs are logged and dropped.
+  defp extract_thawed_cron_specs(%State{agent: agent} = state) do
+    {cleaned_agent, staged} = Jido.Scheduler.extract_staged_cron_specs(agent)
+
+    case staged do
+      empty when empty == %{} or empty == nil ->
+        state
+
+      staged ->
+        {valid, invalid} = Jido.Scheduler.classify_cron_specs(staged)
+
+        Enum.each(invalid, fn {job_id, spec, reason} ->
+          require Logger
+
+          Logger.error(
+            "AgentServer #{state.id} dropped malformed persisted cron spec #{inspect(job_id)}: #{inspect(spec)} (#{inspect(reason)})"
+          )
+        end)
+
+        merged = Map.merge(state.cron_specs, valid)
+        %{state | agent: cleaned_agent, cron_specs: merged}
+    end
   end
 
   defp register_restored_cron_specs(%State{cron_specs: cron_specs} = state)

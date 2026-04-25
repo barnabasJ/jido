@@ -56,9 +56,9 @@ defmodule JidoTest.JidoTest do
 
     test "returns the persisted binding for an adopted child", %{jido: jido} do
       {:ok, parent_pid} =
-        AgentServer.start(agent: Minimal, id: "parent-binding-parent", jido: jido)
+        AgentServer.start(agent_module: Minimal, id: "parent-binding-parent", jido: jido)
 
-      {:ok, child_pid} = AgentServer.start(agent: Minimal, id: "parent-binding-child", jido: jido)
+      {:ok, child_pid} = AgentServer.start(agent_module: Minimal, id: "parent-binding-child", jido: jido)
 
       assert {:ok, ^child_pid} = AgentServer.adopt_child(parent_pid, child_pid, :worker)
 
@@ -71,13 +71,13 @@ defmodule JidoTest.JidoTest do
 
     test "respects partitioned bindings", %{jido: jido} do
       {:ok, parent_pid} =
-        AgentServer.start(agent: Minimal, id: "partitioned-parent", jido: jido, partition: :alpha)
+        AgentServer.start(agent_module: Minimal, id: "partitioned-parent", jido: jido, partition: :alpha)
 
       {:ok, alpha_child_pid} =
-        AgentServer.start(agent: Minimal, id: "shared-child", jido: jido, partition: :alpha)
+        AgentServer.start(agent_module: Minimal, id: "shared-child", jido: jido, partition: :alpha)
 
       {:ok, _beta_child_pid} =
-        AgentServer.start(agent: Minimal, id: "shared-child", jido: jido, partition: :beta)
+        AgentServer.start(agent_module: Minimal, id: "shared-child", jido: jido, partition: :beta)
 
       assert {:ok, ^alpha_child_pid} =
                AgentServer.adopt_child(parent_pid, alpha_child_pid, :worker)
@@ -89,58 +89,6 @@ defmodule JidoTest.JidoTest do
 
       assert :error = Jido.parent_binding(jido, "shared-child", partition: :beta)
       assert :error = Jido.parent_binding(jido, "shared-child")
-    end
-  end
-
-  describe "await delegates" do
-    test "await/3 delegates to Jido.Await.completion", %{jido: jido} do
-      {:ok, pid} = Jido.start_agent(jido, Minimal, id: "await-delegate-test")
-
-      result = Jido.await(pid, 50)
-      assert {:error, {:timeout, _details}} = result
-    end
-
-    test "await_all/3 delegates to Jido.Await.all", %{jido: jido} do
-      {:ok, pid1} = Jido.start_agent(jido, Minimal, id: "await-all-delegate-1")
-      {:ok, pid2} = Jido.start_agent(jido, Minimal, id: "await-all-delegate-2")
-
-      result = Jido.await_all([pid1, pid2], 50)
-      assert {:error, :timeout} = result
-    end
-
-    test "await_any/3 delegates to Jido.Await.any", %{jido: jido} do
-      {:ok, pid1} = Jido.start_agent(jido, Minimal, id: "await-any-delegate-1")
-      {:ok, pid2} = Jido.start_agent(jido, Minimal, id: "await-any-delegate-2")
-
-      result = Jido.await_any([pid1, pid2], 50)
-      assert match?({:error, _}, result)
-    end
-
-    test "get_children/1 delegates to Jido.Await", %{jido: jido} do
-      {:ok, pid} = Jido.start_agent(jido, Minimal, id: "get-children-delegate")
-
-      {:ok, children} = Jido.get_children(pid)
-      assert children == %{}
-    end
-
-    test "get_child/2 delegates to Jido.Await", %{jido: jido} do
-      {:ok, pid} = Jido.start_agent(jido, Minimal, id: "get-child-delegate")
-
-      result = Jido.get_child(pid, :nonexistent)
-      assert {:error, :child_not_found} = result
-    end
-
-    test "alive?/1 delegates to Jido.Await", %{jido: jido} do
-      {:ok, pid} = Jido.start_agent(jido, Minimal, id: "alive-delegate")
-
-      assert Jido.alive?(pid) == true
-    end
-
-    test "cancel/2 delegates to Jido.Await", %{jido: jido} do
-      {:ok, pid} = Jido.start_agent(jido, Minimal, id: "cancel-delegate")
-
-      assert :ok = Jido.cancel(pid)
-      assert :ok = Jido.cancel(pid, reason: :user_cancelled)
     end
   end
 
@@ -186,11 +134,11 @@ defmodule JidoTest.JidoTest do
     end
   end
 
-  describe "await_child/4 delegate" do
-    test "await_child/4 returns timeout when child not found", %{jido: jido} do
+  describe "AgentServer.await_child/3" do
+    test "returns timeout when child not found", %{jido: jido} do
       {:ok, pid} = Jido.start_agent(jido, Minimal, id: "await-child-delegate")
 
-      result = Jido.await_child(pid, :nonexistent, 50)
+      result = Jido.AgentServer.await_child(pid, :nonexistent, timeout: 50)
       assert {:error, :timeout} = result
     end
   end

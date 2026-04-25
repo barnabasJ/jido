@@ -129,7 +129,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "plugin_with_sensor",
-      state_key: :with_sensor,
+      path: :with_sensor,
       actions: [JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction]
 
     @impl Jido.Plugin
@@ -145,7 +145,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "plugin_with_multiple_sensors",
-      state_key: :multi_sensors,
+      path: :multi_sensors,
       actions: [JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction]
 
     @impl Jido.Plugin
@@ -163,7 +163,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "plugin_with_no_subscriptions",
-      state_key: :no_subs,
+      path: :no_subs,
       actions: [JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction]
 
     @impl Jido.Plugin
@@ -176,7 +176,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "plugin_without_subscriptions_callback",
-      state_key: :no_callback,
+      path: :no_callback,
       actions: [JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction]
   end
 
@@ -184,7 +184,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "plugin_with_routed_sensor",
-      state_key: :routed_sensor,
+      path: :routed_sensor,
       actions: [JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction]
 
     @impl Jido.Plugin
@@ -208,6 +208,8 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Agent,
       name: "agent_with_sensor_plugin",
+
+      path: :domain,
       plugins: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithSensor]
   end
 
@@ -215,6 +217,8 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Agent,
       name: "agent_with_routed_sensor_plugin",
+
+      path: :domain,
       schema: [
         last_sensor_value: [type: :any, default: nil],
         last_sensor_count: [type: :integer, default: 0]
@@ -230,7 +234,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "plugin_with_static_subscriptions",
-      state_key: :static_subs,
+      path: :static_subs,
       actions: [JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction],
       subscriptions: [
         {JidoTest.AgentServer.PluginSubscriptionsTest.TestSensor,
@@ -242,6 +246,8 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Agent,
       name: "agent_with_static_sub_plugin",
+
+      path: :domain,
       plugins: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithStaticSubscriptions]
   end
 
@@ -249,6 +255,8 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Agent,
       name: "agent_with_multi_sensor_plugin",
+
+      path: :domain,
       plugins: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithMultipleSensors]
   end
 
@@ -256,6 +264,8 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Agent,
       name: "agent_with_no_subs_plugin",
+
+      path: :domain,
       plugins: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithNoSubscriptions]
   end
 
@@ -263,6 +273,8 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Agent,
       name: "agent_with_plugin_without_callback",
+
+      path: :domain,
       plugins: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithoutSubscriptionsCallback]
   end
 
@@ -270,6 +282,8 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     @moduledoc false
     use Jido.Agent,
       name: "agent_with_multiple_plugins",
+
+      path: :domain,
       plugins: [
         JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithSensor,
         JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithMultipleSensors
@@ -282,7 +296,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
   describe "plugin subscription sensors during post_init" do
     test "starts subscription sensor during post_init", %{jido: jido} do
-      {:ok, pid} = Jido.AgentServer.start_link(agent: AgentWithSensorPlugin, jido: jido)
+      {:ok, pid} = Jido.AgentServer.start_link(agent_module: AgentWithSensorPlugin, jido: jido)
 
       {:ok, state} = Jido.AgentServer.state(pid)
 
@@ -302,7 +316,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     end
 
     test "sensor is monitored by AgentServer", %{jido: jido} do
-      {:ok, pid} = Jido.AgentServer.start_link(agent: AgentWithSensorPlugin, jido: jido)
+      {:ok, pid} = Jido.AgentServer.start_link(agent_module: AgentWithSensorPlugin, jido: jido)
 
       {:ok, state} = Jido.AgentServer.state(pid)
 
@@ -331,7 +345,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     test "sensor receives correct context with agent_ref, agent_id, agent_module, plugin_spec", %{
       jido: jido
     } do
-      {:ok, pid} = Jido.AgentServer.start_link(agent: AgentWithSensorPlugin, jido: jido)
+      {:ok, pid} = Jido.AgentServer.start_link(agent_module: AgentWithSensorPlugin, jido: jido)
 
       {:ok, state} = Jido.AgentServer.state(pid)
 
@@ -357,7 +371,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
   describe "signal delivery to agent" do
     test "sensor signals are delivered to the agent", %{jido: jido} do
-      {:ok, pid} = Jido.AgentServer.start_link(agent: AgentWithRoutedSensorPlugin, jido: jido)
+      {:ok, pid} = Jido.AgentServer.start_link(agent_module: AgentWithRoutedSensorPlugin, jido: jido)
 
       {:ok, state} = Jido.AgentServer.state(pid)
 
@@ -371,12 +385,12 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
       state =
         eventually_state(pid, fn state ->
-          state.agent.state.__domain__.last_sensor_value == :test_value and
-            state.agent.state.__domain__.last_sensor_count == 1
+          state.agent.state.domain.last_sensor_value == :test_value and
+            state.agent.state.domain.last_sensor_count == 1
         end)
 
-      assert state.agent.state.__domain__.last_sensor_value == :test_value
-      assert state.agent.state.__domain__.last_sensor_count == 1
+      assert state.agent.state.domain.last_sensor_value == :test_value
+      assert state.agent.state.domain.last_sensor_count == 1
 
       GenServer.stop(pid)
     end
@@ -384,7 +398,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
   describe "multiple sensors from same plugin" do
     test "starts all sensors from plugin with multiple subscriptions", %{jido: jido} do
-      {:ok, pid} = Jido.AgentServer.start_link(agent: AgentWithMultiSensorPlugin, jido: jido)
+      {:ok, pid} = Jido.AgentServer.start_link(agent_module: AgentWithMultiSensorPlugin, jido: jido)
 
       {:ok, state} = Jido.AgentServer.state(pid)
 
@@ -411,7 +425,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
   describe "multiple plugins with sensors" do
     test "starts sensors from all plugins", %{jido: jido} do
-      {:ok, pid} = Jido.AgentServer.start_link(agent: AgentWithMultiplePlugins, jido: jido)
+      {:ok, pid} = Jido.AgentServer.start_link(agent_module: AgentWithMultiplePlugins, jido: jido)
 
       {:ok, state} = Jido.AgentServer.state(pid)
 
@@ -436,7 +450,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
   describe "plugin with empty subscriptions" do
     test "plugin returning empty list works fine", %{jido: jido} do
-      {:ok, pid} = Jido.AgentServer.start_link(agent: AgentWithNoSubscriptionsPlugin, jido: jido)
+      {:ok, pid} = Jido.AgentServer.start_link(agent_module: AgentWithNoSubscriptionsPlugin, jido: jido)
 
       {:ok, state} = Jido.AgentServer.state(pid)
 
@@ -450,7 +464,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     end
 
     test "plugin without subscriptions callback works fine", %{jido: jido} do
-      {:ok, pid} = Jido.AgentServer.start_link(agent: AgentWithPluginWithoutCallback, jido: jido)
+      {:ok, pid} = Jido.AgentServer.start_link(agent_module: AgentWithPluginWithoutCallback, jido: jido)
 
       {:ok, state} = Jido.AgentServer.state(pid)
 
@@ -466,7 +480,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
   describe "sensor child tracking" do
     test "sensors are tracked in agent's children map", %{jido: jido} do
-      {:ok, pid} = Jido.AgentServer.start_link(agent: AgentWithSensorPlugin, jido: jido)
+      {:ok, pid} = Jido.AgentServer.start_link(agent_module: AgentWithSensorPlugin, jido: jido)
 
       {:ok, state} = Jido.AgentServer.state(pid)
 
@@ -484,7 +498,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
   describe "sensor cleanup on AgentServer stop" do
     test "sensors are cleaned up when AgentServer stops", %{jido: jido} do
-      {:ok, pid} = Jido.AgentServer.start_link(agent: AgentWithSensorPlugin, jido: jido)
+      {:ok, pid} = Jido.AgentServer.start_link(agent_module: AgentWithSensorPlugin, jido: jido)
 
       {:ok, state} = Jido.AgentServer.state(pid)
 
@@ -507,7 +521,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
   describe "static plugin subscriptions" do
     test "starts static subscription sensor during post_init", %{jido: jido} do
       {:ok, pid} =
-        Jido.AgentServer.start_link(agent: AgentWithStaticSubscriptionPlugin, jido: jido)
+        Jido.AgentServer.start_link(agent_module: AgentWithStaticSubscriptionPlugin, jido: jido)
 
       {:ok, state} = Jido.AgentServer.state(pid)
 

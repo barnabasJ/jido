@@ -19,10 +19,12 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
     @moduledoc false
     use Jido.Action, name: "step1"
 
-    def run(_signal, _slice, _opts, _ctx) do
+    def run(_signal, slice, _opts, _ctx) do
       # Sets step1_cmd_ran via the cmd state update; the emitted directive
       # then sets step1_directive_ran via a state-op directive.
-      {:ok, %{step1_cmd_ran: true},
+      slice = slice || %{}
+
+      {:ok, Map.put(slice, :step1_cmd_ran, true),
        %JidoTest.SetStateDirective{key: :step1_directive_ran, value: true}}
     end
   end
@@ -31,11 +33,13 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
     @moduledoc false
     use Jido.Action, name: "step2"
 
-    def run(_signal, slice, _opts, ctx) do
+    def run(_signal, slice, _opts, _ctx) do
+      slice = slice || %{}
       saw_cmd = Map.get(slice, :step1_cmd_ran, false)
       saw_directive = Map.get(slice, :step1_directive_ran, false)
 
-      {:ok, %{step2_saw_cmd_ran: saw_cmd, step2_saw_directive_ran: saw_directive}}
+      {:ok,
+       Map.merge(slice, %{step2_saw_cmd_ran: saw_cmd, step2_saw_directive_ran: saw_directive})}
     end
   end
 
@@ -45,6 +49,7 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
     @moduledoc false
     use Jido.Agent,
       name: "ordering_agent",
+      path: :domain,
       schema: [
         step1_cmd_ran: [type: :boolean, default: false],
         step1_directive_ran: [type: :boolean, default: false],
@@ -77,11 +82,11 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
       Jido.AgentServer.cast(pid, signal2)
 
       eventually_state(pid, fn state ->
-        state.agent.state.__domain__.step2_saw_cmd_ran
+        state.agent.state.domain.step2_saw_cmd_ran
       end)
 
       {:ok, state} = Jido.AgentServer.state(pid)
-      agent_state = state.agent.state.__domain__
+      agent_state = state.agent.state.domain
 
       assert agent_state.step1_cmd_ran == true
       assert agent_state.step1_directive_ran == true

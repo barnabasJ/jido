@@ -18,7 +18,7 @@ defmodule JidoTest.Agent.SchemaTest do
       plugin_spec = %Jido.Plugin.Spec{
         module: MyPlugin,
         name: "my_plugin",
-        state_key: :my_plugin,
+        path: :my_plugin,
         schema: Zoi.object(%{count: Zoi.integer()}),
         actions: [],
         config: %{}
@@ -37,7 +37,7 @@ defmodule JidoTest.Agent.SchemaTest do
       plugin_spec = %Jido.Plugin.Spec{
         module: MyPlugin,
         name: "my_plugin",
-        state_key: :plugin_data,
+        path: :plugin_data,
         schema: Zoi.object(%{value: Zoi.integer()}),
         actions: [],
         config: %{}
@@ -54,7 +54,7 @@ defmodule JidoTest.Agent.SchemaTest do
       plugin_with_schema = %Jido.Plugin.Spec{
         module: PluginA,
         name: "plugin_a",
-        state_key: :plugin_a,
+        path: :plugin_a,
         schema: Zoi.object(%{a: Zoi.integer()}),
         actions: [],
         config: %{}
@@ -63,7 +63,7 @@ defmodule JidoTest.Agent.SchemaTest do
       plugin_without_schema = %Jido.Plugin.Spec{
         module: PluginB,
         name: "plugin_b",
-        state_key: :plugin_b,
+        path: :plugin_b,
         schema: nil,
         actions: [],
         config: %{}

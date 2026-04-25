@@ -7,7 +7,7 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "fake_memory",
-      state_key: :__memory__,
+      path: :memory,
       actions: [JidoTest.PluginTestAction],
       singleton: true
   end
@@ -16,7 +16,7 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "fake_thread",
-      state_key: :__thread__,
+      path: :thread,
       actions: [JidoTest.PluginTestAction],
       singleton: true
   end
@@ -25,7 +25,7 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "replacement_memory",
-      state_key: :__memory__,
+      path: :memory,
       actions: [JidoTest.PluginTestAction],
       singleton: true
   end
@@ -34,7 +34,7 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "user_plugin",
-      state_key: :user_stuff,
+      path: :user_stuff,
       actions: [JidoTest.PluginTestAction]
   end
 
@@ -66,7 +66,7 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
 
     test "exclude a default by state_key" do
       defaults = [FakeMemoryPlugin, FakeThreadPlugin]
-      result = DefaultPlugins.apply_agent_overrides(defaults, %{__thread__: false})
+      result = DefaultPlugins.apply_agent_overrides(defaults, %{thread: false})
       assert result == [FakeMemoryPlugin]
     end
 
@@ -74,7 +74,7 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defaults = [FakeMemoryPlugin, FakeThreadPlugin]
 
       result =
-        DefaultPlugins.apply_agent_overrides(defaults, %{__memory__: ReplacementMemoryPlugin})
+        DefaultPlugins.apply_agent_overrides(defaults, %{memory: ReplacementMemoryPlugin})
 
       assert result == [ReplacementMemoryPlugin, FakeThreadPlugin]
     end
@@ -84,7 +84,7 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
 
       result =
         DefaultPlugins.apply_agent_overrides(defaults, %{
-          __memory__: {ReplacementMemoryPlugin, %{timeout: 5000}}
+          memory: {ReplacementMemoryPlugin, %{timeout: 5000}}
         })
 
       assert result == [{ReplacementMemoryPlugin, %{timeout: 5000}}, FakeThreadPlugin]
@@ -92,7 +92,7 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
 
     test "combine exclude and replace" do
       defaults = [FakeMemoryPlugin, FakeThreadPlugin]
-      overrides = %{__thread__: false, __memory__: ReplacementMemoryPlugin}
+      overrides = %{thread: false, memory: ReplacementMemoryPlugin}
       result = DefaultPlugins.apply_agent_overrides(defaults, overrides)
       assert result == [ReplacementMemoryPlugin]
     end
@@ -107,7 +107,7 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
 
     test "handles defaults with config tuples" do
       defaults = [{FakeMemoryPlugin, %{opt: true}}, FakeThreadPlugin]
-      result = DefaultPlugins.apply_agent_overrides(defaults, %{__thread__: false})
+      result = DefaultPlugins.apply_agent_overrides(defaults, %{thread: false})
       assert result == [{FakeMemoryPlugin, %{opt: true}}]
     end
 
@@ -115,21 +115,21 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defaults = [{FakeMemoryPlugin, %{opt: true}}, FakeThreadPlugin]
 
       result =
-        DefaultPlugins.apply_agent_overrides(defaults, %{__memory__: ReplacementMemoryPlugin})
+        DefaultPlugins.apply_agent_overrides(defaults, %{memory: ReplacementMemoryPlugin})
 
       assert result == [ReplacementMemoryPlugin, FakeThreadPlugin]
     end
 
     test "exclude all defaults individually" do
       defaults = [FakeMemoryPlugin, FakeThreadPlugin]
-      overrides = %{__memory__: false, __thread__: false}
+      overrides = %{memory: false, thread: false}
       result = DefaultPlugins.apply_agent_overrides(defaults, overrides)
       assert result == []
     end
 
     test "single default list" do
       defaults = [FakeMemoryPlugin]
-      result = DefaultPlugins.apply_agent_overrides(defaults, %{__memory__: false})
+      result = DefaultPlugins.apply_agent_overrides(defaults, %{memory: false})
       assert result == []
     end
   end
@@ -137,7 +137,7 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
   describe "agent macro integration" do
     test "agent with no default_plugins option gets framework defaults" do
       defmodule AgentNoDefaults do
-        use Jido.Agent, name: "dp_agent_no_defaults"
+        use Jido.Agent, name: "dp_agent_no_defaults", path: :domain
       end
 
       instances = AgentNoDefaults.plugin_instances()
@@ -152,6 +152,8 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentDisableDefaults do
         use Jido.Agent,
           name: "dp_agent_disable_defaults",
+
+          path: :domain,
           default_plugins: false
       end
 
@@ -162,6 +164,8 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentUserPluginsOnly do
         use Jido.Agent,
           name: "dp_agent_user_only",
+
+          path: :domain,
           default_plugins: false,
           plugins: [UserPlugin]
       end
@@ -179,6 +183,8 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentWithJido do
         use Jido.Agent,
           name: "dp_agent_with_jido",
+
+          path: :domain,
           jido: FakeJido
       end
 
@@ -195,8 +201,10 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentWithJidoOverride do
         use Jido.Agent,
           name: "dp_agent_jido_override",
+
+          path: :domain,
           jido: FakeJido2,
-          default_plugins: %{__thread__: false}
+          default_plugins: %{thread: false}
       end
 
       instances = AgentWithJidoOverride.plugin_instances()
@@ -212,8 +220,10 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentWithReplacement do
         use Jido.Agent,
           name: "dp_agent_replacement",
+
+          path: :domain,
           jido: FakeJido3,
-          default_plugins: %{__memory__: ReplacementMemoryPlugin}
+          default_plugins: %{memory: ReplacementMemoryPlugin}
       end
 
       instances = AgentWithReplacement.plugin_instances()
@@ -231,6 +241,8 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentMountOrder do
         use Jido.Agent,
           name: "dp_agent_mount_order",
+
+          path: :domain,
           jido: FakeJido4,
           plugins: [UserPlugin]
       end

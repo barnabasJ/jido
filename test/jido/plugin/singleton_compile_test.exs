@@ -5,7 +5,7 @@ defmodule JidoTest.Plugin.SingletonCompileTest do
     @moduledoc false
     use Jido.Plugin,
       name: "singleton_fixture",
-      state_key: :singleton_fix,
+      path: :singleton_fix,
       actions: [JidoTest.PluginTestAction],
       singleton: true
   end
@@ -14,7 +14,7 @@ defmodule JidoTest.Plugin.SingletonCompileTest do
     @moduledoc false
     use Jido.Plugin,
       name: "regular_fixture",
-      state_key: :regular_fix,
+      path: :regular_fix,
       actions: [JidoTest.PluginTestAction]
   end
 
@@ -23,6 +23,8 @@ defmodule JidoTest.Plugin.SingletonCompileTest do
       defmodule ValidSingletonAgent do
         use Jido.Agent,
           name: "valid_singleton",
+
+          path: :domain,
           default_plugins: false,
           plugins: [SingletonFixture]
       end
@@ -34,6 +36,8 @@ defmodule JidoTest.Plugin.SingletonCompileTest do
       defmodule MixedPluginAgent do
         use Jido.Agent,
           name: "mixed_plugins",
+
+          path: :domain,
           default_plugins: false,
           plugins: [SingletonFixture, RegularFixture]
       end
@@ -46,6 +50,8 @@ defmodule JidoTest.Plugin.SingletonCompileTest do
         defmodule AliasedSingletonAgent do
           use Jido.Agent,
             name: "aliased_singleton",
+
+            path: :domain,
             plugins: [{SingletonFixture, as: :custom}]
         end
       end
@@ -56,6 +62,8 @@ defmodule JidoTest.Plugin.SingletonCompileTest do
         defmodule DuplicateSingletonAgent do
           use Jido.Agent,
             name: "duplicate_singleton",
+
+            path: :domain,
             plugins: [SingletonFixture, SingletonFixture]
         end
       end
@@ -65,6 +73,8 @@ defmodule JidoTest.Plugin.SingletonCompileTest do
       defmodule AliasedRegularAgent do
         use Jido.Agent,
           name: "aliased_regular",
+
+          path: :domain,
           default_plugins: false,
           plugins: [{RegularFixture, as: :alias1}]
       end

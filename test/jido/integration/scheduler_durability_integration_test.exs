@@ -35,7 +35,7 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
     @moduledoc false
     use Jido.Action, name: "plugin_tick", schema: []
 
-    def run(_signal, slice, _opts, ctx) do
+    def run(_signal, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
       ticks = Map.get(slice, :ticks, [])
       {:ok, %{tick_count: count + 1, ticks: ticks ++ [%{source: :plugin_schedule}]}}
@@ -46,7 +46,7 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
     @moduledoc false
     use Jido.Plugin,
       name: "scheduler_integration_plugin",
-      state_key: :scheduler_integration_plugin,
+      path: :scheduler_integration_plugin,
       actions: [PluginTickAction],
       schedules: [
         {"* * * * * * *", PluginTickAction}
@@ -57,6 +57,8 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "scheduler_integration_plugin_agent",
+
+      path: :domain,
       schema: [
         tick_count: [type: :integer, default: 0],
         ticks: [type: {:list, :any}, default: []]
@@ -72,6 +74,8 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "scheduler_restore_counting_agent",
+
+      path: :domain,
       schema: [
         counter: [type: :integer, default: 0]
       ]
@@ -414,7 +418,7 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
       end)
 
       agent = RestoreCountingAgent.new(id: "restore-once-agent")
-      agent = %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | counter: 41}}}
+      agent = %{agent | state: %{agent.state | domain: %{agent.state.domain | counter: 41}}}
 
       assert :ok =
                Persist.hibernate(
@@ -428,7 +432,7 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
       assert_receive {:restore_called, "restore-once-agent"}, 2_000
       refute_receive {:restore_called, "restore-once-agent"}, 500
 
-      assert state(pid).agent.state.__domain__.counter == 41
+      assert state(pid).agent.state.domain.counter == 41
 
       :ok = AgentServer.detach(pid)
     end

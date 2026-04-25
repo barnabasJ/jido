@@ -509,7 +509,7 @@ defmodule Jido.Persist do
   defp resolve_agent_identity(_), do: {:error, :invalid_agent}
 
   @spec get_thread(agent()) :: Thread.t() | nil
-  defp get_thread(%{state: %{__thread__: thread}}) when is_struct(thread, Thread), do: thread
+  defp get_thread(%{state: %{thread: thread}}) when is_struct(thread, Thread), do: thread
   defp get_thread(_agent), do: nil
 
   @spec attach_thread(agent(), Thread.t()) :: agent()

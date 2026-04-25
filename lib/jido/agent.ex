@@ -297,7 +297,7 @@ defmodule Jido.Agent do
                            default_plugins:
                              Zoi.any(
                                description:
-                                 "Override default plugins. false to disable all, or map of %{state_key => false | Module | {Module, config}}"
+                                 "Override default plugins. false to disable all, or map of %{path => false | Module | {Module, config}}"
                              )
                              |> Zoi.optional(),
                            schedules:
@@ -359,9 +359,18 @@ defmodule Jido.Agent do
   @callback signal_routes() :: [Jido.Signal.Router.route_spec()]
   @callback signal_routes(ctx :: map()) :: [Jido.Signal.Router.route_spec()]
 
+  @doc """
+  Optional persistence hooks. When implemented, `Jido.Persist.hibernate/2`
+  uses these to serialize/deserialize the agent. If absent, defaults are used.
+  """
+  @callback checkpoint(agent :: t(), ctx :: map()) :: {:ok, map()} | {:error, term()}
+  @callback restore(checkpoint :: map(), ctx :: map()) :: {:ok, t()} | {:error, term()}
+
   @optional_callbacks [
     signal_routes: 0,
-    signal_routes: 1
+    signal_routes: 1,
+    checkpoint: 2,
+    restore: 2
   ]
 
   # Helper functions that generate quoted code for the __using__ macro.
@@ -617,7 +626,7 @@ defmodule Jido.Agent do
           when is_atom(plugin_mod) and is_atom(as_alias) do
         case Enum.find(@plugin_instances, &(&1.module == plugin_mod and &1.as == as_alias)) do
           nil -> nil
-          instance -> Map.get(agent.state, instance.state_key)
+          instance -> Map.get(agent.state, instance.path)
         end
       end
     end
@@ -628,14 +637,14 @@ defmodule Jido.Agent do
       defp __find_plugin_state_by_module__(agent, plugin_mod) do
         case Enum.find(@plugin_instances, &(&1.module == plugin_mod and is_nil(&1.as))) do
           nil -> __find_plugin_state_fallback__(agent, plugin_mod)
-          instance -> Map.get(agent.state, instance.state_key)
+          instance -> Map.get(agent.state, instance.path)
         end
       end
 
       defp __find_plugin_state_fallback__(agent, plugin_mod) do
         case Enum.find(@plugin_instances, &(&1.module == plugin_mod)) do
           nil -> nil
-          instance -> Map.get(agent.state, instance.state_key)
+          instance -> Map.get(agent.state, instance.path)
         end
       end
     end
@@ -706,17 +715,24 @@ defmodule Jido.Agent do
 
         plugin_slices =
           Enum.reduce(@plugin_instances, %{}, fn instance, acc ->
-            user_for_slice = Map.get(user_state, instance.state_key, %{})
+            user_for_slice = Map.get(user_state, instance.path) || %{}
             merged_input = Map.merge(instance.config || %{}, user_for_slice)
             slice = Jido.Agent.__seed_plugin_slice__(instance.module, merged_input)
-            Map.put(acc, instance.state_key, slice)
+            Map.put(acc, instance.path, slice)
           end)
 
-        Map.put(plugin_slices, own_path, own_slice)
+        # Drop slice-owned keys from user_state, preserve everything else as
+        # top-level scratch state (state-ops can target it via SetPath/DeletePath/...).
+        known_slice_paths = [own_path | @plugin_paths]
+        leftover = Map.drop(user_state, known_slice_paths)
+
+        leftover
+        |> Map.merge(plugin_slices)
+        |> Map.put(own_path, own_slice)
       end
 
       defp __wrap_user_state__(%{} = user_state) do
-        known_slices = [path() | @plugin_state_keys]
+        known_slices = [path() | @plugin_paths]
 
         cond do
           map_size(user_state) == 0 ->
@@ -829,7 +845,7 @@ defmodule Jido.Agent do
           ctx
           |> Map.put_new(:agent_id, agent.id)
 
-        jido_instance = Map.get(ctx, :jido_instance)
+        jido_instance = Map.get(ctx, :jido_instance) || Map.get(ctx, :jido)
 
         base_context =
           case input_signal do
@@ -1077,18 +1093,18 @@ defmodule Jido.Agent do
             line: __ENV__.line
         end
 
-        # Build plugin specs from instances (for backward compatibility)
+        # Build plugin specs from instances (with the instance path).
         @plugin_specs Enum.map(@plugin_instances, fn instance ->
                         spec = instance.module.plugin_spec(instance.config)
-                        %{spec | state_key: instance.state_key}
+                        %{spec | path: instance.path}
                       end)
 
         # Validate unique slice paths across the agent and every declared
         # plugin. Path = agent.path() ++ each plugin.path(). A duplicate
         # raises Jido.Agent.PathConflictError at Agent.new/1 today, but we
         # fail fast at compile time when the conflict is statically known.
-        @plugin_state_keys Enum.map(@plugin_instances, & &1.state_key)
-        @all_slice_paths [@validated_opts.path | @plugin_state_keys]
+        @plugin_paths Enum.map(@plugin_instances, & &1.path)
+        @all_slice_paths [@validated_opts.path | @plugin_paths]
         @duplicate_paths @all_slice_paths -- Enum.uniq(@all_slice_paths)
         if @duplicate_paths != [] do
           raise CompileError,
@@ -1154,7 +1170,7 @@ defmodule Jido.Agent do
 
         # Validate plugin requirements at compile time
         @plugin_config_map Enum.reduce(@plugin_instances, %{}, fn instance, acc ->
-                             Map.put(acc, instance.state_key, instance.config)
+                             Map.put(acc, instance.path, instance.config)
                            end)
         @requirements_result Jido.Plugin.Requirements.validate_all_requirements(
                                @plugin_instances,

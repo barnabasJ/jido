@@ -38,7 +38,7 @@ defmodule JidoTest.Plugin.RoutesTest do
     @moduledoc false
     use Jido.Plugin,
       name: "plugin_with_routes",
-      state_key: :plugin_routes,
+      path: :plugin_routes,
       actions: [TestAction1, TestAction2],
       signal_routes: [
         {"post", TestAction1},
@@ -50,7 +50,7 @@ defmodule JidoTest.Plugin.RoutesTest do
     @moduledoc false
     use Jido.Plugin,
       name: "plugin_with_opts",
-      state_key: :plugin_opts,
+      path: :plugin_opts,
       actions: [TestAction1, TestAction2],
       signal_routes: [
         {"post", TestAction1, priority: 5},
@@ -58,20 +58,11 @@ defmodule JidoTest.Plugin.RoutesTest do
       ]
   end
 
-  defmodule PluginWithPatterns do
-    @moduledoc false
-    use Jido.Plugin,
-      name: "plugin_with_patterns",
-      state_key: :plugin_patterns,
-      actions: [TestAction1],
-      signal_patterns: ["incoming.*"]
-  end
-
   defmodule PluginNoRoutes do
     @moduledoc false
     use Jido.Plugin,
       name: "plugin_no_routes",
-      state_key: :plugin_no_routes,
+      path: :plugin_no_routes,
       actions: [TestAction1]
   end
 
@@ -106,15 +97,6 @@ defmodule JidoTest.Plugin.RoutesTest do
       assert {"support.plugin_with_routes.list", TestAction2, []} in routes
     end
 
-    test "falls back to legacy signal_patterns when routes empty" do
-      instance = Instance.new(PluginWithPatterns)
-
-      routes = Routes.expand_routes(instance)
-
-      assert length(routes) == 1
-      assert {"plugin_with_patterns.incoming.*", TestAction1, []} in routes
-    end
-
     test "returns empty list when no routes and no patterns" do
       instance = Instance.new(PluginNoRoutes)
 
@@ -123,31 +105,12 @@ defmodule JidoTest.Plugin.RoutesTest do
       assert routes == []
     end
 
-    test "legacy patterns generate routes for each action" do
-      defmodule MultiActionPatternPlugin do
-        @moduledoc false
-        use Jido.Plugin,
-          name: "multi_action",
-          state_key: :multi_action,
-          actions: [TestAction1, TestAction2],
-          signal_patterns: ["pattern1"]
-      end
-
-      instance = Instance.new(MultiActionPatternPlugin)
-
-      routes = Routes.expand_routes(instance)
-
-      assert length(routes) == 2
-      assert {"multi_action.pattern1", TestAction1, []} in routes
-      assert {"multi_action.pattern1", TestAction2, []} in routes
-    end
-
     test "returns empty when plugin has custom signal_routes/1 callback" do
       defmodule PluginWithCustomRouter do
         @moduledoc false
         use Jido.Plugin,
           name: "custom_router",
-          state_key: :custom_router,
+          path: :custom_router,
           actions: [TestAction1],
           signal_patterns: ["ignored.*"]
 
@@ -164,26 +127,6 @@ defmodule JidoTest.Plugin.RoutesTest do
       assert routes == []
     end
 
-    test "falls back to patterns when signal_routes/1 returns empty list" do
-      defmodule PluginWithNilRouter do
-        @moduledoc false
-        use Jido.Plugin,
-          name: "nil_router",
-          state_key: :nil_router,
-          actions: [TestAction1],
-          signal_patterns: ["fallback.*"]
-
-        @impl Jido.Plugin
-        def signal_routes(_config), do: []
-      end
-
-      instance = Instance.new(PluginWithNilRouter)
-
-      routes = Routes.expand_routes(instance)
-
-      assert length(routes) == 1
-      assert {"nil_router.fallback.*", TestAction1, []} in routes
-    end
   end
 
   describe "detect_conflicts/1" do

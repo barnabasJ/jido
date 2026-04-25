@@ -8,6 +8,7 @@ defmodule JidoTest.DebugIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "debug_integration_test_agent",
+      path: :domain,
       schema: [
         counter: [type: :integer, default: 0]
       ]

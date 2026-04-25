@@ -14,8 +14,8 @@ defmodule JidoTest.Memory.AgentTest do
   end
 
   describe "key/0" do
-    test "returns :__memory__" do
-      assert MemoryAgent.key() == :__memory__
+    test "returns :memory" do
+      assert MemoryAgent.key() == :memory
     end
   end
 
@@ -33,7 +33,7 @@ defmodule JidoTest.Memory.AgentTest do
 
     test "returns memory when present" do
       memory = Memory.new(id: "test-mem")
-      agent = %{create_agent() | state: %{__memory__: memory}}
+      agent = %{create_agent() | state: %{memory: memory}}
       assert MemoryAgent.get(agent) == memory
     end
   end
@@ -45,7 +45,7 @@ defmodule JidoTest.Memory.AgentTest do
 
       updated = MemoryAgent.put(agent, memory)
 
-      assert updated.state[:__memory__] == memory
+      assert updated.state[:memory] == memory
       assert MemoryAgent.get(updated) == memory
     end
 
@@ -56,7 +56,7 @@ defmodule JidoTest.Memory.AgentTest do
       updated = MemoryAgent.put(agent, memory)
 
       assert updated.state[:foo] == :bar
-      assert updated.state[:__memory__] == memory
+      assert updated.state[:memory] == memory
     end
   end
 

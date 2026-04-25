@@ -43,6 +43,7 @@ defmodule JidoTest.Signal.CallTest do
     @moduledoc false
     use Jido.Agent,
       name: "call_test_agent",
+      path: :domain,
       schema: []
 
     def signal_routes(_ctx) do
@@ -55,7 +56,7 @@ defmodule JidoTest.Signal.CallTest do
 
   describe "call/3" do
     test "returns the reply signal on the happy path", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CallTestAgent, id: "echo", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CallTestAgent, id: "echo", jido: jido)
 
       query = Signal.new!("jido.test.echo", %{}, source: "/test")
       assert {:ok, reply} = Call.call(pid, query)
@@ -68,7 +69,7 @@ defmodule JidoTest.Signal.CallTest do
 
     test "returns {:error, :timeout} when the action does not reply within the window",
          %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CallTestAgent, id: "silent", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CallTestAgent, id: "silent", jido: jido)
 
       query = Signal.new!("jido.test.silent", %{}, source: "/test")
       assert {:error, :timeout} = Call.call(pid, query, timeout: 50)
@@ -102,7 +103,7 @@ defmodule JidoTest.Signal.CallTest do
 
     test "returns {:error, :noproc} when the target process dies mid-call",
          %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent: CallTestAgent, id: "dying", jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: CallTestAgent, id: "dying", jido: jido)
       # Unlink so our kill doesn't also take down the test process.
       Process.unlink(pid)
 

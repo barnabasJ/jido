@@ -47,6 +47,7 @@ defmodule JidoExampleTest.PodScaleTest do
     @moduledoc false
     use Jido.Agent,
       name: "example_pod_scale_worker",
+      path: :domain,
       schema: [
         role: [type: :string, default: "worker"]
       ]

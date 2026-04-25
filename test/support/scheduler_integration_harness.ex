@@ -12,7 +12,7 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
     @moduledoc false
     use Jido.Action, name: "cron_count", schema: []
 
-    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
       ticks = Map.get(slice, :ticks, [])
       {:ok, %{tick_count: count + 1, ticks: ticks ++ [params]}}
@@ -23,14 +23,14 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
     @moduledoc false
     use Jido.Action, name: "register_cron", schema: []
 
-    def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
+    def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       cron_expr = Map.get(params, :cron)
       job_id = Map.get(params, :job_id)
       timezone = Map.get(params, :timezone)
       message = Map.get(params, :message, Signal.new!(%{type: "cron.tick", source: "/test"}))
 
       directive = Directive.cron(cron_expr, message, job_id: job_id, timezone: timezone)
-      {:ok, %{}, [directive]}
+      {:ok, slice, [directive]}
     end
   end
 
@@ -38,8 +38,8 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
     @moduledoc false
     use Jido.Action, name: "cancel_cron", schema: []
 
-    def run(%Jido.Signal{data: %{job_id: job_id}}, _slice, _opts, _ctx) do
-      {:ok, %{}, [Directive.cron_cancel(job_id)]}
+    def run(%Jido.Signal{data: %{job_id: job_id}}, slice, _opts, _ctx) do
+      {:ok, slice, [Directive.cron_cancel(job_id)]}
     end
   end
 
@@ -178,7 +178,7 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
     eventually_state(
       pid,
       fn state ->
-        tick_count = state.agent.state.__domain__.tick_count
+        tick_count = state.agent.state.domain.tick_count
         if tick_count >= count, do: tick_count, else: false
       end,
       opts
@@ -187,12 +187,12 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
 
   def tick_count(pid) do
     state = state(pid)
-    state.agent.state.__domain__.tick_count
+    state.agent.state.domain.tick_count
   end
 
   def ticks(pid) do
     state = state(pid)
-    state.agent.state.__domain__.ticks
+    state.agent.state.domain.ticks
   end
 
   def state(pid) do

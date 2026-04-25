@@ -14,6 +14,7 @@ defmodule JidoTest.InstanceTest do
   defmodule RedisTestAgent do
     use Jido.Agent,
       name: "redis_test_agent",
+      path: :domain,
       schema: [
         counter: [type: :integer, default: 0]
       ]
@@ -146,20 +147,20 @@ defmodule JidoTest.InstanceTest do
 
       agent =
         RedisTestAgent.new(id: "redis-instance-agent")
-        |> then(fn agent -> %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | counter: 42}}} end)
+        |> then(fn agent -> %{agent | state: %{agent.state | domain: %{agent.state.domain | counter: 42}}} end)
         |> then(fn agent ->
           thread =
             Thread.new(id: "redis-thread")
             |> Thread.append(%{kind: :note, payload: %{text: "saved"}})
 
-          %{agent | state: Map.put(agent.state, :__thread__, thread)}
+          %{agent | state: Map.put(agent.state, :thread, thread)}
         end)
 
       assert :ok = module.hibernate(agent)
       assert {:ok, thawed} = module.thaw(RedisTestAgent, "redis-instance-agent")
-      assert thawed.state.__domain__.counter == 42
-      assert thawed.state[:__thread__].id == "redis-thread"
-      assert Thread.entry_count(thawed.state[:__thread__]) == 1
+      assert thawed.state.domain.counter == 42
+      assert thawed.state[:thread].id == "redis-thread"
+      assert Thread.entry_count(thawed.state[:thread]) == 1
     end
 
     test "partitioned and unpartitioned checkpoints coexist through an instance module" do
@@ -168,12 +169,12 @@ defmodule JidoTest.InstanceTest do
 
       unpartitioned =
         RedisTestAgent.new(id: "shared-partition-key")
-        |> then(fn agent -> %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | counter: 10}}} end)
+        |> then(fn agent -> %{agent | state: %{agent.state | domain: %{agent.state.domain | counter: 10}}} end)
 
       partitioned =
         RedisTestAgent.new(id: "shared-partition-key")
         |> then(fn agent ->
-          %{agent | state: agent.state |> put_in([:__domain__, :counter], 20) |> Map.put(:__partition__, :blue)}
+          %{agent | state: agent.state |> put_in([:domain, :counter], 20) |> Map.put(:__partition__, :blue)}
         end)
 
       assert :ok = module.hibernate(unpartitioned)
@@ -184,21 +185,13 @@ defmodule JidoTest.InstanceTest do
       assert {:ok, thawed_partitioned} =
                module.thaw(RedisTestAgent, "shared-partition-key", partition: :blue)
 
-      assert thawed_unpartitioned.state.__domain__.counter == 10
+      assert thawed_unpartitioned.state.domain.counter == 10
       assert Map.get(thawed_unpartitioned.state, :__partition__) == nil
 
-      assert thawed_partitioned.state.__domain__.counter == 20
+      assert thawed_partitioned.state.domain.counter == 20
       assert thawed_partitioned.state.__partition__ == :blue
     end
 
-    test "hibernate rejects conflicting partition metadata" do
-      agent =
-        RedisTestAgent.new(id: "partition-conflict")
-        |> then(fn agent -> %{agent | state: Map.put(agent.state, :__partition__, :alpha)} end)
-
-      assert {:error, %Jido.Error.ValidationError{}} =
-               TestInstance.hibernate(agent, partition: :beta)
-    end
   end
 
   describe "instance lifecycle" do

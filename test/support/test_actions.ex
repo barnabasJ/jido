@@ -159,9 +159,10 @@ defmodule JidoTest.TestActions do
         amount: [type: :integer, default: 1]
       ]
 
-    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
+      slice = if is_map(slice), do: slice, else: %{}
       count = Map.get(slice, :counter, 0)
-      {:ok, %{counter: count + amount}}
+      {:ok, Map.put(slice, :counter, count + amount)}
     end
   end
 
@@ -173,9 +174,10 @@ defmodule JidoTest.TestActions do
         amount: [type: :integer, default: 1]
       ]
 
-    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
+      slice = if is_map(slice), do: slice, else: %{}
       count = Map.get(slice, :counter, 0)
-      {:ok, %{counter: count - amount}}
+      {:ok, Map.put(slice, :counter, count - amount)}
     end
   end
 
@@ -187,7 +189,7 @@ defmodule JidoTest.TestActions do
         message: [type: :any, required: false]
       ]
 
-    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       messages = Map.get(slice, :messages, [])
       message = Map.get(params, :message, params)
       {:ok, %{messages: messages ++ [message]}}

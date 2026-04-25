@@ -21,7 +21,7 @@ defmodule Jido.Pod.TopologyState do
         []
       end
 
-    case Enum.find(instances, &(&1.state_key == @pod_state_key)) do
+    case Enum.find(instances, &(&1.path == @pod_state_key)) do
       %PluginInstance{} = instance ->
         {:ok, instance}
 
@@ -38,7 +38,7 @@ defmodule Jido.Pod.TopologyState do
 
   def fetch_state(%Agent{agent_module: agent_module, state: state}) when is_map(state) do
     with {:ok, instance} <- pod_plugin_instance(agent_module) do
-      case Map.get(state, instance.state_key) do
+      case Map.get(state, instance.path) do
         plugin_state when is_map(plugin_state) ->
           {:ok, plugin_state}
 
@@ -46,7 +46,7 @@ defmodule Jido.Pod.TopologyState do
           {:error,
            Jido.Error.validation_error(
              "Pod plugin state is missing or malformed.",
-             details: %{state_key: instance.state_key, value: other}
+             details: %{path: instance.path, value: other}
            )}
       end
     end
@@ -99,7 +99,7 @@ defmodule Jido.Pod.TopologyState do
          {:ok, instance} <- pod_plugin_instance(agent.agent_module),
          {:ok, pod_state} <- fetch_state(agent) do
       normalized_topology = normalize_updated_topology(current_topology, topology)
-      {:ok, persist_topology(agent, instance.state_key, pod_state, normalized_topology)}
+      {:ok, persist_topology(agent, instance.path, pod_state, normalized_topology)}
     end
   end
 
@@ -114,7 +114,7 @@ defmodule Jido.Pod.TopologyState do
          {:ok, instance} <- pod_plugin_instance(agent.agent_module),
          {:ok, pod_state} <- fetch_state(agent) do
       normalized_topology = normalize_updated_topology(topology, new_topology)
-      {:ok, persist_topology(agent, instance.state_key, pod_state, normalized_topology)}
+      {:ok, persist_topology(agent, instance.path, pod_state, normalized_topology)}
     end
   end
 

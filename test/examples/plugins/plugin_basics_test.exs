@@ -32,7 +32,7 @@ defmodule JidoExampleTest.PluginBasicsTest do
         text: [type: :string, required: true]
       ]
 
-    def run(%Jido.Signal{data: %{text: text}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{text: text}}, slice, _opts, _ctx) do
       notes = get_in(slice, [:notes, :entries]) || []
       note = %{text: text, added_at: DateTime.utc_now()}
       {:ok, %{notes: %{entries: [note | notes]}}}
@@ -58,7 +58,7 @@ defmodule JidoExampleTest.PluginBasicsTest do
     @moduledoc false
     use Jido.Plugin,
       name: "notes_plugin",
-      state_key: :notes,
+      path: :notes,
       actions: [
         JidoExampleTest.PluginBasicsTest.AddNoteAction,
         JidoExampleTest.PluginBasicsTest.ClearNotesAction
@@ -93,6 +93,8 @@ defmodule JidoExampleTest.PluginBasicsTest do
     @moduledoc false
     use Jido.Agent,
       name: "notes_agent",
+
+      path: :domain,
       plugins: [JidoExampleTest.PluginBasicsTest.NotesPlugin]
   end
 
@@ -100,6 +102,8 @@ defmodule JidoExampleTest.PluginBasicsTest do
     @moduledoc false
     use Jido.Agent,
       name: "configured_notes_agent",
+
+      path: :domain,
       plugins: [{JidoExampleTest.PluginBasicsTest.NotesPlugin, %{label: "work"}}]
   end
 

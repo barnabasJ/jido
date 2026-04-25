@@ -8,7 +8,7 @@ defmodule JidoExampleTest.MemoryPluginTest do
     `put_in_space/4`, `get_in_space/4`, `append_to_space/3`, `ensure_space/3`,
     `space/2`, `spaces/1`, `has_space?/2`, `delete_space/2`, `update_space/4`
   - Actions that manipulate memory spaces via cmd/2
-  - Disabling the memory plugin with `default_plugins: %{__memory__: false}`
+  - Disabling the memory plugin with `default_plugins: %{memory: false}`
 
   Run with: mix test --include example
   """
@@ -34,11 +34,11 @@ defmodule JidoExampleTest.MemoryPluginTest do
         value: [type: :any, required: true]
       ]
 
-    def run(%Jido.Signal{data: %{key: key, value: value}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{key: key, value: value}}, slice, _opts, _ctx) do
       alias Jido.Memory
       alias Jido.Memory.Space
 
-      memory = Map.get(slice, :__memory__) || Memory.new()
+      memory = Map.get(slice, :memory) || Memory.new()
       world = Map.get(memory.spaces, :world, Space.new_kv())
       updated_world = %{world | data: Map.put(world.data, key, value), rev: world.rev + 1}
 
@@ -48,7 +48,7 @@ defmodule JidoExampleTest.MemoryPluginTest do
           rev: memory.rev + 1
       }
 
-      {:ok, %{__memory__: updated_memory}}
+      {:ok, %{memory: updated_memory}}
     end
   end
 
@@ -60,6 +60,7 @@ defmodule JidoExampleTest.MemoryPluginTest do
     @moduledoc false
     use Jido.Agent,
       name: "memory_agent",
+      path: :domain,
       description: "Agent with default memory plugin",
       schema: [
         status: [type: :atom, default: :idle]
@@ -70,8 +71,9 @@ defmodule JidoExampleTest.MemoryPluginTest do
     @moduledoc false
     use Jido.Agent,
       name: "no_memory_agent",
+      path: :domain,
       description: "Agent with memory plugin disabled",
-      default_plugins: %{__memory__: false},
+      default_plugins: %{memory: false},
       schema: [
         value: [type: :integer, default: 0]
       ]
@@ -196,7 +198,7 @@ defmodule JidoExampleTest.MemoryPluginTest do
       agent = NoMemoryAgent.new()
 
       refute MemAgent.has_memory?(agent)
-      refute Map.has_key?(agent.state, :__memory__)
+      refute Map.has_key?(agent.state, :memory)
 
       specs = NoMemoryAgent.plugin_specs()
       modules = Enum.map(specs, & &1.module)

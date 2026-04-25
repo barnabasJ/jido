@@ -89,12 +89,12 @@ defmodule Jido.MixProject do
           "guides/signals.md",
           "guides/directives.md",
           "guides/state-ops.md",
+          "guides/slices.md",
+          "guides/middleware.md",
           "guides/plugins.md",
-          "guides/strategies.md",
           "guides/runtime.md"
         ],
         Coordination: [
-          "guides/await.md",
           "guides/orchestration.md",
           "guides/pods.md",
           "guides/multi-tenancy.md"
@@ -110,8 +110,7 @@ defmodule Jido.MixProject do
         ],
         Extending: [
           "guides/sensors.md",
-          "guides/discovery.md",
-          "guides/custom-strategies.md"
+          "guides/discovery.md"
         ],
         Integrations: [
           "guides/phoenix-integration.md",
@@ -119,7 +118,6 @@ defmodule Jido.MixProject do
         ],
         Advanced: [
           "guides/orphans.md",
-          "guides/fsm-strategy.livemd",
           "guides/errors.md"
         ],
         Migration: [
@@ -148,12 +146,12 @@ defmodule Jido.MixProject do
         {"guides/signals.md", title: "Signals & Routing"},
         {"guides/directives.md", title: "Directives"},
         {"guides/state-ops.md", title: "State Operations"},
+        {"guides/slices.md", title: "Slices"},
+        {"guides/middleware.md", title: "Middleware"},
         {"guides/plugins.md", title: "Plugins"},
-        {"guides/strategies.md", title: "Strategies"},
         {"guides/runtime.md", title: "Runtime"},
 
         # Coordination
-        {"guides/await.md", title: "Await & Coordination"},
         {"guides/orchestration.md", title: "Multi-Agent Orchestration"},
         {"guides/pods.md", title: "Pods"},
         {"guides/multi-tenancy.md", title: "Multi-Tenancy"},
@@ -170,7 +168,6 @@ defmodule Jido.MixProject do
         # Extending
         {"guides/sensors.md", title: "Sensors"},
         {"guides/discovery.md", title: "Discovery"},
-        {"guides/custom-strategies.md", title: "Custom Strategies"},
 
         # Integrations
         {"guides/phoenix-integration.md", title: "Phoenix Integration"},
@@ -178,7 +175,6 @@ defmodule Jido.MixProject do
 
         # Advanced
         {"guides/orphans.md", title: "Orphans & Adoption"},
-        {"guides/fsm-strategy.livemd", title: "FSM Strategy Deep Dive"},
         {"guides/errors.md", title: "Error Handling"},
 
         # Migration

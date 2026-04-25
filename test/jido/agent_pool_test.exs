@@ -14,8 +14,8 @@ defmodule JidoTest.AgentPoolTest do
     @moduledoc false
     use Jido.Action, name: "get_count", schema: []
 
-    def run(_signal, slice, _opts, ctx) do
-      {:ok, %{last_count: Map.get(slice, :counter, 0)}}
+    def run(_signal, slice, _opts, _ctx) do
+      {:ok, Map.put(slice, :last_count, Map.get(slice, :counter, 0))}
     end
   end
 
@@ -23,6 +23,7 @@ defmodule JidoTest.AgentPoolTest do
     @moduledoc false
     use Jido.Agent,
       name: "pool_test_agent",
+      path: :domain,
       schema: [
         counter: [type: :integer, default: 0],
         last_count: [type: :integer, default: 0]
@@ -116,7 +117,7 @@ defmodule JidoTest.AgentPoolTest do
       result =
         AgentPool.with_agent(jido_name, :test_pool, fn pid ->
           {:ok, agent} = AgentServer.call(pid, signal)
-          agent.state.__domain__.counter
+          agent.state.domain.counter
         end)
 
       assert result == 1
@@ -144,7 +145,7 @@ defmodule JidoTest.AgentPoolTest do
       result =
         AgentPool.with_agent(jido_name, :test_pool, fn pid ->
           {:ok, agent} = AgentServer.call(pid, signal)
-          agent.state.__domain__.counter
+          agent.state.domain.counter
         end)
 
       assert result == 2
@@ -168,7 +169,7 @@ defmodule JidoTest.AgentPoolTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, agent} = AgentPool.call(jido_name, :test_pool, signal)
 
-      assert agent.state.__domain__.counter == 1
+      assert agent.state.domain.counter == 1
 
       Supervisor.stop(jido_pid)
     end
@@ -193,7 +194,7 @@ defmodule JidoTest.AgentPoolTest do
 
       eventually(fn ->
         {:ok, agent} = AgentPool.call(jido_name, :test_pool, get_signal)
-        agent.state.__domain__.counter >= 1
+        agent.state.domain.counter >= 1
       end)
 
       Supervisor.stop(jido_pid)
@@ -286,7 +287,7 @@ defmodule JidoTest.AgentPoolTest do
       get_signal = Signal.new!("get_count", %{}, source: "/test")
       {:ok, agent} = AgentPool.call(jido_name, :test_pool, get_signal)
 
-      assert agent.state.__domain__.counter == 100
+      assert agent.state.domain.counter == 100
 
       Supervisor.stop(jido_pid)
     end

@@ -10,6 +10,7 @@ defmodule JidoTest.TelemetryTest do
     @moduledoc false
     use Jido.Agent,
       name: "telemetry_test_agent",
+      path: :domain,
       schema: [
         counter: [type: :integer, default: 0]
       ]

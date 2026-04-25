@@ -15,6 +15,7 @@ defmodule JidoTest.Pod.TelemetryTest do
     @moduledoc false
     use Jido.Agent,
       name: "pod_telemetry_worker",
+      path: :domain,
       schema: [
         role: [type: :string, default: "worker"]
       ]

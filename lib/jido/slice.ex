@@ -251,7 +251,6 @@ defmodule Jido.Slice do
           otp_app: otp_app(),
           capabilities: capabilities(),
           requires: requires(),
-          state_key: path(),
           path: path(),
           schema: schema(),
           config_schema: config_schema(),
@@ -266,16 +265,12 @@ defmodule Jido.Slice do
 
       @doc """
       Returns the slice spec with optional per-agent configuration.
-
-      The `state_key` field on the returned `Spec` is populated from `path/0`
-      for compatibility with consumers that still read `state_key`.
       """
       @spec plugin_spec(map()) :: Spec.t()
       def plugin_spec(config \\ %{}) do
         %Spec{
           module: __MODULE__,
           name: name(),
-          state_key: path(),
           path: path(),
           description: description(),
           category: category(),

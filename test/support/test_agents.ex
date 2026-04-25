@@ -77,7 +77,7 @@ defmodule JidoTest.TestAgents do
     def signal_routes(_ctx), do: []
 
     def on_after_cmd(agent, _action, directives) do
-      new_agent = %{agent | state: put_in(agent.state, [:__domain__, :hook_called], true)}
+      new_agent = %{agent | state: put_in(agent.state, [:domain, :hook_called], true)}
       {:ok, new_agent, directives}
     end
   end

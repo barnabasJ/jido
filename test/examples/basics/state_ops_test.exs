@@ -108,6 +108,8 @@ defmodule JidoExampleTest.StateOpsTest do
     @moduledoc false
     use Jido.Agent,
       name: "flex_agent",
+
+      path: :domain,
       schema: [
         counter: [type: :integer, default: 0],
         name: [type: :string, default: ""],
@@ -130,8 +132,8 @@ defmodule JidoExampleTest.StateOpsTest do
       {agent, []} =
         FlexAgent.cmd(agent, {MergeMetadataAction, %{metadata: %{version: "1.0"}}})
 
-      assert agent.state.__domain__.counter == 10
-      assert agent.state.__domain__.name == "test"
+      assert agent.state.domain.counter == 10
+      assert agent.state.domain.name == "test"
       assert agent.state.metadata == %{version: "1.0"}
     end
 
@@ -156,8 +158,8 @@ defmodule JidoExampleTest.StateOpsTest do
           {ReplaceAllAction, %{new_state: %{counter: 0, name: "fresh", step: :reset}}}
         )
 
-      assert agent.state.__domain__.counter == 0
-      assert agent.state.__domain__.name == "fresh"
+      assert agent.state.domain.counter == 0
+      assert agent.state.domain.name == "fresh"
       assert agent.state.step == :reset
       refute Map.has_key?(agent.state, :metadata)
     end
@@ -169,7 +171,7 @@ defmodule JidoExampleTest.StateOpsTest do
 
       {agent, []} = FlexAgent.cmd(agent, ClearTempDataAction)
 
-      assert agent.state.__domain__.counter == 5
+      assert agent.state.domain.counter == 5
       refute Map.has_key?(agent.state, :temp)
       refute Map.has_key?(agent.state, :cache)
     end
@@ -179,7 +181,7 @@ defmodule JidoExampleTest.StateOpsTest do
 
       {agent, []} = FlexAgent.cmd(agent, ClearTempDataAction)
 
-      assert agent.state.__domain__.counter == 5
+      assert agent.state.domain.counter == 5
     end
   end
 
@@ -243,7 +245,7 @@ defmodule JidoExampleTest.StateOpsTest do
 
       {agent, []} = FlexAgent.cmd(agent, ComboAction)
 
-      assert agent.state.__domain__.primary_result == "done"
+      assert agent.state.domain.primary_result == "done"
       assert agent.state.step == :completed
       refute Map.has_key?(agent.state, :temp)
     end

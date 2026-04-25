@@ -1,9 +1,9 @@
 # 0014. Slices, Middleware, Plugins — the extension model
 
-- Status: Proposed
-- Implementation: Pending
+- Status: Implemented
+- Implementation: Complete
 - Date: 2026-04-23
-- Related commits: —
+- Related commits: 33a6abb, cd6c14b, dc175de, 21b0c04, 4fa37a8, 96c931e, 46bbbb2, 067b2f5, (this commit)
 - Supersedes: [0013](0013-slices-middleware-plugins.md) (which already superseded [0011](0011-retire-strategy-plugins-are-control-flow.md), [0012](0012-middleware-for-cross-cutting-concerns.md))
 
 ## Context

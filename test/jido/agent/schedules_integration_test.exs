@@ -7,7 +7,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
   defmodule TickAction do
     use Jido.Action, name: "tick", schema: []
 
-    def run(_signal, slice, _opts, ctx) do
+    def run(_signal, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
       {:ok, %{tick_count: count + 1}}
     end
@@ -16,6 +16,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
   defmodule ScheduledAgent do
     use Jido.Agent,
       name: "scheduled_agent",
+      path: :domain,
       schema: [tick_count: [type: :integer, default: 0]],
       schedules: [
         {"* * * * * * *", "agent.tick", job_id: :tick}
@@ -29,6 +30,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
   defmodule MultiScheduleAgent do
     use Jido.Agent,
       name: "multi_schedule_agent",
+      path: :domain,
       schema: [tick_count: [type: :integer, default: 0]],
       schedules: [
         {"* * * * *", "heartbeat.tick", job_id: :heartbeat},
@@ -43,6 +45,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
   defmodule NoScheduleAgent do
     use Jido.Agent,
       name: "no_schedule_agent",
+      path: :domain,
       schema: [tick_count: [type: :integer, default: 0]]
   end
 
@@ -61,6 +64,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
           defmodule #{inspect(module)} do
             use Jido.Agent,
               name: "spec_agent_#{unique}",
+              path: :domain,
               schema: [],
               schedules: [
                 {"* * * * *", "agent.tick", job_id: :tick}
@@ -157,7 +161,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
     test "schedule tick delivers signal and updates state", %{jido: jido} do
       pid = start_server(%{jido: jido}, ScheduledAgent)
 
-      eventually_state(pid, fn state -> state.agent.state.__domain__.tick_count > 0 end, timeout: 5_000)
+      eventually_state(pid, fn state -> state.agent.state.domain.tick_count > 0 end, timeout: 5_000)
     end
   end
 end

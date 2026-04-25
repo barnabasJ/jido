@@ -8,19 +8,19 @@ defmodule JidoTest.Plugin.ManifestTest do
       manifest = %Manifest{
         module: SomePlugin,
         name: "some_plugin",
-        state_key: :some
+        path: :some
       }
 
       assert manifest.module == SomePlugin
       assert manifest.name == "some_plugin"
-      assert manifest.state_key == :some
+      assert manifest.path == :some
     end
 
     test "optional fields default correctly" do
       manifest = %Manifest{
         module: SomePlugin,
         name: "some_plugin",
-        state_key: :some
+        path: :some
       }
 
       assert manifest.description == nil
@@ -41,7 +41,7 @@ defmodule JidoTest.Plugin.ManifestTest do
       manifest = %Manifest{
         module: SomePlugin,
         name: "some_plugin",
-        state_key: :some
+        path: :some
       }
 
       assert manifest.singleton == false
@@ -51,7 +51,7 @@ defmodule JidoTest.Plugin.ManifestTest do
       manifest = %Manifest{
         module: SomePlugin,
         name: "some_plugin",
-        state_key: :some,
+        path: :some,
         singleton: true
       }
 
@@ -71,7 +71,7 @@ defmodule JidoTest.Plugin.ManifestTest do
         vsn: "1.0.0",
         capabilities: [:messaging, :notifications],
         requires: [{:config, :token}, {:app, :req}],
-        state_key: :full,
+        path: :full,
         schema: schema,
         config_schema: config_schema,
         actions: [SomeAction, AnotherAction],
@@ -88,7 +88,7 @@ defmodule JidoTest.Plugin.ManifestTest do
       assert manifest.vsn == "1.0.0"
       assert manifest.capabilities == [:messaging, :notifications]
       assert manifest.requires == [{:config, :token}, {:app, :req}]
-      assert manifest.state_key == :full
+      assert manifest.path == :full
       assert manifest.schema == schema
       assert manifest.config_schema == config_schema
       assert manifest.actions == [SomeAction, AnotherAction]
@@ -110,7 +110,7 @@ defmodule JidoTest.Plugin.ManifestTest do
       manifest = %Manifest{
         module: SomePlugin,
         name: "test",
-        state_key: :test
+        path: :test
       }
 
       assert is_struct(manifest, Manifest)

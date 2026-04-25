@@ -454,10 +454,18 @@ defmodule Jido.Agent.Directive do
           directive.agent_opts
         end
 
-      Jido.Agent.InstanceManager.get(directive.namespace, directive.key,
+      get_opts = [
         initial_state: directive.initial_state,
         agent_opts: agent_opts
-      )
+      ]
+
+      get_opts =
+        case Keyword.get(agent_opts, :partition) do
+          nil -> get_opts
+          partition -> Keyword.put(get_opts, :partition, partition)
+        end
+
+      Jido.Agent.InstanceManager.get(directive.namespace, directive.key, get_opts)
     end
 
     # Priority: explicit directive.parent > agent_opts[:parent] > self-as-parent

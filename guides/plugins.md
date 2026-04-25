@@ -1,358 +1,261 @@
 # Plugins
 
-<!-- covers: jido.plugins_and_sensors.plugin_mounting jido.plugins_and_sensors.plugin_lifecycle -->
+A **Plugin** is `Jido.Slice` + `Jido.Middleware` in one module. Use it when
+a single capability needs both:
 
-**After:** You can compose multiple plugins with isolated state and understand lifecycle hooks.
+- **State and routes** that other slices and the agent see (the Slice half), and
+- **Pipeline behaviour** that wraps every signal — gate, transform, retry,
+  persist, etc. (the Middleware half).
 
-> 🎓 **New to plugins?** Start with [Your First Plugin](your-first-plugin.md) for a hands-on tutorial before diving into this comprehensive reference.
+If you don't need the wrap, use [`Jido.Slice`](slices.md) directly. If you
+don't need the data, use [`Jido.Middleware`](middleware.md) directly. Plugin
+exists for the combo case — `Jido.Plugin.FSM` and `Jido.Middleware.Persister`
+are the in-tree examples.
 
-Plugins are composable capability modules that extend an agent's functionality. They encapsulate actions, state, configuration, and signal routing into reusable units.
-
-## When to Use Plugins
-
-Use plugins when you want to:
-- Package related actions together with their state
-- Reuse capabilities across multiple agents
-- Isolate state for a specific domain (e.g., chat, database, metrics)
-- Define signal routing rules for a group of actions
-
-## Defining a Plugin
+## Hello Plugin
 
 ```elixir
-defmodule MyApp.ChatPlugin do
+defmodule MyApp.Audit.Plugin do
   use Jido.Plugin,
-    name: "chat",
-    state_key: :chat,
-    actions: [MyApp.Actions.SendMessage, MyApp.Actions.ListHistory],
-    schema: Zoi.object(%{
-      messages: Zoi.list(Zoi.any()) |> Zoi.default([]),
-      model: Zoi.string() |> Zoi.default("gpt-4")
-    }),
-    signal_patterns: ["chat.*"],
-    signal_routes: [
-      {"chat.send", MyApp.Actions.SendMessage},
-      {"chat.history", MyApp.Actions.ListHistory}
-    ]
+    name: "audit",
+    path: :audit,
+    schema:
+      Zoi.object(%{
+        events: Zoi.list(Zoi.any()) |> Zoi.default([])
+      })
+
+  alias Jido.Agent.{Directive, StateOp}
+
+  @impl Jido.Middleware
+  def on_signal(signal, ctx, _opts, next) do
+    {new_ctx, dirs} = next.(signal, ctx)
+
+    record = %{type: signal.type, at: System.system_time(:millisecond)}
+    events = ctx.agent.state.audit.events ++ [record]
+
+    {new_ctx, dirs ++ [%StateOp.SetPath{path: [:audit, :events], value: events}]}
+  end
 end
 ```
 
-### Required Options
+`use Jido.Plugin` expands to `use Jido.Slice` + `use Jido.Middleware`, so
+the same module gets:
 
-| Option | Description |
-|--------|-------------|
-| `name` | Plugin name (letters, numbers, underscores only) |
-| `state_key` | Atom key for plugin state in agent's state map |
-| `actions` | List of action modules the plugin provides |
+- a `:audit` slice on `agent.state` with schema-defaulted `events: []`, and
+- a middleware callback that wraps every signal.
 
-### Optional Options
+The `agent.state.audit.events` write goes through the normal directive
+pipeline — no privileged access, just the same `%StateOp.SetPath{}` an
+action would emit.
 
-| Option | Description |
-|--------|-------------|
-| `description` | Human-readable description |
-| `schema` | Zoi schema for plugin state defaults |
-| `config_schema` | Zoi schema for per-agent configuration |
-| `signal_patterns` | List of signal patterns for routing |
-| `signal_routes` | Static signal route tuples (`{"type", Action}`) |
-| `category`, `vsn`, `tags` | Metadata for organization |
+## Configuration
 
-## Using Plugins
+`use Jido.Plugin` accepts the union of Slice and Middleware options. The
+full list:
 
-Attach plugins to agents via the `plugins:` option:
+| Field | Tier | Notes |
+|---|---|---|
+| `name`, `path` | Slice | Required. |
+| `actions`, `schema`, `config_schema` | Slice | See [Slices](slices.md). |
+| `signal_routes`, `subscriptions`, `schedules` | Slice | Compile-time, prefixed by route_prefix. |
+| `capabilities`, `requires`, `singleton` | Slice | Discovery + composition. |
+| `description`, `category`, `vsn`, `tags`, `otp_app` | Slice | Metadata. |
 
-```elixir
-defmodule MyAgent do
-  use Jido.Agent,
-    name: "my_agent",
-    plugins: [
-      MyApp.ChatPlugin,
-      {MyApp.DatabasePlugin, %{pool_size: 5}}  # With config
-    ]
-end
+Middleware does not take its own configuration in the `use` block — the
+per-instance `opts` map is what `{MyPlugin, %{...}}` produces when an agent
+declares the plugin. Both halves see the same map: the Slice as `config:`,
+the Middleware as the `opts` callback arg.
+
+## When to choose which
+
+```text
+        Need to wrap signals?
+               |
+       +-------+--------+
+       |                |
+       no              yes
+       |                |
+       v                v
+    Slice         Need slice state?
+                       |
+              +--------+--------+
+              |                 |
+              no               yes
+              |                 |
+              v                 v
+         Middleware           Plugin
 ```
 
-Plugins are mounted during `new/1`. Each plugin's state is initialized under its `state_key`.
+Concrete examples:
 
-## State Isolation
+- `Jido.Thread.Plugin` — chat history. Slice (state). The Plugin macro is
+  used because the persistence transform `to_persistable/1` /
+  `from_persistable/1` lives in the same module; it has no `on_signal`
+  hook, so it's effectively Slice-only.
+- `Jido.Middleware.Persister` — hibernate/thaw. Middleware (no slice).
+- `Jido.Plugin.FSM` — finite-state machine. Slice. (Despite the
+  "Plugin" name, this one is `use Jido.Slice` because there's no
+  middleware half.)
+- A Plugin (real combo): an audit plugin that records every signal in its
+  own slice — both `path:` *and* `on_signal/4`.
 
-Plugin state is nested under the plugin's `state_key`:
+## Migration recipes (pre-0014 → new shape)
+
+The old plugin surface had four behavioural callbacks:
+`mount/2`, `handle_signal/2`, `transform_result/3`, `on_checkpoint/2`.
+All four are retired. Here's what to do with each.
+
+### `state_key:` → `path:`
+
+Mechanical. Same atom, different name.
 
 ```elixir
-# ChatPlugin with state_key: :chat
-agent.state = %{
-  chat: %{messages: [], model: "gpt-4"},  # ChatPlugin state
-  database: %{pool_size: 5}               # DatabasePlugin state
-}
+# Before
+use Jido.Plugin, name: "x", state_key: :x_data, actions: [...]
 
-# Access plugin state
-chat_state = MyAgent.plugin_state(agent, :chat)
+# After
+use Jido.Plugin, name: "x", path: :x_data, actions: [...]
 ```
 
-This prevents plugins from interfering with each other's state.
+### `mount/2` — four replacement patterns
 
-## Lifecycle Callbacks
+The retired `mount/2` callback initialized slice state when the agent
+started. ADR 0014 splits this case into four patterns; pick whichever
+applies:
 
-All callbacks are optional with sensible defaults.
+#### 1. Nothing (the slice is "just data")
 
-### mount/2
-
-Called during `new/1` to initialize plugin state. Pure function—no side effects.
+If `mount/2` returned `{:ok, nil}` or `{:ok, %{}}`, just delete the
+callback. Schema defaults seed the slice automatically.
 
 ```elixir
+# Before
+use Jido.Plugin, name: "x", state_key: :x, ...
+
 @impl Jido.Plugin
-def mount(agent, config) do
-  {:ok, %{initialized_at: DateTime.utc_now(), api_key: config[:api_key]}}
-end
+def mount(_agent, _config), do: {:ok, %{}}
+
+# After — just remove mount/2
+use Jido.Plugin, name: "x", path: :x, ...
 ```
 
-Returns `{:ok, map}` to merge into plugin state, or `{:error, reason}` to abort agent creation.
+#### 2. Echo per-agent config into the slice
 
-### signal_routes (compile-time)
-
-Define signal-to-action routing rules declaratively in `use Jido.Plugin`:
+If `mount/2` copied the config map into slice state, you don't need the
+callback. `Agent.new/1` automatically merges `{Plugin, %{...}}` config on
+top of schema defaults.
 
 ```elixir
-defmodule MyApp.ChatPlugin do
-  use Jido.Plugin,
-    name: "chat",
-    state_key: :chat,
-    actions: [MyApp.Actions.SendMessage, MyApp.Actions.ListHistory],
-    signal_routes: [
-      {"chat.send", MyApp.Actions.SendMessage},
-      {"chat.history", MyApp.Actions.ListHistory}
-    ]
-end
+# Before
+def mount(_agent, config), do: {:ok, config}
+
+# After — declare config_schema and use it as the slice schema, or merge them.
+use Jido.Plugin,
+  name: "x",
+  path: :x,
+  schema: Zoi.object(%{token: Zoi.string()})
+
+# Then the agent declares: plugins: [{MyPlugin, %{token: "abc"}}]
+# and agent.state.x.token == "abc" automatically.
 ```
 
-Use the `signal_routes/1` callback only when routes must be computed from runtime config.
+#### 3. Compile-time derivation from the agent module
 
-### handle_signal/2
+If `mount/2` derived state from the agent module itself (e.g. `Jido.Pod`
+seeding the topology from `agent_module.topology()`), do that derivation
+in a wrapper macro that overrides `Agent.new/1` to inject `state:` before
+delegating. See [`Jido.Pod`](../lib/jido/pod.ex) for the in-tree example.
 
-Pre-routing hook called before signal routing. Can override or abort processing.
+#### 4. Runtime-derived (rare)
+
+If `mount/2` needed agent-instance data not available at config time,
+declare an action routed on `jido.agent.lifecycle.starting` that computes
+the value and writes it via a `%StateOp.SetPath{}` directive. The
+lifecycle signal fires inside `AgentServer.init/1`, before any user
+signal — see [ADR 0015](adr/0015-agent-start-is-signal-driven.md).
+
+### `handle_signal/2` → `on_signal/4` (Middleware)
 
 ```elixir
-@impl Jido.Plugin
+# Before
 def handle_signal(signal, context) do
-  cond do
-    signal.type == "admin.override" ->
-      {:ok, {:override, MyApp.AdminAction}}
-    blocked?(signal) ->
-      {:error, :blocked}
-    true ->
-      {:ok, :continue}
-  end
+  Logger.info("got #{signal.type}")
+  {:ok, signal}
+end
+
+# After (Middleware tier; the Plugin macro provides on_signal/4 by
+# inheriting use Jido.Middleware)
+@impl Jido.Middleware
+def on_signal(signal, ctx, _opts, next) do
+  Logger.info("got #{signal.type}")
+  next.(signal, ctx)
 end
 ```
 
-The `context` map contains `:agent`, `:agent_module`, `:plugin`, `:plugin_spec`, and `:config`.
-
-### transform_result/3
-
-Transforms the agent returned from `AgentServer.call/3` (synchronous path only).
+### `transform_result/3` → `on_signal/4` after `next`
 
 ```elixir
-@impl Jido.Plugin
-def transform_result(_action, agent, _context) do
-  new_state = Map.put(agent.state, :last_call_at, DateTime.utc_now())
-  %{agent | state: new_state}
+# Before
+def transform_result(_action, {:ok, result}, _context) do
+  {:ok, Map.put(result, :transformed, true)}
+end
+
+# After — wrap the directives that come back from next
+@impl Jido.Middleware
+def on_signal(signal, ctx, _opts, next) do
+  {ctx, dirs} = next.(signal, ctx)
+  {ctx, Enum.map(dirs, &transform/1)}
 end
 ```
 
-### child_spec/1
+### `on_checkpoint/2` / `on_restore/2` → Persister middleware MFA
 
-Returns child process specifications started during `AgentServer.init/1`.
+The `Jido.Persist.Transform` behaviour is the new home for shape-shifting
+slices for storage. Implement `externalize/1` and `reinstate/1` on the
+Plugin module; the Persister middleware walks every declared plugin and
+applies the transform pair around hibernate/thaw automatically.
 
 ```elixir
-@impl Jido.Plugin
-def child_spec(config) do
-  %{id: MyWorker, start: {MyWorker, :start_link, [config]}}
+defmodule MyApp.Cache.Plugin do
+  use Jido.Plugin, name: "cache", path: :cache, schema: ...
+
+  @behaviour Jido.Persist.Transform
+
+  @impl Jido.Persist.Transform
+  def externalize(slice), do: %{key: slice.key}  # drop the heavy cached values
+
+  @impl Jido.Persist.Transform
+  def reinstate(stub), do: Map.put(stub, :values, %{})
 end
 ```
 
-Return `nil` for no children, a single spec, or a list of specs.
+See [ADR 0015](adr/0015-agent-start-is-signal-driven.md) for the full
+hibernate/thaw model.
 
-## Composing Multiple Plugins
+### `signal_routes/1` → static `signal_routes:`
 
-Agents can use multiple plugins with isolated state:
-
-```elixir
-defmodule MyAssistant do
-  use Jido.Agent,
-    name: "assistant",
-    plugins: [
-      MyApp.ChatPlugin,
-      MyApp.MemoryPlugin,
-      {MyApp.ToolsPlugin, %{enabled_tools: [:search, :calculator]}}
-    ]
-end
-```
-
-Each plugin maintains its own state slice and routing rules. Plugins are mounted in order, so later plugins can depend on state from earlier ones.
-
-## Default Plugins
-
-Jido ships with **default plugins** that are automatically included in every agent. These are framework-provided singleton plugins that handle core concerns.
-
-### Built-in Defaults
-
-| Plugin | State Key | Purpose |
-|--------|-----------|---------|
-| `Jido.Identity.Plugin` | `:__identity__` | Agent self-model: profile, lifecycle facts |
-| `Jido.Thread.Plugin` | `:__thread__` | Conversation thread management |
-| `Jido.Memory.Plugin` | `:__memory__` | On-demand memory container for agent cognitive state |
-
-Default plugins are **singletons** — only one instance per state key. They are mounted during `new/1` like any other plugin, but they don't initialize state by default. State is created on demand using helpers like `Jido.Identity.Agent.ensure/2` and `Jido.Memory.Agent.ensure/2`.
-
-`Jido.Pod` also uses this mechanism for pod-wrapped agents: it injects a
-singleton plugin under the reserved `:__pod__` key. That plugin is not a
-framework-wide default for all agents, but pod agents can still replace it via
-the normal `default_plugins: %{__pod__: ...}` override path.
-
-### Identity Plugin
-
-The Identity plugin gives every agent a first-class identity primitive stored at `agent.state[:__identity__]`. Identity tracks profile facts (age, origin, generation) and a monotonic revision counter.
+Dynamic, runtime-evaluated `signal_routes/1` callbacks are retired.
+Routes are declared once at compile time:
 
 ```elixir
-alias Jido.Identity.Agent, as: IdentityAgent
-alias Jido.Identity.Profile
-
-agent = MyAgent.new()
-
-# Identity is not initialized until you ask for it
-refute IdentityAgent.has_identity?(agent)
-
-# Initialize on demand
-agent = IdentityAgent.ensure(agent, profile: %{age: 0, origin: :spawned})
-
-# Read profile data
-Profile.age(agent)    #=> 0
-Profile.get(agent, :origin)  #=> :spawned
-
-# Evolve identity over simulated time
-{agent, []} = MyAgent.cmd(agent, {Jido.Identity.Actions.Evolve, %{years: 3}})
-Profile.age(agent)    #=> 3
+use Jido.Plugin,
+  name: "x",
+  path: :x,
+  signal_routes: [
+    {"x.do", MyAction},
+    {"x.audit", AuditAction, priority: 5}
+  ]
 ```
 
-To fully replace the default identity with your own implementation, define a custom plugin that uses the same state key:
+If you really need conditional routing, branch inside the action — the
+router gets you to the action; the action decides what to do.
 
-```elixir
-defmodule MyApp.CustomIdentityPlugin do
-  use Jido.Plugin,
-    name: "custom_identity",
-    state_key: :__identity__,
-    actions: [],
-    description: "Custom identity with auto-initialization."
+## Where to look next
 
-  @impl Jido.Plugin
-  def mount(_agent, config) do
-    profile = Map.get(config, :profile, %{age: 0})
-    {:ok, Jido.Identity.new(profile: profile)}
-  end
-end
-
-defmodule MyAgent do
-  use Jido.Agent,
-    name: "my_agent",
-    default_plugins: %{
-      __identity__: {MyApp.CustomIdentityPlugin, %{profile: %{age: 5, origin: :configured}}}
-    }
-end
-```
-
-### Thread Plugin
-
-The Thread plugin stores `agent.state[:__thread__]` as an append-only journal of
-what happened. Thread entries should be treated as immutable facts.
-
-If external metadata arrives later, append a follow-up entry that points back
-to the original entry instead of updating it in place. The caller supplies a
-stable `entry_id` up front so later events can reference it:
-
-```elixir
-alias Jido.Thread.Agent, as: ThreadAgent
-
-entry_id = "entry_" <> Jido.Util.generate_id()
-
-agent =
-  ThreadAgent.append(agent, %{
-    id: entry_id,
-    kind: :message,
-    payload: %{role: "assistant", content: "hello"}
-  })
-
-agent =
-  ThreadAgent.append(agent, %{
-    kind: :message_committed,
-    payload: %{provider: :slack, remote_id: slack_ts},
-    refs: %{entry_id: entry_id}
-  })
-```
-
-This is the preferred way to model late provider acknowledgements, delivery
-receipts, and similar metadata while preserving thread history. For the
-rationale and a more general pattern, see
-[Persistence & Storage](storage.md#modeling-late-metadata-with-follow-up-events).
-
-### Memory Plugin
-
-The Memory plugin gives every agent an on-demand cognitive memory container stored at `agent.state[:__memory__]`. Memory is organized into **spaces** — named containers holding either map (key-value) or list (ordered items) data. Two reserved spaces, `:world` and `:tasks`, are created by default. Domain-specific wrappers should be built in your own modules on top of the generic space primitives.
-
-```elixir
-alias Jido.Memory.Agent, as: MemoryAgent
-
-agent = MyAgent.new()
-
-# Memory is not initialized until you ask for it
-refute MemoryAgent.has_memory?(agent)
-
-# Initialize on demand
-agent = MemoryAgent.ensure(agent)
-
-# Work with map spaces (e.g. :world)
-agent = MemoryAgent.put_in_space(agent, :world, :temperature, 22)
-MemoryAgent.get_in_space(agent, :world, :temperature)  #=> 22
-
-# Work with list spaces (e.g. :tasks)
-agent = MemoryAgent.append_to_space(agent, :tasks, %{id: "t1", text: "Check sensor"})
-```
-
-### Overriding and Disabling Defaults
-
-Default plugins can be controlled per-agent using the `default_plugins:` option with a map keyed by state key:
-
-```elixir
-# Disable identity (keep thread)
-use Jido.Agent,
-  name: "minimal",
-  default_plugins: %{__identity__: false}
-
-# Replace with custom module
-use Jido.Agent,
-  name: "custom",
-  default_plugins: %{__identity__: MyApp.CustomIdentityPlugin}
-
-# Replace with custom module and config
-use Jido.Agent,
-  name: "configured",
-  default_plugins: %{__identity__: {MyApp.CustomIdentityPlugin, %{profile: %{age: 10}}}}
-
-# Disable memory (keep others)
-use Jido.Agent,
-  name: "no_memory",
-  default_plugins: %{__memory__: false}
-
-# Disable all defaults
-use Jido.Agent,
-  name: "bare",
-  default_plugins: false
-```
-
-> **Note:** `default_plugins:` only controls built-in defaults. To add new plugins, use the `plugins:` option.
-
-For pod-wrapped agents, the reserved `:__pod__` plugin can be replaced but
-should not be disabled. See [Pods](pods.md) for the pod-specific contract.
-
-## See Also
-
-See `Jido.Plugin` moduledoc for complete API reference and advanced patterns.
-
-> **AI-powered plugins:** For LLM-integrated plugins, see the [jido_ai documentation](https://hexdocs.pm/jido_ai).
+- [ADR 0014 — Slice / Middleware / Plugin](adr/0014-slice-middleware-plugin.md) — design rationale
+- [Slices guide](slices.md) — the pure data tier
+- [Middleware guide](middleware.md) — the wrap tier
+- [Migration guide](migration.md) — full pre-0014 → new shape recipes
+- [`Jido.Thread.Plugin`](../lib/jido/thread/plugin.ex) — in-tree slice example
+- [`Jido.Middleware.Persister`](../lib/jido/middleware/persister.ex) — in-tree middleware example
+- [`Jido.Plugin.FSM`](../lib/jido/plugin/fsm.ex) — in-tree slice that's named "Plugin" for legacy reasons

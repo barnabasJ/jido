@@ -143,7 +143,36 @@ defmodule Jido.AgentServer.Lifecycle.Keyed do
   end
 
   @impl true
+  def persist_cron_specs(state, cron_specs) do
+    case find_persister_opts(state) do
+      nil ->
+        :ok
+
+      %{storage: nil} ->
+        :ok
+
+      %{storage: storage, persistence_key: key} ->
+        Jido.Persist.persist_scheduler_manifest(
+          storage,
+          state.agent_module,
+          key,
+          state.agent,
+          cron_specs
+        )
+    end
+  end
+
+  @impl true
   def terminate(_reason, _state), do: :ok
+
+  defp find_persister_opts(_state) do
+    # Persister opts live inside the closed-over middleware chain function;
+    # we can't introspect closures. Instead, the persister opts are mirrored
+    # into the lifecycle struct at init time when the chain is built. For
+    # now, rely on the InstanceManager wiring: read storage/key from the
+    # process dictionary slot Persister stamps during init.
+    Process.get(:jido_persister_opts)
+  end
 
   defp maybe_start_idle_timer(state) do
     lifecycle = state.lifecycle

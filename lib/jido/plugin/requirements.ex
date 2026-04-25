@@ -102,7 +102,7 @@ defmodule Jido.Plugin.Requirements do
     missing_by_plugin =
       instances
       |> Enum.reduce(%{}, fn instance, acc ->
-        resolved_config = Map.get(config_map, instance.state_key, instance.config)
+        resolved_config = Map.get(config_map, instance.path, instance.config)
 
         case validate_requirements_internal(
                instance.manifest.requires || [],

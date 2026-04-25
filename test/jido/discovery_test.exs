@@ -17,6 +17,7 @@ defmodule JidoTest.DiscoveryTest do
     @moduledoc false
     use Jido.Agent,
       name: "discovery_test_agent",
+      path: :domain,
       description: "Test agent for discovery",
       category: "test",
       tags: ["discovery", "test"],

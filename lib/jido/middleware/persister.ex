@@ -40,6 +40,11 @@ defmodule Jido.Middleware.Persister do
 
   @impl Jido.Middleware
   def on_signal(%Signal{type: @starting_type} = sig, ctx, opts, next) do
+    # Stash persister opts in the process dict so the lifecycle module can
+    # call `persist_cron_specs/2` for write-through durability without
+    # peering into the closed-over middleware chain.
+    Process.put(:jido_persister_opts, opts)
+
     case opts[:storage] do
       nil ->
         next.(sig, ctx)
@@ -75,7 +80,12 @@ defmodule Jido.Middleware.Persister do
       storage ->
         agent_module = ctx.agent_module
         key = opts[:persistence_key]
-        to_serialize = apply_externalize(ctx.agent, agent_module)
+
+        # Stage runtime cron specs from server state onto the agent before
+        # serialization so they survive across hibernate/thaw.
+        cron_specs = Map.get(ctx, :cron_specs, %{})
+        agent_with_cron = Jido.Scheduler.attach_staged_cron_specs(ctx.agent, cron_specs)
+        to_serialize = apply_externalize(agent_with_cron, agent_module)
 
         case Jido.Persist.hibernate(storage, agent_module, key, to_serialize) do
           :ok ->

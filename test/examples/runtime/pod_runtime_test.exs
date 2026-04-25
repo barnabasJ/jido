@@ -46,6 +46,7 @@ defmodule JidoExampleTest.PodRuntimeTest do
     @moduledoc false
     use Jido.Agent,
       name: "example_pod_review_worker",
+      path: :domain,
       schema: [
         role: [type: :string, default: "worker"]
       ]

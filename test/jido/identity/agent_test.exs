@@ -10,8 +10,8 @@ defmodule JidoTest.Identity.AgentTest do
   end
 
   describe "key/0" do
-    test "returns :__identity__" do
-      assert IdentityAgent.key() == :__identity__
+    test "returns :identity" do
+      assert IdentityAgent.key() == :identity
     end
   end
 
@@ -29,7 +29,7 @@ defmodule JidoTest.Identity.AgentTest do
 
     test "returns identity when present" do
       identity = Identity.new()
-      agent = %{create_agent() | state: %{__identity__: identity}}
+      agent = %{create_agent() | state: %{identity: identity}}
       assert IdentityAgent.get(agent) == identity
     end
   end
@@ -41,7 +41,7 @@ defmodule JidoTest.Identity.AgentTest do
 
       updated = IdentityAgent.put(agent, identity)
 
-      assert updated.state[:__identity__] == identity
+      assert updated.state[:identity] == identity
       assert IdentityAgent.get(updated) == identity
     end
 
@@ -52,7 +52,7 @@ defmodule JidoTest.Identity.AgentTest do
       updated = IdentityAgent.put(agent, identity)
 
       assert updated.state[:foo] == :bar
-      assert updated.state[:__identity__] == identity
+      assert updated.state[:identity] == identity
     end
   end
 

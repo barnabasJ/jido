@@ -11,17 +11,14 @@ defmodule JidoTest.Actions.LifecycleTest do
   end
 
   describe "NotifyParent" do
-    test "creates emit directive to parent when parent exists" do
+    test "creates emit directive to parent when ctx.parent has a pid" do
       parent_pid = self()
-
-      agent = %{
-        state: %{__parent__: %ParentRef{pid: parent_pid, id: "parent-1", tag: :child, meta: %{}}}
-      }
+      parent = %ParentRef{pid: parent_pid, id: "parent-1", tag: :child, meta: %{}}
 
       data = %{signal_type: "child.done", payload: %{result: 42}, source: "/child"}
 
       {:ok, result, directives} =
-        Lifecycle.NotifyParent.run(sig("notify_parent", data), %{}, %{}, %{agent: agent})
+        Lifecycle.NotifyParent.run(sig("notify_parent", data), %{}, %{}, %{parent: parent})
 
       assert result == %{notified: true}
       assert [%Directive.Emit{} = emit] = directives
@@ -30,12 +27,11 @@ defmodule JidoTest.Actions.LifecycleTest do
       assert emit.dispatch == {:pid, [target: parent_pid]}
     end
 
-    test "returns notified: false when no parent" do
-      agent = %{state: %{}}
+    test "returns notified: false when ctx.parent is nil (orphaned)" do
       data = %{signal_type: "child.done", payload: %{}, source: "/child"}
 
       {:ok, result, directives} =
-        Lifecycle.NotifyParent.run(sig("notify_parent", data), %{}, %{}, %{agent: agent})
+        Lifecycle.NotifyParent.run(sig("notify_parent", data), %{}, %{}, %{parent: nil})
 
       assert result == %{notified: false}
       assert directives == []

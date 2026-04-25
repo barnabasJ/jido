@@ -39,7 +39,7 @@ defmodule JidoTest.Plugin.SchedulesTest do
     @moduledoc false
     use Jido.Plugin,
       name: "scheduled_plugin",
-      state_key: :scheduled,
+      path: :scheduled,
       actions: [RefreshTokenAction, DailyDigestAction],
       schedules: [
         {"*/5 * * * *", RefreshTokenAction},
@@ -51,7 +51,7 @@ defmodule JidoTest.Plugin.SchedulesTest do
     @moduledoc false
     use Jido.Plugin,
       name: "custom_signal_plugin",
-      state_key: :custom_signal,
+      path: :custom_signal,
       actions: [CleanupAction],
       schedules: [
         {"0 0 * * *", CleanupAction, signal: "maintenance.cleanup"}
@@ -62,7 +62,7 @@ defmodule JidoTest.Plugin.SchedulesTest do
     @moduledoc false
     use Jido.Plugin,
       name: "no_schedules",
-      state_key: :no_schedules,
+      path: :no_schedules,
       actions: [RefreshTokenAction]
   end
 

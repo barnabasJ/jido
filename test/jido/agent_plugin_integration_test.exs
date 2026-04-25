@@ -16,9 +16,9 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
-      # :counter_plugin is a plugin slice at the top of agent.state, not in
-      # the user-domain slice ctx.state exposes. Read it from the full state.
+    def run(%Jido.Signal{data: %{amount: amount}}, _slice, _opts, ctx) do
+      # :counter_plugin is a plugin slice at the top of agent.state, not the
+      # user-domain slice the action receives. Read it from the full state.
       current = get_in(ctx.agent.state, [:counter_plugin, :count]) || 0
       {:ok, %{}, %StateOp.SetPath{path: [:counter_plugin, :count], value: current + amount}}
     end
@@ -32,7 +32,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: %{amount: amount}}, _slice, _opts, ctx) do
       current = get_in(ctx.agent.state, [:counter_plugin, :count]) || 0
       {:ok, %{}, %StateOp.SetPath{path: [:counter_plugin, :count], value: current - amount}}
     end
@@ -82,7 +82,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Plugin,
       name: "counter_plugin",
-      state_key: :counter_plugin,
+      path: :counter_plugin,
       actions: [
         JidoTest.AgentPluginIntegrationTest.IncrementAction,
         JidoTest.AgentPluginIntegrationTest.DecrementAction
@@ -95,7 +95,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Plugin,
       name: "greeter_plugin",
-      state_key: :greeter_plugin,
+      path: :greeter_plugin,
       actions: [JidoTest.AgentPluginIntegrationTest.GreetAction],
       description: "A plugin for greeting",
       schema: Zoi.object(%{last_greeting: Zoi.string() |> Zoi.optional()})
@@ -105,7 +105,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Plugin,
       name: "configurable_plugin",
-      state_key: :configurable,
+      path: :configurable,
       actions: [JidoTest.AgentPluginIntegrationTest.SimpleAction],
       description: "A plugin with config",
       config_schema:
@@ -120,7 +120,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Plugin,
       name: "mode_plugin",
-      state_key: :mode_plugin,
+      path: :mode_plugin,
       actions: [JidoTest.AgentPluginIntegrationTest.SetModeAction],
       schema: Zoi.object(%{current_mode: Zoi.atom() |> Zoi.default(:normal)})
   end
@@ -129,7 +129,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Plugin,
       name: "minimal_plugin",
-      state_key: :minimal,
+      path: :minimal,
       actions: [JidoTest.AgentPluginIntegrationTest.SimpleAction]
   end
 
@@ -141,6 +141,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "single_skill_agent",
+
+      path: :domain,
       default_plugins: false,
       plugins: [JidoTest.AgentPluginIntegrationTest.CounterPlugin]
   end
@@ -149,6 +151,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "multi_skill_agent",
+
+      path: :domain,
       default_plugins: false,
       plugins: [
         JidoTest.AgentPluginIntegrationTest.CounterPlugin,
@@ -160,6 +164,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "configured_skill_agent",
+
+      path: :domain,
       default_plugins: false,
       plugins: [
         {JidoTest.AgentPluginIntegrationTest.ConfigurablePlugin,
@@ -171,6 +177,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "mixed_schema_agent",
+
+      path: :domain,
       default_plugins: false,
       schema: [
         base_counter: [type: :integer, default: 100],
@@ -183,6 +191,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "three_skill_agent",
+
+      path: :domain,
       default_plugins: false,
       plugins: [
         JidoTest.AgentPluginIntegrationTest.CounterPlugin,
@@ -195,6 +205,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "minimal_skill_agent",
+
+      path: :domain,
       default_plugins: false,
       plugins: [JidoTest.AgentPluginIntegrationTest.MinimalPlugin]
   end
@@ -219,7 +231,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       assert %Spec{} = spec
       assert spec.module == CounterPlugin
       assert spec.name == "counter_plugin"
-      assert spec.state_key == :counter_plugin
+      assert spec.path == :counter_plugin
     end
 
     test "actions/0 includes plugin actions" do
@@ -293,7 +305,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       assert agent.state[:greeter_plugin][:last_greeting] == nil
     end
 
-    test "plugin states are isolated under their state_keys" do
+    test "plugin states are isolated under their paths" do
       agent = MultiPluginAgent.new()
 
       counter_state = agent.state[:counter_plugin]
@@ -447,6 +459,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       defmodule NoPluginAgent do
         use Jido.Agent,
           name: "no_skill_agent",
+
+          path: :domain,
           default_plugins: false
       end
 
@@ -502,7 +516,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       @moduledoc false
       use Jido.Plugin,
         name: "slack_cap",
-        state_key: :slack_cap,
+        path: :slack_cap,
         actions: [JidoTest.AgentPluginIntegrationTest.SimpleAction],
         capabilities: [:messaging, :channel_management],
         signal_routes: [
@@ -515,7 +529,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       @moduledoc false
       use Jido.Plugin,
         name: "openai_cap",
-        state_key: :openai_cap,
+        path: :openai_cap,
         actions: [JidoTest.AgentPluginIntegrationTest.SimpleAction],
         capabilities: [:chat, :embeddings, :messaging],
         signal_routes: [
@@ -528,6 +542,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       @moduledoc false
       use Jido.Agent,
         name: "capability_agent",
+
+        path: :domain,
         default_plugins: false,
         plugins: [
           JidoTest.AgentPluginIntegrationTest.SlackCapabilityPlugin,
@@ -561,6 +577,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         @moduledoc false
         use Jido.Agent,
           name: "aliased_cap_agent",
+
+          path: :domain,
           default_plugins: false,
           plugins: [
             {JidoTest.AgentPluginIntegrationTest.SlackCapabilityPlugin, as: :support},
@@ -581,6 +599,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         @moduledoc false
         use Jido.Agent,
           name: "multi_instance_cap_agent",
+
+          path: :domain,
           default_plugins: false,
           plugins: [
             {JidoTest.AgentPluginIntegrationTest.SlackCapabilityPlugin, as: :support},
@@ -601,6 +621,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         @moduledoc false
         use Jido.Agent,
           name: "multi_instance_cap_agent2",
+
+          path: :domain,
           default_plugins: false,
           plugins: [
             {JidoTest.AgentPluginIntegrationTest.SlackCapabilityPlugin, as: :support},
@@ -621,7 +643,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
   # =============================================================================
 
   describe "schema merging" do
-    test "merged schema contains plugin state_keys" do
+    test "merged schema contains plugin paths" do
       schema = MixedSchemaAgent.schema()
       keys = Schema.known_keys(schema)
 
@@ -631,23 +653,25 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     test "defaults from both base and skill are applied in new/0" do
       agent = MixedSchemaAgent.new()
 
-      assert agent.state[:__domain__][:base_counter] == 100
-      assert agent.state[:__domain__][:base_mode] == :initial
+      assert agent.state[:domain][:base_counter] == 100
+      assert agent.state[:domain][:base_mode] == :initial
       assert agent.state[:counter_plugin][:count] == 0
     end
 
     test "base schema fields and plugin schema fields coexist" do
       agent = MixedSchemaAgent.new(state: %{base_counter: 50})
 
-      assert agent.state[:__domain__][:base_counter] == 50
-      assert agent.state[:__domain__][:base_mode] == :initial
+      assert agent.state[:domain][:base_counter] == 50
+      assert agent.state[:domain][:base_mode] == :initial
       assert agent.state[:counter_plugin][:count] == 0
     end
 
     test "skill without schema works" do
       agent = MinimalPluginAgent.new()
 
-      assert agent.state[:minimal] == %{}
+      # Per ADR 0014: plugins without schema and without per-agent config get
+      # nil for their slice (no implicit empty map).
+      assert agent.state[:minimal] == nil
     end
 
     test "agent schema/0 returns the merged schema" do
@@ -734,24 +758,24 @@ defmodule JidoTest.AgentPluginIntegrationTest do
   # =============================================================================
 
   describe "edge cases" do
-    test "agent with skill that has no schema initializes with empty map" do
+    test "agent with skill that has no schema initializes with nil" do
       agent = MinimalPluginAgent.new()
 
-      assert agent.state[:minimal] == %{}
+      assert agent.state[:minimal] == nil
     end
 
-    test "accessing plugin state for plugin without schema returns empty map" do
+    test "accessing plugin state for plugin without schema returns nil" do
       agent = MinimalPluginAgent.new()
       state = MinimalPluginAgent.plugin_state(agent, MinimalPlugin)
 
-      assert state == %{}
+      assert state == nil
     end
 
     test "plugin actions list is deduplicated" do
       defmodule DuplicateActionPlugin do
         use Jido.Plugin,
           name: "dup_plugin",
-          state_key: :dup,
+          path: :dup,
           actions: [
             JidoTest.AgentPluginIntegrationTest.SimpleAction,
             JidoTest.AgentPluginIntegrationTest.SimpleAction
@@ -761,6 +785,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       defmodule DupAgent do
         use Jido.Agent,
           name: "dup_agent",
+
+          path: :domain,
           default_plugins: false,
           plugins: [JidoTest.AgentPluginIntegrationTest.DuplicateActionPlugin]
       end
@@ -774,20 +800,22 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       defmodule SharedActionPluginA do
         use Jido.Plugin,
           name: "shared_a",
-          state_key: :shared_a,
+          path: :shared_a,
           actions: [JidoTest.AgentPluginIntegrationTest.SimpleAction]
       end
 
       defmodule SharedActionPluginB do
         use Jido.Plugin,
           name: "shared_b",
-          state_key: :shared_b,
+          path: :shared_b,
           actions: [JidoTest.AgentPluginIntegrationTest.SimpleAction]
       end
 
       defmodule SharedActionAgent do
         use Jido.Agent,
           name: "shared_action_agent",
+
+          path: :domain,
           default_plugins: false,
           plugins: [
             JidoTest.AgentPluginIntegrationTest.SharedActionPluginA,
@@ -817,7 +845,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       @moduledoc false
       use Jido.Plugin,
         name: "slack",
-        state_key: :slack,
+        path: :slack,
         actions: [JidoTest.AgentPluginIntegrationTest.SimpleAction],
         schema:
           Zoi.object(%{
@@ -830,6 +858,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       @moduledoc false
       use Jido.Agent,
         name: "multi_slack_agent",
+
+        path: :domain,
         default_plugins: false,
         plugins: [
           {JidoTest.AgentPluginIntegrationTest.SlackPlugin, as: :support, token: "support-token"},
@@ -841,6 +871,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       @moduledoc false
       use Jido.Agent,
         name: "mixed_instance_agent",
+
+        path: :domain,
         default_plugins: false,
         plugins: [
           JidoTest.AgentPluginIntegrationTest.SlackPlugin,
@@ -855,12 +887,12 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       assert Enum.all?(instances, &match?(%Jido.Plugin.Instance{}, &1))
     end
 
-    test "instances have different derived state_keys" do
+    test "instances have different derived paths" do
       instances = MultiSlackAgent.plugin_instances()
 
-      state_keys = Enum.map(instances, & &1.state_key)
-      assert :slack_support in state_keys
-      assert :slack_sales in state_keys
+      paths = Enum.map(instances, & &1.path)
+      assert :slack_support in paths
+      assert :slack_sales in paths
     end
 
     test "plugin_specs/0 preserves Spec structs for aliased instances" do
@@ -869,9 +901,9 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       assert length(specs) == 2
       assert Enum.all?(specs, &match?(%Spec{}, &1))
 
-      state_keys = Enum.map(specs, & &1.state_key)
-      assert :slack_support in state_keys
-      assert :slack_sales in state_keys
+      paths = Enum.map(specs, & &1.path)
+      assert :slack_support in paths
+      assert :slack_sales in paths
     end
 
     test "instances have different route_prefixes" do
@@ -904,12 +936,12 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       assert is_map(sales_state)
     end
 
-    test "mixed instances (with and without as:) have different state_keys" do
+    test "mixed instances (with and without as:) have different paths" do
       instances = MixedInstanceAgent.plugin_instances()
 
-      state_keys = Enum.map(instances, & &1.state_key)
-      assert :slack in state_keys
-      assert :slack_support in state_keys
+      paths = Enum.map(instances, & &1.path)
+      assert :slack in paths
+      assert :slack_support in paths
     end
 
     test "plugin_config/1 with just module finds default instance first" do
@@ -926,10 +958,12 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
   describe "duplicate state_key detection with as: option" do
     test "same skill without as: twice raises duplicate error" do
-      assert_raise CompileError, ~r/Duplicate plugin state_keys/, fn ->
+      assert_raise CompileError, ~r/Duplicate slice paths/, fn ->
         defmodule DuplicateNoAsAgent do
           use Jido.Agent,
             name: "duplicate_no_as",
+
+            path: :domain,
             plugins: [
               JidoTest.AgentPluginIntegrationTest.CounterPlugin,
               JidoTest.AgentPluginIntegrationTest.CounterPlugin
@@ -939,10 +973,12 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "same skill with same as: value raises duplicate error" do
-      assert_raise CompileError, ~r/Duplicate plugin state_keys/, fn ->
+      assert_raise CompileError, ~r/Duplicate slice paths/, fn ->
         defmodule DuplicateSameAsAgent do
           use Jido.Agent,
             name: "duplicate_same_as",
+
+            path: :domain,
             plugins: [
               {JidoTest.AgentPluginIntegrationTest.CounterPlugin, as: :primary},
               {JidoTest.AgentPluginIntegrationTest.CounterPlugin, as: :primary}
@@ -955,6 +991,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       defmodule DifferentAsAgent do
         use Jido.Agent,
           name: "different_as_agent",
+
+          path: :domain,
           default_plugins: false,
           plugins: [
             {JidoTest.AgentPluginIntegrationTest.CounterPlugin, as: :primary},
@@ -965,9 +1003,9 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       instances = DifferentAsAgent.plugin_instances()
       assert length(instances) == 2
 
-      state_keys = Enum.map(instances, & &1.state_key)
-      assert :counter_plugin_primary in state_keys
-      assert :counter_plugin_secondary in state_keys
+      paths = Enum.map(instances, & &1.path)
+      assert :counter_plugin_primary in paths
+      assert :counter_plugin_secondary in paths
     end
   end
 end

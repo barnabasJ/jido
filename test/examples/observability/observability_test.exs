@@ -91,7 +91,7 @@ defmodule JidoExampleTest.ObservabilityTest do
         work_units: [type: :integer, default: 10]
       ]
 
-    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: params}, _slice, _opts, ctx) do
       agent_id = Map.get(ctx, :agent_id, "unknown")
 
       Observe.with_span(
@@ -114,7 +114,7 @@ defmodule JidoExampleTest.ObservabilityTest do
         delay_ms: [type: :integer, default: 10]
       ]
 
-    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+    def run(%Jido.Signal{data: params}, _slice, _opts, ctx) do
       agent_id = Map.get(ctx, :agent_id, "unknown")
 
       span_ctx =
@@ -144,6 +144,7 @@ defmodule JidoExampleTest.ObservabilityTest do
     @moduledoc false
     use Jido.Agent,
       name: "observe_example_agent",
+      path: :domain,
       schema: [
         last_result: [type: :integer, default: nil],
         async_result: [type: :integer, default: nil]
@@ -176,7 +177,7 @@ defmodule JidoExampleTest.ObservabilityTest do
       signal = Signal.new!("observed_work", %{work_units: 5}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.__domain__.last_result == 10
+      assert agent.state.domain.last_result == 10
 
       eventually(fn ->
         events = TelemetryCollector.get_events(collector)
@@ -262,7 +263,7 @@ defmodule JidoExampleTest.ObservabilityTest do
       signal = Signal.new!("observed_async", %{delay_ms: 5}, source: "/test")
       {:ok, agent} = AgentServer.call(pid, signal)
 
-      assert agent.state.__domain__.async_result == 15
+      assert agent.state.domain.async_result == 15
 
       eventually(fn ->
         events = TelemetryCollector.get_events(collector)

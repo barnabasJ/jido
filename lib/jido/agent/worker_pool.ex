@@ -238,7 +238,7 @@ defmodule Jido.Agent.WorkerPool do
     ]
 
     worker_args =
-      [agent: agent_module, jido: jido_instance] ++
+      [agent_module: agent_module, jido: jido_instance] ++
         Keyword.get(pool_opts, :worker_opts, [])
 
     :poolboy.child_spec(pool_id, poolboy_opts, worker_args)

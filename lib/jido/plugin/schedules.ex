@@ -89,7 +89,7 @@ defmodule Jido.Plugin.Schedules do
   def expand_schedules(%Instance{} = instance) do
     manifest = instance.manifest
     schedules = manifest.schedules || []
-    state_key = instance.state_key
+    state_key = instance.path
     route_prefix = instance.route_prefix
 
     Enum.map(schedules, fn schedule ->

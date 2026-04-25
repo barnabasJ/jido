@@ -3,8 +3,8 @@ defmodule Jido.Plugin.Instance do
   Represents a normalized plugin instance attached to an agent.
 
   Supports multiple instances of the same plugin with different configurations
-  via the `as:` option. Each instance gets a unique derived state_key and
-  route_prefix based on the `as:` value.
+  via the `as:` option. Each instance gets a unique derived `path` and
+  `route_prefix` based on the `as:` value.
 
   ## Fields
 
@@ -12,9 +12,7 @@ defmodule Jido.Plugin.Instance do
   - `as` - Optional instance alias atom (e.g., `:support`, `:sales`)
   - `config` - Resolved config map (overrides from agent declaration)
   - `manifest` - The plugin's manifest struct
-  - `state_key` - Derived state key (e.g., `:slack` or `:slack_support` if `as: :support`)
-  - `path` - Derived state path (Slice naming; populated alongside `state_key`
-    during the Plugin → Slice migration; identical to `state_key` for now)
+  - `path` - Derived slice key (e.g., `:slack` or `:slack_support` if `as: :support`)
   - `route_prefix` - Derived route prefix (e.g., `"slack"` or `"support.slack"`)
 
   ## Examples
@@ -37,13 +35,7 @@ defmodule Jido.Plugin.Instance do
               as: Zoi.atom(description: "Optional instance alias") |> Zoi.optional(),
               config: Zoi.map(description: "Resolved configuration") |> Zoi.default(%{}),
               manifest: Zoi.any(description: "The plugin's manifest struct"),
-              state_key: Zoi.atom(description: "Derived state key for agent state"),
-              path:
-                Zoi.atom(
-                  description:
-                    "Derived state path (Slice naming; populated alongside state_key during Plugin → Slice migration)"
-                )
-                |> Zoi.optional(),
+              path: Zoi.atom(description: "Derived slice key in agent.state"),
               route_prefix: Zoi.string(description: "Derived route prefix for signal routing")
             },
             coerce: true
@@ -72,15 +64,15 @@ defmodule Jido.Plugin.Instance do
   - `{PluginModule, [key: value]}` - Module with keyword list (may include `:as`)
 
   The `:as` option is extracted from the config and used to derive
-  unique state_key and route_prefix for the instance.
+  unique `path` and `route_prefix` for the instance.
 
   ## Examples
 
       Instance.new(MyPlugin)
-      # => %Instance{module: MyPlugin, as: nil, state_key: :my_plugin}
+      # => %Instance{module: MyPlugin, as: nil, path: :my_plugin}
 
       Instance.new({MyPlugin, as: :support, token: "abc"})
-      # => %Instance{module: MyPlugin, as: :support, state_key: :my_plugin_support}
+      # => %Instance{module: MyPlugin, as: :support, path: :my_plugin_support}
 
       Instance.new({MyPlugin, %{token: "abc"}})
       # => %Instance{module: MyPlugin, as: nil, config: %{token: "abc"}}
@@ -95,12 +87,12 @@ defmodule Jido.Plugin.Instance do
     end
 
     manifest = module.manifest()
-    base_state_key = manifest.state_key
+    base_path = manifest.path
     base_name = manifest.name
 
     resolved_config = Config.resolve_config!(module, overrides)
 
-    state_key = derive_state_key(base_state_key, as_opt)
+    path = derive_path(base_path, as_opt)
     route_prefix = derive_route_prefix(base_name, as_opt)
 
     %__MODULE__{
@@ -108,34 +100,28 @@ defmodule Jido.Plugin.Instance do
       as: as_opt,
       config: resolved_config,
       manifest: manifest,
-      state_key: state_key,
-      path: derive_path(manifest.path, as_opt),
+      path: path,
       route_prefix: route_prefix
     }
   end
 
   @doc """
-  Derives the state key from the base key and optional `as:` alias.
+  Derives the slice path from the base path and optional `as:` alias.
 
   ## Examples
 
-      iex> derive_state_key(:slack, nil)
+      iex> derive_path(:slack, nil)
       :slack
 
-      iex> derive_state_key(:slack, :support)
+      iex> derive_path(:slack, :support)
       :slack_support
   """
-  @spec derive_state_key(atom(), atom() | nil) :: atom()
-  def derive_state_key(base_key, nil), do: base_key
+  @spec derive_path(atom(), atom() | nil) :: atom()
+  def derive_path(base_path, nil), do: base_path
 
-  def derive_state_key(base_key, as_alias) when is_atom(as_alias) do
-    String.to_atom("#{base_key}_#{as_alias}")
+  def derive_path(base_path, as_alias) when is_atom(as_alias) do
+    String.to_atom("#{base_path}_#{as_alias}")
   end
-
-  @doc false
-  @spec derive_path(atom() | nil, atom() | nil) :: atom() | nil
-  def derive_path(nil, _as_alias), do: nil
-  def derive_path(base_path, as_alias), do: derive_state_key(base_path, as_alias)
 
   @doc """
   Derives the route prefix from the plugin name and optional `as:` alias.

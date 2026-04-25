@@ -9,8 +9,8 @@ defmodule JidoTest.Thread.PluginTest do
       assert ThreadPlugin.name() == "thread"
     end
 
-    test "state_key is :__thread__" do
-      assert ThreadPlugin.state_key() == :__thread__
+    test "path is :thread" do
+      assert ThreadPlugin.path() == :thread
     end
 
     test "is singleton" do
@@ -30,64 +30,57 @@ defmodule JidoTest.Thread.PluginTest do
     end
   end
 
-  describe "mount/2" do
-    test "returns {:ok, nil} (does not create a thread)" do
-      assert {:ok, nil} = ThreadPlugin.mount(nil, %{})
-    end
-  end
-
   describe "manifest" do
     test "singleton is true in manifest" do
       manifest = ThreadPlugin.manifest()
       assert manifest.singleton == true
     end
 
-    test "state_key is :__thread__ in manifest" do
+    test "path is :thread in manifest" do
       manifest = ThreadPlugin.manifest()
-      assert manifest.state_key == :__thread__
+      assert manifest.path == :thread
     end
   end
 
-  describe "on_checkpoint/2" do
-    test "externalizes a thread struct" do
-      thread = Thread.new(id: "t-1")
-      thread = Thread.append(thread, %{kind: :message, payload: %{text: "hello"}})
+  describe "Persist.Transform implementation" do
+    test "externalize/1 strips a Thread struct to a {id, rev} pointer" do
+      thread =
+        Thread.new(id: "t-1")
+        |> Thread.append(%{kind: :message, payload: %{text: "hello"}})
 
-      assert {:externalize, :thread, %{id: "t-1", rev: 1}} =
-               ThreadPlugin.on_checkpoint(thread, %{})
+      assert %{id: "t-1", rev: 1} = ThreadPlugin.externalize(thread)
     end
 
-    test "keeps nil state" do
-      assert :keep = ThreadPlugin.on_checkpoint(nil, %{})
+    test "externalize/1 returns nil for nil input" do
+      assert nil == ThreadPlugin.externalize(nil)
     end
 
-    test "externalizes thread with correct rev count" do
+    test "externalize/1 reflects rev count for multi-entry threads" do
       thread =
         Thread.new(id: "t-2")
         |> Thread.append(%{kind: :message, payload: %{text: "one"}})
         |> Thread.append(%{kind: :message, payload: %{text: "two"}})
         |> Thread.append(%{kind: :message, payload: %{text: "three"}})
 
-      assert {:externalize, :thread, %{id: "t-2", rev: 3}} =
-               ThreadPlugin.on_checkpoint(thread, %{})
+      assert %{id: "t-2", rev: 3} = ThreadPlugin.externalize(thread)
     end
-  end
 
-  describe "on_restore/2" do
-    test "returns {:ok, nil} (persist handles IO rehydration)" do
-      assert {:ok, nil} = ThreadPlugin.on_restore(%{id: "t-1", rev: 5}, %{})
+    test "reinstate/1 passes through (rehydration is the Persister's job)" do
+      pointer = %{id: "t-1", rev: 5}
+      assert ThreadPlugin.reinstate(pointer) == pointer
     end
   end
 
   describe "agent integration" do
     defmodule AgentWithThread do
-      use Jido.Agent, name: "thread_plugin_test_agent"
+      use Jido.Agent, name: "thread_plugin_test_agent", path: :domain
     end
 
     defmodule AgentWithoutThread do
       use Jido.Agent,
         name: "thread_plugin_test_no_thread",
-        default_plugins: %{__thread__: false}
+        path: :domain,
+        default_plugins: %{thread: false}
     end
 
     test "agent includes thread plugin by default" do
@@ -95,9 +88,9 @@ defmodule JidoTest.Thread.PluginTest do
       assert Jido.Thread.Plugin in modules
     end
 
-    test "agent state does not contain :__thread__ key initially" do
+    test "agent.state[:thread] starts nil (no auto-init)" do
       agent = AgentWithThread.new()
-      refute Map.has_key?(agent.state, :__thread__)
+      assert Map.get(agent.state, :thread) == nil
     end
 
     test "agent can disable thread plugin" do
