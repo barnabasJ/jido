@@ -68,12 +68,12 @@ defmodule Jido.Pod.Mutable do
   end
 
   @spec mark_mutation_lock(Agent.t(), map(), String.t() | nil) :: :ok
-  def mark_mutation_lock(%Agent{id: id, state: state}, context, mutation_id)
+  def mark_mutation_lock(%Agent{id: id}, context, mutation_id)
       when is_map(context) do
     ensure_mutation_lock_table!()
 
     agent_server_pid = Map.get(context, :agent_server_pid)
-    partition = Map.get(state, :__partition__)
+    partition = Map.get(context, :partition)
 
     :ets.insert(@mutation_lock_table, {{:id, partition, id}, mutation_id || true})
 

@@ -67,6 +67,7 @@ defmodule Jido.Agent do
       defmodule MyAgent do
         use Jido.Agent,
           name: "my_agent",
+          path: :domain,
           description: "My custom agent",
           schema: [
             status: [type: :atom, default: :idle],
@@ -79,8 +80,8 @@ defmodule Jido.Agent do
       # Create a new agent (fully initialized including strategy state)
       agent = MyAgent.new()
       agent = MyAgent.new(id: "custom-id", state: %{counter: 10})
-      # User-domain fields live under the `:__domain__` slice:
-      #   agent.state.__domain__.counter  #=> 10
+      # User-domain fields live under the agent's declared `path:` slice:
+      #   agent.state.<path>.counter  #=> 10
 
       # Execute actions
       {agent, directives} = MyAgent.cmd(agent, MyAction)
@@ -89,7 +90,7 @@ defmodule Jido.Agent do
 
       # Update state directly (flat attrs are auto-wrapped into the slice)
       {:ok, agent} = MyAgent.set(agent, %{status: :running})
-      # agent.state.__domain__.status  #=> :running
+      # agent.state.<path>.status  #=> :running
 
   ## Strategy Initialization
 
@@ -325,12 +326,11 @@ defmodule Jido.Agent do
                                  "Jido instance module for resolving default plugins at compile time"
                              )
                              |> Zoi.optional(),
-                           state_key:
+                           path:
                              Zoi.atom(
                                description:
-                                 "Atom slice key where the agent's user-domain state lives under `agent.state`. Actions that don't declare their own `path:` operate on this same slice. Defaults to `:__domain__`. See ADR 0005 / 0007."
+                                 "Required atom slice key where the agent's user-domain state lives under `agent.state`. Actions that don't declare their own `path:` operate on this same slice. See ADR 0014."
                              )
-                             |> Zoi.default(:__domain__)
                          },
                          coerce: true
                        )
@@ -498,12 +498,12 @@ defmodule Jido.Agent do
       @doc """
       Returns the atom slice key where the agent's user-domain state lives.
 
-      Defaults to `:__domain__` (ADR 0007). Schema defaults are seeded under
-      `agent.state[state_key]` and actions that declare a matching `path:`
-      receive just that slice as the `slice` argument of `run/4`.
+      Required at compile time (ADR 0014). Schema defaults are seeded under
+      `agent.state[path]` and actions that declare a matching `path:` receive
+      just that slice as the `slice` argument of `run/4`.
       """
-      @spec state_key() :: atom()
-      def state_key, do: @validated_opts[:state_key]
+      @spec path() :: atom()
+      def path, do: @validated_opts.path
 
       @doc "Returns the merged schema (base + plugin schemas)."
       @spec schema() :: Zoi.schema() | keyword()
@@ -765,9 +765,9 @@ defmodule Jido.Agent do
           agent = #{inspect(__MODULE__)}.new()
           agent = #{inspect(__MODULE__)}.new(id: "custom-id")
 
-          # Flat state is auto-wrapped into the agent's slice (`:__domain__` by default)
+          # Flat state is auto-wrapped into the agent's declared `path:` slice
           agent = #{inspect(__MODULE__)}.new(state: %{counter: 10})
-          # agent.state.__domain__.counter  #=> 10
+          # agent.state[path()].counter  #=> 10
       """
       @spec new(keyword() | map()) :: Agent.t()
       def new(opts \\ []) do
@@ -809,10 +809,8 @@ defmodule Jido.Agent do
         # Build initial state from base schema defaults
         base_defaults = AgentState.defaults_from_schema(@validated_opts[:schema])
 
-        # Nest user-domain defaults under the agent's slice so it participates
-        # in the same "combined reducers" layout as plugins. Every agent now
-        # has a slice (ADR 0007); `state_key()` is always an atom.
-        base_defaults = %{state_key() => base_defaults}
+        # Nest user-domain defaults under the agent's declared slice path.
+        base_defaults = %{path() => base_defaults}
 
         # Build plugin defaults nested under their state_keys
         # Skip plugins with nil schema (they manage their own state lifecycle)
@@ -827,17 +825,18 @@ defmodule Jido.Agent do
 
         schema_defaults = Map.merge(base_defaults, plugin_defaults)
 
-        # Ergonomic auto-wrap (ADR 0007): if the user passes a flat map like
+        # Ergonomic auto-wrap (ADR 0014): if the user passes a flat map like
         # `state: %{counter: 5}` we treat it as "my domain slice" and nest it
-        # under the agent's state_key. If they pass an explicit slice layout
-        # like `state: %{__domain__: %{...}, __pod__: %{...}}` we take it as-is.
+        # under the agent's path. If they pass an explicit slice layout
+        # like `state: %{<path>: %{...}, <plugin_state_key>: %{...}}` we take
+        # it as-is.
         user_state = __wrap_user_state__(opts[:state] || %{})
 
         DeepMerge.deep_merge(schema_defaults, user_state)
       end
 
       defp __wrap_user_state__(%{} = user_state) do
-        known_slices = [state_key() | @plugin_state_keys]
+        known_slices = [path() | @plugin_state_keys]
 
         cond do
           map_size(user_state) == 0 ->
@@ -849,7 +848,7 @@ defmodule Jido.Agent do
 
           true ->
             # Flat shape — wrap under the agent's slice
-            %{state_key() => user_state}
+            %{path() => user_state}
         end
       end
     end
@@ -931,19 +930,33 @@ defmodule Jido.Agent do
         {:ok, agent, action} = on_before_cmd(agent, action)
 
         jido_instance = Keyword.get(opts, :__jido_instance__)
-        partition = Keyword.get(opts, :__partition__, Map.get(agent.state, :__partition__))
+        partition = Keyword.get(opts, :__server_partition__)
         input_signal = Keyword.get(opts, :__input_signal__)
 
         instruction_opts =
           opts
           |> Keyword.delete(:__jido_instance__)
-          |> Keyword.delete(:__partition__)
+          |> Keyword.delete(:__server_partition__)
           |> Keyword.delete(:__input_signal__)
+
+        # Seed agent-level runtime identity into the per-signal ctx so it
+        # reaches actions via the `ctx` arg of `run/4`. ADR 0014: runtime
+        # identity lives on `%AgentServer.State{}` and is mirrored into ctx,
+        # never into `agent.state`.
+        agent_ctx =
+          for {k, v} <- [
+                partition: partition,
+                agent_id: agent.id,
+                jido_instance: jido_instance
+              ],
+              not is_nil(v),
+              into: %{},
+              do: {k, v}
 
         base_context =
           case input_signal do
-            nil -> %{state: agent.state}
-            signal -> %{state: agent.state, signal: signal}
+            nil -> %{state: agent.state, ctx: agent_ctx}
+            signal -> %{state: agent.state, signal: signal, ctx: agent_ctx}
           end
 
         case Instruction.normalize(action, base_context, instruction_opts) do
@@ -980,10 +993,14 @@ defmodule Jido.Agent do
       - `done?` - Whether strategy reached terminal state
       - `result` - Main output if any
       - `details` - Additional strategy-specific metadata
+
+      Runtime identity (e.g. partition) lives on `%Jido.AgentServer.State{}`
+      and is no longer mirrored into `agent.state`. Pass it via the optional
+      `partition:` opt when calling from the AgentServer.
       """
-      @spec strategy_snapshot(Agent.t()) :: Jido.Agent.Strategy.Snapshot.t()
-      def strategy_snapshot(%Agent{} = agent) do
-        ctx = __strategy_ctx__(nil, Map.get(agent.state, :__partition__))
+      @spec strategy_snapshot(Agent.t(), keyword()) :: Jido.Agent.Strategy.Snapshot.t()
+      def strategy_snapshot(%Agent{} = agent, opts \\ []) do
+        ctx = __strategy_ctx__(nil, Keyword.get(opts, :partition))
         strategy().snapshot(agent, ctx)
       end
 
@@ -991,15 +1008,15 @@ defmodule Jido.Agent do
       Updates the agent's state by merging new attributes.
 
       Uses deep merge semantics - nested maps are merged recursively. Flat
-      attrs are auto-wrapped into the agent's slice (`:__domain__` by default).
+      attrs are auto-wrapped into the agent's declared `path:` slice.
 
       ## Examples
 
           {:ok, agent} = #{inspect(__MODULE__)}.set(agent, %{status: :running})
-          # agent.state.__domain__.status  #=> :running
+          # agent.state.<path>.status  #=> :running
 
           {:ok, agent} = #{inspect(__MODULE__)}.set(agent, counter: 5)
-          # agent.state.__domain__.counter  #=> 5
+          # agent.state.<path>.counter  #=> 5
       """
       @spec set(Agent.t(), map() | keyword()) :: Agent.agent_result()
       def set(%Agent{} = agent, attrs) do

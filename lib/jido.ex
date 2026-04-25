@@ -578,9 +578,9 @@ defmodule Jido do
 
   @spec hibernate(atom(), Jido.Agent.t(), keyword()) :: :ok | {:error, term()}
   def hibernate(jido_instance, agent, opts) when is_atom(jido_instance) and is_list(opts) do
-    with {:ok, agent} <- maybe_put_partition(agent, Keyword.get(opts, :partition)) do
-      Jido.Persist.hibernate(jido_instance, agent)
-    end
+    partition = Keyword.get(opts, :partition)
+    agent_module = agent_module_for(agent)
+    Jido.Persist.hibernate(jido_instance, agent_module, partition_key(agent.id, partition), agent)
   end
 
   @doc "Thaw an agent using the given Jido instance."
@@ -593,13 +593,7 @@ defmodule Jido do
   def thaw(jido_instance, agent_module, key, opts)
       when is_atom(jido_instance) and is_list(opts) do
     partition = Keyword.get(opts, :partition)
-
-    jido_instance
-    |> Jido.Persist.thaw(agent_module, partition_key(key, partition))
-    |> case do
-      {:ok, agent} -> maybe_put_partition(agent, partition)
-      {:error, _reason} = error -> error
-    end
+    Jido.Persist.thaw(jido_instance, agent_module, partition_key(key, partition))
   end
 
   defp filter_agent_registry_entries(entries, partition) do
@@ -617,26 +611,8 @@ defmodule Jido do
     end)
   end
 
-  defp maybe_put_partition(%{state: state} = agent, nil) when is_map(state), do: {:ok, agent}
-
-  defp maybe_put_partition(%{state: state} = agent, partition) when is_map(state) do
-    case Map.get(state, :__partition__) do
-      nil ->
-        {:ok, %{agent | state: Map.put(state, :__partition__, partition)}}
-
-      ^partition ->
-        {:ok, agent}
-
-      agent_partition ->
-        {:error,
-         Jido.Error.validation_error("partition does not match agent runtime state", %{
-           partition: partition,
-           agent_partition: agent_partition
-         })}
-    end
-  end
-
-  defp maybe_put_partition(agent, _partition), do: {:ok, agent}
+  defp agent_module_for(%{agent_module: mod}) when is_atom(mod) and not is_nil(mod), do: mod
+  defp agent_module_for(%mod{}), do: mod
 
   defp normalize_parent_binding(%{parent_id: parent_id, tag: _tag} = binding)
        when is_binary(parent_id) do

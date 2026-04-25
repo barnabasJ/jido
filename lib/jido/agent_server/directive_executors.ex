@@ -79,7 +79,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction
         state.agent,
         {result_action, execution_payload},
         __jido_instance__: state.jido,
-        __partition__: state.partition
+        __server_partition__: state.partition
       )
 
     state = State.update_agent(state, agent)

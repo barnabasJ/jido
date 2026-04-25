@@ -7,10 +7,11 @@ defmodule Jido.AgentServer.ParentRef do
   a supervisor; the parent relationship is represented explicitly with this
   struct, child-start signals, and process monitors.
 
-  While a child is attached, the runtime injects this value into
-  `agent.state.__parent__` so child actions can use `Directive.emit_to_parent/3`.
-  If the child becomes orphaned, the current parent ref is cleared and the former
-  parent is moved to `agent.state.__orphaned_from__`.
+  The current parent ref lives on `%Jido.AgentServer.State{}` (under
+  `:parent`) and is exposed to actions via the `ctx` arg of `run/4`. When a
+  child becomes orphaned, the runtime moves the former parent to
+  `state.orphaned_from` and emits identity-transition signals
+  (`jido.agent.identity.parent_died` / `jido.agent.identity.orphaned`).
   """
 
   @schema Zoi.struct(

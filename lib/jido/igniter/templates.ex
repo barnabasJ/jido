@@ -21,13 +21,14 @@ defmodule Jido.Igniter.Templates do
       @moduledoc \"\"\"
       TODO: Describe this agent.
 
-      User-domain fields declared in `schema:` live under the
-      `:__domain__` slice of `agent.state` — e.g. a `:counter` field
-      is read as `agent.state.__domain__.counter`.
+      User-domain fields declared in `schema:` live under the agent's
+      declared `path:` slice of `agent.state` — e.g. with `path: :domain`,
+      a `:counter` field is read as `agent.state.domain.counter`.
       \"\"\"
 
       use Jido.Agent,
         name: "#{name}",
+        path: :domain,
         description: "TODO: Add description",
         schema: []#{plugins_opt}
     end

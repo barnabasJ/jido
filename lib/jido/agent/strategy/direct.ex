@@ -106,13 +106,6 @@ defmodule Jido.Agent.Strategy.Direct do
     end
   end
 
-  # Resolve `{state_key, scoped?}`:
-  #   - If the action module exports `path/0` and returns a non-nil atom
-  #     (i.e. it's a `Jido.Action` declaring its slice), use its declared
-  #     slice and mark scoped? = true (wholesale slice replacement).
-  #   - Otherwise, fall back to the agent's own slice key; scoped? = false so
-  #     the runtime uses deep-merge semantics for partial-update returns
-  #     (legacy `run/2` shape).
   defp resolve_state_key(%Agent{agent_module: mod}, action)
        when is_atom(action) and not is_nil(action) do
     cond do
@@ -121,11 +114,11 @@ defmodule Jido.Agent.Strategy.Direct do
         {action.path(), true}
 
       true ->
-        {mod.state_key(), false}
+        {mod.path(), false}
     end
   end
 
-  defp resolve_state_key(%Agent{agent_module: mod}, _action), do: {mod.state_key(), false}
+  defp resolve_state_key(%Agent{agent_module: mod}, _action), do: {mod.path(), false}
 
   # Scoped action: the returned map IS the new value of the slice.
   defp apply_slice_result(agent, state_key, true, new_slice, effects) do

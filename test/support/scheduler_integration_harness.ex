@@ -47,6 +47,7 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
     @moduledoc false
     use Jido.Agent,
       name: "scheduler_integration_agent",
+      path: :domain,
       schema: [
         tick_count: [type: :integer, default: 0],
         ticks: [type: {:list, :any}, default: []]
@@ -65,6 +66,7 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
     @moduledoc false
     use Jido.Agent,
       name: "scheduler_integration_scheduled_agent",
+      path: :domain,
       schema: [
         tick_count: [type: :integer, default: 0],
         ticks: [type: {:list, :any}, default: []]

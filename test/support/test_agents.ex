@@ -11,7 +11,8 @@ defmodule JidoTest.TestAgents do
   defmodule Minimal do
     @moduledoc false
     use Jido.Agent,
-      name: "minimal_agent"
+      name: "minimal_agent",
+      path: :domain
 
     def signal_routes(_ctx), do: []
   end
@@ -29,6 +30,7 @@ defmodule JidoTest.TestAgents do
     """
     use Jido.Agent,
       name: "counter_agent",
+      path: :domain,
       description: "Test agent with counter and message tracking",
       schema: [
         counter: [type: :integer, default: 0],
@@ -50,6 +52,7 @@ defmodule JidoTest.TestAgents do
     @moduledoc false
     use Jido.Agent,
       name: "basic_agent",
+      path: :domain,
       description: "A basic test agent",
       category: "test",
       tags: ["test", "basic"],
@@ -66,6 +69,7 @@ defmodule JidoTest.TestAgents do
     @moduledoc false
     use Jido.Agent,
       name: "hook_agent",
+      path: :domain,
       schema: [
         counter: [type: :integer, default: 0]
       ]
@@ -122,6 +126,7 @@ defmodule JidoTest.TestAgents do
     @moduledoc false
     use Jido.Agent,
       name: "custom_strategy_agent",
+      path: :domain,
       strategy: JidoTest.TestAgents.CountingStrategy
 
     def signal_routes(_ctx), do: []
@@ -131,6 +136,7 @@ defmodule JidoTest.TestAgents do
     @moduledoc false
     use Jido.Agent,
       name: "strategy_opts_agent",
+      path: :domain,
       strategy: {JidoTest.TestAgents.CountingStrategy, max_depth: 5}
 
     def signal_routes(_ctx), do: []
@@ -140,6 +146,7 @@ defmodule JidoTest.TestAgents do
     @moduledoc false
     use Jido.Agent,
       name: "zoi_schema_agent",
+      path: :domain,
       schema:
         Zoi.object(%{
           status: Zoi.atom() |> Zoi.default(:idle),
@@ -153,6 +160,7 @@ defmodule JidoTest.TestAgents do
     @moduledoc "Agent with a strategy that emits directives from init/2"
     use Jido.Agent,
       name: "with_custom_strategy_agent",
+      path: :domain,
       strategy: JidoTest.TestAgents.InitDirectiveStrategy,
       schema: [
         value: [type: :integer, default: 0]
@@ -188,6 +196,7 @@ defmodule JidoTest.TestAgents do
     @moduledoc false
     use Jido.Agent,
       name: "agent_with_plugin_routes",
+      path: :domain,
       plugins: [JidoTest.TestAgents.TestPluginWithRoutes]
 
     def signal_routes(_ctx), do: []
@@ -197,6 +206,7 @@ defmodule JidoTest.TestAgents do
     @moduledoc false
     use Jido.Agent,
       name: "agent_multi_instance",
+      path: :domain,
       plugins: [
         {JidoTest.TestAgents.TestPluginWithRoutes, as: :support},
         {JidoTest.TestAgents.TestPluginWithRoutes, as: :sales}

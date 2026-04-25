@@ -25,8 +25,9 @@ defmodule Jido.Actions.Lifecycle do
     @moduledoc """
     Emit a signal back to the spawning parent agent.
 
-    Requires the agent to have been spawned via `SpawnAgent` directive
-    (which populates `__parent__` in state).
+    Reads the current parent reference from `ctx.parent` (a `%ParentRef{}`
+    seeded by AgentServer). When the agent is orphaned, `ctx.parent` is
+    `nil` and the action emits no directive.
 
     ## Schema
 
@@ -51,9 +52,23 @@ defmodule Jido.Actions.Lifecycle do
         source: [type: :string, default: "/child", doc: "Signal source path"]
       ]
 
-    def run(%Jido.Signal{data: %{signal_type: type, payload: payload, source: source}}, _slice, _opts, ctx) do
+    def run(
+          %Jido.Signal{data: %{signal_type: type, payload: payload, source: source}},
+          _slice,
+          _opts,
+          ctx
+        ) do
       signal = Signal.new!(type, payload, source: source)
-      directive = Directive.emit_to_parent(ctx.agent, signal)
+
+      directive =
+        case Map.get(ctx, :parent) do
+          %Jido.AgentServer.ParentRef{pid: pid} when is_pid(pid) ->
+            Directive.emit_to_pid(signal, pid)
+
+          _ ->
+            nil
+        end
+
       {:ok, %{notified: directive != nil}, List.wrap(directive)}
     end
   end
@@ -117,8 +132,9 @@ defmodule Jido.Actions.Lifecycle do
     @moduledoc """
     Spawn a child agent with hierarchy tracking.
 
-    The spawned agent will have a parent reference allowing it to
-    use `emit_to_parent/3` to communicate back.
+    The spawned agent will have its `ctx.parent` populated so its actions
+    can address the parent directly via
+    `%Directive.Emit{dispatch: {:pid, target: ctx.parent.pid}}`.
 
     ## Schema
 

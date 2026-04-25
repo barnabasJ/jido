@@ -74,7 +74,11 @@ defprotocol Jido.AgentServer.DirectiveExec do
             Jido.AgentServer.cast(agent_pid, signal)
           end)
 
-          {:ok, put_in(state.agent.state.__domain__.llm_status, :loading)}
+          domain = state.agent_module.path()
+          slice = Map.get(state.agent.state, domain, %{})
+          new_slice = Map.put(slice, :llm_status, :loading)
+          new_agent = %{state.agent | state: Map.put(state.agent.state, domain, new_slice)}
+          {:ok, %{state | agent: new_agent}}
         end
       end
 

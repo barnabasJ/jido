@@ -37,7 +37,7 @@ defmodule Jido.Action do
       defmodule Counter.Increment do
         use Jido.Action,
           name: "increment",
-          path: :__domain__,
+          path: :counter,
           schema: [by: [type: :integer, default: 1]]
 
         @impl true

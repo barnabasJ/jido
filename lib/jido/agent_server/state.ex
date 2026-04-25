@@ -129,12 +129,15 @@ defmodule Jido.AgentServer.State do
   @doc """
   Creates a new State from validated Options, agent module, and agent struct.
 
-  If a parent reference is provided, it's injected into the agent's state
-  as `agent.state.__parent__` so agents can use `Directive.emit_to_parent/3`.
+  Runtime identity (`partition`, `parent`, `orphaned_from`) lives only on the
+  returned `%State{}`; nothing is mirrored into `agent.state`.
+
+  Note: this function will grow a 4th `opts` argument in C4 to thread
+  `middleware_chain:` from the AgentServer init pipeline. The current
+  signature is intentionally not frozen as "always 3-arg".
   """
   @spec from_options(Options.t(), module(), struct()) :: {:ok, t()} | {:error, term()}
   def from_options(%Options{} = opts, agent_module, agent) do
-    agent = inject_runtime_refs(agent, opts.partition, opts.parent, nil)
     {agent, staged_cron_specs} = Jido.Scheduler.extract_staged_cron_specs(agent)
 
     {restored_cron_specs, invalid_cron_specs} =
@@ -194,43 +197,28 @@ defmodule Jido.AgentServer.State do
     end
   end
 
-  defp inject_runtime_refs(agent, partition, parent, orphaned_from) do
-    %{agent | state: put_runtime_refs(agent.state, partition, parent, orphaned_from)}
-  end
-
   @doc """
-  Attaches a parent reference to the runtime and agent state.
+  Attaches a parent reference to the runtime.
+
+  Runtime identity lives only on `%State{}`; the agent struct is left
+  untouched.
   """
   @spec attach_parent(t(), ParentRef.t()) :: t()
   def attach_parent(%__MODULE__{} = state, %ParentRef{} = parent) do
-    %{
-      state
-      | parent: parent,
-        orphaned_from: nil,
-        agent: inject_runtime_refs(state.agent, state.partition, parent, nil)
-    }
+    %{state | parent: parent, orphaned_from: nil}
   end
 
   @doc """
-  Transitions the runtime into an orphaned state, preserving the former parent.
+  Transitions the runtime into an orphaned state, preserving the former
+  parent on `%State{}`.
   """
   @spec orphan_parent(t()) :: t()
   def orphan_parent(%__MODULE__{parent: %ParentRef{} = parent} = state) do
-    %{
-      state
-      | parent: nil,
-        orphaned_from: parent,
-        agent: inject_runtime_refs(state.agent, state.partition, nil, parent)
-    }
+    %{state | parent: nil, orphaned_from: parent}
   end
 
   def orphan_parent(%__MODULE__{} = state) do
-    %{
-      state
-      | parent: nil,
-        orphaned_from: nil,
-        agent: inject_runtime_refs(state.agent, state.partition, nil, nil)
-    }
+    %{state | parent: nil, orphaned_from: nil}
   end
 
   @doc """
@@ -238,10 +226,7 @@ defmodule Jido.AgentServer.State do
   """
   @spec update_agent(t(), struct()) :: t()
   def update_agent(%__MODULE__{} = state, agent) do
-    %{
-      state
-      | agent: inject_runtime_refs(agent, state.partition, state.parent, state.orphaned_from)
-    }
+    %{state | agent: agent}
   end
 
   @doc """
@@ -290,16 +275,6 @@ defmodule Jido.AgentServer.State do
   def get_child(%__MODULE__{children: children}, tag) do
     Map.get(children, tag)
   end
-
-  defp put_runtime_refs(agent_state, partition, parent, orphaned_from) do
-    agent_state
-    |> maybe_put_state_key(:__partition__, partition)
-    |> maybe_put_state_key(:__parent__, parent)
-    |> maybe_put_state_key(:__orphaned_from__, orphaned_from)
-  end
-
-  defp maybe_put_state_key(state, key, nil), do: Map.delete(state, key)
-  defp maybe_put_state_key(state, key, value), do: Map.put(state, key, value)
 
   @doc """
   Increments the error count.

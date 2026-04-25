@@ -148,12 +148,12 @@ defmodule Jido.AgentServer do
   parent dies:
 
   - `state.parent` becomes `nil`
-  - `agent.state.__parent__` becomes `nil`
   - the former parent is preserved in `state.orphaned_from`
-  - the former parent is preserved in `agent.state.__orphaned_from__`
 
-  This prevents children from continuing to route signals to a dead parent via
-  `Jido.Agent.Directive.emit_to_parent/3`.
+  Identity (`partition`, `parent`, `orphaned_from`) lives only on
+  `%AgentServer.State{}`; it is no longer mirrored into `agent.state`.
+  Actions reach the current values via the `ctx` arg of `run/4` and emitted
+  identity-transition signals (`jido.agent.identity.*`).
 
   Reattachment is explicit. A replacement parent can adopt the live child with
   `Jido.Agent.Directive.adopt_child/3`, which refreshes the child's live parent
@@ -198,7 +198,14 @@ defmodule Jido.AgentServer do
   }
 
   alias Jido.Agent.Directive
-  alias Jido.AgentServer.Signal.{ChildExit, ChildStarted, Orphaned}
+  alias Jido.AgentServer.Signal.{
+    ChildExit,
+    ChildStarted,
+    IdentityOrphaned,
+    Orphaned,
+    ParentDied,
+    PartitionAssigned
+  }
   alias Jido.Config.Defaults
   alias Jido.RuntimeStore
   alias Jido.Sensor.Runtime, as: SensorRuntime
@@ -376,9 +383,9 @@ defmodule Jido.AgentServer do
   ## Options
 
   - `:status_path` - Path to status field in `agent.state` (default:
-    `[:__domain__, :status]` — the agent's domain slice)
-  - `:result_path` - Path to result field (default: `[:__domain__, :last_answer]`)
-  - `:error_path` - Path to error field (default: `[:__domain__, :error]`)
+    `[<agent.path()>, :status]` — the agent's declared slice)
+  - `:result_path` - Path to result field (default: `[<agent.path()>, :last_answer]`)
+  - `:error_path` - Path to error field (default: `[<agent.path()>, :error]`)
 
   ## Returns
 
@@ -1073,7 +1080,28 @@ defmodule Jido.AgentServer do
 
     notify_parent_of_startup(state)
 
+    state = emit_partition_assigned(state)
+
     {:noreply, State.set_status(state, :idle)}
+  end
+
+  defp emit_partition_assigned(%State{} = state) do
+    signal =
+      PartitionAssigned.new!(
+        %{partition: state.partition},
+        source: "/agent/#{state.id}"
+      )
+
+    traced_signal =
+      case Trace.put(signal, Trace.new_root()) do
+        {:ok, s} -> s
+        {:error, _} -> signal
+      end
+
+    case process_signal_async(traced_signal, state) do
+      {:ok, new_state} -> new_state
+      {:stop, _reason, new_state} -> new_state
+    end
   end
 
   defp init_signal do
@@ -1116,11 +1144,10 @@ defmodule Jido.AgentServer do
   end
 
   def handle_call({:await_completion, opts}, from, %State{} = state) do
-    # Default completion paths target the agent's :__domain__ slice
-    # (ADR 0008), where schema-backed fields like :status live.
-    status_path = Keyword.get(opts, :status_path, [:__domain__, :status])
-    result_path = Keyword.get(opts, :result_path, [:__domain__, :last_answer])
-    error_path = Keyword.get(opts, :error_path, [:__domain__, :error])
+    default_path = state.agent_module.path()
+    status_path = Keyword.get(opts, :status_path, [default_path, :status])
+    result_path = Keyword.get(opts, :result_path, [default_path, :last_answer])
+    error_path = Keyword.get(opts, :error_path, [default_path, :error])
     waiter_id = Keyword.get(opts, :waiter_id)
 
     case completion_from_agent_state(state.agent.state, status_path, result_path, error_path) do
@@ -1622,7 +1649,7 @@ defmodule Jido.AgentServer do
     {agent, directives} =
       state.agent_module.cmd(state.agent, action_arg,
         __jido_instance__: state.jido,
-        __partition__: state.partition,
+        __server_partition__: state.partition,
         __input_signal__: signal
       )
 
@@ -2503,8 +2530,9 @@ defmodule Jido.AgentServer do
 
   defp notify_parent_of_startup(_state), do: :ok
 
-  defp handle_parent_down(%State{on_parent_death: :stop} = state, _pid, reason) do
+  defp handle_parent_down(%State{on_parent_death: :stop, parent: former_parent} = state, _pid, reason) do
     _ = clear_parent_binding(state.jido, state.id, state.partition)
+    state = emit_parent_died(state, former_parent, reason)
     stop_reason = wrap_parent_down_reason(reason)
 
     Logger.info(
@@ -2516,6 +2544,7 @@ defmodule Jido.AgentServer do
 
   defp handle_parent_down(%State{on_parent_death: :continue} = state, _pid, reason) do
     {former_parent, orphaned_state} = transition_to_orphan(state, reason)
+    orphaned_state = emit_parent_died(orphaned_state, former_parent, reason)
 
     Logger.info(
       "AgentServer #{state.id} continuing as orphan after parent #{former_parent.id} died (#{inspect(reason)})"
@@ -2526,6 +2555,8 @@ defmodule Jido.AgentServer do
 
   defp handle_parent_down(%State{on_parent_death: :emit_orphan} = state, _pid, reason) do
     {former_parent, orphaned_state} = transition_to_orphan(state, reason)
+    orphaned_state = emit_parent_died(orphaned_state, former_parent, reason)
+    orphaned_state = emit_identity_orphaned(orphaned_state, former_parent, reason)
 
     signal =
       Orphaned.new!(
@@ -2548,6 +2579,43 @@ defmodule Jido.AgentServer do
     case process_signal_async(traced_signal, orphaned_state) do
       {:ok, new_state} -> {:noreply, new_state}
       {:stop, reason, new_state} -> {:stop, reason, State.set_status(new_state, :stopping)}
+    end
+  end
+
+  defp emit_parent_died(%State{} = state, %ParentRef{} = former_parent, reason) do
+    signal =
+      ParentDied.new!(
+        %{former_parent: former_parent, reason: reason},
+        source: "/agent/#{state.id}"
+      )
+
+    emit_identity_signal(signal, state)
+  end
+
+  defp emit_parent_died(%State{} = state, _former_parent, _reason), do: state
+
+  defp emit_identity_orphaned(%State{} = state, %ParentRef{} = former_parent, reason) do
+    signal =
+      IdentityOrphaned.new!(
+        %{former_parent: former_parent, reason: reason},
+        source: "/agent/#{state.id}"
+      )
+
+    emit_identity_signal(signal, state)
+  end
+
+  defp emit_identity_orphaned(%State{} = state, _former_parent, _reason), do: state
+
+  defp emit_identity_signal(signal, %State{} = state) do
+    traced_signal =
+      case Trace.put(signal, Trace.new_root()) do
+        {:ok, s} -> s
+        {:error, _} -> signal
+      end
+
+    case process_signal_async(traced_signal, state) do
+      {:ok, new_state} -> new_state
+      {:stop, _reason, new_state} -> new_state
     end
   end
 

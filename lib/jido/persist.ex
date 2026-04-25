@@ -46,6 +46,15 @@ defmodule Jido.Persist do
   - `restore(checkpoint_data, ctx)` - Returns `{:ok, agent}` for custom deserialization
 
   If not implemented, default serialization is used.
+
+  ## Forward compatibility
+
+  Pre-ADR-0014 checkpoints — written when runtime identity (`:__partition__`,
+  `:__parent__`, `:__orphaned_from__`) was mirrored into `agent.state` — are
+  **not** forward-compatible with this revision. There are no external users
+  to migrate (per ADR 0014), so no forward-compat shim is maintained. Local
+  development or test-fixture checkpoints from before this PR should be
+  deleted; fresh checkpoints get the new shape automatically.
   """
 
   require Logger
@@ -488,13 +497,12 @@ defmodule Jido.Persist do
         _ -> agent.__struct__
       end
 
-    partition =
-      case Map.get(agent, :state) do
-        state when is_map(state) -> Map.get(state, :__partition__)
-        _ -> nil
-      end
-
-    {:ok, {agent_module, Jido.partition_key(id, partition)}}
+    # Runtime identity (partition) lives on the AgentServer state, not on
+    # the agent struct (ADR 0014). The 2-arity `hibernate/2` form persists
+    # under a partition-less key; callers needing partition-scoped keys
+    # should use the 4-arity `hibernate/4` with an explicit
+    # `Jido.partition_key/2`.
+    {:ok, {agent_module, Jido.partition_key(id, nil)}}
   end
 
   defp resolve_agent_identity(%{id: nil}), do: {:error, :missing_agent_id}

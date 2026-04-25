@@ -111,11 +111,9 @@ defmodule Jido.AgentServer.Options do
   end
 
   def new(attrs) when is_map(attrs) do
-    agent_partition = extract_agent_partition(attrs[:agent])
-    attrs = normalize_attrs(attrs, agent_partition)
+    attrs = normalize_attrs(attrs)
 
     with {:ok, _} <- validate_agent(attrs[:agent]),
-         {:ok, _} <- validate_partition(attrs[:partition], agent_partition),
          {:ok, _} <- validate_error_policy(attrs[:error_policy]),
          {:ok, parent} <- validate_parent(attrs[:parent]) do
       attrs = Map.put(attrs, :parent, parent)
@@ -137,7 +135,7 @@ defmodule Jido.AgentServer.Options do
   end
 
   # Normalize attributes with defaults
-  defp normalize_attrs(attrs, agent_partition) do
+  defp normalize_attrs(attrs) do
     id =
       case Map.get(attrs, :id) do
         nil -> extract_agent_id(attrs[:agent]) || Jido.Util.generate_id()
@@ -146,12 +144,7 @@ defmodule Jido.AgentServer.Options do
         id when is_atom(id) -> Atom.to_string(id)
       end
 
-    partition =
-      case Map.fetch(attrs, :partition) do
-        {:ok, nil} -> agent_partition
-        {:ok, partition} -> partition
-        :error -> agent_partition
-      end
+    partition = Map.get(attrs, :partition)
 
     jido_instance = Map.get(attrs, :jido, Jido)
     registry = Map.get(attrs, :registry, Jido.registry_name(jido_instance))
@@ -165,12 +158,6 @@ defmodule Jido.AgentServer.Options do
 
   defp extract_agent_id(%{id: id}) when is_binary(id) and id != "", do: id
   defp extract_agent_id(_), do: nil
-
-  defp extract_agent_partition(%{state: state}) when is_map(state) do
-    Map.get(state, :__partition__)
-  end
-
-  defp extract_agent_partition(_), do: nil
 
   defp validate_agent(nil), do: {:error, Jido.Error.validation_error("agent is required")}
 
@@ -211,18 +198,6 @@ defmodule Jido.AgentServer.Options do
 
   def validate_error_policy(other) do
     {:error, Jido.Error.validation_error("invalid error_policy: #{inspect(other)}")}
-  end
-
-  defp validate_partition(nil, _agent_partition), do: {:ok, nil}
-  defp validate_partition(partition, nil), do: {:ok, partition}
-  defp validate_partition(partition, partition), do: {:ok, partition}
-
-  defp validate_partition(partition, agent_partition) do
-    {:error,
-     Jido.Error.validation_error("partition does not match pre-built agent state", %{
-       partition: partition,
-       agent_partition: agent_partition
-     })}
   end
 
   defp validate_parent(nil), do: {:ok, nil}
