@@ -12,7 +12,7 @@ defmodule JidoTest.Plugin.SchedulesTest do
       schema: []
 
     @impl true
-    def run(_params, _context), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   defmodule DailyDigestAction do
@@ -22,7 +22,7 @@ defmodule JidoTest.Plugin.SchedulesTest do
       schema: []
 
     @impl true
-    def run(_params, _context), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   defmodule CleanupAction do
@@ -32,7 +32,7 @@ defmodule JidoTest.Plugin.SchedulesTest do
       schema: []
 
     @impl true
-    def run(_params, _context), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   defmodule PluginWithSchedules do

@@ -91,8 +91,8 @@ defmodule JidoExampleTest.ObservabilityTest do
         work_units: [type: :integer, default: 10]
       ]
 
-    def run(params, context) do
-      agent_id = Map.get(context, :agent_id, "unknown")
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      agent_id = Map.get(ctx, :agent_id, "unknown")
 
       Observe.with_span(
         [:jido, :example, :observed_work],
@@ -114,8 +114,8 @@ defmodule JidoExampleTest.ObservabilityTest do
         delay_ms: [type: :integer, default: 10]
       ]
 
-    def run(params, context) do
-      agent_id = Map.get(context, :agent_id, "unknown")
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      agent_id = Map.get(ctx, :agent_id, "unknown")
 
       span_ctx =
         Observe.start_span(

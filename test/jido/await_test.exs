@@ -9,7 +9,7 @@ defmodule JidoTest.AwaitTest do
     @moduledoc false
     use Jido.Action, name: "completing_action", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{status: :completed, last_answer: "done"}}
     end
   end
@@ -18,7 +18,7 @@ defmodule JidoTest.AwaitTest do
     @moduledoc false
     use Jido.Action, name: "failing_action", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{status: :failed, error: :test_error}}
     end
   end
@@ -27,7 +27,7 @@ defmodule JidoTest.AwaitTest do
     @moduledoc false
     use Jido.Action, name: "slow_action", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       Process.sleep(100)
       {:ok, %{status: :completed, last_answer: "slow_done"}}
     end
@@ -37,7 +37,7 @@ defmodule JidoTest.AwaitTest do
     @moduledoc false
     use Jido.Action, name: "spawn_child", schema: []
 
-    def run(%{tag: tag, child_module: child_module}, _context) do
+    def run(%Jido.Signal{data: %{tag: tag, child_module: child_module}}, _slice, _opts, _ctx) do
       directive = %Jido.Agent.Directive.SpawnAgent{
         agent: child_module,
         tag: tag,

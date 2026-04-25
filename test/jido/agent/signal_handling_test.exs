@@ -18,7 +18,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
     @moduledoc false
     use Jido.Action, name: "emit_test", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       signal = Signal.new!("test.emitted", %{from: "agent"}, source: "/test")
       {:ok, %{}, [%Directive.Emit{signal: signal}]}
     end

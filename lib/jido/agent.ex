@@ -328,7 +328,7 @@ defmodule Jido.Agent do
                            state_key:
                              Zoi.atom(
                                description:
-                                 "Atom slice key where the agent's user-domain state lives under `agent.state`. Scoped actions (`Jido.Agent.ScopedAction`) target this same key to receive just that slice as `ctx.state`. Defaults to `:__domain__`. See ADR 0005 / 0007."
+                                 "Atom slice key where the agent's user-domain state lives under `agent.state`. Actions that don't declare their own `path:` operate on this same slice. Defaults to `:__domain__`. See ADR 0005 / 0007."
                              )
                              |> Zoi.default(:__domain__)
                          },
@@ -499,8 +499,8 @@ defmodule Jido.Agent do
       Returns the atom slice key where the agent's user-domain state lives.
 
       Defaults to `:__domain__` (ADR 0007). Schema defaults are seeded under
-      `agent.state[state_key]` and scoped actions (`Jido.Agent.ScopedAction`)
-      declaring the same key receive just that slice as `ctx.state`.
+      `agent.state[state_key]` and actions that declare a matching `path:`
+      receive just that slice as the `slice` argument of `run/4`.
       """
       @spec state_key() :: atom()
       def state_key, do: @validated_opts[:state_key]

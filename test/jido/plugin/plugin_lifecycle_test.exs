@@ -28,9 +28,10 @@ defmodule JidoTest.PluginLifecycleTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%{role: role, content: content}, %{agent: agent}) do
+    def run(%Jido.Signal{data: %{role: role, content: content}}, _slice, _opts, ctx) do
       # :chat is a plugin slice at top of full agent.state, not in the
-      # user-domain slice ctx.state exposes (ADR 0008).
+      # user-domain slice the action receives (ADR 0008).
+      agent = ctx.agent
       messages = get_in(agent.state, [:chat, :messages]) || []
       new_message = %{role: role, content: content, timestamp: DateTime.utc_now()}
       {:ok, %{}, %StateOp.SetPath{path: [:chat, :messages], value: messages ++ [new_message]}}
@@ -45,7 +46,7 @@ defmodule JidoTest.PluginLifecycleTest do
 
     alias Jido.Agent.StateOp
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.SetPath{path: [:chat, :messages], value: []}}
     end
   end
@@ -58,8 +59,9 @@ defmodule JidoTest.PluginLifecycleTest do
 
     alias Jido.Agent.StateOp
 
-    def run(_params, %{agent: agent}) do
+    def run(_signal, _slice, _opts, ctx) do
       # :chat is a plugin slice; read from full state.
+      agent = ctx.agent
       messages = get_in(agent.state, [:chat, :messages]) || []
       message_count = length(messages)
 
@@ -384,7 +386,7 @@ defmodule JidoTest.PluginLifecycleTest do
           name: "no_plugin_action",
           schema: []
 
-        def run(_params, _context), do: {:ok, %{executed: true}}
+        def run(_signal, _slice, _opts, _ctx), do: {:ok, %{executed: true}}
       end
 
       defmodule NoPluginAgent do

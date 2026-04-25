@@ -21,10 +21,10 @@ defmodule Jido.Pod.Actions.QueryNodes do
   alias Jido.Signal.Call
 
   @impl true
-  def run(_params, ctx) do
+  def run(signal, _slice, _opts, _ctx) do
     directive =
       Call.reply_from_state(
-        Map.get(ctx, :signal),
+        signal,
         "jido.pod.query.nodes.reply",
         "jido.pod.query.nodes.error",
         {Jido.Pod.Queries, :build_nodes_reply, []}

@@ -27,7 +27,7 @@ defmodule Jido.Signal.Call do
       {:ok, reply} = Jido.Signal.Call.call(agent_pid, query)
 
       # Action handling "my.agent.ping"
-      def run(_params, ctx) do
+      def run(_signal, slice, _opts, ctx) do
         emit = Jido.Signal.Call.reply(ctx.signal, "my.agent.ping.reply", %{ok: true})
         {:ok, %{}, [emit]}
       end
@@ -155,7 +155,7 @@ defmodule Jido.Signal.Call do
   ## Example
 
       # Action
-      def run(_params, ctx) do
+      def run(_signal, slice, _opts, ctx) do
         directive =
           Call.reply_from_state(
             ctx.signal,

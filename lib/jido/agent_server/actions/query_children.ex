@@ -15,10 +15,10 @@ defmodule Jido.AgentServer.Actions.QueryChildren do
   alias Jido.Signal.Call
 
   @impl true
-  def run(_params, ctx) do
+  def run(signal, _slice, _opts, _ctx) do
     directive =
       Call.reply_from_state(
-        Map.get(ctx, :signal),
+        signal,
         "jido.agent.query.children.reply",
         "jido.agent.query.children.error",
         {Jido.AgentServer.Queries, :build_children_reply, []}

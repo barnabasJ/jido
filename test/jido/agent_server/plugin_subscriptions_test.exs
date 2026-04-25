@@ -104,7 +104,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
       name: "simple_action",
       schema: []
 
-    def run(_params, _context), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   defmodule RecordSensorSignalAction do
@@ -116,7 +116,7 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
         count: [type: :integer, required: true]
       ]
 
-    def run(params, _context) do
+    def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
       {:ok, %{last_sensor_value: params.value, last_sensor_count: params.count}}
     end
   end

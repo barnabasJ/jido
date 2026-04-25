@@ -23,8 +23,8 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
     @moduledoc false
     use Jido.Action, name: "tick_count", schema: []
 
-    def run(_params, context) do
-      count = Map.get(context.state, :tick_count, 0)
+    def run(_signal, slice, _opts, ctx) do
+      count = Map.get(slice, :tick_count, 0)
       {:ok, %{tick_count: count + 1}}
     end
   end
@@ -33,7 +33,7 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
     @moduledoc false
     use Jido.Action, name: "register_cron", schema: []
 
-    def run(params, _context) do
+    def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
       cron_expr = Map.get(params, :cron)
       job_id = Map.get(params, :job_id)
 

@@ -11,7 +11,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
     @moduledoc false
     use Jido.Action, name: "emit", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       signal = Signal.new!("test.emitted", %{value: 42}, source: "/test")
       {:ok, %{}, [%Directive.Emit{signal: signal}]}
     end

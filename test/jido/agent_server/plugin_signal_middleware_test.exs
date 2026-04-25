@@ -13,7 +13,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%{amount: amount}, %{state: state}) do
+    def run(%Jido.Signal{data: %{amount: amount}}, state, _opts, _ctx) do
       # ctx.state is the :__domain__ slice; SetPath operates on full
       # agent.state, so target the slice explicitly.
       current = get_in(state, [:counter]) || 0
@@ -29,7 +29,7 @@ defmodule JidoTest.AgentServer.PluginSignalMiddlewareTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%{marker: marker}, _context) do
+    def run(%Jido.Signal{data: %{marker: marker}}, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.SetPath{path: [:__domain__, :marker], value: marker}}
     end
   end

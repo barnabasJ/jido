@@ -10,8 +10,8 @@ defmodule JidoTest.AgentServer.StatusTest do
     @moduledoc false
     use Jido.Action, name: "test_complete", schema: []
 
-    def run(_params, context) do
-      {:ok, %{status: :completed, result: context.state.counter}}
+    def run(_signal, slice, _opts, ctx) do
+      {:ok, %{status: :completed, result: slice.counter}}
     end
   end
 

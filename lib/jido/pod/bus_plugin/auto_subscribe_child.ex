@@ -33,8 +33,7 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
   alias Jido.Agent.StateOp.SetPath
   alias Jido.Signal.Bus
 
-  @impl true
-  def run(params, %{state: agent_state}) do
+  def run(%Jido.Signal{data: params}, agent_state, _opts, _ctx) do
     with {:ok, bus} <- fetch_bus(agent_state),
          {:ok, routes} <- fetch_routes(params.child_module) do
       sub_ids =

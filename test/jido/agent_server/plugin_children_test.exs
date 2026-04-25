@@ -8,7 +8,7 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
       name: "simple_action",
       schema: []
 
-    def run(_params, _context), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   # Plugin with no child_spec (default returns nil)

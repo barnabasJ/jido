@@ -12,7 +12,7 @@ defmodule JidoTest.AgentServer.PluginTransformTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%{value: value}, _context) do
+    def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.SetPath{path: [:value], value: value}}
     end
   end

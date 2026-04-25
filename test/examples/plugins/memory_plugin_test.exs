@@ -34,11 +34,11 @@ defmodule JidoExampleTest.MemoryPluginTest do
         value: [type: :any, required: true]
       ]
 
-    def run(%{key: key, value: value}, context) do
+    def run(%Jido.Signal{data: %{key: key, value: value}}, slice, _opts, ctx) do
       alias Jido.Memory
       alias Jido.Memory.Space
 
-      memory = Map.get(context.state, :__memory__) || Memory.new()
+      memory = Map.get(slice, :__memory__) || Memory.new()
       world = Map.get(memory.spaces, :world, Space.new_kv())
       updated_world = %{world | data: Map.put(world.data, key, value), rev: world.rev + 1}
 

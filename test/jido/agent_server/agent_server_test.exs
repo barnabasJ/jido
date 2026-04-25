@@ -14,7 +14,7 @@ defmodule JidoTest.AgentServerTest do
     @moduledoc false
     use Jido.Action, name: "emit_test", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       signal = Signal.new!("test.emitted", %{from: "agent"}, source: "/test")
       {:ok, %{}, [%Directive.Emit{signal: signal}]}
     end
@@ -24,7 +24,7 @@ defmodule JidoTest.AgentServerTest do
     @moduledoc false
     use Jido.Action, name: "schedule_test", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       scheduled_signal = Signal.new!("scheduled.ping", %{}, source: "/test")
       {:ok, %{}, [%Directive.Schedule{delay_ms: 50, message: scheduled_signal}]}
     end
@@ -34,7 +34,7 @@ defmodule JidoTest.AgentServerTest do
     @moduledoc false
     use Jido.Action, name: "stop_test", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, [%Directive.Stop{reason: :normal}]}
     end
   end
@@ -43,7 +43,7 @@ defmodule JidoTest.AgentServerTest do
     @moduledoc false
     use Jido.Action, name: "error_test", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       error = Jido.Error.validation_error("Test error", %{field: :test})
       {:ok, %{}, [%Directive.Error{error: error, context: :test}]}
     end
@@ -252,7 +252,7 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Action, name: "inline_slow", schema: []
 
-        def run(_params, _context) do
+        def run(_signal, _slice, _opts, _ctx) do
           Process.sleep(80)
           {:ok, %{slow_done: true}}
         end
@@ -297,7 +297,7 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Action, name: "buffered_slow", schema: []
 
-        def run(_params, _context) do
+        def run(_signal, _slice, _opts, _ctx) do
           Process.sleep(120)
           {:ok, %{slow_done: true}}
         end
@@ -619,7 +619,7 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Action, name: "start_schedule", schema: []
 
-        def run(_params, _context) do
+        def run(_signal, _slice, _opts, _ctx) do
           scheduled = Signal.new!("scheduled.ping", %{}, source: "/test")
           {:ok, %{}, [%Directive.Schedule{delay_ms: 50, message: scheduled}]}
         end
@@ -629,8 +629,8 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Action, name: "scheduled_ping", schema: []
 
-        def run(_params, context) do
-          pings = Map.get(context.state, :pings, 0)
+        def run(_signal, slice, _opts, ctx) do
+          pings = Map.get(slice, :pings, 0)
           {:ok, %{pings: pings + 1}}
         end
       end
@@ -671,7 +671,7 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Action, name: "schedule_many", schema: []
 
-        def run(_params, _context) do
+        def run(_signal, _slice, _opts, _ctx) do
           directives =
             for i <- 1..3 do
               sig = Signal.new!("tick", %{n: i}, source: "/test")
@@ -686,8 +686,8 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Action, name: "tick", schema: []
 
-        def run(params, context) do
-          events = Map.get(context.state, :events, [])
+        def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+          events = Map.get(slice, :events, [])
           {:ok, %{events: events ++ [params.n]}}
         end
       end
@@ -727,7 +727,7 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Action, name: "schedule_atom", schema: []
 
-        def run(_params, _context) do
+        def run(_signal, _slice, _opts, _ctx) do
           {:ok, %{}, [%Directive.Schedule{delay_ms: 10, message: :timeout}]}
         end
       end
@@ -736,7 +736,7 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Action, name: "jido_scheduled", schema: []
 
-        def run(params, _context) do
+        def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
           {:ok, %{received: params.message}}
         end
       end
@@ -935,7 +935,7 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Action, name: "slow", schema: []
 
-        def run(_params, _context) do
+        def run(_signal, _slice, _opts, _ctx) do
           Process.sleep(20)
           {:ok, %{processed: true}}
         end
@@ -981,7 +981,7 @@ defmodule JidoTest.AgentServerTest do
         schema: []
 
       @impl true
-      def run(_params, _context), do: {:ok, %{scheduled: true}}
+      def run(_signal, _slice, _opts, _ctx), do: {:ok, %{scheduled: true}}
     end
 
     defmodule ScheduledPlugin do

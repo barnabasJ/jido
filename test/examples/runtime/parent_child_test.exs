@@ -60,7 +60,7 @@ defmodule JidoExampleTest.ParentChildTest do
         work_data: [type: :map, default: %{}]
       ]
 
-    def run(%{worker_tag: tag, work_data: work_data}, _context) do
+    def run(%Jido.Signal{data: %{worker_tag: tag, work_data: work_data}}, _slice, _opts, _ctx) do
       spawn_directive =
         Directive.spawn_agent(
           JidoExampleTest.ParentChildTest.WorkerAgent,
@@ -85,11 +85,11 @@ defmodule JidoExampleTest.ParentChildTest do
         meta: [type: :map, default: %{}]
       ]
 
-    def run(%{pid: pid, tag: tag, meta: meta}, context) do
+    def run(%Jido.Signal{data: %{pid: pid, tag: tag, meta: meta}}, slice, _opts, ctx) do
       work_data = Map.get(meta, :work_data, %{})
       request_id = "req-#{System.unique_integer([:positive])}"
 
-      pending = Map.get(context.state, :pending_requests, %{})
+      pending = Map.get(slice, :pending_requests, %{})
 
       updated_pending =
         Map.put(pending, request_id, %{tag: tag, pid: pid, started_at: DateTime.utc_now()})
@@ -117,7 +117,7 @@ defmodule JidoExampleTest.ParentChildTest do
         operation: [type: :atom, default: :double]
       ]
 
-    def run(%{request_id: request_id, value: value, operation: operation}, context) do
+    def run(%Jido.Signal{data: %{request_id: request_id, value: value, operation: operation}}, slice, _opts, ctx) do
       result =
         case operation do
           :double -> value * 2
@@ -133,8 +133,8 @@ defmodule JidoExampleTest.ParentChildTest do
           source: "/worker"
         )
 
-      # Use %{state: context.state} to match emit_to_parent's expected pattern
-      agent_like = %{state: context.state}
+      # Use %{state: slice} to match emit_to_parent's expected pattern
+      agent_like = %{state: slice}
       emit_directive = Directive.emit_to_parent(agent_like, result_signal)
 
       {:ok, %{last_processed: %{request_id: request_id, result: result}},
@@ -152,9 +152,9 @@ defmodule JidoExampleTest.ParentChildTest do
         operation: [type: :atom, default: :unknown]
       ]
 
-    def run(%{request_id: request_id, result: result, operation: operation}, context) do
-      pending = Map.get(context.state, :pending_requests, %{})
-      responses = Map.get(context.state, :completed_responses, [])
+    def run(%Jido.Signal{data: %{request_id: request_id, result: result, operation: operation}}, slice, _opts, ctx) do
+      pending = Map.get(slice, :pending_requests, %{})
+      responses = Map.get(slice, :completed_responses, [])
 
       {request_info, remaining_pending} = Map.pop(pending, request_id, nil)
 

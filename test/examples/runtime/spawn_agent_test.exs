@@ -48,7 +48,7 @@ defmodule JidoExampleTest.SpawnAgentTest do
         restart: [type: {:in, @restart_policies}, default: :transient]
       ]
 
-    def run(%{tag: tag} = params, _context) do
+    def run(%Jido.Signal{data: %{tag: tag} = params}, _slice, _opts, _ctx) do
       meta = Map.get(params, :meta, %{})
       restart = Map.get(params, :restart, :transient)
 
@@ -73,8 +73,8 @@ defmodule JidoExampleTest.SpawnAgentTest do
         meta: [type: :map, default: %{}]
       ]
 
-    def run(params, context) do
-      started_events = Map.get(context.state, :child_started_events, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      started_events = Map.get(slice, :child_started_events, [])
 
       event = %{
         pid: params.pid,
@@ -96,8 +96,8 @@ defmodule JidoExampleTest.SpawnAgentTest do
         from_tag: [type: :atom, required: true]
       ]
 
-    def run(params, context) do
-      results = Map.get(context.state, :worker_results, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      results = Map.get(slice, :worker_results, [])
       entry = %{result: params.result, from_tag: params.from_tag}
       {:ok, %{worker_results: [entry | results]}}
     end
@@ -112,7 +112,7 @@ defmodule JidoExampleTest.SpawnAgentTest do
         reason: [type: :atom, default: :normal]
       ]
 
-    def run(%{tag: tag, reason: reason}, _context) do
+    def run(%Jido.Signal{data: %{tag: tag, reason: reason}}, _slice, _opts, _ctx) do
       directive = Directive.stop_child(tag, reason)
       {:ok, %{last_stopped: tag}, [directive]}
     end
@@ -130,10 +130,10 @@ defmodule JidoExampleTest.SpawnAgentTest do
         task: [type: :string, required: true]
       ]
 
-    def run(%{task: task}, context) do
+    def run(%Jido.Signal{data: %{task: task}}, slice, _opts, ctx) do
       result = "Completed: #{task}"
 
-      parent_ref = Map.get(context.state, :__parent__)
+      parent_ref = Map.get(slice, :__parent__)
       from_tag = if parent_ref, do: parent_ref.tag, else: :unknown
 
       reply_signal =
@@ -143,7 +143,7 @@ defmodule JidoExampleTest.SpawnAgentTest do
           source: "/worker"
         )
 
-      emit_directive = Directive.emit_to_parent(%{state: context.state}, reply_signal)
+      emit_directive = Directive.emit_to_parent(%{state: slice}, reply_signal)
 
       {:ok, %{last_task: task, status: :completed}, List.wrap(emit_directive)}
     end

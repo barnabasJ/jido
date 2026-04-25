@@ -116,7 +116,7 @@ defmodule JidoTest.AgentServerCoverageTest do
 
     alias Jido.Agent.Directive
 
-    def run(%{count: count}, _context) do
+    def run(%Jido.Signal{data: %{count: count}}, _slice, _opts, _ctx) do
       directives =
         for i <- 1..count do
           signal = Jido.Signal.new!("test.emitted.#{i}", %{index: i}, source: "/test")
@@ -146,7 +146,7 @@ defmodule JidoTest.AgentServerCoverageTest do
     @moduledoc false
     use Jido.Action, name: "complete", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{status: :completed, last_answer: "done!"}}
     end
   end
@@ -155,7 +155,7 @@ defmodule JidoTest.AgentServerCoverageTest do
     @moduledoc false
     use Jido.Action, name: "fail", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{status: :failed, error: "something went wrong"}}
     end
   end
@@ -166,7 +166,7 @@ defmodule JidoTest.AgentServerCoverageTest do
       name: "delay_complete",
       schema: [delay_ms: [type: :integer, default: 50]]
 
-    def run(%{delay_ms: delay}, _context) do
+    def run(%Jido.Signal{data: %{delay_ms: delay}}, _slice, _opts, _ctx) do
       Process.sleep(delay)
       {:ok, %{status: :completed, last_answer: "delayed done!"}}
     end

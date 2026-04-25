@@ -27,8 +27,8 @@ defmodule JidoExampleTest.CounterAgentTest do
         amount: [type: :integer, default: 1]
       ]
 
-    def run(%{amount: amount}, context) do
-      current = Map.get(context.state, :counter, 0)
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+      current = Map.get(slice, :counter, 0)
       {:ok, %{counter: current + amount}}
     end
   end
@@ -41,8 +41,8 @@ defmodule JidoExampleTest.CounterAgentTest do
         amount: [type: :integer, default: 1]
       ]
 
-    def run(%{amount: amount}, context) do
-      current = Map.get(context.state, :counter, 0)
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+      current = Map.get(slice, :counter, 0)
       {:ok, %{counter: current - amount}}
     end
   end
@@ -53,7 +53,7 @@ defmodule JidoExampleTest.CounterAgentTest do
       name: "reset",
       schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{counter: 0}}
     end
   end

@@ -40,7 +40,7 @@ defmodule JidoExampleTest.TracingTest do
         workflow_name: [type: :string, required: true]
       ]
 
-    def run(params, _context) do
+    def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
       event_signal =
         Signal.new!(
           "workflow.started",
@@ -60,8 +60,8 @@ defmodule JidoExampleTest.TracingTest do
         step_number: [type: :integer, required: true]
       ]
 
-    def run(params, context) do
-      current_step = Map.get(context.state, :step, 0)
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      current_step = Map.get(slice, :step, 0)
       new_step = params.step_number
 
       event_signal =
@@ -81,13 +81,13 @@ defmodule JidoExampleTest.TracingTest do
       name: "complete_workflow",
       schema: []
 
-    def run(_params, context) do
-      workflow = Map.get(context.state, :workflow, "unknown")
+    def run(_signal, slice, _opts, ctx) do
+      workflow = Map.get(slice, :workflow, "unknown")
 
       event_signal =
         Signal.new!(
           "workflow.completed",
-          %{workflow: workflow, final_step: context.state.step},
+          %{workflow: workflow, final_step: slice.step},
           source: "/workflow-agent"
         )
 

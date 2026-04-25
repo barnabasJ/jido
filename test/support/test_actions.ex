@@ -4,7 +4,7 @@ defmodule JidoTest.PluginTestAction do
     name: "plugin_test_action",
     schema: []
 
-  def run(_params, _context), do: {:ok, %{}}
+  def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
 end
 
 defmodule JidoTest.PluginTestAnotherAction do
@@ -13,7 +13,7 @@ defmodule JidoTest.PluginTestAnotherAction do
     name: "plugin_test_another_action",
     schema: [value: [type: :integer, default: 0]]
 
-  def run(%{value: value}, _context), do: {:ok, %{value: value}}
+  def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx), do: {:ok, %{value: value}}
 end
 
 defmodule JidoTest.NotAnActionModule do
@@ -38,7 +38,7 @@ defmodule JidoTest.TestActions do
         value: [type: :integer, required: true]
       ]
 
-    def run(%{value: value}, _context) do
+    def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx) do
       {:ok, %{value: value}}
     end
   end
@@ -49,8 +49,8 @@ defmodule JidoTest.TestActions do
       name: "no_schema",
       description: "Action with no schema"
 
-    def run(%{value: value}, _context), do: {:ok, %{result: value + 2}}
-    def run(_params, _context), do: {:ok, %{result: "No params"}}
+    def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx), do: {:ok, %{result: value + 2}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{result: "No params"}}
   end
 
   defmodule Add do
@@ -63,7 +63,7 @@ defmodule JidoTest.TestActions do
         amount: [type: :integer, default: 1]
       ]
 
-    def run(%{value: value, amount: amount}, _context) do
+    def run(%Jido.Signal{data: %{value: value, amount: amount}}, _slice, _opts, _ctx) do
       {:ok, %{value: value + amount}}
     end
   end
@@ -74,7 +74,7 @@ defmodule JidoTest.TestActions do
       name: "emit_action",
       description: "Action that returns an emit effect"
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       signal = %{type: "test.emitted", data: %{value: 42}}
       {:ok, %{emitted: true}, Directive.emit(signal)}
     end
@@ -86,7 +86,7 @@ defmodule JidoTest.TestActions do
       name: "multi_effect_action",
       description: "Action that returns multiple effects"
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       effects = [
         Directive.emit(%{type: "event.1"}),
         Directive.schedule(1000, :check)
@@ -102,7 +102,7 @@ defmodule JidoTest.TestActions do
       name: "set_state_action",
       description: "Action that uses StateOp.SetState"
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{primary: "result"}, %StateOp.SetState{attrs: %{extra: "state"}}}
     end
   end
@@ -113,7 +113,7 @@ defmodule JidoTest.TestActions do
       name: "replace_state_action",
       description: "Action that uses StateOp.ReplaceState"
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.ReplaceState{state: %{replaced: true, fresh: "state"}}}
     end
   end
@@ -124,7 +124,7 @@ defmodule JidoTest.TestActions do
       name: "delete_keys_action",
       description: "Action that uses StateOp.DeleteKeys"
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.DeleteKeys{keys: [:to_delete, :also_delete]}}
     end
   end
@@ -135,7 +135,7 @@ defmodule JidoTest.TestActions do
       name: "set_path_action",
       description: "Action that uses StateOp.SetPath"
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.SetPath{path: [:nested, :deep, :value], value: 42}}
     end
   end
@@ -146,7 +146,7 @@ defmodule JidoTest.TestActions do
       name: "delete_path_action",
       description: "Action that uses StateOp.DeletePath"
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.DeletePath{path: [:nested, :to_remove]}}
     end
   end
@@ -159,8 +159,8 @@ defmodule JidoTest.TestActions do
         amount: [type: :integer, default: 1]
       ]
 
-    def run(%{amount: amount}, context) do
-      count = Map.get(context.state, :counter, 0)
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+      count = Map.get(slice, :counter, 0)
       {:ok, %{counter: count + amount}}
     end
   end
@@ -173,8 +173,8 @@ defmodule JidoTest.TestActions do
         amount: [type: :integer, default: 1]
       ]
 
-    def run(%{amount: amount}, context) do
-      count = Map.get(context.state, :counter, 0)
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+      count = Map.get(slice, :counter, 0)
       {:ok, %{counter: count - amount}}
     end
   end
@@ -187,8 +187,8 @@ defmodule JidoTest.TestActions do
         message: [type: :any, required: false]
       ]
 
-    def run(params, context) do
-      messages = Map.get(context.state, :messages, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      messages = Map.get(slice, :messages, [])
       message = Map.get(params, :message, params)
       {:ok, %{messages: messages ++ [message]}}
     end
@@ -202,7 +202,7 @@ defmodule JidoTest.TestActions do
         delay_ms: [type: :integer, default: 100]
       ]
 
-    def run(%{delay_ms: delay}, _context) do
+    def run(%Jido.Signal{data: %{delay_ms: delay}}, _slice, _opts, _ctx) do
       Process.sleep(delay)
       {:ok, %{processed: true, delay: delay}}
     end
@@ -216,7 +216,7 @@ defmodule JidoTest.TestActions do
         reason: [type: :string, default: "intentional failure"]
       ]
 
-    def run(%{reason: reason}, _context) do
+    def run(%Jido.Signal{data: %{reason: reason}}, _slice, _opts, _ctx) do
       {:error, reason}
     end
   end

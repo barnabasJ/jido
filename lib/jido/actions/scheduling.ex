@@ -10,7 +10,7 @@ defmodule Jido.Actions.Scheduling do
         name: "timed_worker",
         signal_routes: [
           {"work.start", MyStartAction},  # Might schedule a timeout
-          {"work.timeout", Jido.Actions.Status.MarkFailed}
+          {"work.timeout", MyTimeoutHandler}
         ]
   """
 
@@ -50,7 +50,7 @@ defmodule Jido.Actions.Scheduling do
         source: [type: :string, default: "/scheduler", doc: "Signal source path"]
       ]
 
-    def run(%{delay_ms: delay, signal_type: type, payload: payload, source: source}, _context) do
+    def run(%Jido.Signal{data: %{delay_ms: delay, signal_type: type, payload: payload, source: source}}, _slice, _opts, _ctx) do
       signal = Signal.new!(type, payload, source: source)
       directive = Directive.schedule(delay, signal)
       {:ok, %{scheduled_for_ms: delay, signal_type: type}, [directive]}
@@ -87,7 +87,7 @@ defmodule Jido.Actions.Scheduling do
         signal_type: [type: :string, default: "agent.timeout", doc: "Timeout signal type"]
       ]
 
-    def run(%{timeout_ms: timeout, timeout_id: id, signal_type: type}, _context) do
+    def run(%Jido.Signal{data: %{timeout_ms: timeout, timeout_id: id, signal_type: type}}, _slice, _opts, _ctx) do
       signal = Signal.new!(type, %{timeout_id: id}, source: "/timeout")
       directive = Directive.schedule(timeout, signal)
       {:ok, %{timeout_set: id, expires_in_ms: timeout}, [directive]}
@@ -137,8 +137,18 @@ defmodule Jido.Actions.Scheduling do
       ]
 
     def run(
-          %{cron: cron_expr, job_id: job_id, signal_type: type, payload: payload, timezone: tz},
-          _context
+          %Jido.Signal{
+            data: %{
+              cron: cron_expr,
+              job_id: job_id,
+              signal_type: type,
+              payload: payload,
+              timezone: tz
+            }
+          },
+          _slice,
+          _opts,
+          _ctx
         ) do
       signal = Signal.new!(type, payload, source: "/cron")
       opts = if job_id, do: [job_id: job_id], else: []
@@ -167,7 +177,7 @@ defmodule Jido.Actions.Scheduling do
         job_id: [type: :any, required: true, doc: "Job identifier to cancel"]
       ]
 
-    def run(%{job_id: job_id}, _context) do
+    def run(%Jido.Signal{data: %{job_id: job_id}}, _slice, _opts, _ctx) do
       directive = Directive.cron_cancel(job_id)
       {:ok, %{cancelled_job: job_id}, [directive]}
     end

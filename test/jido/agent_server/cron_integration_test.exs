@@ -17,9 +17,9 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     @moduledoc false
     use Jido.Action, name: "cron_count", schema: []
 
-    def run(params, context) do
-      count = Map.get(context.state, :tick_count, 0)
-      ticks = Map.get(context.state, :ticks, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      count = Map.get(slice, :tick_count, 0)
+      ticks = Map.get(slice, :ticks, [])
       {:ok, %{tick_count: count + 1, ticks: ticks ++ [params]}}
     end
   end
@@ -28,7 +28,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     @moduledoc false
     use Jido.Action, name: "register_cron", schema: []
 
-    def run(params, _context) do
+    def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
       cron_expr = Map.get(params, :cron)
       job_id = Map.get(params, :job_id)
       message = Map.get(params, :message, Signal.new!(%{type: "cron.tick", source: "/test"}))
@@ -43,7 +43,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     @moduledoc false
     use Jido.Action, name: "cancel_cron", schema: []
 
-    def run(%{job_id: job_id}, _context) do
+    def run(%Jido.Signal{data: %{job_id: job_id}}, _slice, _opts, _ctx) do
       {:ok, %{}, [Directive.cron_cancel(job_id)]}
     end
   end

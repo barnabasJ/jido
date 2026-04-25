@@ -34,8 +34,8 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         total: [type: :integer, required: true]
       ]
 
-    def run(params, context) do
-      orders = Map.get(context.state, :orders, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      orders = Map.get(slice, :orders, [])
 
       order = %{
         id: params.order_id,
@@ -66,7 +66,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         payment_method: [type: :string, default: "card"]
       ]
 
-    def run(params, _context) do
+    def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
       order_id = params.order_id
 
       payment_signal =
@@ -89,7 +89,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         event_count: [type: :integer, default: 3]
       ]
 
-    def run(%{event_count: count}, _context) do
+    def run(%Jido.Signal{data: %{event_count: count}}, _slice, _opts, _ctx) do
       emissions =
         for i <- 1..count do
           signal = Signal.new!("batch.event", %{index: i}, source: "/batch")
@@ -132,8 +132,8 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         amount: [type: :integer, default: 1]
       ]
 
-    def run(%{amount: amount}, context) do
-      current = Map.get(context.state, :count, 0)
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+      current = Map.get(slice, :count, 0)
       new_count = current + amount
 
       internal_signal =
@@ -156,9 +156,9 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         count: [type: :integer, required: true]
       ]
 
-    def run(%{previous_count: previous_count, count: count}, context) do
-      if is_pid(context.state.observer),
-        do: send(context.state.observer, {:print_count, previous_count, count})
+    def run(%Jido.Signal{data: %{previous_count: previous_count, count: count}}, slice, _opts, ctx) do
+      if is_pid(slice.observer),
+        do: send(slice.observer, {:print_count, previous_count, count})
 
       {:ok, %{last_seen_count: count}}
     end

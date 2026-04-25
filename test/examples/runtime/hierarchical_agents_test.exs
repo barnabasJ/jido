@@ -76,7 +76,7 @@ defmodule JidoExampleTest.HierarchicalAgentsTest do
         value: [type: :integer, required: true]
       ]
 
-    def run(params, context) do
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
       result =
         case params.operation do
           :compute -> params.value * 2 + 1
@@ -97,13 +97,13 @@ defmodule JidoExampleTest.HierarchicalAgentsTest do
           source: "/worker"
         )
 
-      agent_like = %{state: context.state}
+      agent_like = %{state: slice}
       emit_directive = Directive.emit_to_parent(agent_like, result_signal)
 
       {:ok,
        %{
          last_task: %{task_id: params.task_id, result: result},
-         tasks_completed: Map.get(context.state, :tasks_completed, 0) + 1
+         tasks_completed: Map.get(slice, :tasks_completed, 0) + 1
        }, List.wrap(emit_directive)}
     end
   end
@@ -121,8 +121,8 @@ defmodule JidoExampleTest.HierarchicalAgentsTest do
         tasks: [type: {:list, :map}, required: true]
       ]
 
-    def run(%{job_id: job_id, tasks: tasks}, context) do
-      pending = Map.get(context.state, :pending_tasks, %{})
+    def run(%Jido.Signal{data: %{job_id: job_id, tasks: tasks}}, slice, _opts, ctx) do
+      pending = Map.get(slice, :pending_tasks, %{})
       task_count = length(tasks)
 
       job_info = %{
@@ -168,7 +168,7 @@ defmodule JidoExampleTest.HierarchicalAgentsTest do
         meta: [type: :map, default: %{}]
       ]
 
-    def run(%{pid: pid, meta: meta}, _context) do
+    def run(%Jido.Signal{data: %{pid: pid, meta: meta}}, _slice, _opts, _ctx) do
       task_signal =
         Signal.new!(
           "task.execute",
@@ -198,8 +198,8 @@ defmodule JidoExampleTest.HierarchicalAgentsTest do
         operation: [type: :atom, required: true]
       ]
 
-    def run(params, context) do
-      pending = Map.get(context.state, :pending_tasks, %{})
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      pending = Map.get(slice, :pending_tasks, %{})
 
       job_info =
         Map.get(pending, params.job_id, %{results: [], completed_tasks: 0, total_tasks: 0})
@@ -230,10 +230,10 @@ defmodule JidoExampleTest.HierarchicalAgentsTest do
             source: "/coordinator"
           )
 
-        agent_like = %{state: context.state}
+        agent_like = %{state: slice}
         emit_directive = Directive.emit_to_parent(agent_like, job_result_signal)
 
-        completed = Map.get(context.state, :completed_jobs, [])
+        completed = Map.get(slice, :completed_jobs, [])
 
         set_pending_op =
           StateOp.set_path([:pending_tasks], Map.delete(updated_pending, params.job_id))
@@ -259,11 +259,11 @@ defmodule JidoExampleTest.HierarchicalAgentsTest do
         tasks: [type: {:list, :map}, required: true]
       ]
 
-    def run(%{job_name: job_name, tasks: tasks}, context) do
+    def run(%Jido.Signal{data: %{job_name: job_name, tasks: tasks}}, slice, _opts, ctx) do
       job_id = "job-#{System.unique_integer([:positive])}"
       coordinator_tag = String.to_atom("coordinator-#{job_id}")
 
-      pending = Map.get(context.state, :pending_jobs, %{})
+      pending = Map.get(slice, :pending_jobs, %{})
 
       job_info = %{
         job_id: job_id,
@@ -299,7 +299,7 @@ defmodule JidoExampleTest.HierarchicalAgentsTest do
         meta: [type: :map, default: %{}]
       ]
 
-    def run(%{pid: pid, meta: meta}, _context) do
+    def run(%Jido.Signal{data: %{pid: pid, meta: meta}}, _slice, _opts, _ctx) do
       indexed_tasks =
         meta.tasks
         |> Enum.with_index(1)
@@ -328,9 +328,9 @@ defmodule JidoExampleTest.HierarchicalAgentsTest do
         total_tasks: [type: :integer, required: true]
       ]
 
-    def run(params, context) do
-      pending = Map.get(context.state, :pending_jobs, %{})
-      completed = Map.get(context.state, :completed_jobs, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      pending = Map.get(slice, :pending_jobs, %{})
+      completed = Map.get(slice, :completed_jobs, [])
 
       job_info = Map.get(pending, params.job_id, %{})
 

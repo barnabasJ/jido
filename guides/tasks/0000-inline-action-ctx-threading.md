@@ -6,6 +6,15 @@
 - Blocks: 0001 (and everything downstream)
 - Leaves tree: **green** (existing tests rewritten to new signature)
 
+> ## NO LEGACY ADAPTERS
+>
+> No `run/2` shim, no `__before_compile__` adapter that wraps the old
+> shape, no "transitional" code path. There are no external users to
+> protect. The point of this commit is to land the **best** new API we
+> can — `run(signal, slice, opts, ctx)` — and rewrite every in-repo call
+> site to it. Anything that translates between the old and the new shape
+> is bug-bait that will outlive the migration.
+
 ## Goal
 
 Bring `Jido.Action`, `Jido.Instruction`, and `Jido.Exec` from the external `jido_action` dep into this repo, then change the callback from `run(params, context)` to **`run(signal, slice, opts, ctx)`** — four explicit args. Establish `signal.extensions[:jido_ctx]` as the canonical location for per-signal runtime context (user, trace, tenant) threaded through actions, middleware, and directives. Delete `Jido.Actions.Status.*` (unused convention library).

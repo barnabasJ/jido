@@ -31,8 +31,8 @@ defmodule JidoExampleTest.PluginMiddlewareTest do
         value: [type: :string, default: "processed"]
       ]
 
-    def run(%{value: value}, context) do
-      log = Map.get(context.state, :log, [])
+    def run(%Jido.Signal{data: %{value: value}}, slice, _opts, ctx) do
+      log = Map.get(slice, :log, [])
       {:ok, %{log: [value | log], last_action: "process"}}
     end
   end
@@ -45,8 +45,8 @@ defmodule JidoExampleTest.PluginMiddlewareTest do
         value: [type: :string, default: "admin"]
       ]
 
-    def run(%{value: value}, context) do
-      log = Map.get(context.state, :log, [])
+    def run(%Jido.Signal{data: %{value: value}}, slice, _opts, ctx) do
+      log = Map.get(slice, :log, [])
       {:ok, %{log: ["admin:#{value}" | log], last_action: "admin"}}
     end
   end

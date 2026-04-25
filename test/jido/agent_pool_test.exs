@@ -14,8 +14,8 @@ defmodule JidoTest.AgentPoolTest do
     @moduledoc false
     use Jido.Action, name: "get_count", schema: []
 
-    def run(_params, context) do
-      {:ok, %{last_count: Map.get(context.state, :counter, 0)}}
+    def run(_signal, slice, _opts, ctx) do
+      {:ok, %{last_count: Map.get(slice, :counter, 0)}}
     end
   end
 

@@ -16,10 +16,10 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%{amount: amount}, %{agent: agent}) do
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
       # :counter_plugin is a plugin slice at the top of agent.state, not in
       # the user-domain slice ctx.state exposes. Read it from the full state.
-      current = get_in(agent.state, [:counter_plugin, :count]) || 0
+      current = get_in(ctx.agent.state, [:counter_plugin, :count]) || 0
       {:ok, %{}, %StateOp.SetPath{path: [:counter_plugin, :count], value: current + amount}}
     end
   end
@@ -32,8 +32,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%{amount: amount}, %{agent: agent}) do
-      current = get_in(agent.state, [:counter_plugin, :count]) || 0
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+      current = get_in(ctx.agent.state, [:counter_plugin, :count]) || 0
       {:ok, %{}, %StateOp.SetPath{path: [:counter_plugin, :count], value: current - amount}}
     end
   end
@@ -46,7 +46,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%{name: name}, _context) do
+    def run(%Jido.Signal{data: %{name: name}}, _slice, _opts, _ctx) do
       {:ok, %{},
        %StateOp.SetPath{path: [:greeter_plugin, :last_greeting], value: "Hello, #{name}!"}}
     end
@@ -60,7 +60,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     alias Jido.Agent.StateOp
 
-    def run(%{mode: mode}, _context) do
+    def run(%Jido.Signal{data: %{mode: mode}}, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.SetPath{path: [:mode_plugin, :current_mode], value: mode}}
     end
   end
@@ -71,7 +71,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       name: "simple_action",
       schema: []
 
-    def run(_params, _context), do: {:ok, %{executed: true}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{executed: true}}
   end
 
   # =============================================================================

@@ -8,7 +8,7 @@ defmodule JidoTest.PluginMountTest do
       name: "test_action",
       schema: []
 
-    def run(_params, _context), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   # Plugin with custom mount that adds state

@@ -13,7 +13,7 @@ defmodule JidoTest.AwaitCoverageTest do
     @moduledoc false
     use Jido.Action, name: "never_completes", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{status: :working}}
     end
   end
@@ -22,7 +22,7 @@ defmodule JidoTest.AwaitCoverageTest do
     @moduledoc false
     use Jido.Action, name: "completing_action", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{status: :completed, last_answer: "done"}}
     end
   end
@@ -35,7 +35,7 @@ defmodule JidoTest.AwaitCoverageTest do
         tag: [type: :atom, required: true]
       ]
 
-    def run(%{tag: tag}, _context) do
+    def run(%Jido.Signal{data: %{tag: tag}}, _slice, _opts, _ctx) do
       directive = %Jido.Agent.Directive.SpawnAgent{
         agent: JidoTest.AwaitCoverageTest.ChildAgent,
         tag: tag,

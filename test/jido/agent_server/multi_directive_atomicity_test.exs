@@ -16,7 +16,7 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
     @moduledoc false
     use Jido.Action, name: "emit_three"
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       directives = [
         %JidoTest.SetStateDirective{key: :d1_ran, value: true},
         %JidoTest.SetStateDirective{key: :d2_ran, value: true},
@@ -31,13 +31,13 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
     @moduledoc false
     use Jido.Action, name: "observe"
 
-    def run(_params, context) do
+    def run(_signal, slice, _opts, ctx) do
       {:ok,
        %{
-         saw_cmd: Map.get(context.state, :cmd_ran, false),
-         saw_d1: Map.get(context.state, :d1_ran, false),
-         saw_d2: Map.get(context.state, :d2_ran, false),
-         saw_d3: Map.get(context.state, :d3_ran, false)
+         saw_cmd: Map.get(slice, :cmd_ran, false),
+         saw_d1: Map.get(slice, :d1_ran, false),
+         saw_d2: Map.get(slice, :d2_ran, false),
+         saw_d3: Map.get(slice, :d3_ran, false)
        }}
     end
   end

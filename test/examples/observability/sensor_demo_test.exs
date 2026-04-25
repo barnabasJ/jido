@@ -33,8 +33,8 @@ defmodule JidoExampleTest.SensorDemoTest do
         sensor_id: [type: :string, default: "unknown"]
       ]
 
-    def run(params, context) do
-      current_quotes = Map.get(context.state, :quotes, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      current_quotes = Map.get(slice, :quotes, [])
 
       quotes = [
         %{
@@ -62,8 +62,8 @@ defmodule JidoExampleTest.SensorDemoTest do
         received_at: [type: :any, required: false]
       ]
 
-    def run(params, context) do
-      current_events = Map.get(context.state, :events, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      current_events = Map.get(slice, :events, [])
 
       events = [
         %{
@@ -90,8 +90,8 @@ defmodule JidoExampleTest.SensorDemoTest do
         received_at: [type: :any, required: false]
       ]
 
-    def run(params, context) do
-      current_events = Map.get(context.state, :events, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      current_events = Map.get(slice, :events, [])
 
       events = [
         %{

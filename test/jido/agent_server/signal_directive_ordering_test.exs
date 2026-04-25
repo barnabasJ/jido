@@ -19,7 +19,7 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
     @moduledoc false
     use Jido.Action, name: "step1"
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       # Sets step1_cmd_ran via the cmd state update; the emitted directive
       # then sets step1_directive_ran via a state-op directive.
       {:ok, %{step1_cmd_ran: true},
@@ -31,9 +31,9 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
     @moduledoc false
     use Jido.Action, name: "step2"
 
-    def run(_params, context) do
-      saw_cmd = Map.get(context.state, :step1_cmd_ran, false)
-      saw_directive = Map.get(context.state, :step1_directive_ran, false)
+    def run(_signal, slice, _opts, ctx) do
+      saw_cmd = Map.get(slice, :step1_cmd_ran, false)
+      saw_directive = Map.get(slice, :step1_directive_ran, false)
 
       {:ok, %{step2_saw_cmd_ran: saw_cmd, step2_saw_directive_ran: saw_directive}}
     end

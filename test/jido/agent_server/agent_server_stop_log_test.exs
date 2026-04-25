@@ -11,7 +11,7 @@ defmodule JidoTest.AgentServerStopLogTest do
     @moduledoc false
     use Jido.Action, name: "stop_test", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, [%Directive.Stop{reason: :normal}]}
     end
   end

@@ -55,14 +55,14 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
         child_id: [type: :string, required: true]
       ]
 
-    def run(%{tag: tag, child_id: child_id}, context) do
+    def run(%Jido.Signal{data: %{tag: tag, child_id: child_id}}, slice, _opts, ctx) do
       directive =
         Directive.spawn_agent(JidoExampleTest.OrphanLifecycleTest.RecoverableWorkerAgent, tag,
           opts: %{id: child_id, on_parent_death: :emit_orphan},
           meta: %{role: "recoverable"}
         )
 
-      spawned = Map.get(context.state, :spawned_children, [])
+      spawned = Map.get(slice, :spawned_children, [])
       {:ok, %{spawned_children: spawned ++ [child_id]}, [directive]}
     end
   end
@@ -78,8 +78,8 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
         meta: [type: :map, default: %{}]
       ]
 
-    def run(params, context) do
-      started_children = Map.get(context.state, :started_children, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      started_children = Map.get(slice, :started_children, [])
 
       event = %{
         pid: params.pid,
@@ -101,8 +101,8 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
         current_parent_id: [type: :string, required: true]
       ]
 
-    def run(params, context) do
-      messages = Map.get(context.state, :received_messages, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      messages = Map.get(slice, :received_messages, [])
       {:ok, %{received_messages: messages ++ [params]}}
     end
   end
@@ -117,7 +117,7 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
         meta: [type: :map, default: %{}]
       ]
 
-    def run(%{child: child, tag: tag, meta: meta}, _context) do
+    def run(%Jido.Signal{data: %{child: child, tag: tag, meta: meta}}, _slice, _opts, _ctx) do
       {:ok, %{}, [Directive.adopt_child(child, tag, meta: meta)]}
     end
   end
@@ -134,8 +134,8 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
         text: [type: :string, required: true]
       ]
 
-    def run(%{text: text}, context) do
-      parent_ref = Map.get(context.state, :__parent__)
+    def run(%Jido.Signal{data: %{text: text}}, slice, _opts, ctx) do
+      parent_ref = Map.get(slice, :__parent__)
 
       signal =
         Signal.new!(
@@ -144,8 +144,8 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
           source: "/worker"
         )
 
-      emit_directive = Directive.emit_to_parent(%{state: context.state}, signal)
-      reports = Map.get(context.state, :reports, [])
+      emit_directive = Directive.emit_to_parent(%{state: slice}, signal)
+      reports = Map.get(slice, :reports, [])
 
       report = %{
         text: text,
@@ -169,13 +169,13 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
         reason: [type: :any, required: true]
       ]
 
-    def run(params, context) do
-      orphan_events = Map.get(context.state, :orphan_events, [])
-      former_parent = Map.get(context.state, :__orphaned_from__)
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      orphan_events = Map.get(slice, :orphan_events, [])
+      former_parent = Map.get(slice, :__orphaned_from__)
 
       can_emit_to_parent =
         Directive.emit_to_parent(
-          %{state: context.state},
+          %{state: slice},
           Signal.new!("worker.orphan.check", %{}, source: "/worker")
         ) != nil
 
@@ -185,7 +185,7 @@ defmodule JidoExampleTest.OrphanLifecycleTest do
         tag: params.tag,
         meta: params.meta,
         reason: params.reason,
-        parent_available: not is_nil(Map.get(context.state, :__parent__)),
+        parent_available: not is_nil(Map.get(slice, :__parent__)),
         orphaned_from_id: former_parent && former_parent.id,
         can_emit_to_parent: can_emit_to_parent
       }

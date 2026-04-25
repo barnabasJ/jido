@@ -12,7 +12,7 @@ defmodule JidoTest.Agent.StrategyFSMTest do
       name: "simple_action",
       schema: []
 
-    def run(_params, _context), do: {:ok, %{executed: true}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{executed: true}}
   end
 
   defmodule ValueAction do
@@ -21,7 +21,7 @@ defmodule JidoTest.Agent.StrategyFSMTest do
       name: "value_action",
       schema: [value: [type: :integer, required: true]]
 
-    def run(%{value: value}, _context), do: {:ok, %{value: value}}
+    def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx), do: {:ok, %{value: value}}
   end
 
   defmodule FailingAction do
@@ -30,7 +30,7 @@ defmodule JidoTest.Agent.StrategyFSMTest do
       name: "failing_action",
       schema: []
 
-    def run(_params, _context), do: {:error, "intentional failure"}
+    def run(_signal, _slice, _opts, _ctx), do: {:error, "intentional failure"}
   end
 
   defmodule EffectAction do
@@ -41,7 +41,7 @@ defmodule JidoTest.Agent.StrategyFSMTest do
 
     alias Jido.Agent.{Directive, StateOp}
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       effects = [
         %StateOp.SetState{attrs: %{extra: "data"}},
         Directive.emit(%{type: "test.event"})
@@ -59,7 +59,7 @@ defmodule JidoTest.Agent.StrategyFSMTest do
 
     alias Jido.Agent.StateOp
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.SetPath{path: [:nested, :value], value: 42}}
     end
   end
@@ -72,7 +72,7 @@ defmodule JidoTest.Agent.StrategyFSMTest do
 
     alias Jido.Agent.StateOp
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.DeletePath{path: [:to_remove, :nested]}}
     end
   end

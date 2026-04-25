@@ -33,9 +33,9 @@ defmodule JidoExampleTest.ThreadPluginTest do
         content: [type: :string, required: true]
       ]
 
-    def run(%{role: role, content: content}, context) do
+    def run(%Jido.Signal{data: %{role: role, content: content}}, slice, _opts, ctx) do
       thread =
-        case Map.get(context.state, :__thread__) do
+        case Map.get(slice, :__thread__) do
           nil -> Thread.new()
           existing -> existing
         end
@@ -53,8 +53,8 @@ defmodule JidoExampleTest.ThreadPluginTest do
       name: "summarize",
       schema: []
 
-    def run(_params, context) do
-      thread = Map.get(context.state, :__thread__)
+    def run(_signal, slice, _opts, ctx) do
+      thread = Map.get(slice, :__thread__)
 
       message_count =
         case thread do

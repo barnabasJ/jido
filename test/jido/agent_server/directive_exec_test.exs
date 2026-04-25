@@ -24,13 +24,13 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
     alias Jido.Agent.Directive
 
-    def run(%{reason: reason}, %{state: %{observer_pid: observer_pid}})
+    def run(%Jido.Signal{data: %{reason: reason}}, %{observer_pid: observer_pid}, _opts, _ctx)
         when is_pid(observer_pid) do
       send(observer_pid, {:child_stop_signal_received, reason})
       {:ok, %{stop_reason: reason}, [%Directive.Stop{reason: reason}]}
     end
 
-    def run(%{reason: reason}, _context) do
+    def run(%Jido.Signal{data: %{reason: reason}}, _slice, _opts, _ctx) do
       {:ok, %{stop_reason: reason}, [%Directive.Stop{reason: reason}]}
     end
   end
@@ -62,7 +62,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       name: "run_instruction_success",
       schema: []
 
-    def run(_params, _context), do: {:ok, %{ran: true}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{ran: true}}
   end
 
   defmodule RunInstructionFailureAction do
@@ -71,7 +71,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       name: "run_instruction_failure",
       schema: []
 
-    def run(_params, _context), do: {:error, :boom}
+    def run(_signal, _slice, _opts, _ctx), do: {:error, :boom}
   end
 
   defmodule CaptureResultAction do
@@ -87,7 +87,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: [type: :map, default: %{}]
       ]
 
-    def run(params, _context) do
+    def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
       {:ok,
        %{
          captured_status: params.status,
@@ -111,7 +111,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: [type: :map, default: %{}]
       ]
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       directive = Directive.emit(%{type: "capture.result.event"})
       {:ok, %{captured_emit: true}, [directive]}
     end

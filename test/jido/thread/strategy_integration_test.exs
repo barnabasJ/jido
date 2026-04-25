@@ -13,7 +13,7 @@ defmodule JidoTest.Thread.StrategyIntegrationTest do
       name: "simple_action",
       schema: []
 
-    def run(_params, _context), do: {:ok, %{executed: true}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{executed: true}}
   end
 
   defmodule ValueAction do
@@ -22,7 +22,7 @@ defmodule JidoTest.Thread.StrategyIntegrationTest do
       name: "value_action",
       schema: [value: [type: :integer, required: true]]
 
-    def run(%{value: value}, _context), do: {:ok, %{value: value}}
+    def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx), do: {:ok, %{value: value}}
   end
 
   defmodule FailingAction do
@@ -31,7 +31,7 @@ defmodule JidoTest.Thread.StrategyIntegrationTest do
       name: "failing_action",
       schema: []
 
-    def run(_params, _context), do: {:error, "intentional failure"}
+    def run(_signal, _slice, _opts, _ctx), do: {:error, "intentional failure"}
   end
 
   defmodule DirectTestAgent do

@@ -22,8 +22,8 @@ defmodule JidoExampleTest.FSMStrategyGuideTest do
       name: "confirm_order",
       schema: []
 
-    def run(_params, context) do
-      case context.state[:order_status] do
+    def run(_signal, slice, _opts, ctx) do
+      case slice[:order_status] do
         :pending -> {:ok, %{order_status: :confirmed}}
         other -> {:error, "cannot confirm order from #{inspect(other)}"}
       end
@@ -38,8 +38,8 @@ defmodule JidoExampleTest.FSMStrategyGuideTest do
         carrier: [type: :string, default: "Standard Shipping"]
       ]
 
-    def run(%{carrier: carrier}, context) do
-      case context.state[:order_status] do
+    def run(%Jido.Signal{data: %{carrier: carrier}}, slice, _opts, ctx) do
+      case slice[:order_status] do
         :confirmed ->
           {:ok, %{order_status: :shipped, shipped_at: DateTime.utc_now(), shipped_via: carrier}}
 
@@ -55,8 +55,8 @@ defmodule JidoExampleTest.FSMStrategyGuideTest do
       name: "deliver_order",
       schema: []
 
-    def run(_params, context) do
-      case context.state[:order_status] do
+    def run(_signal, slice, _opts, ctx) do
+      case slice[:order_status] do
         :shipped -> {:ok, %{order_status: :delivered, delivered_at: DateTime.utc_now()}}
         other -> {:error, "cannot deliver order from #{inspect(other)}"}
       end

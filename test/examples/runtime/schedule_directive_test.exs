@@ -32,7 +32,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
         timer_id: [type: :string, required: true]
       ]
 
-    def run(%{delay_ms: delay_ms, timer_id: timer_id}, _context) do
+    def run(%Jido.Signal{data: %{delay_ms: delay_ms, timer_id: timer_id}}, _slice, _opts, _ctx) do
       tick_signal = Signal.new!("timer.tick", %{timer_id: timer_id}, source: "/timer")
 
       schedule = %Directive.Schedule{
@@ -52,8 +52,8 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
         timer_id: [type: :string, required: true]
       ]
 
-    def run(%{timer_id: timer_id}, context) do
-      tick_count = Map.get(context.state, :tick_count, 0) + 1
+    def run(%Jido.Signal{data: %{timer_id: timer_id}}, slice, _opts, ctx) do
+      tick_count = Map.get(slice, :tick_count, 0) + 1
       {:ok, %{status: :ticked, tick_count: tick_count, last_tick_timer: timer_id}}
     end
   end
@@ -67,7 +67,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
         retry_delay_ms: [type: :integer, default: 50]
       ]
 
-    def run(%{max_attempts: max, retry_delay_ms: delay}, _context) do
+    def run(%Jido.Signal{data: %{max_attempts: max, retry_delay_ms: delay}}, _slice, _opts, _ctx) do
       retry_signal = Signal.new!("retry.attempt", %{}, source: "/retry")
 
       schedule = %Directive.Schedule{
@@ -85,10 +85,10 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
       name: "handle_retry",
       schema: []
 
-    def run(_params, context) do
-      attempts = Map.get(context.state, :attempts, 0) + 1
-      max = Map.get(context.state, :max_attempts, 3)
-      delay = Map.get(context.state, :retry_delay_ms, 50)
+    def run(_signal, slice, _opts, ctx) do
+      attempts = Map.get(slice, :attempts, 0) + 1
+      max = Map.get(slice, :max_attempts, 3)
+      delay = Map.get(slice, :retry_delay_ms, 50)
 
       if attempts >= max do
         {:ok, %{status: :completed, attempts: attempts, result: :success}}
@@ -114,7 +114,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
         request_id: [type: :string, required: true]
       ]
 
-    def run(%{timeout_ms: timeout_ms, request_id: request_id}, _context) do
+    def run(%Jido.Signal{data: %{timeout_ms: timeout_ms, request_id: request_id}}, _slice, _opts, _ctx) do
       timeout_signal =
         Signal.new!("request.timeout", %{request_id: request_id}, source: "/timeout")
 
@@ -136,8 +136,8 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
         result: [type: :any, required: true]
       ]
 
-    def run(%{request_id: request_id, result: result}, context) do
-      pending = Map.get(context.state, :pending_request)
+    def run(%Jido.Signal{data: %{request_id: request_id, result: result}}, slice, _opts, ctx) do
+      pending = Map.get(slice, :pending_request)
 
       if pending == request_id do
         {:ok, %{status: :completed, result: result, pending_request: nil}}
@@ -155,8 +155,8 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
         request_id: [type: :string, required: true]
       ]
 
-    def run(%{request_id: request_id}, context) do
-      pending = Map.get(context.state, :pending_request)
+    def run(%Jido.Signal{data: %{request_id: request_id}}, slice, _opts, ctx) do
+      pending = Map.get(slice, :pending_request)
 
       if pending == request_id do
         {:ok, %{status: :timed_out, pending_request: nil}}

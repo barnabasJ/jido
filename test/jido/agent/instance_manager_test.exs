@@ -93,8 +93,8 @@ defmodule JidoTest.Agent.InstanceManagerTest do
     use Jido.Action, name: "cron_tick", schema: []
 
     @impl true
-    def run(_params, context) do
-      count = Map.get(context.state, :tick_count, 0)
+    def run(_signal, slice, _opts, ctx) do
+      count = Map.get(slice, :tick_count, 0)
       {:ok, %{tick_count: count + 1}}
     end
   end
@@ -104,7 +104,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
     use Jido.Action, name: "register_cron", schema: []
 
     @impl true
-    def run(params, _context) do
+    def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
       cron = Map.get(params, :cron, "* * * * * * *")
       job_id = Map.get(params, :job_id, :durable_tick)
       timezone = Map.get(params, :timezone)
@@ -119,7 +119,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
     use Jido.Action, name: "cancel_cron", schema: []
 
     @impl true
-    def run(%{job_id: job_id}, _context) do
+    def run(%Jido.Signal{data: %{job_id: job_id}}, _slice, _opts, _ctx) do
       {:ok, %{}, [Directive.cron_cancel(job_id)]}
     end
   end

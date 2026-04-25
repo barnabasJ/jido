@@ -25,14 +25,8 @@ defmodule JidoTest.Signal.CallTest do
     use Jido.Action, name: "echo_action", schema: []
 
     @impl true
-    def run(_params, ctx) do
-      directive =
-        Call.reply(
-          Map.get(ctx, :signal),
-          "jido.test.echo.reply",
-          %{ok: true}
-        )
-
+    def run(signal, _slice, _opts, _ctx) do
+      directive = Call.reply(signal, "jido.test.echo.reply", %{ok: true})
       {:ok, %{}, List.wrap(directive)}
     end
   end
@@ -42,7 +36,7 @@ defmodule JidoTest.Signal.CallTest do
     use Jido.Action, name: "silent_action", schema: []
 
     @impl true
-    def run(_params, _ctx), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   defmodule CallTestAgent do

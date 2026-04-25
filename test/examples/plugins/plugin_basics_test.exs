@@ -32,8 +32,8 @@ defmodule JidoExampleTest.PluginBasicsTest do
         text: [type: :string, required: true]
       ]
 
-    def run(%{text: text}, context) do
-      notes = get_in(context.state, [:notes, :entries]) || []
+    def run(%Jido.Signal{data: %{text: text}}, slice, _opts, ctx) do
+      notes = get_in(slice, [:notes, :entries]) || []
       note = %{text: text, added_at: DateTime.utc_now()}
       {:ok, %{notes: %{entries: [note | notes]}}}
     end
@@ -45,7 +45,7 @@ defmodule JidoExampleTest.PluginBasicsTest do
       name: "clear_notes",
       schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{notes: %{entries: []}}}
     end
   end

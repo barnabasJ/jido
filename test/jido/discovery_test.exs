@@ -10,7 +10,7 @@ defmodule JidoTest.DiscoveryTest do
       description: "Test action for discovery",
       schema: []
 
-    def run(_params, _context), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   defmodule TestAgent do

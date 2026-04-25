@@ -991,9 +991,9 @@ defmodule Jido.Agent.Directive do
       defmodule WorkDoneAction do
         use Jido.Action, name: "work.done", schema: []
 
-        def run(_params, context) do
+        def run(_signal, slice, _opts, ctx) do
           reply = Signal.new!("worker.result", %{answer: 42}, source: "/worker")
-          directive = Directive.emit_to_parent(context.agent, reply)
+          directive = Directive.emit_to_parent(ctx.agent, reply)
           {:ok, %{}, List.wrap(directive)}
         end
       end

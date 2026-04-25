@@ -26,8 +26,7 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
   alias Jido.Agent.StateOp.DeletePath
   alias Jido.Signal.Bus
 
-  @impl true
-  def run(%{tag: tag}, %{state: agent_state}) do
+  def run(%Jido.Signal{data: %{tag: tag}}, agent_state, _opts, _ctx) do
     with {:ok, bus} <- fetch_bus(agent_state),
          sub_ids when is_list(sub_ids) <-
            get_in(agent_state, [:__bus_wiring__, :subscriptions, tag]) do

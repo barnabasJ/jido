@@ -54,7 +54,7 @@ defmodule JidoTest.AgentServer.StrategyInitTest do
       schema: []
 
     @impl true
-    def run(_params, _ctx), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   defmodule TrackingAgent do

@@ -2,6 +2,42 @@
 
 This directory holds the per-commit task breakdown for implementing [ADR 0014](../adr/0014-slice-middleware-plugin.md), [ADR 0015](../adr/0015-agent-start-is-signal-driven.md), and [ADR 0016](../adr/0016-agent-server-ack-and-subscribe.md) as one PR. Plus a foundation commit (C0) that inlines `jido_action` and unifies the action callback signature.
 
+> # NO LEGACY ADAPTERS — APPLIES TO EVERY TASK BELOW
+>
+> When a task says "rewrite X to Y", **rewrite it**. Do not write a shim,
+> a `__before_compile__` adapter, a translation layer, a "transitional"
+> code path that accepts both shapes, or any other piece of code whose
+> only purpose is to keep the old API working alongside the new one.
+>
+> There are **no external users to protect** here. This codebase ships
+> the framework — anyone consuming it is in this repo, in their own
+> repo, or has agreed to follow the migration. We do not owe any of
+> them a smooth runtime upgrade. We owe them a clean, opinionated API
+> they can read in five minutes.
+>
+> Every adapter is bug-bait that outlives the migration: it doubles the
+> surface area, hides the new shape behind a translation, and makes the
+> next refactor harder. If a task fixture or call site doesn't match the
+> new shape, **rewrite the fixture or call site** — including in tests.
+> Tests are not load-bearing for backwards compatibility; they are
+> verification of current behaviour.
+>
+> Concretely, this rules out:
+>
+> - `run/2` shims wrapped into `run/4` via macros
+> - `state_key/0` fallbacks alongside `path/0`
+> - "if `context[:state]` is set, treat it as the slice" branches in `Exec`
+> - "if `params` is a map and `signal` is nil, synthesize a signal" code
+>   that is reachable from in-repo callers
+> - any `@deprecated` callback declarations that we still call ourselves
+>
+> If a synthesis exists, it exists for **one** reason: to support
+> calling `Jido.Exec.run/4` directly from a test or REPL with raw
+> `(action, params, context, opts)`. That is a developer-affordance
+> entry point. The agent_server / cmd / signal_router path always
+> hands a real `%Jido.Signal{}` to the action and never relies on
+> synthesis.
+
 Each task corresponds to exactly one commit. The PR is expected to be **red from commit 2 through commit 7**; commits 0, 1, and 8 are green. The intermediate red is deliberate — keeping each commit green would require temporary shims that churn across the refactor.
 
 | # | Task | Leaves tree | Implements |

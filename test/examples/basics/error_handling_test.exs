@@ -44,7 +44,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         amount: [type: :integer, required: true]
       ]
 
-    def run(%{amount: amount}, _context) do
+    def run(%Jido.Signal{data: %{amount: amount}}, _slice, _opts, _ctx) do
       if amount > 0 do
         {:ok, %{validated: true, amount: amount}}
       else
@@ -61,8 +61,8 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         fail_count: [type: :integer, default: 0]
       ]
 
-    def run(%{fail_count: fail_count}, context) do
-      attempts = Map.get(context.state, :attempts, 0) + 1
+    def run(%Jido.Signal{data: %{fail_count: fail_count}}, slice, _opts, ctx) do
+      attempts = Map.get(slice, :attempts, 0) + 1
 
       if attempts <= fail_count do
         {:error, Jido.Error.execution_error("Simulated failure", details: %{attempt: attempts})}
@@ -78,7 +78,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       name: "recover",
       schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{status: :recovered, error: nil, error_context: nil}}
     end
   end
@@ -92,12 +92,12 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         error_context: [type: :atom, default: :unknown]
       ]
 
-    def run(%{error_message: message, error_context: ctx}, context) do
+    def run(%Jido.Signal{data: %{error_message: message, error_context: ctx}}, slice, _opts, ctx) do
       error = Jido.Error.execution_error(message)
 
       error_directive = %Directive.Error{error: error, context: ctx}
 
-      current_attempts = Map.get(context.state, :attempts, 0)
+      current_attempts = Map.get(slice, :attempts, 0)
 
       {:ok, %{status: :failed, error: message, error_context: ctx, attempts: current_attempts},
        error_directive}
@@ -112,8 +112,8 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         max_attempts: [type: :integer, default: 3]
       ]
 
-    def run(%{max_attempts: max}, context) do
-      attempts = Map.get(context.state, :attempts, 0) + 1
+    def run(%Jido.Signal{data: %{max_attempts: max}}, slice, _opts, ctx) do
+      attempts = Map.get(slice, :attempts, 0) + 1
 
       if attempts >= max do
         {:ok, %{status: :exhausted, attempts: attempts, result: :max_retries_reached}}
@@ -139,17 +139,17 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         succeed_on: [type: :integer, default: 3]
       ]
 
-    def run(%{max_attempts: max, succeed_on: succeed_on}, context) do
-      attempts = Map.get(context.state, :attempts, 0) + 1
+    def run(%Jido.Signal{data: %{max_attempts: max, succeed_on: succeed_on}}, slice, _opts, ctx) do
+      attempts = Map.get(slice, :attempts, 0) + 1
 
       stored_max =
-        case Map.get(context.state, :stored_max_attempts) do
+        case Map.get(slice, :stored_max_attempts) do
           nil -> max
           val -> val
         end
 
       stored_succeed =
-        case Map.get(context.state, :stored_succeed_on) do
+        case Map.get(slice, :stored_succeed_on) do
           nil -> succeed_on
           val -> val
         end

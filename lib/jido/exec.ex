@@ -139,8 +139,8 @@ defmodule Jido.Exec do
       #     description: "Example action",
       #     vsn: "1.0.0"
       #
-      #   def run(_params, context) do
-      #     metadata = context.action_metadata
+      #   def run(_signal, slice, _opts, ctx) do
+      #     metadata = Map.get(ctx, :action_metadata)
       #     {:ok, %{name: metadata.name, version: metadata.vsn}}
       #   end
       # end
@@ -640,12 +640,80 @@ defmodule Jido.Exec do
       log_level = Keyword.get(opts, :log_level, :info)
       Telemetry.cond_log_execution_debug(log_level, action, params, context)
 
-      action.run(params, context)
+      {signal, slice, action_opts, ctx} = build_run4_args(action, params, context)
+
+      action.run(signal, slice, action_opts, ctx)
       |> handle_action_result(action, log_level, opts)
     rescue
       e ->
         handle_action_exception(e, __STACKTRACE__, action, opts)
     end
+
+    # Translate the legacy `(params, context)` shape into the new
+    # `(signal, slice, opts, ctx)` shape understood by `Jido.Action`.
+    #
+    # Translate the legacy `(action, params, context, opts)` Exec entry
+    # point into the `(signal, slice, opts, ctx)` shape that
+    # `Jido.Action.run/4` expects. Three sources of truth:
+    #
+    #   - `context[:signal]` is the wire signal handed in by the agent
+    #     server. We reuse its envelope (id, type, source, extensions),
+    #     but overwrite `:data` with the validated `params` Exec has
+    #     already merged for this action so the action body sees schema
+    #     defaults applied. If absent (direct `Exec.run/4` from a test
+    #     or REPL), we synthesize a fresh signal from `action.name()`.
+    #   - `context[:state]` is the slice the strategy scoped down to
+    #     `agent.state[path]`. The action receives it as `slice`.
+    #   - `signal.extensions[:jido_ctx]` carries per-signal runtime
+    #     context. We extract it into the explicit `ctx` arg, then
+    #     fold in agent-level identity (`:agent`, `:agent_server_pid`,
+    #     `:action_metadata`) the strategy already attached.
+    defp build_run4_args(action, params, ctx_in) do
+      signal =
+        case Map.get(ctx_in, :signal) do
+          %Jido.Signal{} = sig -> %{sig | data: ensure_map(params)}
+          _ -> synthesize_signal(action, params)
+        end
+
+      slice = Map.get(ctx_in, :state, %{})
+      action_opts = Map.get(ctx_in, :action_opts, %{})
+
+      ctx_from_signal =
+        case signal do
+          %Jido.Signal{} -> Jido.SignalCtx.ctx(signal)
+          _ -> %{}
+        end
+
+      ctx =
+        ctx_from_signal
+        |> Map.merge(Map.get(ctx_in, :ctx, %{}))
+        |> maybe_put(:agent, Map.get(ctx_in, :agent))
+        |> maybe_put(:agent_server_pid, Map.get(ctx_in, :agent_server_pid))
+        |> maybe_put(:action_metadata, Map.get(ctx_in, :action_metadata))
+
+      {signal, slice, action_opts, ctx}
+    end
+
+    defp synthesize_signal(action, params) do
+      type =
+        cond do
+          function_exported?(action, :name, 0) -> action.name()
+          true -> Atom.to_string(action)
+        end
+
+      data = ensure_map(params)
+
+      case Jido.Signal.new(%{type: type, data: data, source: "/jido/exec"}) do
+        {:ok, signal} -> signal
+        _ -> nil
+      end
+    end
+
+    defp ensure_map(map) when is_map(map), do: map
+    defp ensure_map(_), do: %{}
+
+    defp maybe_put(map, _key, nil), do: map
+    defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
     # Handle successful results with extra data
     defp handle_action_result({:ok, result, other}, action, log_level, opts) do

@@ -14,8 +14,8 @@ defmodule JidoTest.AgentServer.HierarchyTest do
     @moduledoc false
     use Jido.Action, name: "child_exit", schema: []
 
-    def run(params, context) do
-      events = Map.get(context.state, :child_events, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      events = Map.get(slice, :child_events, [])
       {:ok, %{child_events: events ++ [params]}}
     end
   end
@@ -24,7 +24,7 @@ defmodule JidoTest.AgentServer.HierarchyTest do
     @moduledoc false
     use Jido.Action, name: "spawn_child", schema: []
 
-    def run(%{module: mod, tag: tag}, _context) do
+    def run(%Jido.Signal{data: %{module: mod, tag: tag}}, _slice, _opts, _ctx) do
       {:ok, %{}, [%Directive.Spawn{child_spec: {mod, []}, tag: tag}]}
     end
   end
@@ -33,7 +33,7 @@ defmodule JidoTest.AgentServer.HierarchyTest do
     @moduledoc false
     use Jido.Action, name: "spawn_agent", schema: []
 
-    def run(%{module: mod, tag: tag} = params, _context) do
+    def run(%Jido.Signal{data: %{module: mod, tag: tag} = params}, _slice, _opts, _ctx) do
       opts = Map.get(params, :opts, %{})
       meta = Map.get(params, :meta, %{})
       restart = Map.get(params, :restart, :transient)
@@ -45,7 +45,7 @@ defmodule JidoTest.AgentServer.HierarchyTest do
     @moduledoc false
     use Jido.Action, name: "adopt_child", schema: []
 
-    def run(%{child: child, tag: tag} = params, _context) do
+    def run(%Jido.Signal{data: %{child: child, tag: tag} = params}, _slice, _opts, _ctx) do
       meta = Map.get(params, :meta, %{})
       {:ok, %{}, [Directive.adopt_child(child, tag, meta: meta)]}
     end
@@ -56,13 +56,13 @@ defmodule JidoTest.AgentServer.HierarchyTest do
     @moduledoc false
     use Jido.Action, name: "orphaned", schema: []
 
-    def run(params, context) do
-      events = Map.get(context.state, :orphan_events, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      events = Map.get(slice, :orphan_events, [])
 
       # Runtime metadata (:__parent__, :__orphaned_from__) lives on the full
       # agent.state, not the :__domain__ slice this action receives as
-      # ctx.state. Use context.agent.state to reach it.
-      full_state = context.agent.state
+      # ctx.state. Use ctx.agent.state to reach it.
+      full_state = ctx.agent.state
 
       event =
         params

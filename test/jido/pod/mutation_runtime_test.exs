@@ -96,10 +96,10 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
 
     use Jido.Action, name: "expand_pod", schema: []
 
-    def run(_params, context) do
+    def run(_signal, slice, _opts, ctx) do
       with {:ok, effects} <-
              Pod.mutation_effects(
-               context.agent,
+               ctx.agent,
                [
                  Mutation.add_node(
                    "planner",

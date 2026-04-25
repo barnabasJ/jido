@@ -15,8 +15,8 @@ defmodule Jido.Identity.Actions.Evolve do
       years: [type: :integer, default: 0, doc: "Years of simulated time to add"]
     ]
 
-  def run(params, ctx) do
-    identity = ctx.state[:__identity__] || Jido.Identity.new()
+  def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
+    identity = Map.get(slice, :__identity__, Jido.Identity.new())
     evolved = Jido.Identity.evolve(identity, Map.to_list(params))
     {:ok, %{__identity__: evolved}}
   end

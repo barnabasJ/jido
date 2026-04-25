@@ -11,7 +11,7 @@ defmodule JidoTest.Plugin.RoutesTest do
       schema: []
 
     @impl true
-    def run(_params, _context), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   defmodule TestAction2 do
@@ -21,7 +21,7 @@ defmodule JidoTest.Plugin.RoutesTest do
       schema: []
 
     @impl true
-    def run(_params, _context), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   defmodule TestAction3 do
@@ -31,7 +31,7 @@ defmodule JidoTest.Plugin.RoutesTest do
       schema: []
 
     @impl true
-    def run(_params, _context), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   defmodule PluginWithRoutes do

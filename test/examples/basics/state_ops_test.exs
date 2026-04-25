@@ -29,7 +29,7 @@ defmodule JidoExampleTest.StateOpsTest do
         metadata: [type: :map, required: true]
       ]
 
-    def run(%{metadata: metadata}, _context) do
+    def run(%Jido.Signal{data: %{metadata: metadata}}, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.SetState{attrs: %{metadata: metadata}}}
     end
   end
@@ -42,7 +42,7 @@ defmodule JidoExampleTest.StateOpsTest do
         new_state: [type: :map, required: true]
       ]
 
-    def run(%{new_state: new_state}, _context) do
+    def run(%Jido.Signal{data: %{new_state: new_state}}, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.ReplaceState{state: new_state}}
     end
   end
@@ -53,7 +53,7 @@ defmodule JidoExampleTest.StateOpsTest do
       name: "clear_temp_data",
       schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.DeleteKeys{keys: [:temp, :cache]}}
     end
   end
@@ -67,7 +67,7 @@ defmodule JidoExampleTest.StateOpsTest do
         value: [type: :any, required: true]
       ]
 
-    def run(%{path: path, value: value}, _context) do
+    def run(%Jido.Signal{data: %{path: path, value: value}}, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.SetPath{path: path, value: value}}
     end
   end
@@ -80,7 +80,7 @@ defmodule JidoExampleTest.StateOpsTest do
         path: [type: {:list, :atom}, required: true]
       ]
 
-    def run(%{path: path}, _context) do
+    def run(%Jido.Signal{data: %{path: path}}, _slice, _opts, _ctx) do
       {:ok, %{}, %StateOp.DeletePath{path: path}}
     end
   end
@@ -91,7 +91,7 @@ defmodule JidoExampleTest.StateOpsTest do
       name: "combo_action",
       schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{primary_result: "done"},
        [
          %StateOp.SetState{attrs: %{step: :completed}},

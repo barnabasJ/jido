@@ -30,8 +30,8 @@ defmodule JidoExampleTest.SignalRoutingTest do
         amount: [type: :integer, default: 1]
       ]
 
-    def run(%{amount: amount}, context) do
-      current = Map.get(context.state, :counter, 0)
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+      current = Map.get(slice, :counter, 0)
       {:ok, %{counter: current + amount}}
     end
   end
@@ -44,7 +44,7 @@ defmodule JidoExampleTest.SignalRoutingTest do
         name: [type: :string, required: true]
       ]
 
-    def run(%{name: name}, _context) do
+    def run(%Jido.Signal{data: %{name: name}}, _slice, _opts, _ctx) do
       {:ok, %{name: name}}
     end
   end
@@ -58,8 +58,8 @@ defmodule JidoExampleTest.SignalRoutingTest do
         payload: [type: :map, default: %{}]
       ]
 
-    def run(params, context) do
-      events = Map.get(context.state, :events, [])
+    def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
+      events = Map.get(slice, :events, [])
 
       event = %{
         type: params.event_type,

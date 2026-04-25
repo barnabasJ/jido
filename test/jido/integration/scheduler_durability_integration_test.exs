@@ -35,9 +35,9 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
     @moduledoc false
     use Jido.Action, name: "plugin_tick", schema: []
 
-    def run(_params, context) do
-      count = Map.get(context.state, :tick_count, 0)
-      ticks = Map.get(context.state, :ticks, [])
+    def run(_signal, slice, _opts, ctx) do
+      count = Map.get(slice, :tick_count, 0)
+      ticks = Map.get(slice, :ticks, [])
       {:ok, %{tick_count: count + 1, ticks: ticks ++ [%{source: :plugin_schedule}]}}
     end
   end

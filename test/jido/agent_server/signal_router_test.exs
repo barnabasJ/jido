@@ -16,7 +16,7 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
       name: "test_action",
       schema: []
 
-    def run(_params, _ctx), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   defmodule AnotherAction do
@@ -25,7 +25,7 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
       name: "another_action",
       schema: []
 
-    def run(_params, _ctx), do: {:ok, %{}}
+    def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}}
   end
 
   # =============================================================================

@@ -15,10 +15,10 @@ defmodule Jido.Pod.Actions.QueryTopology do
   alias Jido.Signal.Call
 
   @impl true
-  def run(_params, ctx) do
+  def run(signal, _slice, _opts, _ctx) do
     directive =
       Call.reply_from_state(
-        Map.get(ctx, :signal),
+        signal,
         "jido.pod.query.topology.reply",
         "jido.pod.query.topology.error",
         {Jido.Pod.Queries, :build_topology_reply, []}

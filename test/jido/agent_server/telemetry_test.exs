@@ -13,7 +13,7 @@ defmodule JidoTest.AgentServer.TelemetryTest do
     @moduledoc false
     use Jido.Action, name: "emit_directive", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       signal = Signal.new!("test.emitted", %{}, source: "/test")
       {:ok, %{}, [%Directive.Emit{signal: signal}]}
     end
@@ -23,7 +23,7 @@ defmodule JidoTest.AgentServer.TelemetryTest do
     @moduledoc false
     use Jido.Action, name: "schedule_directive", schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, [%Directive.Schedule{delay_ms: 100, message: :tick}]}
     end
   end

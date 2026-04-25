@@ -43,7 +43,7 @@ defmodule Jido.Actions.Control do
         reason: [type: :any, default: :cancelled, doc: "Cancellation reason"]
       ]
 
-    def run(%{reason: reason}, _context) do
+    def run(%Jido.Signal{data: %{reason: reason}}, _slice, _opts, _ctx) do
       {:ok, %{status: :failed, error: {:cancelled, reason}}}
     end
   end
@@ -67,7 +67,7 @@ defmodule Jido.Actions.Control do
       description: "No-operation, acknowledges signal without changes",
       schema: []
 
-    def run(_params, _context) do
+    def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}}
     end
   end
@@ -106,15 +106,19 @@ defmodule Jido.Actions.Control do
         source: [type: :string, default: nil, doc: "New source (optional)"]
       ]
 
-    def run(%{target_pid: pid, signal_type: type, payload: payload, source: source}, context) do
-      original = context[:signal]
-
+    def run(
+          %Jido.Signal{data: %{target_pid: pid, signal_type: type, payload: payload, source: source}} =
+            original,
+          _slice,
+          _opts,
+          _ctx
+        ) do
       final_type = resolve_type(type, original)
       final_payload = resolve_payload(payload, original)
       final_source = resolve_source(source, original)
 
-      signal = Signal.new!(final_type, final_payload, source: final_source)
-      directive = Directive.emit_to_pid(signal, pid)
+      out_signal = Signal.new!(final_type, final_payload, source: final_source)
+      directive = Directive.emit_to_pid(out_signal, pid)
       {:ok, %{forwarded_to: pid}, [directive]}
     end
 
@@ -163,7 +167,7 @@ defmodule Jido.Actions.Control do
         source: [type: :string, default: "/broadcast", doc: "Signal source"]
       ]
 
-    def run(%{topic: topic, signal_type: type, payload: payload, source: source}, _context) do
+    def run(%Jido.Signal{data: %{topic: topic, signal_type: type, payload: payload, source: source}}, _slice, _opts, _ctx) do
       signal = Signal.new!(type, payload, source: source)
       directive = Directive.emit(signal, {:pubsub, topic: topic})
       {:ok, %{broadcast_to: topic}, [directive]}
@@ -204,19 +208,22 @@ defmodule Jido.Actions.Control do
         payload: [type: :map, default: %{}, doc: "Reply payload"]
       ]
 
-    def run(%{signal_type: type, payload: payload}, context) do
-      case extract_reply_to(context[:signal]) do
+    def run(
+          %Jido.Signal{data: %{signal_type: type, payload: payload}} = input,
+          _slice,
+          _opts,
+          _ctx
+        ) do
+      case extract_reply_to(input) do
         {:ok, pid} ->
-          signal = Signal.new!(type, payload, source: "/reply")
-          directive = Directive.emit_to_pid(signal, pid)
+          out = Signal.new!(type, payload, source: "/reply")
+          directive = Directive.emit_to_pid(out, pid)
           {:ok, %{replied_to: pid}, [directive]}
 
         :error ->
           {:ok, %{replied_to: nil, warning: "No reply_to found in signal"}}
       end
     end
-
-    defp extract_reply_to(nil), do: :error
 
     defp extract_reply_to(%{data: %{reply_to: pid}}) when is_pid(pid), do: {:ok, pid}
 

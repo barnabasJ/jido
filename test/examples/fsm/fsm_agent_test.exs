@@ -47,8 +47,8 @@ defmodule JidoExampleTest.FSMAgentTest do
         work_item: [type: :string, required: true]
       ]
 
-    def run(%{work_item: item}, context) do
-      items = Map.get(context.state, :processed_items, [])
+    def run(%Jido.Signal{data: %{work_item: item}}, slice, _opts, ctx) do
+      items = Map.get(slice, :processed_items, [])
       {:ok, %{processed_items: items ++ [item], last_item: item}}
     end
   end
@@ -61,8 +61,8 @@ defmodule JidoExampleTest.FSMAgentTest do
         task_id: [type: :integer, required: true]
       ]
 
-    def run(%{task_id: task_id}, context) do
-      completed = Map.get(context.state, :completed_tasks, [])
+    def run(%Jido.Signal{data: %{task_id: task_id}}, slice, _opts, ctx) do
+      completed = Map.get(slice, :completed_tasks, [])
       {:ok, %{completed_tasks: completed ++ [task_id]}}
     end
   end
@@ -75,8 +75,8 @@ defmodule JidoExampleTest.FSMAgentTest do
         amount: [type: :integer, default: 1]
       ]
 
-    def run(%{amount: amount}, context) do
-      current = Map.get(context.state, :counter, 0)
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, ctx) do
+      current = Map.get(slice, :counter, 0)
       {:ok, %{counter: current + amount}}
     end
   end

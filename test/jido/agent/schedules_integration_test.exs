@@ -7,8 +7,8 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
   defmodule TickAction do
     use Jido.Action, name: "tick", schema: []
 
-    def run(_params, context) do
-      count = Map.get(context.state, :tick_count, 0)
+    def run(_signal, slice, _opts, ctx) do
+      count = Map.get(slice, :tick_count, 0)
       {:ok, %{tick_count: count + 1}}
     end
   end
