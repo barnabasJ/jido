@@ -92,13 +92,16 @@ defmodule Jido.AgentServer.State do
                 Zoi.integer(description: "Count of errors for max_errors policy")
                 |> Zoi.default(0),
               metrics: Zoi.map(description: "Runtime metrics") |> Zoi.default(%{}),
-              completion_waiters:
-                Zoi.map(description: "Map of ref => waiter for completion notifications")
-                |> Zoi.default(%{}),
-              child_waiters:
+              pending_acks:
                 Zoi.map(
                   description:
-                    "Map of monitor_ref => waiter for children-appearance notifications"
+                    "Map of signal id => %{caller_pid, ref, monitor_ref, selector} for cast_and_await"
+                )
+                |> Zoi.default(%{}),
+              signal_subscribers:
+                Zoi.map(
+                  description:
+                    "Map of sub_ref => %{pattern_compiled, selector, dispatch, monitor_ref, once} for subscribe"
                 )
                 |> Zoi.default(%{}),
               ready_waiters:
@@ -189,8 +192,8 @@ defmodule Jido.AgentServer.State do
         skip_schedules: opts.skip_schedules,
         error_count: 0,
         metrics: %{},
-        completion_waiters: %{},
-        child_waiters: %{},
+        pending_acks: %{},
+        signal_subscribers: %{},
         ready_waiters: %{},
         lifecycle: lifecycle,
         debug: opts.debug,

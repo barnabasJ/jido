@@ -32,9 +32,8 @@ defmodule Jido.Pod.Mutable do
       with {:ok, state} <- AgentServer.state(server),
            {:ok, synced_lock} <- sync_external_mutation_lock(lock, server, state) do
         with {:ok, pod_state} <- TopologyState.fetch_state(state),
-             :ok <- ensure_mutation_idle(pod_state),
-             {:ok, _agent} <- AgentServer.call(server, signal) do
-          await_mutation(server, await_timeout, synced_lock)
+             :ok <- ensure_mutation_idle(pod_state) do
+          run_mutation(server, signal, await_timeout, synced_lock)
         else
           {:error, _reason} = error ->
             release_external_mutation_lock(synced_lock)
@@ -99,26 +98,25 @@ defmodule Jido.Pod.Mutable do
 
   defp ensure_mutation_idle(_pod_state), do: :ok
 
-  defp await_mutation(server, await_timeout, lock) do
-    case AgentServer.await_completion(
-           server,
-           timeout: await_timeout,
-           status_path: [@pod_state_key, :mutation, :status],
-           result_path: [@pod_state_key, :mutation, :report],
-           error_path: [@pod_state_key, :mutation, :error]
-         ) do
-      {:ok, %{status: :completed, result: result}} ->
-        {:ok, result}
+  defp run_mutation(server, signal, await_timeout, lock) do
+    selector = fn %{agent: %{state: agent_state}} ->
+      case get_in(agent_state, [@pod_state_key, :mutation, :status]) do
+        :completed -> {:ok, get_in(agent_state, [@pod_state_key, :mutation, :report])}
+        :failed -> {:error, get_in(agent_state, [@pod_state_key, :mutation, :error])}
+        _ -> {:error, :mutation_not_settled}
+      end
+    end
 
-      {:ok, %{status: :failed, result: result}} ->
-        {:error, result}
+    case AgentServer.cast_and_await(server, signal, selector, timeout: await_timeout) do
+      {:ok, _result} = ok ->
+        ok
 
-      {:error, :not_found} = error ->
+      {:error, {:agent_down, _}} = error ->
         release_external_mutation_lock(lock)
         error
 
-      {:error, reason} ->
-        {:error, reason}
+      {:error, _reason} = error ->
+        error
     end
   end
 

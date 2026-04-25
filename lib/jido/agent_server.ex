@@ -149,19 +149,22 @@ defmodule Jido.AgentServer do
   later restarts it rehydrates its current logical parent from instance runtime
   state instead of falling back to stale startup metadata.
 
-  ## Timeout Diagnostics
+  ## Waiting Primitives
 
-  When `await_completion/2` times out, it returns a diagnostic map:
+  Two selector-based primitives let callers wait on agent activity without
+  polling:
 
-      {:error, {:timeout, %{
-        hint: "await_completion timed out before terminal status reached",
-        mailbox_length: 0,
-        waited_ms: 5000
-      }}}
+  - `cast_and_await/4` — per-signal ack. The caller registers synchronously
+    with the cast; after the outermost middleware unwinds and directives
+    have executed, the selector runs over `agent.state` and the tagged
+    result is delivered to the caller.
+  - `subscribe/4` + `unsubscribe/2` — ambient subscribe on a signal pattern
+    plus a selector. Matching signals fire the selector and dispatch
+    `{:ok, _}` / `{:error, _}` to the subscriber; `:skip` keeps listening.
 
-  An empty mailbox usually means the agent finished but its state never
-  satisfied the await condition; a non-empty mailbox means signals are
-  still pending behind the call.
+  Both fire after the outermost middleware unwinds, so retry middleware
+  that re-invokes `next` produces exactly one ack/notification per
+  triggering signal.
   """
 
   use GenServer
@@ -358,59 +361,134 @@ defmodule Jido.AgentServer do
     end
   end
 
-  @doc """
-  Wait for an agent to reach a terminal status (`:completed` or `:failed`).
+  @typedoc """
+  Selector for `cast_and_await/4`. Receives the full `%AgentServer.State{}`
+  after the outermost middleware unwinds and the signal's directives
+  execute; the slice the user cares about lives at `state.agent.state`
+  (or under the agent's declared `path/0`). Must return a tagged tuple.
 
-  This is an event-driven wait - the caller blocks until the agent's state
-  transitions to a terminal status, then receives the result immediately.
-  No polling is involved.
+  Selectors run synchronously in the agent process and must be pure — a
+  raise crashes the agent and the caller's `:DOWN` monitor surfaces it as
+  `{:error, {:agent_down, _}}`.
+  """
+  @type ack_selector :: (State.t() -> {:ok, term()} | {:error, term()})
+
+  @typedoc """
+  Selector for `subscribe/4`. Same calling convention as `ack_selector/0`,
+  with one extra return value: `:skip` keeps the subscription alive and
+  delivers nothing to the subscriber.
+  """
+  @type subscribe_selector :: (State.t() -> {:ok, term()} | {:error, term()} | :skip)
+
+  @doc """
+  Cast a signal and wait for the per-signal ack.
+
+  Registers `selector` against `signal.id`, casts the signal, then blocks
+  until the agent runs the selector after the outermost middleware unwinds
+  and the signal's directives have executed. Retry middleware that
+  re-invokes `next` does not fire the selector multiple times — the ack
+  fires once per outermost return.
 
   ## Options
 
-  - `:status_path` - Path to status field in `agent.state` (default:
-    `[<agent.path()>, :status]` — the agent's declared slice)
-  - `:result_path` - Path to result field (default: `[<agent.path()>, :last_answer]`)
-  - `:error_path` - Path to error field (default: `[<agent.path()>, :error]`)
+  - `:timeout` — ms to wait (default `Defaults.agent_server_await_timeout_ms/0`)
 
   ## Returns
 
-  - `{:ok, %{status: :completed | :failed, result: any()}}` - Agent reached terminal status
-  - `{:error, :not_found}` - Server not found
-  - Exits with `{:timeout, ...}` if GenServer.call times out
-
-  ## Examples
-
-      {:ok, result} = AgentServer.await_completion(pid, timeout: 10_000)
+  - `{:ok, value}` / `{:error, reason}` — selector return passed through verbatim
+  - `{:error, :timeout}` — caller timed out; ack registration is canceled
+  - `{:error, {:agent_down, reason}}` — agent process exited while waiting
+  - `{:error, :not_found}` — server reference did not resolve
   """
-  @spec await_completion(server(), keyword()) :: {:ok, map()} | {:error, term()}
-  def await_completion(server, opts \\ []) do
+  @spec cast_and_await(server(), Signal.t(), ack_selector(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  def cast_and_await(server, %Signal{} = signal, selector, opts \\ [])
+      when is_function(selector, 1) do
     timeout = Keyword.get(opts, :timeout, Defaults.agent_server_await_timeout_ms())
-    waiter_id = make_ref()
-    opts = Keyword.put(opts, :waiter_id, waiter_id)
 
-    with {:ok, pid} <- resolve_server(server) do
-      try do
-        GenServer.call(pid, {:await_completion, opts}, timeout)
-      catch
-        :exit, {:timeout, _} ->
-          GenServer.cast(pid, {:cancel_await_completion, waiter_id})
-          {:error, {:timeout, build_timeout_diagnostic(pid, timeout)}}
-      end
+    case resolve_server(server) do
+      {:ok, pid} ->
+        ref = make_ref()
+        monitor_ref = Process.monitor(pid)
+
+        case GenServer.call(pid, {:register_ack, signal.id, selector, self(), ref}) do
+          :ok ->
+            :ok = GenServer.cast(pid, {:signal, signal})
+
+            receive do
+              {:jido_ack, ^ref, {:ok, _} = result} ->
+                Process.demonitor(monitor_ref, [:flush])
+                result
+
+              {:jido_ack, ^ref, {:error, _} = result} ->
+                Process.demonitor(monitor_ref, [:flush])
+                result
+
+              {:DOWN, ^monitor_ref, :process, ^pid, reason} ->
+                {:error, {:agent_down, reason}}
+            after
+              timeout ->
+                GenServer.cast(pid, {:cancel_ack, signal.id, ref})
+                Process.demonitor(monitor_ref, [:flush])
+                {:error, :timeout}
+            end
+        end
+
+      {:error, _} = error ->
+        error
     end
   end
 
-  defp build_timeout_diagnostic(pid, timeout_ms) do
-    mailbox_length =
-      case Process.info(pid, :message_queue_len) do
-        {:message_queue_len, len} -> len
-        _ -> 0
-      end
+  @doc """
+  Subscribe to signals matching `pattern`, with a selector deciding what
+  the subscriber sees.
 
-    %{
-      waited_ms: timeout_ms,
-      mailbox_length: mailbox_length,
-      hint: "await_completion timed out before terminal status reached"
-    }
+  The selector runs after the outermost middleware unwinds (same hook
+  point as `cast_and_await/4`). Returning `:skip` keeps the subscription
+  silent and alive; `{:ok, _}` / `{:error, _}` dispatches the result to
+  the subscriber. With `once: true`, the subscription is removed after
+  the first non-`:skip` selector return.
+
+  Patterns are compiled by `Jido.Signal.Router` and have identical
+  semantics to `signal_routes/1` declarations (`"work.*"`, `"audit.**"`,
+  literals, `"*"` for "everything").
+
+  Default dispatch is `{:pid, target: self()}`, which sends
+  `{:jido_subscription, sub_ref, %{signal_type: type, result: result}}`
+  to the caller.
+
+  ## Options
+
+  - `:dispatch` — dispatch config (default `{:pid, target: self()}`)
+  - `:once` — boolean, if true unsubscribe after first non-`:skip` fire (default `false`)
+
+  ## Returns
+
+  - `{:ok, sub_ref}` — subscription registered; pass `sub_ref` to `unsubscribe/2`
+  - `{:error, reason}` — pattern invalid or server lookup failed
+  """
+  @spec subscribe(server(), String.t(), subscribe_selector(), keyword()) ::
+          {:ok, reference()} | {:error, term()}
+  def subscribe(server, pattern, selector, opts \\ [])
+      when is_binary(pattern) and is_function(selector, 1) do
+    dispatch = Keyword.get(opts, :dispatch, {:pid, target: self()})
+    once? = Keyword.get(opts, :once, false)
+
+    with {:ok, pid} <- resolve_server(server) do
+      GenServer.call(pid, {:subscribe, pattern, selector, dispatch, self(), once?})
+    end
+  end
+
+  @doc """
+  Cancel a subscription created via `subscribe/4`.
+
+  Idempotent — unknown refs are silently ignored.
+  """
+  @spec unsubscribe(server(), reference()) :: :ok | {:error, term()}
+  def unsubscribe(server, sub_ref) when is_reference(sub_ref) do
+    with {:ok, pid} <- resolve_server(server) do
+      GenServer.cast(pid, {:unsubscribe, sub_ref})
+    end
   end
 
   @doc """
@@ -458,19 +536,15 @@ defmodule Jido.AgentServer do
   @doc """
   Wait for a child with the given tag to be registered under the agent.
 
-  Event-driven — mirrors `await_completion/2`. The parent parks the
-  caller in `state.child_waiters`; the handler that registers a new
-  child (`maybe_track_child_started/2`, fed by `jido.agent.child.started`
-  or by `handle_call({:adopt_child, ...})`) wakes matching waiters.
-  No polling.
-
-  If the tag already resolves to a child pid at call time, replies
-  immediately with the current pid.
+  Thin wrapper over `subscribe/4` with `once: true`. Fast-paths via
+  `{:get_child_pid, tag}` when the child is already present; otherwise
+  subscribes to `jido.agent.child.started` and resolves on the first
+  matching selector hit.
 
   ## Options
 
   - `:timeout` - ms to wait before giving up (defaults to
-    `Jido.Config.Defaults.await_timeout_ms/0`)
+    `Jido.Config.Defaults.agent_server_await_timeout_ms/0`)
 
   ## Returns
 
@@ -481,16 +555,36 @@ defmodule Jido.AgentServer do
   @spec await_child(server(), term(), keyword()) :: {:ok, pid()} | {:error, term()}
   def await_child(server, child_tag, opts \\ []) do
     timeout = Keyword.get(opts, :timeout, Defaults.agent_server_await_timeout_ms())
-    waiter_id = make_ref()
 
     with {:ok, pid} <- resolve_server(server) do
-      try do
-        GenServer.call(pid, {:await_child, child_tag, waiter_id}, timeout)
-      catch
-        :exit, {:timeout, _} ->
-          GenServer.cast(pid, {:cancel_await_child, waiter_id})
-          {:error, :timeout}
+      case GenServer.call(pid, {:get_child_pid, child_tag}) do
+        {:ok, child_pid} ->
+          {:ok, child_pid}
+
+        :not_found ->
+          selector = fn %State{} = state ->
+            case State.get_child(state, child_tag) do
+              %ChildInfo{pid: child_pid} when is_pid(child_pid) -> {:ok, child_pid}
+              _ -> :skip
+            end
+          end
+
+          case subscribe(pid, "jido.agent.child.started", selector, once: true) do
+            {:ok, ref} -> wait_for_child_subscription(pid, ref, timeout)
+            error -> error
+          end
       end
+    end
+  end
+
+  defp wait_for_child_subscription(server, ref, timeout) do
+    receive do
+      {:jido_subscription, ^ref, %{result: {:ok, value}}} -> {:ok, value}
+      {:jido_subscription, ^ref, %{result: {:error, reason}}} -> {:error, reason}
+    after
+      timeout ->
+        unsubscribe(server, ref)
+        {:error, :timeout}
     end
   end
 
@@ -1059,54 +1153,56 @@ defmodule Jido.AgentServer do
     end
   end
 
-  def handle_call({:await_completion, opts}, from, %State{} = state) do
-    default_path = state.agent_module.path()
-    status_path = Keyword.get(opts, :status_path, [default_path, :status])
-    result_path = Keyword.get(opts, :result_path, [default_path, :last_answer])
-    error_path = Keyword.get(opts, :error_path, [default_path, :error])
-    waiter_id = Keyword.get(opts, :waiter_id)
-
-    case completion_from_agent_state(state.agent.state, status_path, result_path, error_path) do
-      {:ok, result} ->
-        {:reply, {:ok, result}, state}
-
-      :pending ->
-        {caller_pid, _tag} = from
-        monitor_ref = Process.monitor(caller_pid)
-
-        waiter = %{
-          from: from,
-          monitor_ref: monitor_ref,
-          waiter_id: waiter_id,
-          status_path: status_path,
-          result_path: result_path,
-          error_path: error_path
-        }
-
-        new_waiters = Map.put(state.completion_waiters, monitor_ref, waiter)
-        {:noreply, %{state | completion_waiters: new_waiters}}
+  def handle_call({:get_child_pid, child_tag}, _from, %State{} = state) do
+    case State.get_child(state, child_tag) do
+      %ChildInfo{pid: pid} when is_pid(pid) -> {:reply, {:ok, pid}, state}
+      _ -> {:reply, :not_found, state}
     end
   end
 
-  def handle_call({:await_child, child_tag, waiter_id}, from, %State{} = state) do
-    case State.get_child(state, child_tag) do
-      %ChildInfo{pid: pid} when is_pid(pid) ->
-        # Child is already registered — reply immediately.
-        {:reply, {:ok, pid}, state}
+  def handle_call(
+        {:register_ack, signal_id, selector, caller_pid, ref},
+        _from,
+        %State{} = state
+      )
+      when is_function(selector, 1) and is_pid(caller_pid) and is_reference(ref) do
+    monitor_ref = Process.monitor(caller_pid)
 
-      _ ->
-        {caller_pid, _tag} = from
+    entry = %{
+      caller_pid: caller_pid,
+      ref: ref,
+      monitor_ref: monitor_ref,
+      selector: selector
+    }
+
+    {:reply, :ok, %{state | pending_acks: Map.put(state.pending_acks, signal_id, entry)}}
+  end
+
+  def handle_call(
+        {:subscribe, pattern, selector, dispatch, caller_pid, once?},
+        _from,
+        %State{} = state
+      )
+      when is_binary(pattern) and is_function(selector, 1) and is_pid(caller_pid) and
+             is_boolean(once?) do
+    case JidoRouter.Validator.validate_path(pattern) do
+      {:ok, _} ->
+        sub_ref = make_ref()
         monitor_ref = Process.monitor(caller_pid)
 
-        waiter = %{
-          from: from,
+        entry = %{
+          pattern_compiled: pattern,
+          selector: selector,
+          dispatch: dispatch,
           monitor_ref: monitor_ref,
-          waiter_id: waiter_id,
-          tag: child_tag
+          once: once?
         }
 
-        new_waiters = Map.put(state.child_waiters, monitor_ref, waiter)
-        {:noreply, %{state | child_waiters: new_waiters}}
+        {:reply, {:ok, sub_ref},
+         %{state | signal_subscribers: Map.put(state.signal_subscribers, sub_ref, entry)}}
+
+      {:error, reason} ->
+        {:reply, {:error, {:invalid_pattern, reason}}, state}
     end
   end
 
@@ -1184,7 +1280,6 @@ defmodule Jido.AgentServer do
         state
         |> State.add_child(tag, child_info)
         |> State.record_debug_event(:child_adopted, %{child_id: child_runtime.id, tag: tag})
-        |> maybe_notify_child_waiters(tag, child_pid)
 
       {:reply, {:ok, child_pid}, new_state}
     else
@@ -1217,32 +1312,26 @@ defmodule Jido.AgentServer do
     end
   end
 
-  def handle_cast({:cancel_await_completion, waiter_id}, %State{} = state) do
-    remaining_waiters =
-      Enum.reduce(state.completion_waiters, %{}, fn {monitor_ref, waiter}, acc ->
-        if waiter.waiter_id == waiter_id do
-          Process.demonitor(waiter.monitor_ref, [:flush])
-          acc
-        else
-          Map.put(acc, monitor_ref, waiter)
-        end
-      end)
+  def handle_cast({:cancel_ack, signal_id, ref}, %State{} = state) do
+    case Map.fetch(state.pending_acks, signal_id) do
+      {:ok, %{ref: ^ref, monitor_ref: monitor_ref}} ->
+        Process.demonitor(monitor_ref, [:flush])
+        {:noreply, %{state | pending_acks: Map.delete(state.pending_acks, signal_id)}}
 
-    {:noreply, %{state | completion_waiters: remaining_waiters}}
+      _ ->
+        {:noreply, state}
+    end
   end
 
-  def handle_cast({:cancel_await_child, waiter_id}, %State{} = state) do
-    remaining_waiters =
-      Enum.reduce(state.child_waiters, %{}, fn {monitor_ref, waiter}, acc ->
-        if waiter.waiter_id == waiter_id do
-          Process.demonitor(waiter.monitor_ref, [:flush])
-          acc
-        else
-          Map.put(acc, monitor_ref, waiter)
-        end
-      end)
+  def handle_cast({:unsubscribe, sub_ref}, %State{} = state) when is_reference(sub_ref) do
+    case Map.pop(state.signal_subscribers, sub_ref) do
+      {nil, _} ->
+        {:noreply, state}
 
-    {:noreply, %{state | child_waiters: remaining_waiters}}
+      {%{monitor_ref: monitor_ref}, remaining} ->
+        Process.demonitor(monitor_ref, [:flush])
+        {:noreply, %{state | signal_subscribers: remaining}}
+    end
   end
 
   def handle_cast({:register_ready_waiter, pid, ref}, %State{status: status} = state)
@@ -1304,18 +1393,10 @@ defmodule Jido.AgentServer do
       _ ->
         case Map.get(state.cron_monitor_refs, ref) do
           nil ->
-            # Not an attachment, clean up any completion/child waiters whose
-            # caller pid died. Both maps are keyed by monitor_ref.
-            {_popped_completion, new_completion_waiters} =
-              Map.pop(state.completion_waiters, ref)
-
-            {_popped_child, new_child_waiters} = Map.pop(state.child_waiters, ref)
-
-            state = %{
-              state
-              | completion_waiters: new_completion_waiters,
-                child_waiters: new_child_waiters
-            }
+            # Not an attachment, clean up any pending ack / subscriber whose
+            # caller pid died. Both maps' entries carry the caller's monitor_ref.
+            state = drop_dead_pending_ack(state, ref)
+            state = drop_dead_subscriber(state, ref)
 
             if match?(%{parent: %ParentRef{pid: ^pid}}, state) do
               handle_parent_down(state, pid, reason)
@@ -1454,9 +1535,12 @@ defmodule Jido.AgentServer do
 
       case execute_directives(directives, signal, new_state) do
         {:ok, executed_state} ->
+          executed_state = fire_post_signal_hooks(executed_state, signal)
           {:reply, {:ok, executed_state.agent}, executed_state}
 
         {:stop, reason, executed_state} ->
+          # Caller's :DOWN monitor on the agent surfaces the stop; no
+          # separate ack fired here. See ADR 0016 stop semantics.
           {:stop, reason, {:ok, executed_state.agent}, executed_state}
       end
     catch
@@ -1474,6 +1558,7 @@ defmodule Jido.AgentServer do
             Exception.format_stacktrace(stacktrace)
         )
 
+        state = fire_ack_error_for_signal(state, signal, reason)
         {:reply, {:error, reason}, state}
     end
   end
@@ -1502,7 +1587,13 @@ defmodule Jido.AgentServer do
         Map.merge(metadata, signal_stop_metadata(directives))
       )
 
-      execute_directives(directives, signal, new_state)
+      case execute_directives(directives, signal, new_state) do
+        {:ok, executed_state} ->
+          {:ok, fire_post_signal_hooks(executed_state, signal)}
+
+        {:stop, reason, executed_state} ->
+          {:stop, reason, executed_state}
+      end
     catch
       kind, reason ->
         emit_telemetry(
@@ -1528,10 +1619,7 @@ defmodule Jido.AgentServer do
     ctx = build_signal_ctx(signal, state)
     {new_ctx, directives} = chain.(signal, ctx)
 
-    new_state =
-      state
-      |> State.update_agent(new_ctx.agent)
-      |> maybe_notify_completion_waiters()
+    new_state = State.update_agent(state, new_ctx.agent)
 
     {:ok, new_state, List.wrap(directives)}
   end
@@ -1540,20 +1628,23 @@ defmodule Jido.AgentServer do
   # Mirrors the agent-state sync in `process_signal_common/2` and runs
   # any returned directives inline so middleware-emitted side-effect
   # signals (e.g. `jido.persist.thaw.completed`) reach observers.
+  #
+  # Like the user-signal path, ack/subscriber hooks fire after the
+  # outermost middleware unwinds and directives have executed.
   defp emit_through_chain(%State{middleware_chain: chain} = state, %Signal{} = signal)
        when is_function(chain, 2) do
     ctx = build_signal_ctx(signal, state)
     {new_ctx, directives} = chain.(signal, ctx)
 
-    new_state =
-      state
-      |> State.update_agent(new_ctx.agent)
-      |> maybe_notify_completion_waiters()
+    new_state = State.update_agent(state, new_ctx.agent)
 
-    case execute_directives(List.wrap(directives), signal, new_state) do
-      {:ok, executed_state} -> executed_state
-      {:stop, _reason, executed_state} -> executed_state
-    end
+    executed_state =
+      case execute_directives(List.wrap(directives), signal, new_state) do
+        {:ok, s} -> s
+        {:stop, _reason, s} -> s
+      end
+
+    fire_post_signal_hooks(executed_state, signal)
   end
 
   defp build_signal_ctx(%Signal{} = signal, %State{} = state) do
@@ -1595,7 +1686,7 @@ defmodule Jido.AgentServer do
 
     case result do
       {:ok, new_state} ->
-        execute_directives(rest, signal, maybe_notify_completion_waiters(new_state))
+        execute_directives(rest, signal, new_state)
 
       {:stop, reason, new_state} ->
         warn_if_normal_stop(reason, directive, new_state)
@@ -1674,26 +1765,110 @@ defmodule Jido.AgentServer do
         meta: meta
       })
 
-    state
-    |> State.add_child(tag, child_info)
-    |> maybe_notify_child_waiters(tag, pid)
+    State.add_child(state, tag, child_info)
   end
 
-  defp maybe_notify_child_waiters(%State{child_waiters: waiters} = state, _tag, _pid)
-       when map_size(waiters) == 0 do
+  # ---------------------------------------------------------------------------
+  # Internal: ack / subscriber dispatch
+  #
+  # Both run after the outermost middleware unwinds and directives have
+  # executed (the "post-signal" hook point). Order is fixed: ack first,
+  # then subscribers, both deterministic so observers can reason about
+  # the sequence.
+  # ---------------------------------------------------------------------------
+
+  defp fire_post_signal_hooks(%State{} = state, %Signal{} = signal) do
+    state
+    |> fire_ack_for_signal(signal)
+    |> fire_subscribers(signal)
+  end
+
+  defp fire_ack_for_signal(%State{pending_acks: acks} = state, %Signal{id: id})
+       when map_size(acks) == 0 or not is_map_key(acks, id) do
     state
   end
 
-  defp maybe_notify_child_waiters(%State{child_waiters: waiters} = state, tag, pid) do
-    {to_notify, still_waiting} =
-      Enum.split_with(waiters, fn {_ref, waiter} -> waiter.tag == tag end)
+  defp fire_ack_for_signal(%State{pending_acks: acks} = state, %Signal{id: id}) do
+    {entry, remaining} = Map.pop(acks, id)
+    result = entry.selector.(state)
+    send(entry.caller_pid, {:jido_ack, entry.ref, result})
+    Process.demonitor(entry.monitor_ref, [:flush])
+    %{state | pending_acks: remaining}
+  end
 
-    Enum.each(to_notify, fn {_ref, waiter} ->
-      Process.demonitor(waiter.monitor_ref, [:flush])
-      GenServer.reply(waiter.from, {:ok, pid})
+  defp fire_ack_error_for_signal(%State{pending_acks: acks} = state, %Signal{id: id}, reason)
+       when map_size(acks) == 0 or not is_map_key(acks, id) do
+    _ = reason
+    state
+  end
+
+  defp fire_ack_error_for_signal(%State{pending_acks: acks} = state, %Signal{id: id}, reason) do
+    {entry, remaining} = Map.pop(acks, id)
+    send(entry.caller_pid, {:jido_ack, entry.ref, {:error, reason}})
+    Process.demonitor(entry.monitor_ref, [:flush])
+    %{state | pending_acks: remaining}
+  end
+
+  defp fire_subscribers(%State{signal_subscribers: subs} = state, _signal)
+       when map_size(subs) == 0 do
+    state
+  end
+
+  defp fire_subscribers(%State{} = state, %Signal{type: type} = signal) do
+    Enum.reduce(state.signal_subscribers, state, fn {sub_ref, entry}, acc_state ->
+      if JidoRouter.matches?(type, entry.pattern_compiled) do
+        case entry.selector.(acc_state) do
+          :skip ->
+            acc_state
+
+          {:ok, _value} = fire ->
+            dispatch_subscriber(entry.dispatch, sub_ref, signal, fire)
+            if entry.once, do: remove_subscriber(acc_state, sub_ref), else: acc_state
+
+          {:error, _reason} = fire ->
+            dispatch_subscriber(entry.dispatch, sub_ref, signal, fire)
+            if entry.once, do: remove_subscriber(acc_state, sub_ref), else: acc_state
+        end
+      else
+        acc_state
+      end
     end)
+  end
 
-    %{state | child_waiters: Map.new(still_waiting)}
+  defp dispatch_subscriber({:pid, target: target}, sub_ref, %Signal{type: type}, result)
+       when is_pid(target) do
+    send(target, {:jido_subscription, sub_ref, %{signal_type: type, result: result}})
+    :ok
+  end
+
+  defp dispatch_subscriber(dispatch, sub_ref, %Signal{type: type} = signal, result) do
+    payload = %{signal_type: type, result: result, sub_ref: sub_ref, source_signal: signal}
+
+    case Jido.Signal.new(%{
+           type: "jido.subscription.fire",
+           source: signal.source || "/agent/subscription",
+           data: payload
+         }) do
+      {:ok, fire_signal} ->
+        case Jido.Signal.Dispatch.dispatch(fire_signal, dispatch) do
+          :ok -> :ok
+          {:error, _} -> :ok
+        end
+
+      {:error, _} ->
+        :ok
+    end
+  end
+
+  defp remove_subscriber(%State{signal_subscribers: subs} = state, sub_ref) do
+    case Map.pop(subs, sub_ref) do
+      {nil, _} ->
+        state
+
+      {%{monitor_ref: monitor_ref}, remaining} ->
+        Process.demonitor(monitor_ref, [:flush])
+        %{state | signal_subscribers: remaining}
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -2133,21 +2308,8 @@ defmodule Jido.AgentServer do
   defp normal_cron_exit?(_), do: false
 
   # ---------------------------------------------------------------------------
-  # Internal: Completion Detection
+  # Internal: Lifecycle waiters
   # ---------------------------------------------------------------------------
-
-  defp completion_from_agent_state(agent_state, status_path, result_path, error_path) do
-    case get_in(agent_state, status_path) do
-      :completed ->
-        {:ok, %{status: :completed, result: get_in(agent_state, result_path)}}
-
-      :failed ->
-        {:ok, %{status: :failed, result: get_in(agent_state, error_path)}}
-
-      _ ->
-        :pending
-    end
-  end
 
   defp notify_ready_waiters(%State{ready_waiters: waiters} = state)
        when map_size(waiters) == 0,
@@ -2158,36 +2320,24 @@ defmodule Jido.AgentServer do
     %{state | ready_waiters: %{}}
   end
 
-  defp maybe_notify_completion_waiters(%State{completion_waiters: waiters} = state)
-       when map_size(waiters) == 0 do
-    state
+  defp drop_dead_pending_ack(%State{pending_acks: acks} = state, monitor_ref) do
+    case Enum.find(acks, fn {_id, %{monitor_ref: ref}} -> ref == monitor_ref end) do
+      {signal_id, _entry} ->
+        %{state | pending_acks: Map.delete(acks, signal_id)}
+
+      nil ->
+        state
+    end
   end
 
-  defp maybe_notify_completion_waiters(%State{completion_waiters: waiters, agent: agent} = state) do
-    {to_notify, still_waiting} =
-      Enum.split_with(waiters, fn {_ref, waiter} ->
-        completion_from_agent_state(
-          agent.state,
-          waiter.status_path,
-          waiter.result_path,
-          waiter.error_path
-        ) != :pending
-      end)
+  defp drop_dead_subscriber(%State{signal_subscribers: subs} = state, monitor_ref) do
+    case Enum.find(subs, fn {_ref, %{monitor_ref: ref}} -> ref == monitor_ref end) do
+      {sub_ref, _entry} ->
+        %{state | signal_subscribers: Map.delete(subs, sub_ref)}
 
-    Enum.each(to_notify, fn {_ref, waiter} ->
-      {:ok, result} =
-        completion_from_agent_state(
-          agent.state,
-          waiter.status_path,
-          waiter.result_path,
-          waiter.error_path
-        )
-
-      Process.demonitor(waiter.monitor_ref, [:flush])
-      GenServer.reply(waiter.from, {:ok, result})
-    end)
-
-    %{state | completion_waiters: Map.new(still_waiting)}
+      nil ->
+        state
+    end
   end
 
   # ---------------------------------------------------------------------------

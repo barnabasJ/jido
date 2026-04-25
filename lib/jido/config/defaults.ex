@@ -49,15 +49,15 @@ defmodule Jido.Config.Defaults do
   @spec agent_server_call_timeout_ms() :: pos_integer()
   def agent_server_call_timeout_ms, do: @agent_server_call_timeout_ms
 
-  @doc "Default timeout for AgentServer.await_completion/2."
+  @doc "Default timeout for AgentServer waiting primitives (cast_and_await/4, await_child/3, await_ready/2)."
   @spec agent_server_await_timeout_ms() :: pos_integer()
   def agent_server_await_timeout_ms, do: @agent_server_await_timeout_ms
 
-  @doc "Default timeout for Jido.Await helpers."
+  @doc "Default timeout for caller-side wait helpers."
   @spec await_timeout_ms() :: pos_integer()
   def await_timeout_ms, do: @await_timeout_ms
 
-  @doc "Default timeout for Jido.await_child/4."
+  @doc "Default timeout for caller-side child-wait helpers."
   @spec await_child_timeout_ms() :: pos_integer()
   def await_child_timeout_ms, do: @await_child_timeout_ms
 

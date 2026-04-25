@@ -51,7 +51,9 @@ defmodule Jido do
         end
       end
 
-  See `Jido.Agent` for defining agents and `Jido.Await` for coordination.
+  See `Jido.Agent` for defining agents and `Jido.AgentServer` for the
+  signal-driven runtime (including the `cast_and_await/4` and
+  `subscribe/4` primitives for coordination).
   """
 
   @doc """
@@ -659,76 +661,4 @@ defmodule Jido do
   @doc "Refreshes the Discovery catalog."
   defdelegate refresh_discovery(), to: Jido.Discovery, as: :refresh
 
-  # ---------------------------------------------------------------------------
-  # Agent Coordination
-  # ---------------------------------------------------------------------------
-
-  @doc """
-  Wait for an agent to reach a terminal status.
-
-  See `Jido.Await.completion/3` for details.
-  """
-  defdelegate await(server, timeout_ms \\ Defaults.await_timeout_ms(), opts \\ []),
-    to: Jido.Await,
-    as: :completion
-
-  @doc """
-  Wait for a child agent to reach a terminal status.
-
-  See `Jido.Await.child/4` for details.
-  """
-  defdelegate await_child(
-                server,
-                child_tag,
-                timeout_ms \\ Defaults.await_child_timeout_ms(),
-                opts \\ []
-              ),
-              to: Jido.Await,
-              as: :child
-
-  @doc """
-  Wait for all agents to reach terminal status.
-
-  See `Jido.Await.all/3` for details.
-  """
-  defdelegate await_all(servers, timeout_ms \\ Defaults.await_timeout_ms(), opts \\ []),
-    to: Jido.Await,
-    as: :all
-
-  @doc """
-  Wait for any agent to reach terminal status.
-
-  See `Jido.Await.any/3` for details.
-  """
-  defdelegate await_any(servers, timeout_ms \\ Defaults.await_timeout_ms(), opts \\ []),
-    to: Jido.Await,
-    as: :any
-
-  @doc """
-  Get the PIDs of all children of a parent agent.
-
-  See `Jido.Await.get_children/1` for details.
-  """
-  defdelegate get_children(parent_server), to: Jido.Await
-
-  @doc """
-  Get a specific child's PID by tag.
-
-  See `Jido.Await.get_child/2` for details.
-  """
-  defdelegate get_child(parent_server, child_tag), to: Jido.Await
-
-  @doc """
-  Check if an agent process is alive and responding.
-
-  See `Jido.Await.alive?/1` for details.
-  """
-  defdelegate alive?(server), to: Jido.Await
-
-  @doc """
-  Request graceful cancellation of an agent.
-
-  See `Jido.Await.cancel/2` for details.
-  """
-  defdelegate cancel(server, opts \\ []), to: Jido.Await
 end
