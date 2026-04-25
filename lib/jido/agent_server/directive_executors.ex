@@ -211,7 +211,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
   alias Jido.RuntimeStore
 
   @relationship_hive :relationships
-  @reserved_child_opts [:agent, :id, :jido, :parent, :partition]
+  @reserved_child_opts [:agent, :agent_module, :id, :jido, :parent, :partition]
 
   def exec(
         %{agent: agent, tag: tag, opts: opts, meta: meta, restart: restart},
@@ -235,6 +235,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
   defp spawn_child(state, agent, tag, opts, meta, restart) do
     child_id = opts[:id] || "#{state.id}/#{tag}"
     child_partition = Map.get(opts, :partition, state.partition)
+    agent_module = resolve_agent_module(agent)
 
     parent_ref = %{
       pid: self(),
@@ -247,7 +248,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
     child_opts =
       opts
       |> Map.drop(@reserved_child_opts)
-      |> Map.put(:agent, agent)
+      |> Map.put(:agent_module, agent_module)
       |> Map.put(:id, child_id)
       |> Map.put(:partition, child_partition)
       |> Map.put(:parent, parent_ref)

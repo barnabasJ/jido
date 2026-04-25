@@ -17,10 +17,8 @@ defmodule Jido.AgentServer.Options do
   @schema Zoi.struct(
             __MODULE__,
             %{
-              agent: Zoi.any(description: "Agent module (atom) or instantiated agent struct"),
               agent_module:
-                Zoi.atom(description: "Resolved agent module (set by Options.new/1)")
-                |> Zoi.optional(),
+                Zoi.atom(description: "Agent module; required. Always constructed via new/1."),
               jido:
                 Zoi.atom(description: "Jido instance name for registry scoping (default: Jido)")
                 |> Zoi.optional(),
@@ -69,12 +67,6 @@ defmodule Jido.AgentServer.Options do
                   description: "Idle timeout in ms before hibernate/stop (:infinity to disable)"
                 )
                 |> Zoi.default(:infinity),
-              storage:
-                Zoi.any(description: "Storage config (nil | Module | {Module, opts})")
-                |> Zoi.optional(),
-              restored_from_storage:
-                Zoi.boolean(description: "Whether the startup agent was already thawed")
-                |> Zoi.default(false),
 
               # Debug mode
               debug:
@@ -97,8 +89,7 @@ defmodule Jido.AgentServer.Options do
 
   Normalizes and validates all options, including:
   - Generating an ID if not provided
-  - Validating the agent module/struct
-  - Resolving `:agent_module` from the `:agent` option when not given explicitly
+  - Validating the agent module
   - Parsing parent reference
 
   Returns `{:ok, options}` or `{:error, reason}`.
@@ -111,8 +102,7 @@ defmodule Jido.AgentServer.Options do
   def new(attrs) when is_map(attrs) do
     attrs = normalize_attrs(attrs)
 
-    with {:ok, _} <- validate_agent(attrs[:agent]),
-         {:ok, agent_module} <- resolve_agent_module(attrs),
+    with {:ok, agent_module} <- validate_agent_module(attrs[:agent_module]),
          {:ok, parent} <- validate_parent(attrs[:parent]) do
       attrs =
         attrs
@@ -140,8 +130,8 @@ defmodule Jido.AgentServer.Options do
   defp normalize_attrs(attrs) do
     id =
       case Map.get(attrs, :id) do
-        nil -> extract_agent_id(attrs[:agent]) || Jido.Util.generate_id()
-        "" -> extract_agent_id(attrs[:agent]) || Jido.Util.generate_id()
+        nil -> Jido.Util.generate_id()
+        "" -> Jido.Util.generate_id()
         id when is_binary(id) -> id
         id when is_atom(id) -> Atom.to_string(id)
       end
@@ -158,56 +148,26 @@ defmodule Jido.AgentServer.Options do
     |> Map.put(:registry, registry)
   end
 
-  defp extract_agent_id(%{id: id}) when is_binary(id) and id != "", do: id
-  defp extract_agent_id(_), do: nil
+  defp validate_agent_module(nil),
+    do: {:error, Jido.Error.validation_error("agent_module is required")}
 
-  defp validate_agent(nil), do: {:error, Jido.Error.validation_error("agent is required")}
-
-  defp validate_agent(agent) when is_atom(agent) do
-    case Code.ensure_loaded(agent) do
+  defp validate_agent_module(mod) when is_atom(mod) do
+    case Code.ensure_loaded(mod) do
       {:module, _} ->
-        if function_exported?(agent, :new, 0) or function_exported?(agent, :new, 1) or
-             function_exported?(agent, :new, 2) do
-          {:ok, agent}
+        if function_exported?(mod, :new, 0) or function_exported?(mod, :new, 1) do
+          {:ok, mod}
         else
           {:error,
-           Jido.Error.validation_error("agent module must implement new/0, new/1, or new/2")}
+           Jido.Error.validation_error("agent_module must implement new/0 or new/1")}
         end
 
       {:error, _} ->
-        {:error, Jido.Error.validation_error("agent module not found: #{inspect(agent)}")}
+        {:error, Jido.Error.validation_error("agent_module not found: #{inspect(mod)}")}
     end
   end
 
-  defp validate_agent(%{__struct__: _} = agent), do: {:ok, agent}
-
-  defp validate_agent(_),
-    do: {:error, Jido.Error.validation_error("agent must be a module or struct")}
-
-  defp resolve_agent_module(attrs) do
-    case Map.get(attrs, :agent_module) do
-      mod when is_atom(mod) and not is_nil(mod) ->
-        {:ok, mod}
-
-      _ ->
-        case attrs[:agent] do
-          mod when is_atom(mod) and not is_nil(mod) ->
-            {:ok, mod}
-
-          %{agent_module: mod} when is_atom(mod) and not is_nil(mod) ->
-            {:ok, mod}
-
-          %{__struct__: struct_mod} ->
-            {:ok, struct_mod}
-
-          _ ->
-            {:error,
-             Jido.Error.validation_error(
-               "agent_module is required (provide :agent as a module or set :agent_module)"
-             )}
-        end
-    end
-  end
+  defp validate_agent_module(_),
+    do: {:error, Jido.Error.validation_error("agent_module must be a module atom")}
 
   defp validate_parent(nil), do: {:ok, nil}
 

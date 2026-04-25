@@ -77,7 +77,6 @@ defmodule Jido.Agent.InstanceManager do
   require Logger
 
   alias Jido.Config.Defaults
-  alias Jido.Persist
   alias Jido.Storage
 
   @reserved_agent_opts [
@@ -92,9 +91,7 @@ defmodule Jido.Agent.InstanceManager do
     :lifecycle_mod,
     :pool,
     :pool_key,
-    :idle_timeout,
-    :storage,
-    :restored_from_storage
+    :idle_timeout
   ]
 
   @type manager_name :: atom()
@@ -320,10 +317,7 @@ defmodule Jido.Agent.InstanceManager do
     config = get_config(manager)
     partition = effective_partition(config, opts)
 
-    # Try to thaw from storage first
-    agent_or_nil = maybe_thaw(config, key, partition)
-
-    child_spec = build_child_spec(config, key, agent_or_nil, opts, partition)
+    child_spec = build_child_spec(config, key, opts, partition)
 
     case DynamicSupervisor.start_child(dynamic_supervisor_name(manager), child_spec) do
       {:ok, pid} ->
@@ -338,13 +332,18 @@ defmodule Jido.Agent.InstanceManager do
     end
   end
 
-  defp build_child_spec(config, key, agent_or_nil, opts, partition) do
+  defp build_child_spec(config, key, opts, partition) do
     initial_state = Keyword.get(opts, :initial_state, %{})
+
+    persister_middleware = build_persister_middleware(config, key, partition)
+
+    extra_agent_opts = Keyword.get(opts, :agent_opts, [])
+    extra_middleware = Keyword.get(extra_agent_opts, :middleware, [])
 
     agent_opts =
       config.agent_opts
-      |> Keyword.drop(@reserved_agent_opts)
-      |> Keyword.merge(Keyword.get(opts, :agent_opts, []))
+      |> Keyword.drop(@reserved_agent_opts ++ [:middleware])
+      |> Keyword.merge(Keyword.delete(extra_agent_opts, :middleware))
       |> Keyword.put_new(:jido, config.jido)
       |> Keyword.put(:partition, partition)
       |> Keyword.put(:registry, registry_name(config.name))
@@ -352,53 +351,34 @@ defmodule Jido.Agent.InstanceManager do
 
     base_opts =
       [
-        agent: agent_or_nil || config.agent,
-        # When thawing from storage we pass a struct, so keep the module explicit.
         agent_module: config.agent,
         id: key_to_id(key),
+        initial_state: initial_state,
         name:
           {:via, Registry, {registry_name(config.name), manager_registry_key(key, partition)}},
-        # Instance manager lifecycle options
+        # Persister handles thaw/hibernate via lifecycle.starting / .stopping.
+        middleware: persister_middleware ++ extra_middleware,
+        # Instance manager lifecycle options (attachment + idle timeout only).
         lifecycle_mod: Jido.AgentServer.Lifecycle.Keyed,
         pool: config.name,
         pool_key: key,
-        idle_timeout: config.idle_timeout,
-        storage: config.storage,
-        restored_from_storage: not is_nil(agent_or_nil)
+        idle_timeout: config.idle_timeout
       ] ++ agent_opts
-
-    # Only add initial_state for fresh agents (not thawed)
-    base_opts =
-      if agent_or_nil do
-        base_opts
-      else
-        Keyword.put(base_opts, :initial_state, initial_state)
-      end
 
     # Avoid immediate restarts on normal shutdown/idle timeout; allow restarts on crashes.
     Supervisor.child_spec({Jido.AgentServer, base_opts}, restart: :transient)
   end
 
-  defp maybe_thaw(%{storage: nil}, _key, _partition), do: nil
+  defp build_persister_middleware(%{storage: nil}, _key, _partition), do: []
 
-  defp maybe_thaw(%{name: manager_name, storage: storage, agent: agent_module}, key, partition) do
-    persistence_key = manager_persistence_key(manager_name, key, partition)
-
-    case Persist.thaw(storage, agent_module, persistence_key) do
-      {:ok, agent} ->
-        Logger.debug("InstanceManager thawed agent for key #{inspect(key)}")
-        agent
-
-      {:error, :not_found} ->
-        nil
-
-      {:error, reason} ->
-        Logger.warning(
-          "InstanceManager failed to thaw agent for key #{inspect(key)}: #{inspect(reason)}"
-        )
-
-        nil
-    end
+  defp build_persister_middleware(%{storage: storage, name: name}, key, partition) do
+    [
+      {Jido.Middleware.Persister,
+       %{
+         storage: storage,
+         persistence_key: manager_persistence_key(name, key, partition)
+       }}
+    ]
   end
 
   # ---------------------------------------------------------------------------

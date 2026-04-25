@@ -426,9 +426,13 @@ defmodule Jido do
       {:ok, pid} = Jido.start_agent(MyApp.Jido, MyAgent)
       {:ok, pid} = Jido.start_agent(MyApp.Jido, MyAgent, id: "custom-id")
   """
-  @spec start_agent(atom(), module() | struct(), keyword()) :: DynamicSupervisor.on_start_child()
-  def start_agent(jido_instance, agent, opts \\ []) when is_atom(jido_instance) do
-    child_spec = {Jido.AgentServer, Keyword.merge(opts, agent: agent, jido: jido_instance)}
+  @spec start_agent(atom(), module(), keyword()) :: DynamicSupervisor.on_start_child()
+  def start_agent(jido_instance, agent_module, opts \\ [])
+      when is_atom(jido_instance) and is_atom(agent_module) do
+    child_spec =
+      {Jido.AgentServer,
+       Keyword.merge(opts, agent_module: agent_module, jido: jido_instance)}
+
     DynamicSupervisor.start_child(agent_supervisor_name(jido_instance), child_spec)
   end
 

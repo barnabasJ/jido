@@ -132,7 +132,8 @@ defmodule Jido.Pod do
   """
   @spec get(atom(), term(), keyword()) :: {:ok, pid()} | {:error, term()}
   def get(manager, key, opts \\ []) when is_atom(manager) and is_list(opts) do
-    with {:ok, pod_pid} <- InstanceManager.get(manager, key, opts) do
+    with {:ok, pod_pid} <- InstanceManager.get(manager, key, opts),
+         :ok <- AgentServer.await_ready(pod_pid) do
       case reconcile(pod_pid) do
         {:ok, _started} ->
           {:ok, pod_pid}

@@ -47,7 +47,8 @@ defmodule Jido.AgentServer do
   ## Options
 
   - `:jido` - Jido instance name for registry scoping (default: `Jido`)
-  - `:agent` - Agent module or struct (required)
+  - `:agent_module` - Agent module (required). The agent struct is always
+    constructed via `agent_module.new(id: ..., state: ...)`.
   - `:id` - Instance ID (auto-generated if not provided)
   - `:initial_state` - Initial state map for agent
   - `:registry` - Registry module (default: `Jido.Registry`)
@@ -61,37 +62,20 @@ defmodule Jido.AgentServer do
   - `:spawn_fun` - Custom function for spawning children
   - `:debug` - Enable debug mode with event buffer (default: `false`)
 
-  ## Agent Resolution
-
-  The `:agent` option accepts:
-
-  - **Module name** - Must implement `new/0` or `new/1`
-    - `new/1` receives `[id: id, state: initial_state]` as keyword options
-    - `new/0` creates agent with defaults; `:id` and `:initial_state` options are ignored
-  - **Agent struct** - Used directly
-    - Provide `:agent_module` option to specify the module if it differs from `agent.__struct__`
-    - The struct's ID takes precedence over the `:id` option
-
-  The `:agent_module` option is only used when `:agent` is a struct. It tells AgentServer which module implements the agent behavior (for calling `cmd/2`, lifecycle hooks, etc.).
-
   ## Examples
 
       # Using global Jido instance (default)
-      {:ok, pid} = AgentServer.start_link(agent: SimpleAgent)
+      {:ok, pid} = AgentServer.start_link(agent_module: SimpleAgent)
 
       # Using a named Jido instance
-      {:ok, pid} = AgentServer.start_link(jido: MyApp.Jido, agent: MyAgent)
+      {:ok, pid} = AgentServer.start_link(jido: MyApp.Jido, agent_module: MyAgent)
 
-      # Module with new/1 - receives id and state
+      # With explicit id and initial state
       {:ok, pid} = AgentServer.start_link(
-        agent: MyAgent,
+        agent_module: MyAgent,
         id: "my-id",
         initial_state: %{counter: 42}
       )
-
-      # Pre-built struct - requires agent_module
-      agent = MyAgent.new(id: "prebuilt", state: %{value: 99})
-      {:ok, pid} = AgentServer.start_link(agent: agent, agent_module: MyAgent)
 
   ## Completion Detection
 
@@ -200,6 +184,9 @@ defmodule Jido.AgentServer do
     ChildExit,
     ChildStarted,
     IdentityOrphaned,
+    LifecycleReady,
+    LifecycleStarting,
+    LifecycleStopping,
     Orphaned,
     ParentDied,
     PartitionAssigned
@@ -424,6 +411,48 @@ defmodule Jido.AgentServer do
       mailbox_length: mailbox_length,
       hint: "await_completion timed out before terminal status reached"
     }
+  end
+
+  @doc """
+  Block until the AgentServer has emitted `jido.agent.lifecycle.ready`.
+
+  Useful when callers spawn an agent and need to assert that thaw +
+  reconcile + plugin start has completed before sending signals or
+  reading agent state. If the agent is already past `:idle` (ready
+  fired before the call), replies immediately.
+
+  ## Returns
+
+  - `:ok` - Agent is ready
+  - `{:error, :timeout}` - Did not become ready in `timeout` ms
+  - `{:error, {:down, reason}}` - Agent process exited while waiting
+  - `{:error, :not_found}` - Server reference did not resolve
+  """
+  @spec await_ready(server(), timeout()) ::
+          :ok | {:error, :timeout | {:down, term()} | term()}
+  def await_ready(server, timeout \\ Defaults.agent_server_await_timeout_ms()) do
+    case resolve_server(server) do
+      {:ok, pid} ->
+        ref = Process.monitor(pid)
+        GenServer.cast(pid, {:register_ready_waiter, self(), ref})
+
+        receive do
+          {:jido_ready, ^ref} ->
+            Process.demonitor(ref, [:flush])
+            :ok
+
+          {:DOWN, ^ref, :process, ^pid, reason} ->
+            {:error, {:down, reason}}
+        after
+          timeout ->
+            GenServer.cast(pid, {:cancel_ready_waiter, ref})
+            Process.demonitor(ref, [:flush])
+            {:error, :timeout}
+        end
+
+      {:error, _} = error ->
+        error
+    end
   end
 
   @doc """
@@ -894,8 +923,13 @@ defmodule Jido.AgentServer do
          {:ok, state} <-
            State.from_options(options, agent_module, agent, middleware_chain: chain),
          :ok <- maybe_register_global(options, state) do
-      # Monitor parent if present
       state = maybe_monitor_parent(state)
+
+      # Persister middleware (if declared) blocks on thaw IO during this
+      # pass and replaces ctx.agent with the rehydrated struct. Downstream
+      # state.agent reflects post-thaw state.
+      state = emit_through_chain(state, lifecycle_starting_signal(state))
+      state = emit_through_chain(state, partition_assigned_signal(state))
 
       {:ok, state, {:continue, :post_init}}
     else
@@ -919,6 +953,33 @@ defmodule Jido.AgentServer do
     end
   end
 
+  defp lifecycle_starting_signal(%State{} = state) do
+    LifecycleStarting.new!(%{}, source: "/agent/#{state.id}")
+    |> with_root_trace()
+  end
+
+  defp lifecycle_ready_signal(%State{} = state) do
+    LifecycleReady.new!(%{}, source: "/agent/#{state.id}")
+    |> with_root_trace()
+  end
+
+  defp lifecycle_stopping_signal(%State{} = state, reason) do
+    LifecycleStopping.new!(%{reason: reason}, source: "/agent/#{state.id}")
+    |> with_root_trace()
+  end
+
+  defp partition_assigned_signal(%State{} = state) do
+    PartitionAssigned.new!(%{partition: state.partition}, source: "/agent/#{state.id}")
+    |> with_root_trace()
+  end
+
+  defp with_root_trace(%Signal{} = signal) do
+    case Trace.put(signal, Trace.new_root()) do
+      {:ok, s} -> s
+      {:error, _} -> signal
+    end
+  end
+
   defp maybe_register_global(%Options{register_global: false}, _state), do: :ok
 
   defp maybe_register_global(%Options{register_global: true}, state) do
@@ -939,51 +1000,28 @@ defmodule Jido.AgentServer do
     signal_router = SignalRouter.build(state)
     state = %{state | signal_router: signal_router}
 
-    # Start plugin children
     state = start_plugin_children(state)
-
-    # Start plugin subscription sensors
     state = start_plugin_subscriptions(state)
 
-    # Initialize lifecycle module (may restore state for keyed lifecycle)
     lifecycle_opts = [
       idle_timeout: state.lifecycle.idle_timeout,
       pool: state.lifecycle.pool,
-      pool_key: state.lifecycle.pool_key,
-      storage: state.lifecycle.storage
+      pool_key: state.lifecycle.pool_key
     ]
 
     state = state.lifecycle.mod.init(lifecycle_opts, state)
 
-    # Register plugin schedules (cron jobs)
     state = register_plugin_schedules(state)
     state = register_restored_cron_specs(state)
     state = maybe_persist_parent_binding(state)
 
     notify_parent_of_startup(state)
 
-    state = emit_partition_assigned(state)
+    state = emit_through_chain(state, lifecycle_ready_signal(state))
+    state = State.set_status(state, :idle)
+    state = notify_ready_waiters(state)
 
-    {:noreply, State.set_status(state, :idle)}
-  end
-
-  defp emit_partition_assigned(%State{} = state) do
-    signal =
-      PartitionAssigned.new!(
-        %{partition: state.partition},
-        source: "/agent/#{state.id}"
-      )
-
-    traced_signal =
-      case Trace.put(signal, Trace.new_root()) do
-        {:ok, s} -> s
-        {:error, _} -> signal
-      end
-
-    case process_signal_async(traced_signal, state) do
-      {:ok, new_state} -> new_state
-      {:stop, _reason, new_state} -> new_state
-    end
+    {:noreply, state}
   end
 
   @impl true
@@ -1207,6 +1245,21 @@ defmodule Jido.AgentServer do
     {:noreply, %{state | child_waiters: remaining_waiters}}
   end
 
+  def handle_cast({:register_ready_waiter, pid, ref}, %State{status: status} = state)
+      when status in [:idle, :stopping] do
+    # Already past lifecycle.ready; reply immediately and skip parking.
+    send(pid, {:jido_ready, ref})
+    {:noreply, state}
+  end
+
+  def handle_cast({:register_ready_waiter, pid, ref}, %State{} = state) do
+    {:noreply, %{state | ready_waiters: Map.put(state.ready_waiters, ref, pid)}}
+  end
+
+  def handle_cast({:cancel_ready_waiter, ref}, %State{} = state) do
+    {:noreply, %{state | ready_waiters: Map.delete(state.ready_waiters, ref)}}
+  end
+
   def handle_cast({:signal, %Signal{} = signal}, state) do
     {traced_signal, _ctx} = TraceContext.ensure_from_signal(signal)
 
@@ -1338,7 +1391,16 @@ defmodule Jido.AgentServer do
 
   @impl true
   def terminate(reason, state) do
-    # Delegate to lifecycle module for storage-backed hibernation
+    # Emit lifecycle.stopping at the top so middleware (notably
+    # Jido.Middleware.Persister) can perform synchronous hibernate IO
+    # before any other shutdown work runs.
+    state =
+      if clean_shutdown?(reason) do
+        emit_through_chain(state, lifecycle_stopping_signal(state, reason))
+      else
+        state
+      end
+
     state.lifecycle.mod.terminate(reason, state)
 
     # Clean up all cron jobs owned by this agent
@@ -1350,6 +1412,11 @@ defmodule Jido.AgentServer do
 
     :ok
   end
+
+  defp clean_shutdown?(:normal), do: true
+  defp clean_shutdown?(:shutdown), do: true
+  defp clean_shutdown?({:shutdown, _}), do: true
+  defp clean_shutdown?(_), do: false
 
   # ---------------------------------------------------------------------------
   # Internal: Signal Processing
@@ -1467,6 +1534,26 @@ defmodule Jido.AgentServer do
       |> maybe_notify_completion_waiters()
 
     {:ok, new_state, List.wrap(directives)}
+  end
+
+  # Routes a lifecycle / identity signal through the middleware chain.
+  # Mirrors the agent-state sync in `process_signal_common/2` and runs
+  # any returned directives inline so middleware-emitted side-effect
+  # signals (e.g. `jido.persist.thaw.completed`) reach observers.
+  defp emit_through_chain(%State{middleware_chain: chain} = state, %Signal{} = signal)
+       when is_function(chain, 2) do
+    ctx = build_signal_ctx(signal, state)
+    {new_ctx, directives} = chain.(signal, ctx)
+
+    new_state =
+      state
+      |> State.update_agent(new_ctx.agent)
+      |> maybe_notify_completion_waiters()
+
+    case execute_directives(List.wrap(directives), signal, new_state) do
+      {:ok, executed_state} -> executed_state
+      {:stop, _reason, executed_state} -> executed_state
+    end
   end
 
   defp build_signal_ctx(%Signal{} = signal, %State{} = state) do
@@ -2060,6 +2147,15 @@ defmodule Jido.AgentServer do
       _ ->
         :pending
     end
+  end
+
+  defp notify_ready_waiters(%State{ready_waiters: waiters} = state)
+       when map_size(waiters) == 0,
+       do: state
+
+  defp notify_ready_waiters(%State{ready_waiters: waiters} = state) do
+    Enum.each(waiters, fn {ref, pid} -> send(pid, {:jido_ready, ref}) end)
+    %{state | ready_waiters: %{}}
   end
 
   defp maybe_notify_completion_waiters(%State{completion_waiters: waiters} = state)

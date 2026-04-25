@@ -67,9 +67,6 @@ defmodule Jido.AgentServer.State do
               skip_schedules:
                 Zoi.boolean(description: "Skip registering plugin schedules")
                 |> Zoi.default(false),
-              restored_from_storage:
-                Zoi.boolean(description: "Whether the startup agent was already thawed")
-                |> Zoi.default(false),
 
               # Configuration
               jido: Zoi.atom(description: "Jido instance name (required)"),
@@ -104,8 +101,11 @@ defmodule Jido.AgentServer.State do
                     "Map of monitor_ref => waiter for children-appearance notifications"
                 )
                 |> Zoi.default(%{}),
+              ready_waiters:
+                Zoi.map(description: "Map of ref => pid waiting on lifecycle.ready")
+                |> Zoi.default(%{}),
 
-              # Lifecycle (InstanceManager integration: attachment tracking, idle timeout, storage)
+              # Lifecycle (InstanceManager integration: attachment tracking, idle timeout)
               lifecycle: Zoi.any(description: "Lifecycle state (State.Lifecycle.t())"),
 
               # Debug mode
@@ -159,8 +159,7 @@ defmodule Jido.AgentServer.State do
       lifecycle_mod: opts.lifecycle_mod,
       pool: opts.pool,
       pool_key: opts.pool_key,
-      idle_timeout: opts.idle_timeout,
-      storage: opts.storage
+      idle_timeout: opts.idle_timeout
     ]
 
     with {:ok, lifecycle} <- LifecycleState.new(lifecycle_opts) do
@@ -188,11 +187,11 @@ defmodule Jido.AgentServer.State do
         cron_specs: restored_cron_specs,
         cron_runtime_specs: %{},
         skip_schedules: opts.skip_schedules,
-        restored_from_storage: opts.restored_from_storage,
         error_count: 0,
         metrics: %{},
         completion_waiters: %{},
         child_waiters: %{},
+        ready_waiters: %{},
         lifecycle: lifecycle,
         debug: opts.debug,
         debug_events: [],

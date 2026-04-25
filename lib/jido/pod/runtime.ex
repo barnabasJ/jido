@@ -590,23 +590,18 @@ defmodule Jido.Pod.Runtime do
          report,
          opts
        ) do
-    case snapshot.status do
-      :adopted ->
-        {:ok, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}
+    if is_pid(snapshot.running_pid) do
+      {:ok, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}
+    else
+      initial_state = node_initial_state(requested_names, name, node, opts)
+      key = node_key(state, name)
 
-      :misplaced ->
-        {:error, misplaced_node_reason(name, snapshot)}
-
-      _status ->
-        initial_state = node_initial_state(requested_names, name, node, opts)
-        key = node_key(state, name)
-
-        with {:ok, parent_pid} <- resolve_parent_pid(server_pid, topology, name, report),
-             {:ok, parent_ref} <-
-               build_parent_ref(parent_pid, state, topology, name, node.meta),
-             {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state) do
-          {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
-        end
+      with {:ok, parent_pid} <- resolve_parent_pid(server_pid, topology, name, report),
+           {:ok, parent_ref} <-
+             build_parent_ref(parent_pid, state, topology, name, node.meta),
+           {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state) do
+        {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
+      end
     end
   end
 
@@ -652,27 +647,22 @@ defmodule Jido.Pod.Runtime do
          opts
        ) do
     with :ok <- ensure_pod_recursion_safe(node, state, opts) do
-      case snapshot.status do
-        :adopted ->
-          with {:ok, _nested_report} <-
-                 reconcile_nested_pod(snapshot.running_pid, node, state, opts) do
-            {:ok, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}
-          end
+      if is_pid(snapshot.running_pid) do
+        with {:ok, _nested_report} <-
+               reconcile_nested_pod(snapshot.running_pid, node, state, opts) do
+          {:ok, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}
+        end
+      else
+        initial_state = node_initial_state(requested_names, name, node, opts)
+        key = node_key(state, name)
 
-        :misplaced ->
-          {:error, misplaced_node_reason(name, snapshot)}
-
-        _status ->
-          initial_state = node_initial_state(requested_names, name, node, opts)
-          key = node_key(state, name)
-
-          with {:ok, parent_pid} <- resolve_parent_pid(server_pid, topology, name, report),
-               {:ok, parent_ref} <-
-                 build_parent_ref(parent_pid, state, topology, name, node.meta),
-               {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state),
-               {:ok, _nested_report} <- reconcile_nested_pod(pid, node, state, opts) do
-            {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
-          end
+        with {:ok, parent_pid} <- resolve_parent_pid(server_pid, topology, name, report),
+             {:ok, parent_ref} <-
+               build_parent_ref(parent_pid, state, topology, name, node.meta),
+             {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state),
+             {:ok, _nested_report} <- reconcile_nested_pod(pid, node, state, opts) do
+          {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
+        end
       end
     end
   end
@@ -687,26 +677,27 @@ defmodule Jido.Pod.Runtime do
          report,
          opts
        ) do
-    case snapshot.status do
-      :adopted ->
-        {:ok, {state, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}}
+    if is_pid(snapshot.running_pid) do
+      case register_child_locally(state, name, snapshot.running_pid, node.meta) do
+        {:ok, next_state} ->
+          {:ok, {next_state, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}}
 
-      :misplaced ->
-        {:error, state, misplaced_node_reason(name, snapshot)}
+        {:error, reason} ->
+          {:error, state, reason}
+      end
+    else
+      initial_state = node_initial_state(requested_names, name, node, opts)
+      key = node_key(state, name)
 
-      _status ->
-        initial_state = node_initial_state(requested_names, name, node, opts)
-        key = node_key(state, name)
-
-        with {:ok, parent_pid} <- resolve_parent_pid(self(), topology, name, report),
-             {:ok, parent_ref} <-
-               build_parent_ref(parent_pid, state, topology, name, node.meta),
-             {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state),
-             {:ok, next_state} <- register_child_locally(state, name, pid, node.meta) do
-          {:ok, {next_state, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}}
-        else
-          {:error, reason} -> {:error, state, reason}
-        end
+      with {:ok, parent_pid} <- resolve_parent_pid(self(), topology, name, report),
+           {:ok, parent_ref} <-
+             build_parent_ref(parent_pid, state, topology, name, node.meta),
+           {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state),
+           {:ok, next_state} <- register_child_locally(state, name, pid, node.meta) do
+        {:ok, {next_state, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}}
+      else
+        {:error, reason} -> {:error, state, reason}
+      end
     end
   end
 
@@ -721,32 +712,29 @@ defmodule Jido.Pod.Runtime do
          opts
        ) do
     with :ok <- ensure_pod_recursion_safe(node, state, opts) do
-      case snapshot.status do
-        :adopted ->
-          with {:ok, _nested_report} <-
-                 reconcile_nested_pod(snapshot.running_pid, node, state, opts) do
-            {:ok, {state, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}}
-          else
-            {:error, reason} -> {:error, state, reason}
-          end
+      if is_pid(snapshot.running_pid) do
+        with {:ok, next_state} <-
+               register_child_locally(state, name, snapshot.running_pid, node.meta),
+             {:ok, _nested_report} <-
+               reconcile_nested_pod(snapshot.running_pid, node, state, opts) do
+          {:ok, {next_state, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}}
+        else
+          {:error, reason} -> {:error, state, reason}
+        end
+      else
+        initial_state = node_initial_state(requested_names, name, node, opts)
+        key = node_key(state, name)
 
-        :misplaced ->
-          {:error, state, misplaced_node_reason(name, snapshot)}
-
-        _status ->
-          initial_state = node_initial_state(requested_names, name, node, opts)
-          key = node_key(state, name)
-
-          with {:ok, parent_pid} <- resolve_parent_pid(self(), topology, name, report),
-               {:ok, parent_ref} <-
-                 build_parent_ref(parent_pid, state, topology, name, node.meta),
-               {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state),
-               {:ok, next_state} <- register_child_locally(state, name, pid, node.meta),
-               {:ok, _nested_report} <- reconcile_nested_pod(pid, node, state, opts) do
-            {:ok, {next_state, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}}
-          else
-            {:error, reason} -> {:error, state, reason}
-          end
+        with {:ok, parent_pid} <- resolve_parent_pid(self(), topology, name, report),
+             {:ok, parent_ref} <-
+               build_parent_ref(parent_pid, state, topology, name, node.meta),
+             {:ok, pid} <- spawn_node(name, node, key, parent_ref, state, initial_state),
+             {:ok, next_state} <- register_child_locally(state, name, pid, node.meta),
+             {:ok, _nested_report} <- reconcile_nested_pod(pid, node, state, opts) do
+          {:ok, {next_state, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}}
+        else
+          {:error, reason} -> {:error, state, reason}
+        end
       end
     else
       {:error, reason} -> {:error, state, reason}
@@ -1000,17 +988,6 @@ defmodule Jido.Pod.Runtime do
       reason ->
         reason
     end
-  end
-
-  defp misplaced_node_reason(name, snapshot) do
-    Jido.Error.validation_error(
-      "Pod node is already running under a different parent.",
-      details: %{
-        node: name,
-        expected_parent: snapshot.expected_parent,
-        actual_parent: snapshot.actual_parent
-      }
-    )
   end
 
   defp pod_event_metadata(%State{} = state, extra \\ %{}) when is_map(extra) do

@@ -101,9 +101,7 @@ defmodule Jido.Agent.Directive do
     :lifecycle_mod,
     :pool,
     :pool_key,
-    :idle_timeout,
-    :storage,
-    :restored_from_storage
+    :idle_timeout
   ]
 
   @doc false
@@ -308,9 +306,8 @@ defmodule Jido.Agent.Directive do
     - `tag` - Tag for tracking this child (used as key in children map)
     - `opts` - Additional options passed to child AgentServer. Supports standard
       child startup options like `:id`, `:initial_state`, and `:on_parent_death`,
-      but not InstanceManager lifecycle/persistence options like `:storage`,
-      `:idle_timeout`, `:lifecycle_mod`, `:pool`, `:pool_key`, or
-      `:restored_from_storage`
+      but not InstanceManager lifecycle options like `:idle_timeout`,
+      `:lifecycle_mod`, `:pool`, or `:pool_key`
     - `meta` - Metadata to pass to child via parent reference
     - `restart` - Restart policy for the child under supervision (default: `:transient`)
 
@@ -752,8 +749,8 @@ defmodule Jido.Agent.Directive do
 
   - `:opts` - Additional options for the child AgentServer (map)
     - Supports child startup options like `:id`, `:initial_state`, and `:on_parent_death`
-    - Does not support InstanceManager lifecycle/persistence options like `:storage`,
-      `:idle_timeout`, `:lifecycle_mod`, `:pool`, `:pool_key`, or `:restored_from_storage`
+    - Does not support InstanceManager lifecycle options like `:idle_timeout`,
+      `:lifecycle_mod`, `:pool`, or `:pool_key`
   - `:meta` - Metadata to pass to the child via parent reference (map)
   - `:restart` - Child restart policy under supervision (default: `:transient`)
 
