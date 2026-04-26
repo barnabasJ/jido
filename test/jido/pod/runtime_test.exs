@@ -556,8 +556,9 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert report.failed == [:nested]
     assert report.pending == []
     assert Map.has_key?(report.nodes, :planner)
-    assert report.failures.nested.stage == :nested_reconcile
-    assert inspect(report.failures.nested.reason) =~ "Recursive pod runtime is not supported"
+
+    assert {:start_failed, inner} = report.failures.nested
+    assert inspect(inner) =~ "Recursive pod runtime is not supported"
   end
 
   test "same pod key can exist across partitions and keeps runtime lookups isolated", %{
