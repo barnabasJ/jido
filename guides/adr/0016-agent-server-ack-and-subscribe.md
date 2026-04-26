@@ -1,10 +1,11 @@
 # 0016. Waiting on agents: ack + subscribe on AgentServer
 
-- Status: Implemented
-- Implementation: Complete
+- Status: Partially superseded
+- Implementation: Complete (as originally specified). §1 (`cast_and_await/4`) retires under [ADR 0020](0020-synchronous-call-takes-a-selector.md) — see that ADR for the unified `call/4`-with-selector design. §2 (`subscribe/4`) is unchanged.
 - Date: 2026-04-23
 - Related commits: f48e3f2, (this commit)
 - Supersedes: [0010](0010-waiting-via-ack-and-subscribe.md)
+- Superseded by (partial): [0020](0020-synchronous-call-takes-a-selector.md) for §1 only
 
 ## Context
 
