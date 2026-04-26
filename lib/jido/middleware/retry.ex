@@ -36,7 +36,7 @@ defmodule Jido.Middleware.Retry do
 
   defp attempt(signal, ctx, next, attempts_left) when attempts_left > 0 do
     case next.(signal, ctx) do
-      {:error, _reason} when attempts_left > 1 ->
+      {:error, _ctx, _reason} when attempts_left > 1 ->
         attempt(signal, ctx, next, attempts_left - 1)
 
       other ->

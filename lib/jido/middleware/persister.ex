@@ -15,11 +15,13 @@ defmodule Jido.Middleware.Persister do
   `Jido.Persist.hibernate/4`. Hibernate IO runs on the terminate path —
   callers must size the supervisor's shutdown timeout accordingly.
 
-  Per [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md), the
-  middleware returns the tagged tuple from `next.(sig, ctx)` and only
-  appends its own observability directive on the success branch. A chain
-  failure propagates verbatim — Persister is not in the request/response
-  error path.
+  Per [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md), both
+  the success and error branches of the middleware return shape carry
+  ctx, so the thawed agent Persister stages in `ctx.agent` flows back to
+  `state.agent` unconditionally. Lifecycle observability (thaw.completed
+  / thaw.failed / hibernate.*) is appended only to the success branch;
+  a chain `{:error, ctx, reason}` propagates verbatim — Persister is
+  not in the request/response error path.
 
   ## Configuration
 
@@ -111,13 +113,14 @@ defmodule Jido.Middleware.Persister do
   def on_signal(sig, ctx, _opts, next), do: next.(sig, ctx)
 
   # Lifecycle-signal observability emits append to the success directive
-  # list and pass {:error, _} chain returns through unchanged. Persister is
-  # not in the request/response error path; non-lifecycle errors are
-  # someone else's concern.
+  # list and pass {:error, ctx, reason} chain returns through unchanged.
+  # Persister is not in the request/response error path; non-lifecycle
+  # errors are someone else's concern. ctx carries through either branch
+  # so any state mutation Persister staged (the thawed agent) commits.
   defp append_observability({:ok, ctx, dirs}, observability),
     do: {:ok, ctx, dirs ++ [observability]}
 
-  defp append_observability({:error, _reason} = err, _observability), do: err
+  defp append_observability({:error, _ctx, _reason} = err, _observability), do: err
 
   defp emit(type, data), do: %Directive.Emit{signal: Signal.new!(type, data)}
 

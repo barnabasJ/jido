@@ -38,13 +38,14 @@ Action, cmd reducer, and middleware all return the same shape:
 |---|---|
 | `action.run(signal, slice, opts, ctx)` | `{:ok, new_slice, [directive]} \| {:error, reason}` |
 | `agent_module.cmd(agent, action)` | `{:ok, new_agent, [directive]} \| {:error, reason}` |
-| `next.(signal, ctx)` and `on_signal/4` | `{:ok, ctx, [directive]} \| {:error, reason}` |
+| `next.(signal, ctx)` and `on_signal/4` | `{:ok, ctx, [directive]} \| {:error, ctx, reason}` |
 
 Notes:
 
 - **No `{:ok, slice}` two-arg variant.** Always include the directive list, even if empty. Removes a normalization step and a frequently-confused arity choice.
 - **No `{:error, reason, [directive]}`.** If it failed, it failed — emit observability via middleware on the failure path, not from the action. Forces actions to pick a lane.
 - **`reason` is wrapped into `%Jido.Error{}`** by the framework (or passed through if it already is) so consumers have a stable shape.
+- **Middleware error tuple carries `ctx`.** Action errors are reported as `{:error, ctx, reason}` so middleware-staged state mutations (e.g. `Persister`'s thaw setting `ctx.agent`) commit to `state.agent` regardless of the chain outcome. Action-level rollback lives inside `cmd/2`: the input agent flows through the error tuple unchanged, so prior middleware mutations to `ctx.agent` survive.
 
 ### 2. Multi-instruction `cmd` is all-or-nothing
 

@@ -65,8 +65,8 @@ defmodule JidoTest.MiddlewareTest do
           {:ok, ctx, dirs} ->
             {:ok, Map.update!(ctx, :order, &(&1 ++ [:outer_after])), dirs}
 
-          {:error, _} = err ->
-            err
+          {:error, ctx, reason} ->
+            {:error, Map.update!(ctx, :order, &(&1 ++ [:outer_after])), reason}
         end
       end
     end
@@ -102,21 +102,22 @@ defmodule JidoTest.MiddlewareTest do
       @moduledoc false
       use Jido.Middleware
 
-      # Catches `{:error, _}` from `next` and converts it to a success
-      # with no directives, so callers see the success-path selector run.
+      # Catches `{:error, ctx, _}` from `next` and converts it to a
+      # success with no directives, so callers see the success-path
+      # selector run. ctx flows through either branch.
       @impl true
       def on_signal(signal, ctx, _opts, next) do
         case next.(signal, ctx) do
-          {:error, _reason} -> {:ok, ctx, []}
+          {:error, ctx, _reason} -> {:ok, ctx, []}
           ok -> ok
         end
       end
     end
 
-    test "middleware that swallows {:error, _} returns {:ok, ctx, []}" do
+    test "middleware that swallows {:error, _, _} returns {:ok, ctx, []}" do
       sig = %Jido.Signal{type: "x", source: "/test", id: "1"}
 
-      base = fn _sig, _ctx -> {:error, :boom} end
+      base = fn _sig, ctx -> {:error, ctx, :boom} end
       chain = fn s, c -> Swallow.on_signal(s, c, %{}, base) end
 
       assert {:ok, %{}, []} = chain.(sig, %{})

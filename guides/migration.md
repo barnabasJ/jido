@@ -915,17 +915,21 @@ error-aware semantics.
 `on_signal/4` and `next.(signal, ctx)` both return the same shape:
 
 ```elixir
-{:ok, ctx, [directive]} | {:error, reason}
+{:ok, ctx, [directive]} | {:error, ctx, reason}
 ```
 
-Middleware that wrapped `next` and matched on `{ctx, dirs}` should
-match on the new shape:
+The error tuple carries `ctx` so middleware-staged state mutations
+(e.g. `Persister` setting `ctx.agent` to the thawed agent) commit to
+`state.agent` regardless of the action's outcome. Action-level rollback
+lives inside `cmd/2` — the input agent flows back into ctx unchanged on
+error, so prior middleware mutations survive. Middleware that wrapped
+`next` should match on both branches:
 
 ```elixir
 def on_signal(signal, ctx, _opts, next) do
   case next.(signal, ctx) do
-    {:ok, ctx, dirs} -> {:ok, augment(ctx), dirs}
-    {:error, _} = err -> err
+    {:ok, ctx, dirs}      -> {:ok, augment(ctx), dirs}
+    {:error, ctx, reason} -> {:error, augment(ctx), reason}
   end
 end
 ```

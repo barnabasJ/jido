@@ -11,11 +11,16 @@ defmodule Jido.Middleware do
 
       on_signal(signal, ctx, opts, next) ::
         {:ok, ctx, [directive]}
-        | {:error, reason}
+        | {:error, ctx, reason}
 
   Both `next.(signal, ctx)` and `on_signal/4` return the same shape. The
-  chain's tagged outcome is the source of truth for ack delivery — see
-  [ADR 0018](../adr/0018-tagged-tuple-return-shape.md).
+  error tuple carries `ctx` so middleware-level state mutations
+  (e.g. `Persister`'s thaw setting `ctx.agent`) commit to `state.agent`
+  regardless of whether the action eventually errored. Action-level
+  rollback lives inside `cmd/2`: the input agent flows back into ctx
+  unchanged on error, and the framework commits that input agent (with
+  any prior middleware mutations) to state. See
+  [ADR 0018](../adr/0018-tagged-tuple-return-shape.md) §1.
 
   - `signal` — the triggering `Jido.Signal.t()`.
   - `ctx` — per-signal runtime context (user, trace, agent-level identity).
@@ -27,7 +32,8 @@ defmodule Jido.Middleware do
     registration produces `opts = %{}`.
   - `next` — the continuation. The middleware chooses whether (and when) to
     call `next.(signal, ctx)`; the result is `{:ok, new_ctx, [directive]}`
-    on success or `{:error, reason}` on failure.
+    on success or `{:error, new_ctx, reason}` on failure. Either branch
+    carries an updated ctx.
 
   ## Defining middleware
 
@@ -44,19 +50,24 @@ defmodule Jido.Middleware do
         end
       end
 
-  Wiring middleware into the AgentServer signal pipeline lands in a later
-  commit; this module only defines the contract.
+  Middleware that mutates ctx and post-processes can branch on both shapes:
+
+      def on_signal(signal, ctx, _opts, next) do
+        case next.(signal, ctx) do
+          {:ok, ctx, dirs}    -> {:ok, post_process(ctx), dirs}
+          {:error, ctx, reason} -> {:error, post_process(ctx), reason}
+        end
+      end
   """
+
+  @typep result :: {:ok, map(), [Jido.Agent.Directive.t()]} | {:error, map(), term()}
 
   @callback on_signal(
               signal :: Jido.Signal.t(),
               ctx :: map(),
               opts :: map(),
-              next ::
-                (Jido.Signal.t(), map() ->
-                   {:ok, map(), [Jido.Agent.Directive.t()]} | {:error, term()})
-            ) ::
-              {:ok, map(), [Jido.Agent.Directive.t()]} | {:error, term()}
+              next :: (Jido.Signal.t(), map() -> result())
+            ) :: result()
 
   @optional_callbacks on_signal: 4
 

@@ -40,7 +40,7 @@ defmodule JidoTest.Middleware.RetryTest do
   end
 
   describe "on_signal/4 — retry until success" do
-    test "retries while the chain returns {:error, _}, returning the eventual success" do
+    test "retries while the chain returns {:error, _, _}, returning the eventual success" do
       counter = :counters.new(1, [])
 
       next = fn _sig, ctx ->
@@ -48,7 +48,7 @@ defmodule JidoTest.Middleware.RetryTest do
         :counters.add(counter, 1, 1)
 
         if n < 2 do
-          {:error, :transient}
+          {:error, ctx, :transient}
         else
           {:ok, ctx, [%Directive.Emit{signal: signal("done")}]}
         end
@@ -65,15 +65,15 @@ defmodule JidoTest.Middleware.RetryTest do
   end
 
   describe "on_signal/4 — max attempts exceeded" do
-    test "returns the final {:error, _} after max_attempts retries" do
+    test "returns the final {:error, _, _} after max_attempts retries" do
       counter = :counters.new(1, [])
 
-      next = fn _sig, _ctx ->
+      next = fn _sig, ctx ->
         :counters.add(counter, 1, 1)
-        {:error, :always_fails}
+        {:error, ctx, :always_fails}
       end
 
-      assert {:error, :always_fails} =
+      assert {:error, _ctx, :always_fails} =
                Retry.on_signal(signal(), %{}, %{max_attempts: 3}, next)
 
       assert :counters.get(counter, 1) == 3
@@ -84,12 +84,12 @@ defmodule JidoTest.Middleware.RetryTest do
     test "skips retry when signal type does not match pattern" do
       counter = :counters.new(1, [])
 
-      next = fn _sig, _ctx ->
+      next = fn _sig, ctx ->
         :counters.add(counter, 1, 1)
-        {:error, :nope}
+        {:error, ctx, :nope}
       end
 
-      assert {:error, :nope} =
+      assert {:error, _ctx, :nope} =
                Retry.on_signal(
                  signal("audit.log"),
                  %{},
@@ -104,12 +104,12 @@ defmodule JidoTest.Middleware.RetryTest do
     test "retries when signal type matches the pattern" do
       counter = :counters.new(1, [])
 
-      next = fn _sig, _ctx ->
+      next = fn _sig, ctx ->
         :counters.add(counter, 1, 1)
-        {:error, :transient}
+        {:error, ctx, :transient}
       end
 
-      assert {:error, :transient} =
+      assert {:error, _ctx, :transient} =
                Retry.on_signal(
                  signal("work.start"),
                  %{},

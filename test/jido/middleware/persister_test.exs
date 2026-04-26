@@ -91,20 +91,24 @@ defmodule JidoTest.Middleware.PersisterTest do
              end)
     end
 
-    test "passes a chain {:error, _} through verbatim without appending observability" do
+    test "passes a chain {:error, ctx, _} through verbatim with the thawed agent in ctx" do
       agent = TestAgent.new(id: "round-trip-err", state: %{app: %{counter: 1}})
       storage = ets_storage()
       assert :ok = Jido.Persist.hibernate(storage, agent)
 
-      next = fn _sig, _c -> {:error, :downstream_blew_up} end
+      # The downstream "error" carries ctx so middleware-staged state mutations
+      # (Persister's thaw of ctx.agent) flow back to the framework.
+      next = fn _sig, c -> {:error, c, :downstream_blew_up} end
 
-      assert {:error, :downstream_blew_up} =
+      assert {:error, ctx, :downstream_blew_up} =
                Persister.on_signal(
                  signal("jido.agent.lifecycle.starting"),
                  ctx(agent),
                  %{storage: storage, persistence_key: "round-trip-err"},
                  next
                )
+
+      assert ctx.agent.state.app.counter == 1
     end
   end
 

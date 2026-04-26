@@ -1560,13 +1560,13 @@ defmodule Jido.AgentServer do
               {:stop, reason, {:ok, executed_state.agent}, executed_state}
           end
 
-        {:error, _reason} = err ->
-          # Chain returned an error: agent state is unchanged. Skip
-          # directive execution; deliver the error verbatim to any
-          # cast_and_await caller via the post-signal hooks. AgentServer.call/2
-          # still replies with {:ok, agent} per ADR 0018.
-          state = fire_post_signal_hooks(state, signal, err)
-          {:reply, {:ok, state.agent}, state}
+        {:error, new_state, reason} ->
+          # Chain returned an error. `new_state` already has any
+          # middleware-staged mutations committed; no directives to run on
+          # this branch. AgentServer.call/2 still replies {:ok, agent} —
+          # cast_and_await is the error-aware variant per ADR 0018.
+          new_state = fire_post_signal_hooks(new_state, signal, {:error, reason})
+          {:reply, {:ok, new_state.agent}, new_state}
       end
     catch
       kind, reason ->
@@ -1623,8 +1623,8 @@ defmodule Jido.AgentServer do
               {:stop, reason, executed_state}
           end
 
-        {:error, _reason} = err ->
-          {:ok, fire_post_signal_hooks(state, signal, err)}
+        {:error, new_state, reason} ->
+          {:ok, fire_post_signal_hooks(new_state, signal, {:error, reason})}
       end
     catch
       kind, reason ->
@@ -1641,12 +1641,11 @@ defmodule Jido.AgentServer do
   # Middleware chain → routing → cmd/2. The outermost middleware wraps the
   # whole pipeline; the innermost `next` runs routing + cmd/2.
   #
-  # Returns the chain's tagged outcome:
-  #
-  #   - `{:ok, new_state, directives}` — apply state, execute directives,
-  #     run post-signal hooks with success.
-  #   - `{:error, reason}` — agent state is unchanged; directives are not
-  #     produced; the post-signal hooks deliver the error to acks.
+  # The chain returns either branch with a fresh ctx; this function
+  # commits ctx.agent to state.agent unconditionally so middleware-staged
+  # state mutations (e.g. Persister's thaw) land regardless of whether
+  # the action errored downstream. Action-level rollback already happened
+  # inside cmd/2.
   #
   # See [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md).
   defp run_chain(%Signal{} = signal, %State{middleware_chain: chain} = state)
@@ -1658,8 +1657,9 @@ defmodule Jido.AgentServer do
         new_state = State.update_agent(state, new_ctx.agent)
         {:ok, new_state, List.wrap(directives)}
 
-      {:error, _reason} = err ->
-        err
+      {:error, new_ctx, reason} ->
+        new_state = State.update_agent(state, new_ctx.agent)
+        {:error, new_state, reason}
     end
   end
 
@@ -1681,8 +1681,10 @@ defmodule Jido.AgentServer do
 
         fire_post_signal_hooks(executed_state, signal, {:ok, executed_state, directives})
 
-      {:error, _reason} = err ->
-        fire_post_signal_hooks(state, signal, err)
+      {:error, new_state, reason} ->
+        # state has middleware mutations committed; no directives to run on
+        # the error branch. Fire post-signal hooks against the updated state.
+        fire_post_signal_hooks(new_state, signal, {:error, reason})
     end
   end
 
@@ -1754,7 +1756,7 @@ defmodule Jido.AgentServer do
     }
   end
 
-  defp signal_stop_metadata_for({:error, reason}) do
+  defp signal_stop_metadata_for({:error, _state, reason}) do
     %{
       directive_count: 0,
       directive_types: %{},
@@ -2000,19 +2002,17 @@ defmodule Jido.AgentServer do
   #
   # Returns the tagged tuple per [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md):
   #   - `{:ok, ctx, dirs}` on chain success
-  #   - `{:error, reason}` when an action's `cmd/2` errors
+  #   - `{:error, ctx, reason}` on routing failure or `cmd/2` error
   #
-  # Routing misses (`:no_matching_route`) are no-op successes:
-  # framework-emitted lifecycle signals (`jido.agent.lifecycle.*`,
-  # `jido.persist.*`, ...) routinely have no user routes, and treating a
-  # missing route as a chain error would skip `State.update_agent` —
-  # losing, for example, the `Persister` middleware's thawed-agent
-  # assignment on `lifecycle.starting`. Operators still get a debug log.
+  # The error tuple carries `ctx` so middleware-staged state mutations
+  # (`Persister`'s thaw, etc.) commit to `state.agent` regardless. cmd/2
+  # is the action boundary: rollback semantics live there — on action
+  # error, `cmd/2` returns the input agent unchanged, which is exactly
+  # `ctx.agent` at this layer (containing prior middleware mutations).
   #
-  # Concrete routing failures (invalid pattern, etc.) propagate as
-  # `{:error, %RoutingError{}}`. `%Directive.Error{}` is no longer
-  # manufactured by the cmd reducer; user code is free to emit an `%Error{}`
-  # on the success path for log/audit purposes.
+  # `%Directive.Error{}` is no longer manufactured by the cmd reducer or
+  # by routing failures. User code is free to emit one on the success
+  # path for log/audit purposes.
   defp core_next(%Signal{} = signal, ctx) do
     %{agent_module: agent_module, agent: agent, __signal_router__: router} = ctx
 
@@ -2029,13 +2029,12 @@ defmodule Jido.AgentServer do
           {:ok, new_agent, directives} ->
             {:ok, Map.put(ctx, :agent, new_agent), List.wrap(directives)}
 
-          {:error, _reason} = err ->
-            err
+          {:error, reason} ->
+            # Action errored; cmd/2 returned the input agent unchanged.
+            # ctx.agent is still that input agent + middleware mutations,
+            # which run_chain will commit to state.
+            {:error, ctx, reason}
         end
-
-      {:error, :no_matching_route} ->
-        log_routing_miss(ctx, signal)
-        {:ok, ctx, []}
 
       {:error, reason} ->
         routing_error =
@@ -2045,22 +2044,17 @@ defmodule Jido.AgentServer do
           })
 
         log_routing_error(ctx, routing_error)
-        {:error, routing_error}
+        {:error, ctx, routing_error}
     end
   end
 
-  defp log_routing_miss(ctx, %Signal{type: type}) do
-    Logger.debug(
-      "Agent #{Map.get(ctx, :agent_id, "unknown")} [routing]: no route for #{type}"
-    )
-  end
-
-  # Concrete routing failures (invalid pattern, etc.) previously emitted a
-  # `%Directive.Error{}` that `DirectiveExec.Error` logged on its
-  # success-path execution. The chain now short-circuits before directives
-  # run, so log inline to preserve the operator-visible signal.
+  # Concrete routing failures (invalid pattern, missing route, ...)
+  # previously emitted a `%Directive.Error{}` that `DirectiveExec.Error`
+  # logged on its success-path execution. The chain now short-circuits
+  # before directives run, so log inline to preserve the operator-visible
+  # signal.
   defp log_routing_error(ctx, %{message: message}) do
-    Logger.error(
+    Logger.debug(
       "Agent #{Map.get(ctx, :agent_id, "unknown")} [routing]: #{message}"
     )
   end
