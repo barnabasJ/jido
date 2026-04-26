@@ -4,6 +4,8 @@ This directory holds the per-commit task breakdown for implementing [ADR 0014](.
 
 The 0014–0016 work shipped as one PR (commits C0–C8). The 0017–0020 follow-on work lands in five sequential commits, each its own session: **task 0011 first** (the tagged-tuple return shape; ADR 0018), then **task 0009** (the Pod.mutate API refactor on top of 0011; ADR 0017 Phase 1), then **task 0012** (delete StateOp directives + multi-slice via return shape; ADR 0019), then **task 0013** (`call/4` takes a selector; `cast_and_await/4` retires; ADR 0020), then **task 0010** (Pod runtime signal-driven state machine; ADR 0017 Phase 2 under ADR 0019's strict separation rule, using `call/4` from 0013). 0011 ships first because it simplifies every selector and Retry-style middleware downstream. 0012 / 0013 are independent cleanup tasks that both land before 0010 — 0012 to clean up state-mutation channels, 0013 to unify the synchronous primitive — so 0010's diff stays focused on the runtime state machine without dragging in primitive renames.
 
+After 0010, **task 0015** lands as the terminal ADR 0019 cleanup: tightens the agent-side directive surface (`SpawnAgent`, `AdoptChild`, `Cron`, `CronCancel`, `RunInstruction`) to the same strict rule the Pod state machine already follows. The Pod surface was the worked example; 0015 generalises it so the principle "directives mutate no state" holds uniformly.
+
 > # NO LEGACY ADAPTERS — APPLIES TO EVERY TASK BELOW
 >
 > When a task says "rewrite X to Y", **rewrite it**. Do not write a shim,
@@ -59,6 +61,7 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 | [0013](0013-call-takes-selector-cast-and-await-retires.md) | `AgentServer.call/4` takes a selector; delete `cast_and_await/4` + state-returning `call/3`; extract `process_signal/2` helper | **green** | 0020 |
 | [0014](0014-no-full-state-no-polling-pod-runtime-and-tests.md) | `Pod.Runtime` projects a `View` struct; delete `eventually_state/3`; replace polling with subscriptions; rewrite full-state test reads as targeted selectors | **green** | 0021 |
 | [0010](0010-pod-runtime-signal-driven-state-machine.md) | Pod runtime: signal-driven state machine; delete wave orchestration; drop synthetic `jido.pod.mutate.{completed,failed}` lifecycle signal; rewrite `Pod.mutate_and_wait/3` around natural child lifecycle signals; enforce ADR 0019 on Pod surface | **green** | 0017 (Phase 2 — runtime simplification) + 0019 (Pod surface enforcement) |
+| [0015](0015-strict-directives-no-runtime-state.md) | Strict directives: split `SpawnAgent` / `AdoptChild` / `Cron` / `CronCancel` / `RunInstruction` so no directive impl mutates `state.children` / `state.cron_*` / `state.agent`; add `maybe_track_cron_registered/2` + `maybe_track_cron_cancelled/2` cascade callbacks; route `RunInstruction`'s result via signal_routes | **green** | 0019 (cross-cutting tightening of the agent-side directive surface) |
 
 ## Dependencies
 
@@ -77,6 +80,7 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 0012 ← 0013              (ADR 0020 — call/4 takes a selector; cast_and_await retires)
 0013 ← 0014              (ADR 0021 — Pod.Runtime View struct; tests subscribe instead of poll)
 0014 ← 0010              (ADR 0017 Phase 2 — uses call/4 + View, assumes StateOp gone)
+0010 ← 0015              (ADR 0019 — terminal cleanup; agent-side directives split to match Pod surface)
 ```
 
 ## Related planning artifacts

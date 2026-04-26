@@ -1,7 +1,7 @@
 # 0019. Actions mutate state; directives are pure side effects
 
 - Status: Accepted
-- Implementation: Pending — split across [task 0012](../tasks/0012-delete-state-op-directives.md) (StateOp removal + multi-slice via return shape) and [task 0010](../tasks/0010-pod-runtime-signal-driven-state-machine.md) (Pod runtime under the strict rule).
+- Implementation: Partial — [task 0012](../tasks/0012-delete-state-op-directives.md) (StateOp removal + multi-slice via return shape), [task 0010](../tasks/0010-pod-runtime-signal-driven-state-machine.md) (Pod runtime under the strict rule), and [task 0015](../tasks/0015-strict-directives-no-runtime-state.md) (the cross-cutting tightening of the agent-side directive surface — `SpawnAgent`, `AdoptChild`, `Cron`, `CronCancel`, `RunInstruction`).
 - Date: 2026-04-26
 - Related ADRs: [0014](0014-slice-middleware-plugin.md) (action signature), [0017](0017-pod-mutations-are-signal-driven.md) (where the strict rule first bites), [0018](0018-tagged-tuple-return-shape.md) (return shape that the rule extends)
 
@@ -24,8 +24,8 @@ The mixing of channels makes "what does this signal do to the agent's slice valu
 ### 1. The rule
 
 - **Actions mutate `agent.state` (domain).** The action's return value is the sole source of slice-value changes. Reading the action tells you everything that changes.
-- **Directives are pure side effects.** They do work (spawn processes, send shutdown, dispatch signals, persist to disk, write to external systems). They do **not** touch `agent.state`. Their result, if any, comes back as a signal that re-enters the pipeline.
-- **`%AgentServer.State{}` (runtime) stays mutable by AgentServer callbacks.** Children tracking, ack/subscribe registration, monitors — all remain `handle_call` / `handle_cast` mutations. This is bookkeeping the process owns and is invisible to user code.
+- **Directives are pure side effects. They mutate NO state — not domain (`agent.state`), not runtime (`state.children`, `state.cron_*`, monitors, subscriptions).** They do work (spawn processes, send shutdown, dispatch signals, persist to disk, write to external systems) and return immediately. Their result, if any, comes back as a signal that re-enters the pipeline. Bookkeeping that "logically" follows the I/O happens via the downstream signal cascade — `maybe_track_child_started/2` inserts when `jido.agent.child.started` arrives; `handle_child_down/3` removes when the BEAM monitor fires; analogous handlers cover cron, adoption, and any future runtime-tracked resource.
+- **`%AgentServer.State{}` (runtime) stays mutable by AgentServer GenServer callbacks** (`handle_call`/`handle_cast`/`handle_info`) and by the cascade callbacks invoked by `process_signal/2` (`maybe_track_child_started/2`, `handle_child_down/3`, etc.). This is bookkeeping the process owns and is invisible to user code. It is **not** a back-door for directives — directives never call `State.add_child/3`, `State.remove_child_by_pid/2`, or otherwise rewrite runtime fields directly.
 - **Middleware `ctx.agent` mutation is the documented exception** (per ADR 0018 §1). It exists for I/O staging (Persister thaw, future similar concerns) and is the *only* non-action channel for `agent.state` writes.
 
 ### 2. What changes in the directive surface
@@ -34,10 +34,17 @@ The mixing of channels makes "what does this signal do to the agent's slice valu
 |---|---|---|
 | `StateOp.SetPath` / `DeletePath` / `SetState` / `ReplaceState` / `DeleteKeys` | Reified state mutations passed in `[directive]` | **Deleted.** Cross-slice writes flow through the action's return shape (see §3). |
 | `ApplyMutation` (Pod) | Spawns/stops children + writes `agent.state.pod.mutation` | **Deleted.** Replaced by pure-side-effect `StartNode` / `StopNode` directives + signal-handler actions that own the slice updates (see [ADR 0017](0017-pod-mutations-are-signal-driven.md) §1, Phase 2). |
-| `SpawnManagedAgent` | Spawns child + inserts `%ChildInfo{}` into `state.children` | Stays. `state.children` is **runtime** state, not `agent.state` — the rule allows it. |
-| `StopChildRuntime` | Sends `:shutdown` + removes from `state.children` | Stays. Same reason. |
+| `SpawnManagedAgent` | (already strict — spawn + return unchanged state) | Stays. The natural `child.started` cascade tracks the child via `maybe_track_child_started/2`. |
+| `StopChildRuntime` | (already strict — cast stop + return unchanged state) | Stays. The DOWN monitor → `handle_child_down/3` cascade removes the child. |
+| `SpawnAgent` | Spawns child + monitors + inserts `%ChildInfo{}` into `state.children` | **Split** ([task 0015](../tasks/0015-strict-directives-no-runtime-state.md)): I/O directive spawns + `persist_relationship`; the natural `child.started` cascade does the tracking. The directive stops creating its own monitor and stops calling `State.add_child/3`. |
+| `AdoptChild` | Re-attaches parent + inserts `%ChildInfo{}` into `state.children` | **Split** ([task 0015](../tasks/0015-strict-directives-no-runtime-state.md)): I/O directive calls `adopt_parent`; the child's `notify_parent_of_startup` then casts `child.started` back, and `maybe_track_child_started/2` does the tracking. |
+| `Cron` | Registers cron job + inserts spec into `state.cron_specs` / `state.cron_jobs` | **Split** ([task 0015](../tasks/0015-strict-directives-no-runtime-state.md)): I/O directive registers the cron via `Jido.Scheduler` + persists spec; synthesizes a `jido.agent.cron.registered` signal; a new cascade callback (`maybe_track_cron_registered/2`) inserts into runtime maps. |
+| `CronCancel` | Removes cron spec from `state.cron_specs` / `state.cron_jobs` | **Split** ([task 0015](../tasks/0015-strict-directives-no-runtime-state.md)): I/O directive cancels the cron via `Jido.Scheduler` + removes the persisted spec; synthesizes `jido.agent.cron.cancelled`; cascade callback prunes the runtime maps. |
+| `RunInstruction` | Runs instruction + calls `cmd/2` which mutates `state.agent` (DOMAIN) | **Split** ([task 0015](../tasks/0015-strict-directives-no-runtime-state.md)): I/O directive runs the instruction and emits the result_action signal carrying the payload; the action handler — bound to the result signal in `signal_routes` — invokes `cmd/2` and returns the new slice. |
 | `Emit` / `Reply` / `Schedule` | Side effects (cast, dispatch, cron register) | Stays. Already pure side effects. |
 | `%Directive.Error{}` | Logs an error | Stays. Pure I/O. |
+| `Spawn` | Plain `DynamicSupervisor.start_child` | Stays. Already pure I/O. |
+| `Stop` | Returns `{:stop, reason, state}` | Stays. Terminates the GenServer; no field write. |
 
 ### 3. Multi-slice and cross-slice writes
 
@@ -66,9 +73,21 @@ Any directive that today combines "do work" with "mutate `agent.state`" splits i
 
 The Pod state machine in [ADR 0017](0017-pod-mutations-are-signal-driven.md) §1 is the canonical example: `StartNode` spawns and returns; the `jido.agent.child.started` signal triggers a handler action that updates `agent.state.pod.mutation` (specifically `awaiting`, `phase`, possibly emitting the next wave's directives or the terminal `pod.mutate.completed`).
 
-### 5. AgentServer is allowed to mutate its own runtime state freely
+### 5. AgentServer GenServer callbacks may mutate runtime state — directives may not
 
-`state.children` updates from `handle_call({:adopt_child, ...})` and `maybe_track_child_started/2` are fine. They never write to `agent.state`. This is the bright line: if the field lives on `%AgentServer.State{}` outside the `:agent` key, the runtime owns it. If it lives inside `state.agent.state`, only actions (and the documented middleware exception) write it.
+`state.children` updates from `handle_call({:adopt_child, ...})`, `state.cron_jobs` updates from `handle_info({:DOWN, ref, ...})`, and the cascade callbacks called by `process_signal/2` (`maybe_track_child_started/2`, `handle_child_down/3`, the planned `maybe_track_cron_registered/2`) are the *only* legal channels for writes to `%AgentServer.State{}` runtime fields. Each is a GenServer callback or a callback-driven cascade that runs as part of the same handler turn that received a triggering message.
+
+**Directives are not callbacks.** They run inside `execute_directives/3`, which is itself called from `process_signal/2`, but their contract is "do I/O and return; the runtime cascade observes the result and updates state." A directive that calls `State.add_child/3`, `State.remove_child_by_pid/2`, or otherwise touches a runtime field is collapsing two responsibilities into one body — exactly the compound shape this ADR exists to forbid.
+
+The bright line is uniform across domain and runtime state:
+
+| Channel | Writes to `agent.state` (domain) | Writes to `%AgentServer.State{}` (runtime) |
+|---|---|---|
+| Action return value | ✓ (sole channel) | ✗ |
+| Middleware `ctx.agent` staging | ✓ (documented I/O-staging exception) | ✗ |
+| GenServer callbacks (`handle_call`/`handle_cast`/`handle_info`) | ✗ | ✓ (sole channel for runtime writes) |
+| Signal-cascade callbacks invoked from `process_signal/2` (`maybe_track_child_started/2`, `handle_child_down/3`, …) | ✗ | ✓ |
+| **Directives** | ✗ | ✗ |
 
 ## Consequences
 
@@ -79,6 +98,8 @@ The Pod state machine in [ADR 0017](0017-pod-mutations-are-signal-driven.md) §1
 - **Action signature stays the same** — `{:ok, slice, [directive]} | {:error, reason}` from ADR 0018 — but the semantics of `[directive]` tighten: side effects only. The `slice` value position can be a `%SliceUpdate{slices: %{...}}` map for multi-slice writes.
 
 - **The compound `ApplyMutation`-style directives go away.** Pod mutation in particular: today's "ApplyMutation runs everything synchronously and updates the slice"becomes "StartNode/StopNode emit the work, child.started/exit handler-actions advance the slice." This is task 0010's whole point and it lands cleanly only after this rule is documented.
+
+- **Agent-side directive surface tightens to match the Pod surface.** `SpawnAgent`, `AdoptChild`, `Cron`, `CronCancel`, and `RunInstruction` all currently mutate runtime fields (or, in the case of `RunInstruction`, *domain* state) inside their exec bodies. [Task 0015](../tasks/0015-strict-directives-no-runtime-state.md) splits each into "pure I/O directive" + "cascade callback or routed action that observes the resulting signal." Two new cascade callbacks join `maybe_track_child_started/2` and `handle_child_down/3`: `maybe_track_cron_registered/2` and `maybe_track_cron_cancelled/2`. The `RunInstruction` split is the most invasive — the directive's `result_action` field is replaced by `result_signal_type`, and the dispatch happens through `signal_routes` instead of through `cmd/2` from inside the directive body.
 
 - **Bus plugins (`AutoSubscribeChild`, `AutoUnsubscribeChild`) re-pathed.** They use `StateOp.SetPath`/`DeletePath` to write `[:pod_bus, :subscriptions, tag]` while their action `path:` is unset. Re-path to `:pod_bus` and return the full slice with the desired key set or deleted.
 
@@ -96,7 +117,9 @@ The Pod state machine in [ADR 0017](0017-pod-mutations-are-signal-driven.md) §1
 
 **Allow directives to mutate `agent.state` but only via a typed "state-effect" subset.** Halfway between today and the strict rule: a `%StateEffect{path, value}` shape distinct from a `%SideEffect{...}` shape, both passed in the same directive list. Rejected: it's a renaming exercise. The reader still has to walk two lists. The actual ergonomic win comes from collapsing state mutation into one position (the action's return value).
 
-**Make the AgentServer mutate `state.children` only via actions.** A maximalist version of the rule: even runtime bookkeeping flows through pipeline turns. Rejected: turns `adopt_child` from a 5-line `handle_call` into a "cast a signal, wait for the handler to run" round-trip with no architectural payoff. Runtime state isn't domain state; it doesn't need the same invariants.
+**Make the AgentServer mutate `state.children` only via actions.** A maximalist version of the rule: even runtime bookkeeping flows through pipeline turns. Rejected: turns `adopt_child` from a 5-line `handle_call` into a "cast a signal, wait for the handler to run" round-trip with no architectural payoff. Runtime state isn't domain state; it doesn't need to flow through *actions*. It still needs to flow through the same kind of channel — a GenServer callback or signal cascade — so the bright line "directives don't mutate state" stays uniform.
+
+**Allow directives to mutate runtime state but not domain state.** The original ADR 0019 §2 wording carved out exactly this exemption: `SpawnManagedAgent` and `StopChildRuntime` could touch `state.children` because it's "runtime, not domain." Rejected on the second pass (this ADR's update): the carve-out leaks. Once one directive can mutate runtime state, the convention spreads — `SpawnAgent`, `AdoptChild`, `Cron`, `CronCancel`, and even `RunInstruction` (which crossed the line into *domain* state) accreted the same pattern. The principle "directives are pure I/O" is not enforceable while the type system says some directives may write some fields. Tighten the rule to "directives mutate no state of any kind"; the natural cascades already in `process_signal/2` are the canonical channel for runtime updates after I/O.
 
 **Allow multi-slice action returns by letting `path:` be a list.** `path: [:pod, :audit]` would let the action mutate both slices and return `%{pod: ..., audit: ...}`. Rejected: makes "what slice does this action own" fuzzy in exactly the case (`__resolve_slice_path__`) where the framework needs a single answer for slice scoping. The `%SliceUpdate{}` return shape keeps `path:` single-valued and makes secondary slices an explicit, named exception.
 
