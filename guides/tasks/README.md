@@ -57,7 +57,7 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 | [0009](0009-pod-mutate-cast-await-api.md) | `Pod.mutate` switches to `cast_and_await` + lifecycle signals; add `Pod.mutate_and_wait/3` | **green** | 0017 (Phase 1 — public API) |
 | [0012](0012-delete-state-op-directives.md) | Delete `Jido.Agent.StateOp.*`; re-path actions; multi-slice via `%SliceUpdate{}` return shape | **green** | 0019 |
 | [0013](0013-call-takes-selector-cast-and-await-retires.md) | `AgentServer.call/4` takes a selector; delete `cast_and_await/4` + state-returning `call/3`; extract `process_signal/2` helper | **green** | 0020 |
-| [0010](0010-pod-runtime-signal-driven-state-machine.md) | Pod runtime: signal-driven state machine; delete wave orchestration; drop synthetic `jido.pod.mutate.{completed,failed}` lifecycle signal; rewrite `Pod.mutate_and_wait/3` around natural child lifecycle signals; add `Pod.subscribe_mutation/3`; enforce ADR 0019 on Pod surface | **green** | 0017 (Phase 2 — runtime simplification) + 0019 (Pod surface enforcement) |
+| [0010](0010-pod-runtime-signal-driven-state-machine.md) | Pod runtime: signal-driven state machine; delete wave orchestration; drop synthetic `jido.pod.mutate.{completed,failed}` lifecycle signal; rewrite `Pod.mutate_and_wait/3` around natural child lifecycle signals; enforce ADR 0019 on Pod surface | **green** | 0017 (Phase 2 — runtime simplification) + 0019 (Pod surface enforcement) |
 
 ## Dependencies
 

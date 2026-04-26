@@ -108,10 +108,11 @@ The selector runs on every child lifecycle signal during the mutation, returning
 
 Subscribing **before** casting is what makes this race-free: the subscription is registered before the trigger signal enters the mailbox, so the first child event can't fire in a gap. The [ADR 0016](0016-agent-server-ack-and-subscribe.md) hook point — selector runs after the outermost middleware unwinds — guarantees that by the time the selector fires for any given child event, the routed handler has already committed its slice update.
 
-The framework wraps this pattern behind two helpers so callers don't need to know about child lifecycle signals or selector shape:
+The framework wraps this pattern behind one helper so callers don't need to know about child lifecycle signals or selector shape:
 
-- `Pod.mutate_and_wait/3` — cast a mutation and block until its terminal slice. Internally subscribes to `jido.agent.child.*`, casts the signal, and receives the terminal selector value.
-- `Pod.subscribe_mutation/3` — subscribe to a specific mutation's terminal transition by `mutation_id` (returned by the queued ack from `Pod.mutate/3`). Returns a subscription ref; fires once with `{:ok, report}` or `{:error, error}`.
+- `Pod.mutate_and_wait/3` — cast a mutation and block until its terminal slice. Internally subscribes to `jido.agent.child.*`, casts the signal, and receives the terminal selector value via a single subscription that handles both completion and failure.
+
+A separate `Pod.subscribe_mutation/3` helper was considered for the "subscribe-after-cast with a known mutation_id" pattern but rejected — by the time you have the id you've already cast, and the natural shape (subscribe atomically with the cast) is what `mutate_and_wait/3` does. Subscribe-after-cast races the lifecycle that already happened; if a real use case surfaces the helper can be added then.
 
 The "lifecycle signal" framing from earlier drafts of this ADR (a synthetic `jido.pod.mutate.completed/.failed` emission) is gone. It would have been a redundant secondary channel re-broadcasting state that's already correct in the slice — exactly the kind of duplicate-mutation-source [ADR 0019](0019-actions-mutate-state-directives-do-side-effects.md) discourages. Subscribers attach to the natural signals that drive state changes; the state itself is the contract.
 
@@ -141,7 +142,7 @@ When a second `pod.mutate` arrives while `mutation.status == :running`, the acti
 
 **No synthetic completion signal.** The earlier draft of this ADR had `MutateProgress` emit `jido.pod.mutate.{completed,failed}` at the tail; that's removed. The slice transition to terminal status is the contract — anyone who wants to observe mutations subscribes to the underlying child lifecycle signals (or uses the `Pod.subscribe_mutation/3` / `Pod.mutate_and_wait/3` helpers that wrap the pattern). Removing the synthetic signal eliminates a redundant secondary state-mutation channel and simplifies `MutateProgress.complete/3` to "return the terminal slice, no Emit."
 
-**`Pod.subscribe_mutation/3` joins the public Pod API.** Wraps "subscribe to `jido.agent.child.*` with a selector that matches `mutation.id` and reads `mutation.status`" so callers can wait for a specific mutation's terminal transition without knowing about child lifecycle internals. `Pod.mutate_and_wait/3` builds on this helper.
+**Single public helper: `Pod.mutate_and_wait/3`.** Earlier drafts also exposed `Pod.subscribe_mutation/3` for the subscribe-after-cast pattern. Removed: no in-tree user, weak use case (subscribing after the cast races the lifecycle that already happened). The pattern is internally captured inside `mutate_and_wait/3`'s implementation; it can be promoted to public API the day a real consumer surfaces.
 
 **ADR 0016's selector-on-state usage for waiting on long-running work is deprecated.** It still works for short-running pipelines (the trigger signal completes inside one mailbox turn), but for anything that crosses the mailbox boundary multiple times, the prescribed pattern is "subscribe to the natural signals that advance the state, with a selector reading the slice." This is now documented prescriptively.
 
