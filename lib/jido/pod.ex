@@ -187,16 +187,52 @@ defmodule Jido.Pod do
   defdelegate update_topology(agent, fun), to: TopologyState
 
   @doc """
-  Applies live topology mutations to a running pod and waits for runtime work to finish.
+  Submits a topology mutation to a running pod and returns immediately with
+  a queued ack — does **not** wait for the mutation to complete.
+
+  Returns `{:ok, %{mutation_id: id, queued: true}}` once the action's StateOp
+  directives have set the pod's mutation slice. The action's
+  `ensure_mutation_idle/1` rejection (`{:error, :mutation_in_progress}`) and
+  any planner validation errors (`{:error, %Jido.Error{}}`) are delivered
+  through the framework's tagged-tuple ack per
+  [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md) §3 — callers
+  do not encode failure branches in the default selector.
+
+  For the post-completion mutation report, use `mutate_and_wait/3`.
 
   `server` follows the same resolution rules as `Jido.AgentServer.state/1` and
   `Jido.AgentServer.call/3`. Pass the running pod pid, a locally registered
   server name, or another resolvable runtime server reference. Raw string ids
   still require explicit registry lookup before use.
+
+  ## Options
+
+  - `:await_timeout` (or `:timeout`) — ms to wait for the queued ack
+    (default `:timer.seconds(30)`).
+  - `:selector` — override the default queued-ack selector. Power users only;
+    most callers want the default `%{mutation_id: id, queued: true}` projection.
   """
   @spec mutate(AgentServer.server(), [Mutation.t() | term()], keyword()) ::
-          {:ok, mutation_report()} | {:error, mutation_report() | term()}
+          {:ok, %{mutation_id: String.t(), queued: true}} | {:error, term()}
   defdelegate mutate(server, ops, opts \\ []), to: Mutable
+
+  @doc """
+  Submits a topology mutation and waits for the lifecycle signal carrying
+  the completion report (or failure error).
+
+  Wraps `mutate/3` with the subscribe-then-cast-then-receive pattern from
+  [ADR 0017](../../guides/adr/0017-pod-mutations-are-signal-driven.md): subscribes
+  to `jido.pod.mutate.completed` and `jido.pod.mutate.failed` (filtered by
+  the trigger signal's id) **before** issuing the cast, so the lifecycle
+  signal can't fire in a gap.
+
+  Returns `{:ok, mutation_report()}` on success or `{:error, term()}` on
+  any failure path (action rejection, planner error, runtime materialization
+  failure, or `:timeout`).
+  """
+  @spec mutate_and_wait(AgentServer.server(), [Mutation.t() | term()], keyword()) ::
+          {:ok, mutation_report()} | {:error, term()}
+  defdelegate mutate_and_wait(server, ops, opts \\ []), to: Mutable
 
   @doc """
   Builds state ops and runtime effects for an in-turn pod mutation.

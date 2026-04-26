@@ -128,6 +128,33 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
       signal_routes: [{"expand", ExpandPodAction}]
   end
 
+  defmodule StuckMutationAction do
+    @moduledoc false
+
+    alias Jido.Agent.StateOp
+
+    use Jido.Action, name: "stuck_mutation", schema: []
+
+    def run(_signal, _slice, _opts, _ctx) do
+      {:ok, %{}, [
+        StateOp.set_path([:pod, :mutation], %{
+          id: "stuck-id",
+          status: :running,
+          report: nil,
+          error: nil
+        })
+      ]}
+    end
+  end
+
+  defmodule StuckMutationPod do
+    @moduledoc false
+    use Jido.Pod,
+      name: "pod_mutation_stuck_pod",
+      topology: %{},
+      signal_routes: [{"stuck", StuckMutationAction}]
+  end
+
   setup %{jido: jido} do
     storage_table = :"pod_mutation_storage_#{System.unique_integer([:positive])}"
 
@@ -193,7 +220,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     {:ok, pod_pid} = AgentServer.start_link(agent_module: EmptyMutablePod, id: pod_id, jido: jido)
 
     assert {:ok, report} =
-             Pod.mutate(
+             Pod.mutate_and_wait(
                pod_pid,
                [
                  Mutation.add_node(
@@ -223,7 +250,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     {:ok, pod_pid} = AgentServer.start_link(agent_module: EmptyMutablePod, id: pod_id, jido: jido)
 
     assert {:ok, report} =
-             Pod.mutate(
+             Pod.mutate_and_wait(
                pod_pid,
                [
                  Mutation.add_node(
@@ -252,7 +279,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     {:ok, pod_pid} = AgentServer.start_link(agent_module: EmptyMutablePod, id: pod_id, jido: jido)
 
     assert {:ok, report} =
-             Pod.mutate(
+             Pod.mutate_and_wait(
                pod_pid,
                [
                  Mutation.add_node("nested", %{
@@ -298,16 +325,16 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
       )
     ]
 
-    assert {:ok, _report} = Pod.mutate(pod_pid, add_ops)
+    assert {:ok, _report} = Pod.mutate_and_wait(pod_pid, add_ops)
     assert {:ok, planner_pid} = Pod.lookup_node(pod_pid, "planner")
     assert {:ok, reviewer_pid} = Pod.lookup_node(pod_pid, "reviewer")
 
-    assert {:ok, reviewer_report} = Pod.mutate(pod_pid, [Mutation.remove_node("reviewer")])
+    assert {:ok, reviewer_report} = Pod.mutate_and_wait(pod_pid, [Mutation.remove_node("reviewer")])
     assert reviewer_report.status == :completed
     eventually(fn -> not Process.alive?(reviewer_pid) end)
     assert {:error, :unknown_node} = Pod.lookup_node(pod_pid, "reviewer")
 
-    assert {:ok, subtree_report} = Pod.mutate(pod_pid, [Mutation.remove_node("planner")])
+    assert {:ok, subtree_report} = Pod.mutate_and_wait(pod_pid, [Mutation.remove_node("planner")])
     assert subtree_report.status == :completed
     eventually(fn -> not Process.alive?(planner_pid) end)
     refute_eventually(Process.alive?(reviewer_pid))
@@ -318,7 +345,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     {:ok, pod_pid} = AgentServer.start_link(agent_module: EmptyMutablePod, id: pod_id, jido: jido)
 
     assert {:ok, _report} =
-             Pod.mutate(
+             Pod.mutate_and_wait(
                pod_pid,
                [
                  Mutation.add_node("nested", %{
@@ -333,7 +360,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     assert {:ok, nested_pid} = Pod.lookup_node(pod_pid, "nested")
     assert {:ok, nested_planner_pid} = Pod.lookup_node(nested_pid, :planner)
 
-    assert {:ok, report} = Pod.mutate(pod_pid, [Mutation.remove_node("nested")])
+    assert {:ok, report} = Pod.mutate_and_wait(pod_pid, [Mutation.remove_node("nested")])
     assert report.status == :completed
 
     eventually(fn -> not Process.alive?(nested_pid) end)
@@ -348,7 +375,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     {:ok, pod_pid} = AgentServer.start_link(agent_module: EmptyMutablePod, id: pod_id, jido: jido)
 
     assert {:error, report} =
-             Pod.mutate(
+             Pod.mutate_and_wait(
                pod_pid,
                [
                  Mutation.add_node("bad_nested", %{
@@ -371,7 +398,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     end
 
     assert {:ok, follow_up_report} =
-             Pod.mutate(
+             Pod.mutate_and_wait(
                pod_pid,
                [
                  Mutation.add_node("reviewer", %{
@@ -409,5 +436,170 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     assert report.added == ["planner"]
     assert {:ok, planner_pid} = Pod.lookup_node(pod_pid, "planner")
     assert Process.alive?(planner_pid)
+  end
+
+  test "Pod.mutate returns the queued ack with mutation_id immediately", %{
+    pod_id: pod_id,
+    jido: jido
+  } do
+    {:ok, pod_pid} = AgentServer.start_link(agent_module: EmptyMutablePod, id: pod_id, jido: jido)
+
+    assert {:ok, %{mutation_id: id, queued: true}} =
+             Pod.mutate(
+               pod_pid,
+               [
+                 Mutation.add_node("planner", %{
+                   agent: PodWorker,
+                   manager: @planner_manager,
+                   activation: :eager,
+                   initial_state: %{role: "planner"}
+                 })
+               ]
+             )
+
+    assert is_binary(id)
+    assert byte_size(id) > 0
+
+    # Slice reflects the same mutation_id once execute_mutation_plan finishes.
+    {:ok, state} = AgentServer.state(pod_pid)
+    assert get_in(state.agent.state, [:pod, :mutation, :id]) == id
+  end
+
+  test "Pod.mutate while mutation slice is :running returns :mutation_in_progress via the framework error channel",
+       %{pod_id: pod_id, jido: jido} do
+    {:ok, pod_pid} =
+      AgentServer.start_link(agent_module: StuckMutationPod, id: pod_id, jido: jido)
+
+    # Force the mutation slice into :running without actually running anything.
+    # AgentServer.call returns once the directive is applied, so when control
+    # returns here the slice is in the stuck state.
+    assert {:ok, _agent} =
+             AgentServer.call(pod_pid, Signal.new!("stuck", %{}, source: "/test"))
+
+    {:ok, state} = AgentServer.state(pod_pid)
+    assert get_in(state.agent.state, [:pod, :mutation, :status]) == :running
+
+    result =
+      Pod.mutate(
+        pod_pid,
+        [
+          Mutation.add_node("planner", %{
+            agent: PodWorker,
+            manager: @planner_manager,
+            activation: :eager,
+            initial_state: %{role: "planner"}
+          })
+        ]
+      )
+
+    # Action error is wrapped via Jido.Error.from_term/1 per ADR 0018 §1; the
+    # default selector is never invoked on the error path per ADR 0018 §3.
+    # Had the selector run instead, we'd have seen `{:error, :mutation_not_set}`
+    # (because the slice id is "stuck-id" and the selector doesn't know that
+    # value) or a `{:ok, %{queued: true}}` ack — neither of which contains
+    # the substring "mutation_in_progress".
+    assert {:error, %Jido.Error.ExecutionError{} = error} = result
+    assert inspect(error.details) =~ "mutation_in_progress"
+  end
+
+  test "lifecycle signal jido.pod.mutate.completed reaches AgentServer.subscribe subscribers",
+       %{pod_id: pod_id, jido: jido} do
+    {:ok, pod_pid} = AgentServer.start_link(agent_module: EmptyMutablePod, id: pod_id, jido: jido)
+
+    # Subscribe BEFORE the cast — race-free per ADR 0017 §2 because subscribe/4
+    # is a synchronous GenServer.call and the lifecycle signal can't fire before
+    # the trigger signal's pipeline runs.
+    assert {:ok, sub_ref} =
+             AgentServer.subscribe(
+               pod_pid,
+               "jido.pod.mutate.completed",
+               fn %{agent: %{state: agent_state}} ->
+                 case get_in(agent_state, [:pod, :mutation]) do
+                   %{status: :completed, report: report} -> {:ok, report}
+                   _other -> :skip
+                 end
+               end,
+               once: true
+             )
+
+    assert {:ok, %{queued: true}} =
+             Pod.mutate(
+               pod_pid,
+               [
+                 Mutation.add_node("planner", %{
+                   agent: PodWorker,
+                   manager: @planner_manager,
+                   activation: :eager,
+                   initial_state: %{role: "planner"}
+                 })
+               ]
+             )
+
+    assert_receive {:jido_subscription, ^sub_ref, %{result: {:ok, report}}}, 5_000
+    assert report.status == :completed
+    assert report.added == ["planner"]
+  end
+
+  test "lifecycle signal jido.pod.mutate.failed reaches subscribers on materialization failure",
+       %{pod_id: pod_id, jido: jido} do
+    {:ok, pod_pid} = AgentServer.start_link(agent_module: EmptyMutablePod, id: pod_id, jido: jido)
+
+    assert {:ok, sub_ref} =
+             AgentServer.subscribe(
+               pod_pid,
+               "jido.pod.mutate.failed",
+               fn %{agent: %{state: agent_state}} ->
+                 case get_in(agent_state, [:pod, :mutation]) do
+                   %{status: :failed, error: error} -> {:error, error}
+                   _other -> :skip
+                 end
+               end,
+               once: true
+             )
+
+    # AlternateReviewPod has no pod_module wiring → materialization fails.
+    Pod.mutate(
+      pod_pid,
+      [
+        Mutation.add_node("bad_nested", %{
+          module: AlternateReviewPod,
+          manager: @nested_pod_manager,
+          kind: :pod,
+          activation: :eager
+        })
+      ]
+    )
+
+    assert_receive {:jido_subscription, ^sub_ref, %{result: {:error, error}}}, 5_000
+    assert error.status == :failed
+    assert Map.has_key?(error.failures, "bad_nested")
+  end
+
+  test "Pod.mutate_and_wait propagates the action error directly without waiting on a lifecycle signal",
+       %{pod_id: pod_id, jido: jido} do
+    {:ok, pod_pid} =
+      AgentServer.start_link(agent_module: StuckMutationPod, id: pod_id, jido: jido)
+
+    # Pre-stick the slice so the action error path returns immediately on the
+    # second mutation. mutate_and_wait gets {:error, _} from cast_and_await and
+    # unsubscribes both lifecycle subscriptions before returning.
+    assert {:ok, _agent} =
+             AgentServer.call(pod_pid, Signal.new!("stuck", %{}, source: "/test"))
+
+    result =
+      Pod.mutate_and_wait(
+        pod_pid,
+        [
+          Mutation.add_node("planner", %{
+            agent: PodWorker,
+            manager: @planner_manager,
+            activation: :eager,
+            initial_state: %{role: "planner"}
+          })
+        ]
+      )
+
+    assert {:error, %Jido.Error.ExecutionError{} = error} = result
+    assert inspect(error.details) =~ "mutation_in_progress"
   end
 end

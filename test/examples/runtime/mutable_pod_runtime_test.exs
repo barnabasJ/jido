@@ -5,7 +5,7 @@ defmodule JidoExampleTest.MutablePodRuntimeTest do
   This example focuses on the happy path:
 
   - start with an empty durable pod
-  - add eager and lazy members with `Jido.Pod.mutate/3`
+  - add eager and lazy members with `Jido.Pod.mutate_and_wait/3`
   - activate a lazy member with `Jido.Pod.ensure_node/3`
   - reacquire the pod later with the same durable topology
 
@@ -82,7 +82,7 @@ defmodule JidoExampleTest.MutablePodRuntimeTest do
     assert topology.nodes == %{}
 
     assert {:ok, report} =
-             Pod.mutate(
+             Pod.mutate_and_wait(
                pod_pid,
                [
                  Mutation.add_node("planner", %{

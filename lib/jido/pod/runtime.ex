@@ -174,6 +174,18 @@ defmodule Jido.Pod.Runtime do
     }
 
     agent_state = put_in(state.agent.state, [@pod_state_key, :mutation], mutation_state)
+
+    # Lifecycle signal cast back to self() — flows through the pod's own
+    # pipeline so AgentServer.subscribe/4 subscribers see it after the
+    # outermost middleware unwinds (per ADR 0016 hook point). The slice
+    # mutation field above is already in its terminal state by the time
+    # the lifecycle signal is processed.
+    emit_pod_lifecycle(self(), state, "jido.pod.mutate.#{mutation_status}", %{
+      mutation_id: plan.mutation_id,
+      report: report,
+      error: if(mutation_status == :failed, do: report, else: nil)
+    })
+
     {:ok, State.update_agent(state, %{state.agent | state: agent_state})}
   end
 

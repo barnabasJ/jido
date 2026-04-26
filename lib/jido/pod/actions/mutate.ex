@@ -10,9 +10,11 @@ defmodule Jido.Pod.Actions.Mutate do
       opts: [type: :map, default: %{}]
     ]
 
-  def run(%Jido.Signal{data: %{ops: ops, opts: opts}}, _slice, _opts, ctx) do
-    with {:ok, effects} <- Pod.mutation_effects(ctx.agent, ops, Map.to_list(opts || %{})) do
-      {:ok, %{mutation_queued: true}, effects}
+  def run(%Jido.Signal{id: signal_id, data: %{ops: ops, opts: opts}}, _slice, _opts, ctx) do
+    effect_opts = Keyword.put(Map.to_list(opts || %{}), :mutation_id, signal_id)
+
+    with {:ok, effects} <- Pod.mutation_effects(ctx.agent, ops, effect_opts) do
+      {:ok, %{mutation_queued: true, mutation_id: signal_id}, effects}
     end
   end
 end

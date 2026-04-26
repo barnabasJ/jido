@@ -11,8 +11,9 @@ defmodule Jido.Pod.Mutation.Planner do
   defguardp is_node_name(name) when is_atom(name) or is_binary(name)
   @typep node_name_list :: [Mutation.node_name()]
 
-  @spec plan(Topology.t(), [Mutation.t() | term()]) :: {:ok, Plan.t()} | {:error, term()}
-  def plan(%Topology{} = topology, ops) do
+  @spec plan(Topology.t(), [Mutation.t() | term()], keyword()) ::
+          {:ok, Plan.t()} | {:error, term()}
+  def plan(%Topology{} = topology, ops, opts \\ []) do
     with {:ok, normalized_ops} <- Mutation.normalize_ops(ops),
          :ok <- validate_batch_targets(normalized_ops),
          {:ok, final_topology} <- apply_ops(topology, normalized_ops),
@@ -20,7 +21,7 @@ defmodule Jido.Pod.Mutation.Planner do
          {:ok, added, removed} <- diff_nodes(topology, validated_final_topology),
          {:ok, start_requested, start_waves} <- build_start_plan(validated_final_topology, added),
          {:ok, stop_waves} <- stop_waves(topology, removed) do
-      mutation_id = Uniq.UUID.uuid7()
+      mutation_id = Keyword.get(opts, :mutation_id) || Uniq.UUID.uuid7()
 
       normalized_final_topology =
         TopologyState.normalize_updated_topology(topology, validated_final_topology)
