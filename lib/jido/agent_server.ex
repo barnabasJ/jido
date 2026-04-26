@@ -188,8 +188,11 @@ defmodule Jido.AgentServer do
   alias Jido.Agent.Directive
 
   alias Jido.AgentServer.Signal.{
+    ChildAdopted,
     ChildExit,
     ChildStarted,
+    CronDied,
+    CronRestarted,
     IdentityOrphaned,
     LifecycleReady,
     LifecycleStarting,
@@ -1288,10 +1291,31 @@ defmodule Jido.AgentServer do
           meta: meta
         })
 
+      # Synthesize a `jido.agent.child.adopted` after the state mutation
+      # so subscribers see the post-adoption state (per ADR 0021 §2: state
+      # changes need a subscribable channel). `notify_parent_of_startup`
+      # on the child side will also cast `jido.agent.child.started` back
+      # to us asynchronously — that signal observes the same registration
+      # but with a later, race-prone delivery; this synthesized signal is
+      # the synchronous, parent-side announcement.
+      signal =
+        ChildAdopted.new!(
+          %{
+            tag: tag,
+            pid: child_pid,
+            child_id: child_runtime.id,
+            child_module: child_runtime.agent_module,
+            child_partition: child_runtime.partition,
+            meta: meta || %{}
+          },
+          source: "/agent/#{state.id}"
+        )
+
       new_state =
         state
         |> State.add_child(tag, child_info)
         |> State.record_debug_event(:child_adopted, %{child_id: child_runtime.id, tag: tag})
+        |> then(&dispatch_synthetic_signal(signal, &1))
 
       {:reply, {:ok, child_pid}, new_state}
     else
@@ -1426,13 +1450,13 @@ defmodule Jido.AgentServer do
                   cron_expression: runtime_spec.cron_expression
                 })
 
-                # Cast a lifecycle signal back to self() so `subscribe/4`
-                # subscribers can react to the restart. The DOWN handler +
-                # restart timer don't go through `process_signal/2`, so
-                # without this emit there's no `fire_subscribers/2` on the
-                # state transition (per ADR 0021 §2: state changes need a
-                # subscribable signal channel — no polling).
-                _ = cast_cron_lifecycle_signal(new_state, logical_id, :restarted)
+                # Synthesize a lifecycle signal and run it through the
+                # agent's own pipeline so `subscribe/4` subscribers see
+                # the post-restart state (per ADR 0021 §2: state changes
+                # need a subscribable channel — no polling).
+                new_pid = Map.fetch!(new_state.cron_jobs, logical_id)
+                signal = cron_restarted_signal(new_state, logical_id, new_pid)
+                new_state = dispatch_synthetic_signal(signal, new_state)
 
                 {:noreply, new_state}
 
@@ -2293,6 +2317,12 @@ defmodule Jido.AgentServer do
     {tracked_pid, state} = untrack_cron_job(state, logical_id, cancel?: false)
 
     if tracked_pid == pid do
+      # Emit before scheduling restart so subscribers see the death
+      # announcement on a state where `cron_jobs[logical_id]` is already
+      # removed. A `jido.agent.cron.restarted` follows when the restart
+      # timer succeeds (only for abnormal exits).
+      state = dispatch_synthetic_signal(cron_died_signal(state, logical_id, pid, reason), state)
+
       if normal_cron_exit?(reason) do
         state
       else
@@ -2301,6 +2331,20 @@ defmodule Jido.AgentServer do
     else
       state
     end
+  end
+
+  defp cron_died_signal(%State{} = state, logical_id, pid, reason) do
+    CronDied.new!(
+      %{job_id: logical_id, pid: pid, reason: reason},
+      source: "/agent/#{state.id}/cron"
+    )
+  end
+
+  defp cron_restarted_signal(%State{} = state, logical_id, pid) do
+    CronRestarted.new!(
+      %{job_id: logical_id, pid: pid},
+      source: "/agent/#{state.id}/cron"
+    )
   end
 
   defp schedule_cron_restart(state, logical_id, reason) do
@@ -2330,21 +2374,6 @@ defmodule Jido.AgentServer do
       }
     else
       state
-    end
-  end
-
-  # Internal helper for cron lifecycle signals emitted from non-pipeline
-  # code paths (DOWN handler, restart timer). Cast back to self() so the
-  # signal flows through `process_signal/2` and `fire_subscribers/2`,
-  # giving `subscribe/4` consumers a way to react to state-only
-  # transitions per ADR 0021 §2.
-  defp cast_cron_lifecycle_signal(%State{} = state, logical_id, kind)
-       when kind in [:restarted] do
-    type = "jido.agent.cron.#{kind}"
-
-    case Signal.new(type, %{job_id: logical_id}, source: "/agent/#{state.id}/cron") do
-      {:ok, signal} -> Jido.AgentServer.cast(self(), signal)
-      {:error, _} -> :ok
     end
   end
 
@@ -2570,7 +2599,7 @@ defmodule Jido.AgentServer do
         source: "/agent/#{state.id}"
       )
 
-    emit_identity_signal(signal, state)
+    dispatch_synthetic_signal(signal, state)
   end
 
   defp emit_parent_died(%State{} = state, _former_parent, _reason), do: state
@@ -2582,12 +2611,23 @@ defmodule Jido.AgentServer do
         source: "/agent/#{state.id}"
       )
 
-    emit_identity_signal(signal, state)
+    dispatch_synthetic_signal(signal, state)
   end
 
   defp emit_identity_orphaned(%State{} = state, _former_parent, _reason), do: state
 
-  defp emit_identity_signal(signal, %State{} = state) do
+  # Synthesize a signal locally and run it through the agent's own
+  # `process_signal/2` pipeline so subscribers see it. Used by handlers
+  # that mutate state outside the signal pipeline (DOWN handlers,
+  # restart timers, adoption handlers) to give `subscribe/4` consumers
+  # a subscribable channel for state-only transitions per ADR 0021 §2.
+  #
+  # Returns the post-pipeline `%State{}`. The caller composes it into
+  # whatever return shape the surrounding handler needs (`{:noreply, _}`,
+  # `{:reply, _, _}`, etc.). `:stop` directives from middleware are
+  # collapsed to a state return — synthetic signals shouldn't terminate
+  # the agent on their own.
+  defp dispatch_synthetic_signal(signal, %State{} = state) do
     traced_signal =
       case Trace.put(signal, Trace.new_root()) do
         {:ok, s} -> s
