@@ -1,4 +1,4 @@
-# Task 0015 — Strict directives: no runtime-state mutation in `Jido.Agent.Directive.*` exec bodies
+# Task 0015 — Strict directives: no runtime-state mutation; tighten `DirectiveExec` contract
 
 - Implements: [ADR 0019](../adr/0019-actions-mutate-state-directives-do-side-effects.md) — the cross-cutting tightening of the agent-side directive surface so the principle "directives are pure I/O" holds uniformly across the codebase, not just on the Pod surface that [task 0010](0010-pod-runtime-signal-driven-state-machine.md) cleaned up.
 - Depends on: [task 0010](0010-pod-runtime-signal-driven-state-machine.md) (the Pod state machine is the worked example this task generalises; the synthesize-then-cascade pattern lands there first).
@@ -7,13 +7,33 @@
 
 ## Goal
 
-Make ADR 0019 §1's strict reading enforceable by grep across the whole `lib/jido/agent/directive*` surface:
+Make ADR 0019 §1's strict reading enforceable by the type system across the whole `lib/jido/agent/directive*` surface:
 
 > Directives are pure side effects. They mutate NO state — not domain (`agent.state`), not runtime (`state.children`, `state.cron_*`, monitors, subscriptions).
 
-After this task, every `defimpl Jido.AgentServer.DirectiveExec, for: ...` block returns `{:ok, state}` with `state` byte-equal to the input on the success path. The only legal channels for runtime-state mutation are AgentServer GenServer callbacks (`handle_call`/`handle_cast`/`handle_info`) and the cascade callbacks `process_signal/2` already invokes (`maybe_track_child_started/2`, `handle_child_down/3`, plus the new `maybe_track_cron_*` family this task introduces).
+Two halves to this task; **Step 0 lands first** so the rest is type-system-enforced.
 
-Five directive impls violate the strict rule today and are fixed here:
+### Step 0 — Tighten the `DirectiveExec` contract (per ADR 0019 §6)
+
+Drop state from the protocol's return shape:
+
+```elixir
+# Before
+@spec exec(directive, signal, state) :: {:ok, state} | {:stop, term(), state}
+
+# After
+@spec exec(directive, signal, state) :: :ok | {:error, term()} | {:stop, term()}
+```
+
+State stays as **input** (directives still read fields). It just stops being part of the return — there's no longer a slot for a mutated state to land in. Reviewers don't have to verify the returned state is byte-equal to the input; the compiler already did.
+
+`execute_directives/3` in `lib/jido/agent_server.ex` threads the original state through unchanged. `Stop` directive's `{:stop, reason, state}` collapses to `{:stop, reason}` — `execute_directives/3` adds state back when propagating to the GenServer.
+
+Every existing `defimpl Jido.AgentServer.DirectiveExec` block updates: `{:ok, state}` → `:ok`, `{:stop, reason, state}` → `{:stop, reason}`. About 13 impls across the agent and pod surfaces. Mechanical change.
+
+### Step 1 — Split the five violators
+
+After Step 0 the type system rejects state mutation, but the existing five violators don't compile (they return `{:ok, mutated_state}`). Fix them by splitting into "pure I/O directive" + "cascade callback (or routed action) that observes the resulting signal and updates state":
 
 1. **`Jido.Agent.Directive.SpawnAgent`** — adds the spawned child to `state.children` directly.
 2. **`Jido.Agent.Directive.AdoptChild`** — adds the adopted child to `state.children` directly.
@@ -21,11 +41,138 @@ Five directive impls violate the strict rule today and are fixed here:
 4. **`Jido.Agent.Directive.CronCancel`** — removes the spec / pid from the runtime maps directly.
 5. **`Jido.Agent.Directive.RunInstruction`** — runs an instruction and calls `state.agent_module.cmd/2`, mutating `state.agent` (DOMAIN). This is the worst offender.
 
-Each splits into "pure I/O directive" + "cascade callback (or routed action) that observes the resulting signal and updates state."
+The only legal channels for runtime-state mutation are AgentServer GenServer callbacks (`handle_call`/`handle_cast`/`handle_info`) and the cascade callbacks `process_signal/2` already invokes (`maybe_track_child_started/2`, `handle_child_down/3`, plus the new `maybe_track_cron_*` family this task introduces).
 
 ## Files to modify
 
-### `lib/jido/agent_server/directive_executors.ex`
+### Step 0 — Tighten the `DirectiveExec` contract
+
+#### `lib/jido/agent_server/directive_exec.ex`
+
+Update the protocol's `@spec` and supporting docs:
+
+```elixir
+defprotocol Jido.AgentServer.DirectiveExec do
+  @moduledoc """
+  ...
+
+  ## Return Values
+
+  - `:ok` — directive executed successfully, continue processing
+  - `{:error, reason}` — directive failed; logged and skipped (the rest of the
+    batch still runs)
+  - `{:stop, reason}` — **hard stop** the agent process
+
+  Directives never return state. State is passed in as the third arg
+  (for reading); mutating it is impossible by the type signature, per
+  ADR 0019 §6. Bookkeeping that logically follows the I/O happens via
+  the cascade callbacks `process_signal/2` invokes
+  (`maybe_track_child_started/2`, `handle_child_down/3`,
+  `maybe_track_cron_registered/2`, `maybe_track_cron_cancelled/2`).
+  ...
+  """
+
+  @spec exec(struct(), Jido.Signal.t(), Jido.AgentServer.State.t()) ::
+          :ok | {:error, term()} | {:stop, term()}
+  def exec(directive, input_signal, state)
+end
+```
+
+Rewrite the moduledoc's "async pattern" example. The current example
+sets a loading marker on agent state from inside the directive — that's
+exactly the violation this task forbids. Replace with the
+synthesize-then-action pattern: the directive spawns the task; the
+completion signal routes to an action that sets the loading marker via
+its return value.
+
+#### `lib/jido/agent_server.ex`
+
+Rewrite `execute_directives/3` to thread state through unchanged:
+
+```elixir
+@spec execute_directives([struct()], Signal.t(), State.t()) ::
+        {:ok, State.t()} | {:stop, term(), State.t()}
+def execute_directives([], _signal, state), do: {:ok, state}
+
+def execute_directives([directive | rest], signal, state) do
+  TraceContext.set_from_signal(signal)
+
+  result =
+    try do
+      exec_directive_with_telemetry(directive, signal, state)
+    after
+      TraceContext.clear()
+    end
+
+  case result do
+    :ok ->
+      execute_directives(rest, signal, state)
+
+    {:error, reason} ->
+      Logger.error("Directive #{inspect(directive.__struct__)} errored: #{inspect(reason)}")
+      execute_directives(rest, signal, state)
+
+    {:stop, reason} ->
+      warn_if_normal_stop(reason, directive, state)
+      {:stop, reason, state}
+  end
+end
+```
+
+Notice `execute_directives/3` adds `state` back when propagating
+`{:stop, reason, state}` to the GenServer — the directive's return is
+just `{:stop, reason}`, and `execute_directives/3` is the only caller
+that knows the current state.
+
+#### Update every `defimpl Jido.AgentServer.DirectiveExec` block
+
+Mechanical sweep across:
+
+- `lib/jido/agent_server/directive_executors.ex` — `Emit`, `Error`,
+  `RunInstruction`, `Spawn`, `Schedule`, `SpawnAgent`, `AdoptChild`,
+  `StopChild`, `Stop`, `SpawnManagedAgent`, `Reply`, `Any`
+- `lib/jido/agent/directive/cron.ex` — `Cron`
+- `lib/jido/agent/directive/cron_cancel.ex` — `CronCancel`
+- `lib/jido/pod/directive_exec.ex` — `StartNode`, `StopNode`
+
+Two transforms:
+
+| Before | After |
+|---|---|
+| `{:ok, state}` | `:ok` |
+| `{:stop, reason, state}` | `{:stop, reason}` |
+
+For directives that already return state unchanged
+(`Emit`, `Error`, `Spawn`, `Schedule`, `SpawnManagedAgent`, `Reply`,
+`StopChild`, `StartNode`, `StopNode`, the `Any` fallback), the change
+is just deleting `state` from the return.
+
+For `Stop`, the directive returns `{:stop, reason}` —
+`execute_directives/3` will rewrap to `{:stop, reason, state}` for the
+GenServer.
+
+For the violators (Step 1 work), the new shape is `:ok` after the
+state-mutation lines are removed. Step 0 lands first, the violators
+fail to compile (`{:ok, %{state | children: ...}}` is no longer a
+valid return), Step 1 fixes them.
+
+#### `lib/jido/agent_server/stop_child_runtime.ex`
+
+`StopChildRuntime.exec/4` is called from two places:
+- `defimpl ... for: Jido.Agent.Directive.StopChild` (directive context — must follow new contract)
+- `handle_call({:stop_child, tag, reason}, ...)` (GenServer callback — keeps old shape)
+
+Refactor: `StopChildRuntime.exec_io/4` does the I/O and returns
+`:ok | {:error, reason}`; the directive uses that. The
+`handle_call({:stop_child, ...})` callback wraps it for backward
+compatibility with the call's return.
+
+(Cleaner: `handle_call` is allowed to mutate state, so it can keep
+calling the existing `exec/4` shape if that helper retains state in
+the return. Just route the directive through a different entry
+point. Pick whichever is less invasive.)
+
+### Step 1 — Split the five violators
 
 #### `Jido.Agent.Directive.SpawnAgent` impl
 
@@ -403,25 +550,37 @@ For `RunInstruction`: assert the directive returns state unchanged and emits a s
 
 Existing tests that assert "after `SpawnAgent`, `state.children[tag]` is set immediately" need to be updated to wait via `await_child/3` or `await_state_value/3` — the natural cascade is now the only writer, and it runs asynchronously.
 
-### Regression greps
+### Regression checks
 
-Add to the spec's "verify before each commit" section:
+The primary check is the type system itself: after Step 0 lands, the
+`DirectiveExec.exec/3` return type is `:ok | {:error, term()} | {:stop, term()}`.
+A directive that tries to return `{:ok, mutated_state}` fails to compile.
+`mix compile --warnings-as-errors` is the regression check.
+
+Belt-and-suspenders grep (catches state mutations inside the directive
+body that don't escape via the return — e.g., a `State.add_child` call
+whose result is discarded):
 
 ```bash
-# Strict-rule violation regression check: no directive impl modifies runtime fields.
-grep -rn 'State.add_child\|State.remove_child\|State.update_agent\|cron_specs:\|cron_jobs:\|cron_monitors:\|cron_monitor_refs:\|cron_runtime_specs:' lib/jido/agent_server/directive_executors.ex lib/jido/agent/directive/*.ex
 # Should return zero hits inside `defimpl ... for: Jido.Agent.Directive.*` blocks.
+grep -rn 'State.add_child\|State.remove_child\|State.update_agent\|State\.\(add_\|remove_\|update_\)\|cron_specs:\|cron_jobs:\|cron_monitors:\|cron_monitor_refs:\|cron_runtime_specs:' \
+  lib/jido/agent_server/directive_executors.ex \
+  lib/jido/agent/directive/*.ex \
+  lib/jido/pod/directive_exec.ex
 ```
 
-This is the bright-line check. The grep will hit `agent_server.ex` (where mutations are legal) and `state.ex` (the field defs) — those are out of scope and the grep above filters by file.
+The grep will hit `agent_server.ex` (where mutations are legal — GenServer
+callbacks) and `state.ex` (the field defs) — those are out of scope; the
+grep filters by file.
 
 ## Acceptance
 
-- `mix compile --warnings-as-errors` clean.
+- `mix compile --warnings-as-errors` clean — this *is* the strict-rule check after Step 0. The protocol's `@spec` is `:ok | {:error, term()} | {:stop, term()}`, so any directive returning `{:ok, state}` (mutated or not) fails dialyzer / compile.
 - `mix test` — full suite passes.
-- `grep -rn 'State.add_child\|State.update_agent\|cron_specs:' lib/jido/agent_server/directive_executors.ex lib/jido/agent/directive/*.ex` returns zero hits.
-- Each fixed directive has a strict-separation test that captures pre/post state and asserts no field write.
-- The natural cascades populate state on the next mailbox turn (verified via `await_state_value/3`).
+- The Step-0 grep above (`State.add_child`, `cron_specs:`, etc.) returns zero hits inside directive impls. Belt-and-suspenders for state mutations whose result doesn't escape via return.
+- The `DirectiveExec` protocol's `@spec exec(...)` reads `:ok | {:error, term()} | {:stop, term()}` (no state in any return shape).
+- `Stop` directive returns `{:stop, reason}`; `execute_directives/3` rewraps to `{:stop, reason, state}` for the GenServer.
+- Each fixed directive (Step 1) has a strict-separation test that asserts the natural cascade fires (via `await_state_value/3`) — the type system already proves the directive itself didn't mutate.
 
 ## Out of scope
 

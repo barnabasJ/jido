@@ -89,6 +89,42 @@ The bright line is uniform across domain and runtime state:
 | Signal-cascade callbacks invoked from `process_signal/2` (`maybe_track_child_started/2`, `handle_child_down/3`, …) | ✗ | ✓ |
 | **Directives** | ✗ | ✗ |
 
+### 6. The DirectiveExec contract enforces the rule in the type system
+
+Today the `Jido.AgentServer.DirectiveExec` protocol returns state:
+
+```elixir
+@spec exec(directive, signal, state) :: {:ok, state} | {:stop, term(), state}
+```
+
+The shape lets a directive author absent-mindedly write `{:ok, %{state | children: ...}}` and have it compile. The principle "directives mutate no state" depends on convention + code review.
+
+After [task 0015](../tasks/0015-strict-directives-no-runtime-state.md), the contract drops state from the return:
+
+```elixir
+@spec exec(directive, signal, state) :: :ok | {:error, term()} | {:stop, term()}
+```
+
+State stays as **input** — directives still need to read fields (`state.id`, `state.children` to look up a pid for `Process.exit/2`, `state.agent.state` for instruction context, etc.). It just stops being part of the return shape. `execute_directives/3` threads the original state through unchanged:
+
+```elixir
+def execute_directives([], _signal, state), do: {:ok, state}
+
+def execute_directives([directive | rest], signal, state) do
+  case exec_directive_with_telemetry(directive, signal, state) do
+    :ok -> execute_directives(rest, signal, state)
+    {:error, reason} -> log_and_continue(reason, directive, state, rest, signal)
+    {:stop, reason} -> {:stop, reason, state}
+  end
+end
+```
+
+The `Stop` directive's contract collapses from `{:stop, reason, state}` to `{:stop, reason}` — the state was always the unmodified input anyway. `execute_directives/3` adds the state back when propagating to the GenServer.
+
+Now the principle is mechanical, not aspirational: there is no return slot for a mutated state, so a directive author cannot accidentally write one. Reviewers don't have to verify the returned state is byte-equal to the input; the type system already did.
+
+This is the same enforcement pattern as ADR 0021's "no full-state selectors" rule — codified as a grep regression — but moved up into the type system itself.
+
 ## Consequences
 
 - **Auditability.** Reading an action tells you every domain-state change it produces. Reading the side-effect directive list tells you every I/O it produces. The two lists don't overlap.
