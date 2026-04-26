@@ -1,7 +1,7 @@
 # Task 0010 — Pod runtime: signal-driven state machine; delete wave orchestration
 
-- Implements: [ADR 0017](../adr/0017-pod-mutations-are-signal-driven.md) Phase 2 — runtime simplification + state machine
-- Depends on: [task 0009](0009-pod-mutate-cast-await-api.md) (caller API already cast_and_await + lifecycle signal-shaped); transitively [task 0011](0011-tagged-tuple-return-shape.md)
+- Implements: [ADR 0017](../adr/0017-pod-mutations-are-signal-driven.md) Phase 2 — runtime simplification + state machine; enforces [ADR 0019](../adr/0019-actions-mutate-state-directives-do-side-effects.md) (strict separation) on the Pod surface
+- Depends on: [task 0009](0009-pod-mutate-cast-await-api.md) (caller API already cast_and_await + lifecycle signal-shaped); [task 0012](0012-delete-state-op-directives.md) (`StateOp` deleted, multi-slice via return shape, `Pod.Actions.Mutate` re-pathed to `:pod`); transitively [task 0011](0011-tagged-tuple-return-shape.md)
 - Blocks: nothing — this is the terminal task for ADR 0017
 - Leaves tree: **green**
 
@@ -9,11 +9,13 @@
 
 Replace `Jido.Pod.Runtime`'s wave-orchestrating machinery (~1100 lines) with a signal-driven state machine. Mutations decompose into a stream of fast directive applications coordinated by `jido.agent.child.started` and `jido.agent.child.exit` lifecycle signals. The pod's mailbox is never blocked by mutation work.
 
+This task ships under [ADR 0019](../adr/0019-actions-mutate-state-directives-do-side-effects.md): every new directive (`StartNode`, `StopNode`) is a **pure side effect** that touches `state.children` (runtime) but **never** `state.agent.state` (domain). All `agent.state.pod.mutation` field updates happen in **action handlers** wired to `signal_routes` for `jido.agent.child.started` / `jido.agent.child.exit`. Without that rule, the natural temptation is to fold the slice update into the directive body — re-collapsing into the compound `ApplyMutation` shape this task was meant to escape.
+
 After this task:
 
 - `Runtime` shrinks from ~1400 lines to ~250 — only read-side helpers (`nodes/1`, `lookup_node/2`, `build_node_snapshots/2`) and two new primitives (`start_node/2`, `stop_node/2`).
-- `ApplyMutation` directive is deleted. Its work is replaced by `StartNode` / `StopNode` directives plus state-machine handlers in the pod plugin.
-- `Pod.Actions.Mutate.run/4` plans the mutation and emits the first wave of `StartNode`/`StopNode` directives; the action returns immediately.
+- `ApplyMutation` directive is deleted. Its work splits cleanly per ADR 0019: `StartNode` / `StopNode` directives do the I/O; the `MutateProgress` action wired into `signal_routes` does the slice updates.
+- `Pod.Actions.Mutate.run/4` (already re-pathed to `:pod` by task 0012) plans the mutation, returns the new pod slice with `mutation: %{phase: ..., awaiting: ..., ...}` directly, and emits the first wave of `StartNode`/`StopNode` directives. No `StateOp` writes — the slice value carries it all.
 - The pod plugin gets two new signal_routes (`jido.agent.child.started`, `jido.agent.child.exit`) bound to a small action that advances the mutation state machine.
 
 The mutation slice gains two fields per [ADR 0017 §1](../adr/0017-pod-mutations-are-signal-driven.md):
@@ -212,15 +214,14 @@ end
 
 ### `lib/jido/pod/mutable.ex`
 
-`mutation_effects/3` (the function called by `Pod.Actions.Mutate.run/4`) returns the list of effects:
-
-- StateOps to set `mutation.id`, `:status` to `:running`, `:plan`, `:phase`, `:awaiting`
-- Plus the first wave's StartNode/StopNode directives
+`mutation_effects/3` (the function called by `Pod.Actions.Mutate.run/4` after task 0012's re-path to `path: :pod`) now returns **the new pod slice value plus side-effect directives** — no `StateOp` directives, per [ADR 0019](../adr/0019-actions-mutate-state-directives-do-side-effects.md).
 
 ```elixir
+@spec mutation_effects(Agent.t(), [Mutation.t() | term()], keyword()) ::
+        {:ok, pod_slice :: map(), [side_effect_directive]} | {:error, term()}
 def mutation_effects(%Agent{} = agent, ops, opts) do
-  with {:ok, pod_state} <- TopologyState.fetch_state(agent),
-       :ok <- ensure_mutation_idle(pod_state),
+  with {:ok, pod_slice} <- TopologyState.fetch_state(agent),
+       :ok <- ensure_mutation_idle(pod_slice),
        {:ok, topology} <- TopologyState.fetch_topology(agent),
        mutation_id <- Keyword.get(opts, :mutation_id) || generate_mutation_id(),
        {:ok, plan} <- Planner.plan(topology, ops, mutation_id: mutation_id) do
@@ -236,13 +237,13 @@ def mutation_effects(%Agent{} = agent, ops, opts) do
       error: nil
     }
 
-    {:ok,
-     [
-       StateOp.set_path([@pod_state_key, :topology], plan.final_topology),
-       StateOp.set_path([@pod_state_key, :topology_version], plan.final_topology.version),
-       StateOp.set_path([@pod_state_key, :mutation], mutation_state)
-       | wave_directives
-     ]}
+    new_pod_slice = %{pod_slice |
+      topology: plan.final_topology,
+      topology_version: plan.final_topology.version,
+      mutation: mutation_state
+    }
+
+    {:ok, new_pod_slice, wave_directives}
   end
 end
 
@@ -266,27 +267,37 @@ defp first_wave(%Plan{stop_waves: [], start_waves: []}) do
 end
 ```
 
+`Pod.Actions.Mutate.run/4` (re-pathed to `:pod` in task 0012) becomes:
+
+```elixir
+def run(%Jido.Signal{id: signal_id, data: %{ops: ops, opts: opts}}, _slice, _opts, ctx) do
+  effect_opts = Keyword.put(Map.to_list(opts || %{}), :mutation_id, signal_id)
+  Pod.mutation_effects(ctx.agent, ops, effect_opts)
+end
+```
+
+Three-tuple return passed straight through — `mutation_effects` already returns `{:ok, new_pod_slice, wave_directives}`.
+
 ### `lib/jido/pod/actions/mutate_progress.ex` *(new file)*
 
-The state-machine progression action. Routed from `jido.agent.child.started` and `jido.agent.child.exit`. Reads the current mutation slice, removes the named child from `awaiting.names`, and either:
+The state-machine progression action — declared with `path: :pod` (it owns the slice it mutates per [ADR 0019](../adr/0019-actions-mutate-state-directives-do-side-effects.md)). Routed from `jido.agent.child.started` and `jido.agent.child.exit`. Reads the current mutation slice, removes the named child from `awaiting.names`, and either:
 
-- Awaiting still non-empty → no-op (return current slice unchanged).
-- Awaiting empty → advance phase: emit the next wave's directives, OR finalize the mutation by emitting the lifecycle signal.
+- Awaiting still non-empty → return the slice with `awaiting` decremented.
+- Awaiting empty → advance phase: return the slice for the new phase + emit the next wave's `StartNode`/`StopNode` directives, OR finalize the mutation by returning the terminal slice + emit the lifecycle signal.
+
+This is the canonical example of ADR 0019: the directive (`StartNode`/`StopNode`) does I/O and produces a lifecycle signal; the action (`MutateProgress`) sees the signal and produces the slice change. No state mutation in the directive body, no I/O in the action body.
 
 ```elixir
 defmodule Jido.Pod.Actions.MutateProgress do
   @moduledoc false
 
-  alias Jido.Pod.Plugin
   alias Jido.Pod.Mutation.Plan
-  alias Jido.AgentServer.StateOp
   alias Jido.Agent.Directive.Emit
 
   use Jido.Action,
     name: "pod_mutate_progress",
+    path: :pod,
     schema: []
-
-  @pod_state_key Plugin.path()
 
   def run(%Jido.Signal{type: type, data: data}, slice, _opts, _ctx) do
     kind = lifecycle_kind(type)
@@ -298,7 +309,7 @@ defmodule Jido.Pod.Actions.MutateProgress do
         cond do
           MapSet.size(new_names) > 0 ->
             updated = put_in(mutation.awaiting.names, new_names)
-            {:ok, %{slice | mutation: updated}}
+            {:ok, %{slice | mutation: updated}, []}
 
           true ->
             advance(slice, mutation)
@@ -306,7 +317,7 @@ defmodule Jido.Pod.Actions.MutateProgress do
 
       _ ->
         # Not part of an in-flight mutation; ignore.
-        {:ok, slice}
+        {:ok, slice, []}
     end
   end
 
@@ -315,8 +326,8 @@ defmodule Jido.Pod.Actions.MutateProgress do
 
   defp advance(slice, %{phase: phase, plan: %Plan{} = plan} = mutation) do
     case next_phase(phase, plan) do
-      {next_phase, awaiting, directives} ->
-        updated = %{mutation | phase: next_phase, awaiting: awaiting}
+      {next_phase_value, awaiting, directives} ->
+        updated = %{mutation | phase: next_phase_value, awaiting: awaiting}
         {:ok, %{slice | mutation: updated}, directives}
 
       :done ->
@@ -411,17 +422,28 @@ mutation: Zoi.object(%{
 
 ### `lib/jido/pod/actions/mutate.ex`
 
-Already updated in [task 0009](0009-pod-mutate-cast-await-api.md) to use `signal.id` as mutation_id. No further changes — `mutation_effects/3` now returns StartNode/StopNode directives instead of the deleted ApplyMutation, but the action itself doesn't see directive types.
+Already updated in [task 0009](0009-pod-mutate-cast-await-api.md) to use `signal.id` as mutation_id, and re-pathed to `path: :pod` in task 0012. After this task, the action body becomes a one-liner forwarding to `Pod.mutation_effects/3`, which now returns `{:ok, new_pod_slice, [side_effect_directives]}` directly:
+
+```elixir
+def run(%Jido.Signal{id: signal_id, data: %{ops: ops, opts: opts}}, _slice, _opts, ctx) do
+  effect_opts = Keyword.put(Map.to_list(opts || %{}), :mutation_id, signal_id)
+  Pod.mutation_effects(ctx.agent, ops, effect_opts)
+end
+```
 
 ### Tests
 
 - `test/jido/pod/mutation_runtime_test.exs` — the most affected. After this task, mutations no longer block. Test invariants stay: "after `mutate_and_wait`, the requested nodes are running / removed / report has the expected shape." But timing-sensitive tests may need adjustment because the mutation is genuinely concurrent with caller observation. Use `Pod.mutate_and_wait` for the standard "do mutation, assert end state" pattern.
 
+- **Delete `StuckMutationAction` shim.** The fixture introduced in task 0009 forged the slice into `:running` to test concurrent rejection. After this task, two `Pod.mutate` casts in quick succession naturally produce one running and one rejected without state forging. The shim and the two tests that use it (`Pod.mutate while mutation slice is :running...` and `Pod.mutate_and_wait propagates the action error directly...`) rewrite as natural concurrent-cast scenarios — see the new `concurrent mutation rejected` test below. Note: this task also depends on task 0012 which deletes `StateOp`, so the shim's `StateOp.set_path` body wouldn't compile anyway — coordinated removal.
+
 - Add a test: **mailbox stays responsive during a long-stop mutation**. Spawn a pod with a child that has a slow `terminate/2` (e.g. `Process.sleep(2_000)` in the child). Cast a `pod.mutate` to remove that child. Immediately query `Pod.nodes/1`. The query must return *before* the stop completes (within milliseconds). This verifies the unblocked mailbox.
 
-- Add a test: **concurrent mutation rejected with `:mutation_in_progress`**. Cast mutation A (long-running). Immediately call `Pod.mutate(...)` for mutation B. Assert `{:error, :mutation_in_progress}`.
+- Add a test: **concurrent mutation rejected with `:mutation_in_progress`**. Cast mutation A with a slow-to-stop or slow-to-start node. While A is in-flight (slice is `:running`, awaiting child lifecycle signals), call `Pod.mutate(...)` for mutation B. Assert mutation B returns the wrapped `:mutation_in_progress` error via the framework error channel. This is the natural form of the test that task 0009 had to fake with `StuckMutationAction`.
 
 - Add a test: **mutation failure path emits `jido.pod.mutate.failed`**. Use a topology where one node fails to boot. `Pod.mutate_and_wait` returns `{:error, error_report}`.
+
+- Add a test: **strict-separation invariant — `StartNode` does not write `agent.state`**. Mock or instrument the `StartNode` directive's `exec/3` (or just inspect the `state.agent.state` before/after a single `StartNode` application via direct `DirectiveExec.exec/3` call). Assert no slice value changed. The state machine progression's slice update should only happen via the `MutateProgress` action handling the resulting `child.started` signal.
 
 ## Files to create
 
@@ -456,6 +478,8 @@ Already updated in [task 0009](0009-pod-mutate-cast-await-api.md) to use `signal
 - **`Pod.Directive.ApplyMutation` archeological removal.** If any tests reference the type, delete those references. If any external (out-of-tree) callers exist (none known), they break. Per the [tasks NO-LEGACY-ADAPTERS rule](README.md), no shim.
 
 ## Risks
+
+- **ADR 0019 enforcement is on the implementer, not the type system.** Nothing prevents `StartNode.exec/3` from sneakily updating `state.agent.state` while it's at it. The bright line is convention + code review. Add the strict-separation test (above) to make accidental violations break loudly. If a future directive author needs to update `agent.state`, the right answer is "emit a signal, write a handler action" — not "while we're in here, also update the slice."
 
 - **Adoption + lifecycle signal synthesis.** When `start_node` finds an existing pid (adoption), it must emit a synthetic `jido.agent.child.started` so the state machine progresses. Use `AgentServer.cast(self(), signal)` rather than calling the handler directly — keeps the path uniform with real spawns.
 

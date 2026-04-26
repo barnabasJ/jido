@@ -1,8 +1,8 @@
-# Implementation tasks — ADRs 0014–0018
+# Implementation tasks — ADRs 0014–0019
 
-This directory holds the per-commit task breakdown for implementing [ADR 0014](../adr/0014-slice-middleware-plugin.md), [ADR 0015](../adr/0015-agent-start-is-signal-driven.md), [ADR 0016](../adr/0016-agent-server-ack-and-subscribe.md), [ADR 0017](../adr/0017-pod-mutations-are-signal-driven.md), and [ADR 0018](../adr/0018-tagged-tuple-return-shape.md).
+This directory holds the per-commit task breakdown for implementing [ADR 0014](../adr/0014-slice-middleware-plugin.md), [ADR 0015](../adr/0015-agent-start-is-signal-driven.md), [ADR 0016](../adr/0016-agent-server-ack-and-subscribe.md), [ADR 0017](../adr/0017-pod-mutations-are-signal-driven.md), [ADR 0018](../adr/0018-tagged-tuple-return-shape.md), and [ADR 0019](../adr/0019-actions-mutate-state-directives-do-side-effects.md).
 
-The 0014–0016 work shipped as one PR (commits C0–C8). The 0017–0018 follow-on work lands in three sequential commits, each its own session: **task 0011 first** (the tagged-tuple return shape; ADR 0018), then **task 0009** (the Pod.mutate API refactor on top of 0011; ADR 0017 Phase 1), then **task 0010** (Pod runtime signal-driven state machine; ADR 0017 Phase 2). 0011 ships first because it simplifies every selector and Retry-style middleware downstream — running it after 0009 would mean shipping 0009 with explicit-failure-branch selectors that immediately get rewritten.
+The 0014–0016 work shipped as one PR (commits C0–C8). The 0017–0019 follow-on work lands in four sequential commits, each its own session: **task 0011 first** (the tagged-tuple return shape; ADR 0018), then **task 0009** (the Pod.mutate API refactor on top of 0011; ADR 0017 Phase 1), then **task 0012** (delete StateOp directives + multi-slice via return shape; ADR 0019), then **task 0010** (Pod runtime signal-driven state machine; ADR 0017 Phase 2 under ADR 0019's strict separation rule). 0011 ships first because it simplifies every selector and Retry-style middleware downstream. 0012 lands before 0010 because 0010's design assumes `StateOp` is gone and `Pod.Actions.Mutate` is already re-pathed to `:pod` — landing 0012 second-to-last keeps each task's diff coherent.
 
 > # NO LEGACY ADAPTERS — APPLIES TO EVERY TASK BELOW
 >
@@ -55,7 +55,8 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 | [0008](0008-tests-guides-adr-status.md) | Tests, guides, ReAct reference, ADR status flip | **green** | all three — housekeeping |
 | [0011](0011-tagged-tuple-return-shape.md) | Tagged-tuple return shape across action / cmd / middleware; ack reads chain outcome | **green** | 0018 |
 | [0009](0009-pod-mutate-cast-await-api.md) | `Pod.mutate` switches to `cast_and_await` + lifecycle signals; add `Pod.mutate_and_wait/3` | **green** | 0017 (Phase 1 — public API) |
-| [0010](0010-pod-runtime-signal-driven-state-machine.md) | Pod runtime: signal-driven state machine; delete wave orchestration | **green** | 0017 (Phase 2 — runtime simplification) |
+| [0012](0012-delete-state-op-directives.md) | Delete `Jido.Agent.StateOp.*`; re-path actions; multi-slice via `%SliceUpdate{}` return shape | **green** | 0019 |
+| [0010](0010-pod-runtime-signal-driven-state-machine.md) | Pod runtime: signal-driven state machine; delete wave orchestration; enforce ADR 0019 on Pod surface | **green** | 0017 (Phase 2 — runtime simplification) + 0019 (Pod surface enforcement) |
 
 ## Dependencies
 
@@ -70,7 +71,8 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 0007 ← 0008
 0008 ← 0011              (ADR 0018 — first of the follow-on chain)
 0011 ← 0009              (ADR 0017 Phase 1 — uses 0011's simplified selectors)
-0009 ← 0010              (ADR 0017 Phase 2 — runtime state machine)
+0009 ← 0012              (ADR 0019 — StateOp deletion, re-path Pod.Actions.Mutate)
+0012 ← 0010              (ADR 0017 Phase 2 — assumes StateOp gone, Mutate re-pathed)
 ```
 
 ## Related planning artifacts

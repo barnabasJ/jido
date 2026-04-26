@@ -1,10 +1,10 @@
 # 0017. Pod mutations are signal-driven; async actions ack-and-lifecycle-signal
 
 - Status: Accepted
-- Implementation: Partial — ADR + ETS lock deletion in this commit; Phase 1 (API) tracked by [task 0009](../tasks/0009-pod-mutate-cast-await-api.md); Phase 2 (runtime simplification) tracked by [task 0010](../tasks/0010-pod-runtime-signal-driven-state-machine.md). [Task 0011](../tasks/0011-tagged-tuple-return-shape.md) (ADR 0018) lands before 0009 so the cast_and_await selectors are written in their simplified single-clause form.
+- Implementation: Partial — ADR + ETS lock deletion in commit `fdd59cf`; Phase 1 (API) shipped by [task 0009](../tasks/0009-pod-mutate-cast-await-api.md) (commit `c8ca724`); Phase 2 (runtime simplification) tracked by [task 0010](../tasks/0010-pod-runtime-signal-driven-state-machine.md). [Task 0011](../tasks/0011-tagged-tuple-return-shape.md) (ADR 0018) landed before 0009 so the cast_and_await selectors are written in their simplified single-clause form. Phase 2 lands under the strict separation rule from [ADR 0019](0019-actions-mutate-state-directives-do-side-effects.md), which task 0010 enforces.
 - Date: 2026-04-25
-- Related commits: (this commit — ADR + ETS lock deletion only)
-- Related ADRs: [0014](0014-slice-middleware-plugin.md), [0015](0015-agent-start-is-signal-driven.md), [0016](0016-agent-server-ack-and-subscribe.md)
+- Related commits: (this commit — ADR + ETS lock deletion only), `c8ca724` (Phase 1 API)
+- Related ADRs: [0014](0014-slice-middleware-plugin.md), [0015](0015-agent-start-is-signal-driven.md), [0016](0016-agent-server-ack-and-subscribe.md), [0019](0019-actions-mutate-state-directives-do-side-effects.md)
 
 ## Context
 
@@ -53,14 +53,20 @@ mutation = %{
 }
 ```
 
-Two new directives:
+Two new directives — **pure side effects per [ADR 0019](0019-actions-mutate-state-directives-do-side-effects.md)**, neither writes to `agent.state`:
 
-- `Jido.Pod.Directive.StartNode{name: name}` — `DirectiveExec.exec/3` resolves the topology entry, calls `InstanceManager` to spawn the child. Returns `{:ok, state}` immediately. No wait — the resulting `jido.agent.child.started` signal advances the state machine.
-- `Jido.Pod.Directive.StopNode{name: name, reason: term}` — `DirectiveExec.exec/3` looks up the child pid in `state.children`, sends `:shutdown`. Returns `{:ok, state}` immediately. No wait — the resulting `jido.agent.child.exit` signal advances the state machine.
+- `Jido.Pod.Directive.StartNode{name: name}` — `DirectiveExec.exec/3` resolves the topology entry, calls `InstanceManager` to spawn the child. May update `state.children` (runtime bookkeeping per ADR 0019) but **never** `state.agent.state`. Returns `{:ok, state}` immediately. No wait — the resulting `jido.agent.child.started` signal advances the state machine.
+- `Jido.Pod.Directive.StopNode{name: name, reason: term}` — `DirectiveExec.exec/3` looks up the child pid in `state.children`, sends `:shutdown`. Returns `{:ok, state}` immediately. No `agent.state` write. The resulting `jido.agent.child.exit` signal advances the state machine.
 
-The pod plugin extends its `signal_routes` with two handlers that advance the state machine on `jido.agent.child.started` and `jido.agent.child.exit` (both already emitted by AgentServer per [ADR 0001](0001-children-boot-with-parent-ref.md) and `handle_child_down/3`). The handlers check whether the named node is in `mutation.awaiting.names`; if removing it empties the set, they advance the phase by emitting StartNode/StopNode directives for the next wave or — at the end — emitting the lifecycle signal.
+All `agent.state.pod.mutation` updates (`status`, `phase`, `awaiting`, `report`, `error`) come from **action handlers** wired to `signal_routes`. The pod plugin extends `signal_routes` with handlers for `jido.agent.child.started` and `jido.agent.child.exit` (both already emitted by AgentServer per [ADR 0001](0001-children-boot-with-parent-ref.md) and `handle_child_down/3`). Each handler is an *action* — it inspects the slice, removes the named node from `mutation.awaiting.names`, and either:
 
-`Jido.Pod.Directive.ApplyMutation` is deleted. `Jido.Pod.Runtime.execute_mutation_plan/3`, `execute_runtime_plan/6`, `execute_runtime_plan_locally/5`, `execute_stop_waves/8`, `await_process_exit`, and the wave-orchestration helpers are deleted along with it. What remains in `Runtime`: the read-side helpers (`nodes/1`, `lookup_node/2`, `build_node_snapshots/2`), `start_node/2` / `stop_node/2` primitives, and small directive bodies. `Runtime` shrinks from ~1400 lines to ~250.
+- Returns the updated slice with `awaiting` decremented (if more nodes pending in this wave), or
+- Returns the updated slice advanced to the next phase, plus the next wave's `StartNode`/`StopNode` directives, or
+- Returns the terminal slice (`status: :completed | :failed`) plus an `Emit` directive carrying the `jido.pod.mutate.{completed,failed}` lifecycle signal.
+
+`Pod.Actions.Mutate` declares `path: :pod` (it owns the slice it mutates per ADR 0019). Its return value sets `topology`, `topology_version`, and the initial `mutation` map directly — no `StateOp` directives needed. The first wave's directives ride alongside in the effect list.
+
+`Jido.Pod.Directive.ApplyMutation` is deleted along with `Jido.Pod.Runtime.execute_mutation_plan/3`, `execute_runtime_plan/6`, `execute_runtime_plan_locally/5`, `execute_stop_waves/8`, `await_process_exit`, and the wave-orchestration helpers. What remains in `Runtime`: the read-side helpers (`nodes/1`, `lookup_node/2`, `build_node_snapshots/2`), `start_node/2` / `stop_node/2` primitives, and small directive bodies. `Runtime` shrinks from ~1400 lines to ~250.
 
 ### 2. Async actions follow ack-and-lifecycle-signal
 
@@ -122,6 +128,8 @@ When a second `pod.mutate` arrives while `mutation.status == :running`, the acti
 **Crash recovery is now a first-class flow, not a fragile retry loop.** If a child fails to start (its boot crashes before `child.started` fires), the pod sees a `:DOWN` for that pid before any `child.started`. The mutation handler treats unrecognized `:DOWN`s during a start wave as a wave failure, marks the mutation `:failed`, and emits `jido.pod.mutate.failed` with details. The previous code raced against the start timeout.
 
 **ADR 0016's selector-on-state usage for waiting on long-running work is deprecated.** It still works for short-running pipelines (the trigger signal completes inside one mailbox turn), but for anything that crosses the mailbox boundary multiple times, the prescribed pattern is subscribe-to-lifecycle-signal. This is now documented prescriptively.
+
+**ADR 0019 (strict separation) becomes load-bearing.** Phase 2 only reads cleanly under the rule that actions own state mutation and directives are pure side effects. Without 0019, the natural temptation when implementing `StartNode` is to "while we're at it, also update `state.agent.state.pod.mutation.awaiting`" — and the design re-collapses into the compound-directive shape the refactor was meant to escape. Task 0010 enforces 0019 explicitly in the new directive bodies and signal-handler actions.
 
 ## Alternatives considered
 
