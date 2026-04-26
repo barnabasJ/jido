@@ -102,7 +102,7 @@ The shape lets a directive author absent-mindedly write `{:ok, %{state | childre
 After [task 0015](../tasks/0015-strict-directives-no-runtime-state.md), the contract drops state from the return:
 
 ```elixir
-@spec exec(directive, signal, state) :: :ok | {:error, term()} | {:stop, term()}
+@spec exec(directive, signal, state) :: :ok | {:stop, term()}
 ```
 
 State stays as **input** — directives still need to read fields (`state.id`, `state.children` to look up a pid for `Process.exit/2`, `state.agent.state` for instruction context, etc.). It just stops being part of the return shape. `execute_directives/3` threads the original state through unchanged:
@@ -113,13 +113,14 @@ def execute_directives([], _signal, state), do: {:ok, state}
 def execute_directives([directive | rest], signal, state) do
   case exec_directive_with_telemetry(directive, signal, state) do
     :ok -> execute_directives(rest, signal, state)
-    {:error, reason} -> log_and_continue(reason, directive, state, rest, signal)
     {:stop, reason} -> {:stop, reason, state}
   end
 end
 ```
 
 The `Stop` directive's contract collapses from `{:stop, reason, state}` to `{:stop, reason}` — the state was always the unmodified input anyway. `execute_directives/3` adds the state back when propagating to the GenServer.
+
+No `{:error, _}` return shape — directives that fail internally log and return `:ok` (matching the existing `Error` directive's swallow-and-continue convention). Anything that should abort the batch escalates via `{:stop, reason}`. There is no third "this directive failed but keep going" return because `execute_directives/3` never had to decide between log-and-continue vs. abort, and inventing one now would expand the surface area without a use case.
 
 Now the principle is mechanical, not aspirational: there is no return slot for a mutated state, so a directive author cannot accidentally write one. Reviewers don't have to verify the returned state is byte-equal to the input; the type system already did.
 

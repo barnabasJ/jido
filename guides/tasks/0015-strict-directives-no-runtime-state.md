@@ -22,12 +22,14 @@ Drop state from the protocol's return shape:
 @spec exec(directive, signal, state) :: {:ok, state} | {:stop, term(), state}
 
 # After
-@spec exec(directive, signal, state) :: :ok | {:error, term()} | {:stop, term()}
+@spec exec(directive, signal, state) :: :ok | {:stop, term()}
 ```
 
 State stays as **input** (directives still read fields). It just stops being part of the return — there's no longer a slot for a mutated state to land in. Reviewers don't have to verify the returned state is byte-equal to the input; the compiler already did.
 
 `execute_directives/3` in `lib/jido/agent_server.ex` threads the original state through unchanged. `Stop` directive's `{:stop, reason, state}` collapses to `{:stop, reason}` — `execute_directives/3` adds state back when propagating to the GenServer.
+
+No `{:error, _}` return: directives that fail internally log and return `:ok` (the existing `Error` directive's swallow-and-continue convention). Anything that should abort the batch escalates via `{:stop, reason}`. `execute_directives/3` doesn't need a third decision between log-and-continue vs. abort — there's no caller asking for it.
 
 Every existing `defimpl Jido.AgentServer.DirectiveExec` block updates: `{:ok, state}` → `:ok`, `{:stop, reason, state}` → `{:stop, reason}`. About 13 impls across the agent and pod surfaces. Mechanical change.
 
@@ -59,8 +61,6 @@ defprotocol Jido.AgentServer.DirectiveExec do
   ## Return Values
 
   - `:ok` — directive executed successfully, continue processing
-  - `{:error, reason}` — directive failed; logged and skipped (the rest of the
-    batch still runs)
   - `{:stop, reason}` — **hard stop** the agent process
 
   Directives never return state. State is passed in as the third arg
@@ -69,11 +69,18 @@ defprotocol Jido.AgentServer.DirectiveExec do
   the cascade callbacks `process_signal/2` invokes
   (`maybe_track_child_started/2`, `handle_child_down/3`,
   `maybe_track_cron_registered/2`, `maybe_track_cron_cancelled/2`).
+
+  Failure handling: directives that hit an internal error log it and
+  return `:ok` — same swallow-and-continue convention the `Error`
+  directive already follows. There's no `{:error, _}` return because
+  `execute_directives/3` would have nowhere meaningful to send it; if
+  the failure should abort the batch and stop the agent, escalate via
+  `{:stop, reason}`.
   ...
   """
 
   @spec exec(struct(), Jido.Signal.t(), Jido.AgentServer.State.t()) ::
-          :ok | {:error, term()} | {:stop, term()}
+          :ok | {:stop, term()}
   def exec(directive, input_signal, state)
 end
 ```
@@ -106,10 +113,6 @@ def execute_directives([directive | rest], signal, state) do
 
   case result do
     :ok ->
-      execute_directives(rest, signal, state)
-
-    {:error, reason} ->
-      Logger.error("Directive #{inspect(directive.__struct__)} errored: #{inspect(reason)}")
       execute_directives(rest, signal, state)
 
     {:stop, reason} ->
@@ -553,7 +556,7 @@ Existing tests that assert "after `SpawnAgent`, `state.children[tag]` is set imm
 ### Regression checks
 
 The primary check is the type system itself: after Step 0 lands, the
-`DirectiveExec.exec/3` return type is `:ok | {:error, term()} | {:stop, term()}`.
+`DirectiveExec.exec/3` return type is `:ok | {:stop, term()}`.
 A directive that tries to return `{:ok, mutated_state}` fails to compile.
 `mix compile --warnings-as-errors` is the regression check.
 
@@ -575,10 +578,10 @@ grep filters by file.
 
 ## Acceptance
 
-- `mix compile --warnings-as-errors` clean — this *is* the strict-rule check after Step 0. The protocol's `@spec` is `:ok | {:error, term()} | {:stop, term()}`, so any directive returning `{:ok, state}` (mutated or not) fails dialyzer / compile.
+- `mix compile --warnings-as-errors` clean — this *is* the strict-rule check after Step 0. The protocol's `@spec` is `:ok | {:stop, term()}`, so any directive returning `{:ok, state}` (mutated or not) fails dialyzer / compile.
 - `mix test` — full suite passes.
 - The Step-0 grep above (`State.add_child`, `cron_specs:`, etc.) returns zero hits inside directive impls. Belt-and-suspenders for state mutations whose result doesn't escape via return.
-- The `DirectiveExec` protocol's `@spec exec(...)` reads `:ok | {:error, term()} | {:stop, term()}` (no state in any return shape).
+- The `DirectiveExec` protocol's `@spec exec(...)` reads `:ok | {:stop, term()}` (no state in any return shape).
 - `Stop` directive returns `{:stop, reason}`; `execute_directives/3` rewraps to `{:stop, reason, state}` for the GenServer.
 - Each fixed directive (Step 1) has a strict-separation test that asserts the natural cascade fires (via `await_state_value/3`) — the type system already proves the directive itself didn't mutate.
 
