@@ -20,12 +20,12 @@ Starting and stopping individual agents is *cheap*. A start is `DynamicSuperviso
 
 ### 1. Pod mutations run as a signal-driven state machine
 
-Mutations stop being a single blocking function. They become a sequence of small directive applications coordinated by lifecycle signals:
+Mutations stop being a single blocking function. They become a sequence of small directive applications coordinated by **the natural child lifecycle signals the runtime already emits** — `jido.agent.child.started` and `jido.agent.child.exit`. There is no separate "mutation completion" signal: the slice is the source of truth, and the same handler that processes the last awaited child event flips `mutation.status` to its terminal value in the same return.
 
 ```
 pod.mutate (incoming)
    ↓
-   action: ensure_idle, plan, set mutation slice, kick off first wave
+   action: ensure_idle, plan, set mutation slice (status :running), kick off first wave
    action returns; mailbox FREE
    ↓
    first wave: emit StopNode/StartNode directives for each node (cheap, sync)
@@ -34,9 +34,12 @@ pod.mutate (incoming)
    ↓
 jido.agent.child.exit / jido.agent.child.started signals arrive (one per node)
    ↓
-   pod-plugin handler: decrement awaiting set; if empty, advance phase
+   MutateProgress action: classify event, update report.{started,stopped,failures},
+                          decrement awaiting; if empty, advance phase OR mark terminal
    ↓
-   advance: kick off next wave OR emit jido.pod.mutate.completed/failed
+   on terminal: action returns slice with status :completed / :failed and
+                full report — no further signal emission needed; the slice IS
+                the contract subscribers read.
 ```
 
 The pod's `mutation` slice grows two fields:
@@ -58,30 +61,32 @@ Two new directives — **pure side effects per [ADR 0019](0019-actions-mutate-st
 - `Jido.Pod.Directive.StartNode{name: name}` — `DirectiveExec.exec/3` resolves the topology entry, calls `InstanceManager` to spawn the child. May update `state.children` (runtime bookkeeping per ADR 0019) but **never** `state.agent.state`. Returns `{:ok, state}` immediately. No wait — the resulting `jido.agent.child.started` signal advances the state machine.
 - `Jido.Pod.Directive.StopNode{name: name, reason: term}` — `DirectiveExec.exec/3` looks up the child pid in `state.children`, sends `:shutdown`. Returns `{:ok, state}` immediately. No `agent.state` write. The resulting `jido.agent.child.exit` signal advances the state machine.
 
-All `agent.state.pod.mutation` updates (`status`, `phase`, `awaiting`, `report`, `error`) come from **action handlers** wired to `signal_routes`. The pod plugin extends `signal_routes` with handlers for `jido.agent.child.started` and `jido.agent.child.exit` (both already emitted by AgentServer per [ADR 0001](0001-children-boot-with-parent-ref.md) and `handle_child_down/3`). Each handler is an *action* — it inspects the slice, removes the named node from `mutation.awaiting.names`, and either:
+All `agent.state.pod.mutation` updates (`status`, `phase`, `awaiting`, `report`, `error`) come from **action handlers** wired to `signal_routes`. The pod plugin extends `signal_routes` with handlers for `jido.agent.child.started` and `jido.agent.child.exit` (both already emitted by AgentServer per [ADR 0001](0001-children-boot-with-parent-ref.md) and `handle_child_down/3`). Each handler is an *action* — it inspects the slice, classifies the event against the current phase, updates `report` incrementally from the signal payload, removes the named node from `mutation.awaiting.names`, and either:
 
 - Returns the updated slice with `awaiting` decremented (if more nodes pending in this wave), or
 - Returns the updated slice advanced to the next phase, plus the next wave's `StartNode`/`StopNode` directives, or
-- Returns the terminal slice (`status: :completed | :failed`) plus an `Emit` directive carrying the `jido.pod.mutate.{completed,failed}` lifecycle signal.
+- Returns the terminal slice (`status: :completed | :failed`, full `report`).
+
+There is **no separate `jido.pod.mutate.completed/.failed` lifecycle signal**. The slice is the contract — anyone who wants to observe completion attaches to the underlying `jido.agent.child.*` signals (with a selector that reads `pod.mutation.status` and matches by `mutation.id`). The framework wraps this pattern behind `Pod.subscribe_mutation/3` and `Pod.mutate_and_wait/3` so callers don't need to know about child lifecycle internals. Emitting a synthetic completion signal would re-broadcast information already in the slice; per [ADR 0019](0019-actions-mutate-state-directives-do-side-effects.md), the slice is the single source of truth and the signal would be a redundant secondary channel.
 
 `Pod.Actions.Mutate` declares `path: :pod` (it owns the slice it mutates per ADR 0019). Its return value sets `topology`, `topology_version`, and the initial `mutation` map directly — no `StateOp` directives needed. The first wave's directives ride alongside in the effect list.
 
 `Jido.Pod.Directive.ApplyMutation` is deleted along with `Jido.Pod.Runtime.execute_mutation_plan/3`, `execute_runtime_plan/6`, `execute_runtime_plan_locally/5`, `execute_stop_waves/8`, `await_process_exit`, and the wave-orchestration helpers. What remains in `Runtime`: the read-side helpers (`nodes/1`, `lookup_node/2`, `build_node_snapshots/2`), `start_node/2` / `stop_node/2` primitives, and small directive bodies. `Runtime` shrinks from ~1400 lines to ~250.
 
-### 2. Async actions follow ack-and-lifecycle-signal
+### 2. Async actions: ack-then-state-as-truth
 
 For any action whose work *cannot complete inside one mailbox turn*, the pattern is:
 
 **Action handler does only fast work**: validate, plan, set a `:running`-style marker in slice state, return directives to start the work. The action's return crosses back to the caller via `cast_and_await/4`'s ack, immediately, carrying a *correlation id* (typically `signal.id`).
 
-**Async work emits a lifecycle signal on completion**: `<domain>.<verb>.{completed,failed}` carrying the correlation id and the terminal payload (report/error). For pods this is `jido.pod.mutate.completed` / `jido.pod.mutate.failed`.
+**Async work updates the slice via subsequent action handlers**: the natural lifecycle signals the runtime emits (`jido.agent.child.started`/`.exit`, or whatever advances the domain's state machine) trigger handlers that mutate the slice. The terminal handler — the one that processes the last awaited event — flips the status field to its terminal value and finalizes the report **in the same return**. The slice is the single source of truth.
 
-**Callers who need to wait subscribe before they cast**:
+**Callers who need to wait subscribe to the signals that advance the state**:
 
 ```elixir
 mutation_id = signal.id  # known before the cast
 
-{:ok, sub_ref} = AgentServer.subscribe(server, "jido.pod.mutate.completed",
+{:ok, sub_ref} = AgentServer.subscribe(server, "jido.agent.child.*",
   fn s ->
     case get_in(s.agent.state, [:pod, :mutation]) do
       %{id: ^mutation_id, status: :completed, report: r} -> {:ok, r}
@@ -95,13 +100,20 @@ mutation_id = signal.id  # known before the cast
 {:ok, %{queued: true}} = AgentServer.cast_and_await(server, signal, &queued_selector/1)
 
 receive do
-  {:jido_subscription, ^sub_ref, %{value: result}} -> result
+  {:jido_subscription, ^sub_ref, %{result: result}} -> result
 end
 ```
 
-Subscribing **before** casting is what makes this race-free: the subscription is registered before the trigger signal enters the mailbox, so the lifecycle signal can't fire in a gap. The ADR 0016 hook point — selector runs after the outermost middleware unwinds — guarantees that by the time the lifecycle signal's selector fires, the slice has been updated.
+The selector runs on every child lifecycle signal during the mutation, returning `:skip` until the terminal handler flips `mutation.status`. With `once: true`, the subscription auto-unsubscribes on the first non-`:skip` return.
 
-A thin convenience wrapper, `Pod.mutate_and_wait/3`, encapsulates subscribe-then-cast-then-receive for callers that don't want to thread the dance manually.
+Subscribing **before** casting is what makes this race-free: the subscription is registered before the trigger signal enters the mailbox, so the first child event can't fire in a gap. The [ADR 0016](0016-agent-server-ack-and-subscribe.md) hook point — selector runs after the outermost middleware unwinds — guarantees that by the time the selector fires for any given child event, the routed handler has already committed its slice update.
+
+The framework wraps this pattern behind two helpers so callers don't need to know about child lifecycle signals or selector shape:
+
+- `Pod.mutate_and_wait/3` — cast a mutation and block until its terminal slice. Internally subscribes to `jido.agent.child.*`, casts the signal, and receives the terminal selector value.
+- `Pod.subscribe_mutation/3` — subscribe to a specific mutation's terminal transition by `mutation_id` (returned by the queued ack from `Pod.mutate/3`). Returns a subscription ref; fires once with `{:ok, report}` or `{:error, error}`.
+
+The "lifecycle signal" framing from earlier drafts of this ADR (a synthetic `jido.pod.mutate.completed/.failed` emission) is gone. It would have been a redundant secondary channel re-broadcasting state that's already correct in the slice — exactly the kind of duplicate-mutation-source [ADR 0019](0019-actions-mutate-state-directives-do-side-effects.md) discourages. Subscribers attach to the natural signals that drive state changes; the state itself is the contract.
 
 ### 3. Concurrent-mutate rejection rides the cast_and_await ack
 
@@ -121,13 +133,17 @@ When a second `pod.mutate` arrives while `mutation.status == :running`, the acti
 
 **Public API change.** `Pod.mutate/3` returns `{:ok, %{mutation_id: id, queued: true}}` immediately, not `{:ok, report}`. Callers that want the report use `Pod.mutate_and_wait/3`. Per the [tasks NO-LEGACY-ADAPTERS rule](../tasks/README.md), no compatibility shim. Tests assert on the new shape.
 
-**Tests rewritten, not deleted.** The mutation-runtime tests previously asserted on synchronous reports from `Pod.mutate/3`. They now assert via `Pod.mutate_and_wait/3` or by directly subscribing to the lifecycle signal. Functional coverage is preserved; the tests just match the new API.
+**Tests rewritten, not deleted.** The mutation-runtime tests previously asserted on synchronous reports from `Pod.mutate/3`. They now assert via `Pod.mutate_and_wait/3` or by directly subscribing to `jido.agent.child.*` with a selector reading `pod.mutation`. Functional coverage is preserved; the tests just match the new API.
 
-**Telemetry simplified.** `observe_pod_operation` wrapping was per-node and per-wave in the old code; now it lives at the mutation envelope (start, complete) and per-directive (StartNode start, StopNode start). Detailed wave timing is observable via the lifecycle signals themselves — emit timestamps on each phase transition.
+**Telemetry simplified.** `observe_pod_operation` wrapping was per-node and per-wave in the old code; now it lives at the mutation envelope (start, complete) and per-directive (StartNode start, StopNode start). Detailed wave timing is observable via the natural child lifecycle signals — handlers can record timestamps on each phase transition into `mutation.report`.
 
-**Crash recovery is now a first-class flow, not a fragile retry loop.** If a child fails to start (its boot crashes before `child.started` fires), the pod sees a `:DOWN` for that pid before any `child.started`. The mutation handler treats unrecognized `:DOWN`s during a start wave as a wave failure, marks the mutation `:failed`, and emits `jido.pod.mutate.failed` with details. The previous code raced against the start timeout.
+**Crash recovery is now a first-class flow, not a fragile retry loop.** If a child fails to start (its boot crashes before `child.started` fires), the pod sees a `:DOWN` for that pid translated to `child.exit`. The `MutateProgress` handler treats `child.exit` during a start wave as a wave failure, marks the mutation `:failed`, and finalizes the slice with the failure recorded in `report.failures`. The previous code raced against the start timeout.
 
-**ADR 0016's selector-on-state usage for waiting on long-running work is deprecated.** It still works for short-running pipelines (the trigger signal completes inside one mailbox turn), but for anything that crosses the mailbox boundary multiple times, the prescribed pattern is subscribe-to-lifecycle-signal. This is now documented prescriptively.
+**No synthetic completion signal.** The earlier draft of this ADR had `MutateProgress` emit `jido.pod.mutate.{completed,failed}` at the tail; that's removed. The slice transition to terminal status is the contract — anyone who wants to observe mutations subscribes to the underlying child lifecycle signals (or uses the `Pod.subscribe_mutation/3` / `Pod.mutate_and_wait/3` helpers that wrap the pattern). Removing the synthetic signal eliminates a redundant secondary state-mutation channel and simplifies `MutateProgress.complete/3` to "return the terminal slice, no Emit."
+
+**`Pod.subscribe_mutation/3` joins the public Pod API.** Wraps "subscribe to `jido.agent.child.*` with a selector that matches `mutation.id` and reads `mutation.status`" so callers can wait for a specific mutation's terminal transition without knowing about child lifecycle internals. `Pod.mutate_and_wait/3` builds on this helper.
+
+**ADR 0016's selector-on-state usage for waiting on long-running work is deprecated.** It still works for short-running pipelines (the trigger signal completes inside one mailbox turn), but for anything that crosses the mailbox boundary multiple times, the prescribed pattern is "subscribe to the natural signals that advance the state, with a selector reading the slice." This is now documented prescriptively.
 
 **ADR 0019 (strict separation) becomes load-bearing.** Phase 2 only reads cleanly under the rule that actions own state mutation and directives are pure side effects. Without 0019, the natural temptation when implementing `StartNode` is to "while we're at it, also update `state.agent.state.pod.mutation.awaiting`" — and the design re-collapses into the compound-directive shape the refactor was meant to escape. Task 0010 enforces 0019 explicitly in the new directive bodies and signal-handler actions.
 
@@ -139,8 +155,10 @@ When a second `pod.mutate` arrives while `mutation.status == :running`, the acti
 
 **Per-pod GenServer dedicated to mutation orchestration.** The agent's mailbox stays free; a sibling process owns the wave loop. Rejected: introduces a new process to coordinate, more failure modes, more state to keep in sync. The existing AgentServer with signal-driven state-machine logic does the same job with no new processes.
 
-**Keep `cast_and_await` selectors polling state for completion.** Don't introduce lifecycle signals; just keep the slice's `mutation.status` field and have callers `cast_and_await` with selectors that check it. Rejected: selectors run on every signal that crosses the agent's pipeline, not only when state changes — wasteful when 99% of signals don't touch the slice. Lifecycle signals + pattern-matched subscribe means the selector only fires on the relevant event. Aligns with the ADR's stated "Redux-style explicit subscribe" model.
+**Emit a synthetic `jido.pod.mutate.completed/.failed` lifecycle signal.** Earlier drafts of this ADR specified `MutateProgress.complete/3` would emit a synthetic completion signal that subscribers attach to. Rejected: the slice transition to terminal status already carries everything subscribers need; the synthetic signal would re-broadcast information that's already in the slice, creating a redundant secondary state-mutation channel that violates [ADR 0019](0019-actions-mutate-state-directives-do-side-effects.md)'s "state is the single source of truth" principle. Subscribers attach to the natural underlying child lifecycle signals; the framework wraps the pattern via `Pod.subscribe_mutation/3` so callers don't see the internals. The wider the surface of "synthetic notification signals," the harder it is to keep state authoritative.
 
-**Single-step mutations only (deprecate multi-node atomicity).** Skip the wave concept entirely; expose `Pod.start_node/2` and `Pod.stop_node/2` as the only public API; let users compose their own multi-node flows. Rejected: pod mutations as a transactional unit are the user-facing concept. The internal implementation now uses single-step primitives, but the *API* still provides the multi-node mutation as a coherent operation with its own success/failure signal. Two layers, one for power users, one for the common case.
+**Keep `cast_and_await` selectors polling state for completion.** Use `cast_and_await` exclusively, no `subscribe/4`, even for multi-mailbox-turn mutations. Rejected: `cast_and_await`'s selector fires once when the trigger signal's pipeline completes — that's mailbox-turn-1, when the mutation has barely started. The selector returns "queued" and the caller is on its own to poll afterward. `subscribe/4` with a state-reading selector is the right primitive: it fires repeatedly across the mutation's mailbox turns, returning `:skip` until the slice reaches terminal state.
 
-**New AgentServer primitive `cast_and_subscribe/6`** that atomically registers a subscription and casts a signal in one call. Rejected for now: subscribe-then-cast in user code already gives race-free semantics (the lifecycle signal can't fire before the trigger signal is processed, and the subscription registers in a synchronous `GenServer.call`). The convenience win is real but small; if a future caller pattern wants the atomic single call, it's an additive primitive that doesn't break anything in this ADR.
+**Single-step mutations only (deprecate multi-node atomicity).** Skip the wave concept entirely; expose `Pod.start_node/2` and `Pod.stop_node/2` as the only public API; let users compose their own multi-node flows. Rejected: pod mutations as a transactional unit are the user-facing concept. The internal implementation now uses single-step primitives, but the *API* still provides the multi-node mutation as a coherent operation with its own terminal slice. Two layers, one for power users, one for the common case.
+
+**New AgentServer primitive `cast_and_subscribe/6`** that atomically registers a subscription and casts a signal in one call. Rejected for now: subscribe-then-cast in user code already gives race-free semantics (the trigger signal hasn't started its pipeline before the subscription registers, since `subscribe/4` is a synchronous `GenServer.call`). The convenience win is real but small; if a future caller pattern wants the atomic single call, it's an additive primitive that doesn't break anything in this ADR.
