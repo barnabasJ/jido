@@ -1,4 +1,4 @@
-# Task 0013 — `AgentServer.call/4` takes a selector; `cast_and_await/4` retires; state-returning `call/3` deleted
+# Task 0013 — Cross-boundary reads take a selector; uniform `(server, ..., opts)` shape; `cast_and_await/4` retires
 
 - Implements: [ADR 0020](../adr/0020-synchronous-call-takes-a-selector.md)
 - Depends on: [task 0009](0009-pod-mutate-cast-await-api.md) (shipped) — `Pod.mutate*` already use `cast_and_await/4` so this task is the migration off it.
@@ -7,18 +7,28 @@
 
 ## Goal
 
-Replace `AgentServer.cast_and_await/4` and the state-returning `AgentServer.call/3` with a unified `AgentServer.call/4` that always takes a selector. Delete the ack-table machinery (`pending_acks`, `register_ack` / `cancel_ack` handlers, `drop_dead_pending_ack/2`, `fire_ack_for_signal/3`). Extract the signal-pipeline logic into a `process_signal/2` helper callable from both `handle_cast({:signal, ...})` and the new `handle_call({:signal_with_selector, ...})`.
+Apply the [ADR 0020](../adr/0020-synchronous-call-takes-a-selector.md) principle across the `AgentServer` surface: **every cross-boundary read takes a selector; every primitive takes opts**.
 
-Per [ADR 0020](../adr/0020-synchronous-call-takes-a-selector.md): synchronous interaction with an agent always carries a caller-provided selector. The boundary-shaping is the caller's choice; the server runs the projection and replies with its result.
+Concretely:
+
+- Replace `cast_and_await/4` and the state-returning `call/3` with a unified `call/4` that always takes a selector.
+- Replace state-leaking `state/1` with `state/3` that takes a selector — pure read, no signal pipeline.
+- Add opts to `cast/2` (becomes `cast/3`).
+- Standardize `await_ready`'s timeout into opts (becomes `await_ready/2` with opts keyword).
+- Delete the ack-table machinery (`pending_acks`, `register_ack` / `cancel_ack` handlers, `drop_dead_pending_ack/2`, `fire_ack_for_signal/3`).
+- Extract the signal-pipeline logic into a `process_signal/2` helper callable from `handle_cast({:signal, ...})` and the new `handle_call({:signal_with_selector, ...})`.
 
 After this task `AgentServer`'s public surface is:
 
-| | Synchronous? | Selector? | Returns |
-|---|---|---|---|
-| `cast/2` | no | no | `:ok` |
-| `call/4` | yes | required | `{:ok, value}` / `{:error, reason}` from selector or framework error |
-| `subscribe/4` | no (ambient) | required | dispatched per-event |
-| `state/1` | yes | no — debug only | `{:ok, %State{}}` (kept per ADR 0006 for liveness/bootstrap) |
+| | Synchronous? | Selector? | Opts? | Returns |
+|---|---|---|---|---|
+| `cast/3` | no | no (no answer) | yes | `:ok` |
+| `call/4` | yes (signal pipeline) | required | yes | `{:ok, value}` / `{:error, reason}` from selector |
+| `subscribe/4` | no (ambient) | required | yes | dispatched per-event via selector |
+| `state/3` | yes (no signal pipeline) | required | yes | `{:ok, value}` / `{:error, reason}` from selector |
+| `unsubscribe/2` | yes (admin) | n/a | n/a | `:ok` |
+| `await_ready/2` | yes (waits) | n/a (no data) | yes | `:ok` / `{:error, _}` |
+| `await_child/3` | yes (waits) | n/a (returns one pid) | yes | `{:ok, pid}` / `{:error, _}` |
 
 ## Files to modify
 
@@ -84,11 +94,71 @@ def handle_cast({:signal, signal}, state) do
 end
 ```
 
+**Add `state/3` (replacing `state/1`):**
+
+```elixir
+@spec state(server(), call_selector(), keyword()) :: {:ok, term()} | {:error, term()}
+def state(server, selector, opts \\ []) when is_function(selector, 1) do
+  timeout = Keyword.get(opts, :timeout, Defaults.agent_server_call_timeout_ms())
+  with {:ok, pid} <- resolve_server(server) do
+    GenServer.call(pid, {:read_state_with_selector, selector}, timeout)
+  end
+end
+```
+
+**Add the matching read-only handler:**
+
+```elixir
+def handle_call({:read_state_with_selector, selector}, _from, state)
+    when is_function(selector, 1) do
+  # Pure read — no signal pipeline runs. Selector projects %State{} to whatever
+  # the caller asked for. Wrap in try/rescue so a raising selector doesn't
+  # crash the agent.
+  reply =
+    try do
+      selector.(state)
+    rescue
+      exception -> {:error, {:selector_raised, exception, __STACKTRACE__}}
+    end
+
+  {:reply, reply, state}
+end
+```
+
+**Add `cast/3` (replacing `cast/2`):**
+
+```elixir
+@spec cast(server(), Signal.t(), keyword()) :: :ok | {:error, term()}
+def cast(server, %Signal{} = signal, opts \\ []) do
+  with {:ok, pid} <- resolve_server(server) do
+    # opts currently unused but reserved for dispatch overrides, telemetry tags, etc.
+    _ = opts
+    GenServer.cast(pid, {:signal, signal})
+  end
+end
+```
+
+The opts arg is reserved for future use — adding it now means callers don't break when knobs land later. Today it's unused.
+
+**Standardize `await_ready` into opts shape:**
+
+```elixir
+@spec await_ready(server(), keyword()) :: :ok | {:error, term()}
+def await_ready(server, opts \\ []) do
+  timeout = Keyword.get(opts, :timeout, Defaults.agent_server_await_timeout_ms())
+  # ... existing wait logic ...
+end
+```
+
+`await_ready(server, timeout)` callsites become `await_ready(server, timeout: timeout)` (or just `await_ready(server)` for the default).
+
 **Delete:**
 
 - `cast_and_await/4` ([agent_server.ex:411-446](../../lib/jido/agent_server.ex)) — caller side
 - `call/3` ([agent_server.ex:319-324](../../lib/jido/agent_server.ex)) — state-returning version
+- `state/1` ([agent_server.ex:363-368](../../lib/jido/agent_server.ex)) — full-state read
 - `handle_call({:register_ack, ...}, ...)` ([agent_server.ex:1175-1191](../../lib/jido/agent_server.ex))
+- `handle_call(:get_state, ...)` (the existing state/1 handler)
 - `handle_cast({:cancel_ack, ...}, ...)` (if present)
 - `drop_dead_pending_ack/2` and its `:DOWN` handler branch
 - `fire_ack_for_signal/3` ([agent_server.ex:1848-1865](../../lib/jido/agent_server.ex))
@@ -105,7 +175,9 @@ end
 
 **Delete the `pending_acks` field** (currently around line 98 per the comment "Map of signal id => %{caller_pid, ref, monitor_ref, selector} for cast_and_await"). Remove from struct definition, default value, and any `%State{pending_acks: ...}` constructions in tests.
 
-### `lib/jido/pod/mutable.ex`
+### `lib/jido/pod/mutable.ex` (also `state/1` callsite)
+
+**Migrate `state/1` callsite** at line 30 (or wherever `AgentServer.state(server)` appears) — `mutate/3`'s previous shape called `state/1` to fetch the agent before doing the cast. Under the new design, `Pod.mutation_effects/3` is called inside the action with `ctx.agent`, so the external `state/1` call may already be gone in the current `mutate/3` (per task 0009). Audit. Any remaining callsites that pull state for inspection rewrite as targeted selectors.
 
 **Migrate `mutate/3`** from `cast_and_await/4` to `call/4`:
 
@@ -184,6 +256,71 @@ def call(pool, signal, selector, opts \\ []) do
 end
 ```
 
+### Pod helpers built on `state/3`
+
+`Pod.fetch_state/1`, `Pod.fetch_topology/1`, `Pod.nodes/1`, `Pod.lookup_node/2` and similar read helpers — they currently call `AgentServer.state(server)` (or its successors) and pull specific fields from the full struct. Under the new design they wrap `AgentServer.state/3` with a baked-in selector:
+
+```elixir
+# Pod.fetch_state/1
+def fetch_state(server) do
+  AgentServer.state(server, fn s ->
+    case Map.get(s.agent.state, :pod) do
+      nil -> {:error, :no_pod_slice}
+      slice -> {:ok, slice}
+    end
+  end)
+end
+
+# Pod.fetch_topology/1
+def fetch_topology(server) do
+  AgentServer.state(server, fn s ->
+    {:ok, get_in(s.agent.state, [:pod, :topology])}
+  end)
+end
+```
+
+Domain helpers absorb the selector boilerplate; callers use the typed helper. The framework primitive enforces the discipline; the domain helper is the ergonomic wrapper.
+
+Audit `lib/jido/pod/topology_state.ex` (the `TopologyState.fetch_state/1` etc. functions) for similar shape. Migrate.
+
+### `state/1` callsite audit
+
+Every `AgentServer.state(pid)` callsite in `lib/` and `test/` migrates to `state/3` with a selector. The selector returns whatever the post-call code was reading from the struct. Mechanical recipe:
+
+```elixir
+# Before
+{:ok, state} = AgentServer.state(pid)
+counter = state.agent.state.counter
+agent_id = state.id
+
+# After (single read)
+{:ok, %{counter: counter, agent_id: agent_id}} =
+  AgentServer.state(pid, fn s ->
+    {:ok, %{counter: s.agent.state.counter, agent_id: s.id}}
+  end)
+```
+
+Tests that exercised the full struct for general inspection: pick the fields actually asserted and shape the selector accordingly. Don't reach for `fn s -> {:ok, s} end` — verbose enough to make you think, but that's the point.
+
+### `cast/2` → `cast/3`
+
+Caller-side migration is mechanical: the new arity defaults `opts` to `[]`, so existing `AgentServer.cast(pid, signal)` keeps working. The signature change is visible in `@spec`, dialyzer output, and docs.
+
+Internal callsites in `lib/` audit and verify they pass through the right opts (e.g. dispatch overrides — currently none, but the slot is reserved).
+
+### `await_ready/2`
+
+```elixir
+# Before
+:ok = AgentServer.await_ready(pid, 5_000)
+
+# After
+:ok = AgentServer.await_ready(pid, timeout: 5_000)
+:ok = AgentServer.await_ready(pid)  # uses default timeout
+```
+
+Existing callsites with positional timeout migrate to keyword form. There's no functional change.
+
 ### `lib/jido/signal/call.ex`
 
 Update the comparison at [call.ex:35](../../lib/jido/signal/call.ex):
@@ -238,8 +375,13 @@ None (all changes are in-place).
 - `mix test` — full suite passes.
 - `grep -rn "cast_and_await" lib/ test/` returns no hits (other than this task doc + ADR 0020 / commit messages).
 - `grep -rn "AgentServer.call(" lib/ test/` shows only `call/4` callsites (3-arity gone).
+- `grep -rn "AgentServer.state(" lib/ test/` shows only `state/3` callsites (1-arity gone). No callsite returns `%AgentServer.State{}` to a caller.
 - `state.pending_acks` field is gone from `Jido.AgentServer.State`.
-- `pod_pid |> AgentServer.call(signal, selector)` is the canonical synchronous-with-answer pattern; nothing returns `{:ok, %Agent{}}` from the framework anymore.
+- Nothing in the framework returns `{:ok, %Agent{}}` or `{:ok, %AgentServer.State{}}` to a cross-process caller. Search by grepping for those return shapes in lib/.
+- `await_ready/2` accepts `[timeout: ms]` opts; callsites use keyword form.
+- `cast/3` is the canonical fire-and-forget; `cast/2` callsites still work via default opts but no in-tree code uses the 2-arity form.
+- `pod_pid |> AgentServer.call(signal, selector)` is the canonical synchronous-with-answer pattern.
+- `pod_pid |> AgentServer.state(selector)` is the canonical synchronous-without-pipeline pattern.
 
 ## Out of scope
 
@@ -252,6 +394,10 @@ None (all changes are in-place).
 - **Migration of `Pod.mutate_and_wait/3` to subscribe to natural child lifecycle signals.** That's [task 0010](0010-pod-runtime-signal-driven-state-machine.md). This task only changes the queued-ack primitive (cast_and_await → call); the subscription pattern stays as-is from task 0009 until 0010 lands.
 
 ## Risks
+
+- **Selector wrapping in `state/3`.** Unlike `call/4` where the selector runs after the chain (with try/rescue around the chain itself catching most failures), `state/3`'s `handle_call` is a thin direct invocation. A raising selector would crash the agent. Wrap the selector call in `try/rescue` and reply `{:error, {:selector_raised, exception, stacktrace}}` on rescue. Same for `call/4`'s post-chain selector evaluation.
+
+- **Breadth of `state/1` callsites.** Bigger migration surface than `cast_and_await/4`. Audit reveals callsites in `lib/jido/pod/*`, `lib/jido/agent/worker_pool.ex`, and across `test/`. Recommended: migrate `Pod.*` helpers first (each becomes a thin `state/3` wrapper with a baked-in selector), verify pod tests pass, then sweep the rest.
 
 - **`process_signal/2` extraction.** The existing `handle_cast({:signal, ...})` body has accumulated logic — middleware chain composition, directive application, fire_post_signal_hooks, error reshaping. Extracting cleanly without changing semantics is the trickiest part of this task. Recommended: extract first as a pure refactor (still using `cast_and_await/4`), verify tests stay green, *then* delete the ack-table code and add the new `call/4` handler.
 
