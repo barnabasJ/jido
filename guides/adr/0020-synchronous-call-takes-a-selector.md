@@ -4,6 +4,7 @@
 - Implementation: Pending — tracked by [task 0013](../tasks/0013-call-takes-selector-cast-and-await-retires.md).
 - Date: 2026-04-26
 - Supersedes: [ADR 0016 §1 `cast_and_await/4`](0016-agent-server-ack-and-subscribe.md) (the per-signal ack primitive) and the `AgentServer.call/3` state-returning shape from [ADR 0002](0002-signal-based-request-reply.md). [ADR 0016 §2 `subscribe/4`](0016-agent-server-ack-and-subscribe.md) is unchanged.
+- Extended by: [ADR 0021](0021-no-full-state-no-polling.md) — selectors must project (not return the full struct); waits are signal-driven (no polling).
 - Related ADRs: [0002](0002-signal-based-request-reply.md), [0006](0006-external-sync-uses-signals.md), [0016](0016-agent-server-ack-and-subscribe.md), [0018](0018-tagged-tuple-return-shape.md)
 
 ## Context
