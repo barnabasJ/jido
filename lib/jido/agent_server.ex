@@ -572,8 +572,23 @@ defmodule Jido.AgentServer do
           end
 
           case subscribe(pid, "jido.agent.child.started", selector, once: true) do
-            {:ok, ref} -> wait_for_child_subscription(pid, ref, timeout)
-            error -> error
+            {:ok, ref} ->
+              # Re-check after subscribing — the natural `child.started`
+              # cast can arrive between the initial `:get_child_pid` reply
+              # and the `subscribe` call returning, in which case the
+              # cascade already populated state.children but our
+              # subscriber wasn't registered in time to observe it.
+              case GenServer.call(pid, {:get_child_pid, child_tag}) do
+                {:ok, child_pid} ->
+                  unsubscribe(pid, ref)
+                  {:ok, child_pid}
+
+                :not_found ->
+                  wait_for_child_subscription(pid, ref, timeout)
+              end
+
+            error ->
+              error
           end
       end
     end
@@ -1332,8 +1347,8 @@ defmodule Jido.AgentServer do
         source: "/agent/#{state.id}"
       )
 
-    {:ok, new_state} = StopChildRuntime.exec(tag, reason, signal, state)
-    {:reply, :ok, new_state}
+    :ok = StopChildRuntime.exec(tag, reason, signal, state)
+    {:reply, :ok, state}
   end
 
   def handle_call(_msg, _from, state) do
@@ -1563,6 +1578,8 @@ defmodule Jido.AgentServer do
       state
       |> State.record_debug_event(:signal_received, %{type: signal.type, id: signal.id})
       |> maybe_track_child_started(signal)
+      |> maybe_track_cron_registered(signal)
+      |> maybe_track_cron_cancelled(signal)
 
     emit_telemetry(
       [:jido, :agent_server, :signal, :start],
@@ -1694,9 +1711,16 @@ defmodule Jido.AgentServer do
   end
 
   @doc false
-  # Inline directive loop. Each directive returns `{:ok, state}` (bounded
-  # work; for async effects, spawn a task and emit a signal when done —
-  # see the DirectiveExec docs). `{:stop, reason, state}` aborts the batch.
+  # Inline directive loop. Each directive returns `:ok` (bounded I/O;
+  # for async effects, spawn a task and emit a signal when done — see
+  # the DirectiveExec docs). `{:stop, reason}` aborts the batch and
+  # propagates as `{:stop, reason, state}` to the GenServer.
+  #
+  # The directive contract drops state from the return per ADR 0019 §6:
+  # directives mutate no state, so there's no slot for a returned state
+  # to land in. `state` threads through unchanged here; the cascade
+  # callbacks invoked by `process_signal/2` are the only legal channel
+  # for runtime-state writes that follow directive I/O.
   @spec execute_directives([struct()], Signal.t(), State.t()) ::
           {:ok, State.t()} | {:stop, term(), State.t()}
   def execute_directives(directives, signal, state)
@@ -1714,12 +1738,12 @@ defmodule Jido.AgentServer do
       end
 
     case result do
-      {:ok, new_state} ->
-        execute_directives(rest, signal, new_state)
+      :ok ->
+        execute_directives(rest, signal, state)
 
-      {:stop, reason, new_state} ->
-        warn_if_normal_stop(reason, directive, new_state)
-        {:stop, reason, new_state}
+      {:stop, reason} ->
+        warn_if_normal_stop(reason, directive, state)
+        {:stop, reason, state}
     end
   end
 
@@ -1803,6 +1827,94 @@ defmodule Jido.AgentServer do
       })
 
     State.add_child(state, tag, child_info)
+  end
+
+  # Cascade for `Jido.Agent.Directive.Cron`'s synthetic
+  # `jido.agent.cron.registered` signal. The directive does all the I/O
+  # (start the scheduler job, monitor it, persist the spec) and casts
+  # this signal carrying the resulting pid + monitor_ref + spec; the
+  # cascade is the sole writer of the runtime cron maps. Existing
+  # entries under the same `job_id` are demonitored before being
+  # overwritten so we don't leak monitor refs on upserts.
+  defp maybe_track_cron_registered(
+         %State{} = state,
+         %Signal{type: "jido.agent.cron.registered", data: data}
+       )
+       when is_map(data) do
+    case data do
+      %{
+        job_id: job_id,
+        pid: pid,
+        monitor_ref: monitor_ref,
+        cron_spec: cron_spec,
+        runtime_spec: runtime_spec
+      }
+      when is_pid(pid) and is_reference(monitor_ref) ->
+        cleaned = drop_existing_cron_entry(state, job_id)
+
+        %{
+          cleaned
+          | cron_specs: Map.put(cleaned.cron_specs, job_id, cron_spec),
+            cron_runtime_specs: Map.put(cleaned.cron_runtime_specs, job_id, runtime_spec),
+            cron_jobs: Map.put(cleaned.cron_jobs, job_id, pid),
+            cron_monitors: Map.put(cleaned.cron_monitors, job_id, monitor_ref),
+            cron_monitor_refs: Map.put(cleaned.cron_monitor_refs, monitor_ref, job_id),
+            cron_restart_attempts: Map.delete(cleaned.cron_restart_attempts, job_id)
+        }
+
+      _ ->
+        state
+    end
+  end
+
+  defp maybe_track_cron_registered(state, _signal), do: state
+
+  # Companion to `maybe_track_cron_registered/2`: drops the entry on
+  # cancellation. Mirrors the I/O the directive already performed (the
+  # scheduler job is cancelled and the monitor flushed before this
+  # signal lands). Idempotent — a cancel for an unknown job_id is a
+  # no-op.
+  defp maybe_track_cron_cancelled(
+         %State{} = state,
+         %Signal{type: "jido.agent.cron.cancelled", data: %{job_id: job_id} = data}
+       ) do
+    monitor_ref = Map.get(data, :monitor_ref)
+
+    %{
+      state
+      | cron_specs: Map.delete(state.cron_specs, job_id),
+        cron_runtime_specs: Map.delete(state.cron_runtime_specs, job_id),
+        cron_jobs: Map.delete(state.cron_jobs, job_id),
+        cron_monitors: Map.delete(state.cron_monitors, job_id),
+        cron_monitor_refs:
+          if(is_reference(monitor_ref),
+            do: Map.delete(state.cron_monitor_refs, monitor_ref),
+            else: state.cron_monitor_refs
+          ),
+        cron_restart_attempts: Map.delete(state.cron_restart_attempts, job_id)
+    }
+  end
+
+  defp maybe_track_cron_cancelled(state, _signal), do: state
+
+  # Drop a stale cron entry under `job_id` before the cascade installs
+  # the new pid+ref. Demonitors the previous entry's BEAM ref so we
+  # don't leak monitors on `Cron` upserts.
+  defp drop_existing_cron_entry(%State{} = state, job_id) do
+    previous_ref = Map.get(state.cron_monitors, job_id)
+
+    if is_reference(previous_ref) do
+      Process.demonitor(previous_ref, [:flush])
+
+      %{
+        state
+        | cron_monitor_refs: Map.delete(state.cron_monitor_refs, previous_ref),
+          cron_jobs: Map.delete(state.cron_jobs, job_id),
+          cron_monitors: Map.delete(state.cron_monitors, job_id)
+      }
+    else
+      state
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -2264,10 +2376,7 @@ defmodule Jido.AgentServer do
           cleaned_state
       end
     else
-      {:ok, new_state} =
-        Directive.Cron.register(state, cron_expr, message, job_id, timezone, on_failure: :drop)
-
-      new_state
+      register_restored_cron_runtime(state, job_id, cron_expr, message, timezone)
     end
   end
 
@@ -2277,6 +2386,62 @@ defmodule Jido.AgentServer do
     )
 
     state
+  end
+
+  # GenServer-context helper that restores a persisted cron spec by
+  # spawning the scheduler job and installing the runtime maps directly
+  # (no synthetic-signal cascade). Used only by the post-init restore
+  # path. Mirrors the directive's `register_io/5` flow without the
+  # cascade dispatch — directives go through `maybe_track_cron_registered/2`,
+  # but a still-initializing GenServer can't rely on signal mailbox
+  # turns yet. On failure we drop the persisted spec so a broken entry
+  # doesn't block boot.
+  defp register_restored_cron_runtime(state, job_id, cron_expr, message, timezone) do
+    case Directive.Cron.register_io(state, cron_expr, message, job_id, timezone) do
+      {:ok, io_result} ->
+        commit_cron_io_result(state, io_result, cron_expr)
+
+      {:error, reason} ->
+        Logger.error(
+          "AgentServer #{state.id} failed to register cron job #{inspect(job_id)}: #{inspect(reason)}"
+        )
+
+        {_pid, runtime_state} =
+          untrack_cron_job(state, job_id, cancel?: true, drop_runtime_spec?: true)
+
+        %{runtime_state | cron_specs: Map.delete(runtime_state.cron_specs, job_id)}
+    end
+  end
+
+  defp commit_cron_io_result(%State{} = state, io_result, cron_expr) do
+    %{
+      job_id: job_id,
+      pid: pid,
+      monitor_ref: monitor_ref,
+      cron_spec: cron_spec,
+      runtime_spec: runtime_spec
+    } = io_result
+
+    committed = %{
+      state
+      | cron_specs: Map.put(state.cron_specs, job_id, cron_spec),
+        cron_runtime_specs: Map.put(state.cron_runtime_specs, job_id, runtime_spec),
+        cron_jobs: Map.put(state.cron_jobs, job_id, pid),
+        cron_monitors: Map.put(state.cron_monitors, job_id, monitor_ref),
+        cron_monitor_refs: Map.put(state.cron_monitor_refs, monitor_ref, job_id),
+        cron_restart_attempts: Map.delete(state.cron_restart_attempts, job_id)
+    }
+
+    Logger.debug(
+      "AgentServer #{state.id} registered cron job #{inspect(job_id)}: #{cron_expr}"
+    )
+
+    emit_cron_telemetry_event(committed, :register, %{
+      job_id: job_id,
+      cron_expression: cron_expr
+    })
+
+    committed
   end
 
   defp register_schedule(%State{} = state, schedule_spec) do
@@ -2818,8 +2983,8 @@ defmodule Jido.AgentServer do
     end
   end
 
-  defp result_type({:ok, _}), do: :ok
-  defp result_type({:stop, _, _}), do: :stop
+  defp result_type(:ok), do: :ok
+  defp result_type({:stop, _}), do: :stop
 
   defp emit_telemetry(event, measurements, metadata) do
     :telemetry.execute(event, measurements, metadata)

@@ -10,12 +10,12 @@ defmodule Jido.AgentServer.StopChildRuntime do
 
   @relationship_hive :relationships
 
-  @spec exec(term(), term(), Signal.t(), State.t()) :: {:ok, State.t()}
+  @spec exec(term(), term(), Signal.t(), State.t()) :: :ok
   def exec(tag, reason, %Signal{} = input_signal, %State{} = state) do
     case State.get_child(state, tag) do
       nil ->
         Logger.debug("AgentServer #{state.id} cannot stop child #{inspect(tag)}: not found")
-        {:ok, state}
+        :ok
 
       %{pid: pid, id: child_id, partition: child_partition} ->
         Logger.debug(
@@ -51,7 +51,7 @@ defmodule Jido.AgentServer.StopChildRuntime do
 
         _ = Jido.AgentServer.cast(pid, traced_signal)
 
-        {:ok, state}
+        :ok
     end
   end
 

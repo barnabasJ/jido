@@ -28,7 +28,7 @@ defmodule Jido.Agent.Directive.Cron do
   require Logger
 
   alias Jido.AgentServer
-  alias Jido.AgentServer.CronRuntimeSpec
+  alias Jido.AgentServer.{CronRuntimeSpec, State}
 
   @schema Zoi.struct(
             __MODULE__,
@@ -53,11 +53,25 @@ defmodule Jido.Agent.Directive.Cron do
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @typedoc false
+  @type io_result :: %{
+          job_id: term(),
+          pid: pid(),
+          monitor_ref: reference(),
+          cron_spec: map(),
+          runtime_spec: term()
+        }
+
+  # Pure I/O for cron registration. Validates the expression, spawns
+  # the scheduler job, monitors it, and persists the new spec map.
+  # Returns the data the cascade callback
+  # (`maybe_track_cron_registered/2`) needs to install in the runtime
+  # maps. Does **not** mutate `%AgentServer.State{}` — per ADR 0019 §1,
+  # runtime field writes flow through the cascade.
   @doc false
-  @spec register(map(), term(), term(), term(), term(), keyword()) :: {:ok, map()}
-  def register(state, cron_expr, message, logical_id, tz, opts \\ []) do
-    on_failure = Keyword.get(opts, :on_failure, :keep)
-    agent_id = state.id
+  @spec register_io(State.t(), term(), term(), term() | nil, term() | nil) ::
+          {:ok, io_result()} | {:error, term()}
+  def register_io(%State{} = state, cron_expr, message, logical_id, tz) do
     logical_id = logical_id || make_ref()
 
     with {:ok, cron_spec} <- Jido.Scheduler.validate_and_build_cron_spec(cron_expr, message, tz),
@@ -67,93 +81,94 @@ defmodule Jido.Agent.Directive.Cron do
              cron_spec.message,
              cron_spec.timezone
            ),
-         {:ok, pid} <- AgentServer.start_runtime_cron_job(state, logical_id, runtime_spec),
-         {:ok, persisted_state} <-
-           persist_then_commit_registration(state, pid, logical_id, cron_spec, runtime_spec) do
-      Logger.debug(
-        "AgentServer #{agent_id} registered cron job #{inspect(logical_id)}: #{cron_expr}"
-      )
+         {:ok, pid} <- AgentServer.start_runtime_cron_job(state, logical_id, runtime_spec) do
+      proposed_specs = Map.put(state.cron_specs, logical_id, cron_spec)
 
-      AgentServer.emit_cron_telemetry_event(persisted_state, :register, %{
-        job_id: logical_id,
-        cron_expression: cron_expr
-      })
+      case AgentServer.persist_cron_specs(state, proposed_specs) do
+        :ok ->
+          {:ok, build_io_result(logical_id, pid, cron_spec, runtime_spec)}
 
-      {:ok, persisted_state}
-    else
-      {:error, reason} ->
-        Logger.error(
-          "AgentServer #{agent_id} failed to register cron job #{inspect(logical_id)}: #{inspect(reason)}"
-        )
+        {:error, {:invalid_checkpoint, _} = reason} ->
+          AgentServer.emit_cron_telemetry_event(state, :persist_failure, %{
+            job_id: logical_id,
+            cron_expression: cron_spec.cron_expression,
+            reason: reason
+          })
 
-        {:ok, handle_failed_registration(state, logical_id, on_failure)}
+          {:ok, build_io_result(logical_id, pid, cron_spec, runtime_spec)}
+
+        {:error, reason} ->
+          Jido.Scheduler.cancel(pid)
+
+          AgentServer.emit_cron_telemetry_event(state, :persist_failure, %{
+            job_id: logical_id,
+            cron_expression: cron_spec.cron_expression,
+            reason: reason
+          })
+
+          {:error, {:persist_failed, reason}}
+      end
     end
   end
 
-  defp persist_then_commit_registration(state, new_pid, logical_id, cron_spec, runtime_spec) do
-    proposed_specs = Map.put(state.cron_specs, logical_id, cron_spec)
-
-    case AgentServer.persist_cron_specs(state, proposed_specs) do
-      :ok ->
-        tracked_state =
-          AgentServer.track_cron_job(state, logical_id, new_pid, runtime_spec: runtime_spec)
-
-        committed_state = %{tracked_state | cron_specs: proposed_specs}
-
-        {:ok, committed_state}
-
-      {:error, {:invalid_checkpoint, _} = reason} ->
-        AgentServer.emit_cron_telemetry_event(state, :persist_failure, %{
-          job_id: logical_id,
-          cron_expression: cron_spec.cron_expression,
-          reason: reason
-        })
-
-        tracked_state =
-          AgentServer.track_cron_job(state, logical_id, new_pid, runtime_spec: runtime_spec)
-
-        committed_state = %{tracked_state | cron_specs: proposed_specs}
-
-        {:ok, committed_state}
-
-      {:error, reason} ->
-        Jido.Scheduler.cancel(new_pid)
-
-        AgentServer.emit_cron_telemetry_event(state, :persist_failure, %{
-          job_id: logical_id,
-          cron_expression: cron_spec.cron_expression,
-          reason: reason
-        })
-
-        {:error, {:persist_failed, reason}}
-    end
+  defp build_io_result(logical_id, pid, cron_spec, runtime_spec) do
+    %{
+      job_id: logical_id,
+      pid: pid,
+      monitor_ref: Process.monitor(pid),
+      cron_spec: cron_spec,
+      runtime_spec: runtime_spec
+    }
   end
 
-  defp handle_failed_registration(state, logical_id, :drop) do
-    {_pid, runtime_state} =
-      AgentServer.untrack_cron_job(state, logical_id, cancel?: true, drop_runtime_spec?: true)
-
-    %{runtime_state | cron_specs: Map.delete(runtime_state.cron_specs, logical_id)}
-  end
-
-  defp handle_failed_registration(state, _logical_id, _on_failure), do: state
 end
 
 defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Cron do
   @moduledoc false
+
+  require Logger
+
+  alias Jido.AgentServer
+  alias Jido.AgentServer.Signal.CronRegistered
 
   def exec(
         %{cron: cron_expr, message: message, job_id: logical_id, timezone: tz},
         _input_signal,
         state
       ) do
-    Jido.Agent.Directive.Cron.register(
-      state,
-      cron_expr,
-      message,
-      logical_id,
-      tz,
-      on_failure: :keep
-    )
+    case Jido.Agent.Directive.Cron.register_io(state, cron_expr, message, logical_id, tz) do
+      {:ok, io_result} ->
+        signal =
+          CronRegistered.new!(
+            %{
+              job_id: io_result.job_id,
+              pid: io_result.pid,
+              monitor_ref: io_result.monitor_ref,
+              cron_spec: io_result.cron_spec,
+              runtime_spec: io_result.runtime_spec
+            },
+            source: "/agent/#{state.id}"
+          )
+
+        _ = AgentServer.cast(self(), signal)
+
+        Logger.debug(
+          "AgentServer #{state.id} registered cron job #{inspect(io_result.job_id)}: #{cron_expr}"
+        )
+
+        AgentServer.emit_cron_telemetry_event(state, :register, %{
+          job_id: io_result.job_id,
+          cron_expression: cron_expr
+        })
+
+        :ok
+
+      {:error, reason} ->
+        Logger.error(
+          "AgentServer #{state.id} failed to register cron job #{inspect(logical_id)}: #{inspect(reason)}"
+        )
+
+        :ok
+    end
   end
 end

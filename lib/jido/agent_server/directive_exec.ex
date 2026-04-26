@@ -7,28 +7,43 @@ defprotocol Jido.AgentServer.DirectiveExec do
 
   ## Return Values
 
-  - `{:ok, state}` - Directive executed successfully, continue processing
-  - `{:stop, reason, state}` - **Hard stop** the agent process (see warning below)
+  - `:ok` — directive executed successfully, continue processing
+  - `{:stop, reason}` — **hard stop** the agent process (see warning below)
+
+  Directives never return state. State is passed in as the third arg (for
+  reading); mutating it is impossible by the type signature, per
+  ADR 0019 §6. Bookkeeping that logically follows the I/O happens via
+  the cascade callbacks `process_signal/2` invokes
+  (`maybe_track_child_started/2`, `handle_child_down/3`,
+  `maybe_track_cron_registered/2`, `maybe_track_cron_cancelled/2`).
+
+  Failure handling: directives that hit an internal error log it and
+  return `:ok` — the same swallow-and-continue convention the `Error`
+  directive already follows. There is no `{:error, _}` return because
+  `execute_directives/3` would have nowhere meaningful to send it; if
+  the failure should abort the batch and stop the agent, escalate via
+  `{:stop, reason}`.
 
   ### The async pattern
 
   There is no special `{:async, ...}` return. If a directive needs to do
-  work that could block the GenServer, it should:
+  work that could block the GenServer:
 
-  1. Spawn a supervised task for the side-effect
-  2. Record the in-flight work as a loading marker in agent state
-  3. Return `{:ok, state_with_loading_marker}`
-  4. When the task finishes, emit a **signal** back to the agent — the
-     signal routes through the normal pipeline and its `cmd/2` clause
-     settles the loading marker into `:success` or `:error`
+  1. Spawn a supervised task for the side-effect.
+  2. When the task finishes, emit a **signal** back to the agent — the
+     signal routes through the normal pipeline and an action bound via
+     `signal_routes` settles the result onto the agent's slice via its
+     return value.
 
-  Signals are the single coordination vehicle, both for external input
-  and for async-completion results. The state path where the loading
-  marker lives is the correlation key — no separate ref tracking needed.
+  Loading markers, success/error settles, and any other state changes
+  live in actions. Directives never write `agent.state` or
+  `%AgentServer.State{}` runtime fields — those flow through the
+  cascade callbacks or `cmd/2` slice updates.
 
   ## ⚠️ WARNING: {:stop, ...} Semantics
 
-  `{:stop, reason, state}` is a **hard stop** that terminates the AgentServer immediately:
+  `{:stop, reason}` is a **hard stop** that terminates the AgentServer
+  immediately:
 
   - **Remaining directives are dropped** - Any directives in the same batch will NOT be executed
   - **Async work is orphaned** - In-flight tasks may complete but their signals go nowhere
@@ -74,13 +89,15 @@ defprotocol Jido.AgentServer.DirectiveExec do
             Jido.AgentServer.cast(agent_pid, signal)
           end)
 
-          domain = state.agent_module.path()
-          slice = Map.get(state.agent.state, domain, %{})
-          new_slice = Map.put(slice, :llm_status, :loading)
-          new_agent = %{state.agent | state: Map.put(state.agent.state, domain, new_slice)}
-          {:ok, %{state | agent: new_agent}}
+          :ok
         end
       end
+
+  The agent then declares a `signal_routes` entry mapping
+  `"myapp.llm.replied"` to an action that sets the appropriate slice
+  fields (e.g., `:llm_status => :success`, `:result => result`) via its
+  return value. The directive does the I/O; the action does the state
+  mutation.
 
   ## Fallback for Unknown Directives
 
@@ -91,21 +108,21 @@ defprotocol Jido.AgentServer.DirectiveExec do
   @fallback_to_any true
 
   @doc """
-  Execute a directive, returning an updated state.
+  Execute a directive.
 
   ## Parameters
 
   - `directive` - The directive struct to execute
   - `input_signal` - The signal that triggered this directive
-  - `state` - The current AgentServer.State
+  - `state` - The current AgentServer.State (read-only — directives may
+    inspect any field but cannot return a mutated version)
 
   ## Returns
 
-  - `{:ok, state}` - Continue processing with updated state
-  - `{:stop, reason, state}` - Stop the agent
+  - `:ok` - Continue processing
+  - `{:stop, reason}` - Hard-stop the agent (see warnings above)
   """
   @spec exec(struct(), Jido.Signal.t(), Jido.AgentServer.State.t()) ::
-          {:ok, Jido.AgentServer.State.t()}
-          | {:stop, term(), Jido.AgentServer.State.t()}
+          :ok | {:stop, term()}
   def exec(directive, input_signal, state)
 end

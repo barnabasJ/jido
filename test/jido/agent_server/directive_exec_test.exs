@@ -2,8 +2,22 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
   use JidoTest.Case, async: true
 
   alias Jido.Agent.Directive
+  alias Jido.AgentServer
   alias Jido.AgentServer.{DirectiveExec, Options, State}
   alias Jido.Signal
+
+  defmodule EmitDirectiveAction do
+    @moduledoc false
+    use Jido.Action,
+      name: "emit_directive",
+      schema: [
+        directive: [type: :any, required: true]
+      ]
+
+    def run(%Jido.Signal{data: %{directive: directive}}, slice, _opts, _ctx) do
+      {:ok, slice || %{}, [directive]}
+    end
+  end
 
   defmodule TestAgent do
     @moduledoc false
@@ -13,6 +27,12 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       schema: [
         counter: [type: :integer, default: 0]
       ]
+
+    def signal_routes(_ctx) do
+      [
+        {"test.directive", JidoTest.AgentServer.DirectiveExecTest.EmitDirectiveAction}
+      ]
+    end
   end
 
   defmodule StopOnSignalAction do
@@ -48,7 +68,8 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
     def signal_routes(_ctx) do
       [
-        {"jido.agent.stop", StopOnSignalAction}
+        {"jido.agent.stop", StopOnSignalAction},
+        {"test.directive", JidoTest.AgentServer.DirectiveExecTest.EmitDirectiveAction}
       ]
     end
   end
@@ -89,14 +110,16 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: [type: :map, default: %{}]
       ]
 
-    def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
+    def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
+      slice = slice || %{}
+
       {:ok,
-       %{
+       Map.merge(slice, %{
          captured_status: params.status,
          captured_result: params.result,
          captured_reason: params.reason,
          captured_meta: params.meta
-       }, []}
+       }), []}
     end
   end
 
@@ -113,9 +136,34 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: [type: :map, default: %{}]
       ]
 
-    def run(_signal, _slice, _opts, _ctx) do
+    def run(_signal, slice, _opts, _ctx) do
+      slice = slice || %{}
       directive = Directive.emit(%{type: "capture.result.event"})
-      {:ok, %{captured_emit: true}, [directive]}
+      {:ok, Map.put(slice, :captured_emit, true), [directive]}
+    end
+  end
+
+  defmodule RunInstructionRoutedAgent do
+    @moduledoc false
+    use Jido.Agent,
+      name: "run_instruction_routed_agent",
+      path: :domain,
+      schema: [
+        captured_status: [type: :atom, default: nil],
+        captured_result: [type: :map, default: %{}],
+        captured_reason: [type: :any, default: nil],
+        captured_meta: [type: :map, default: %{}],
+        captured_emit: [type: :boolean, default: false]
+      ]
+
+    def signal_routes(_ctx) do
+      [
+        {"test.directive", JidoTest.AgentServer.DirectiveExecTest.EmitDirectiveAction},
+        {"test.run_instruction.captured",
+         JidoTest.AgentServer.DirectiveExecTest.CaptureResultAction},
+        {"test.run_instruction.failure",
+         JidoTest.AgentServer.DirectiveExecTest.CaptureResultEmitAction}
+      ]
     end
   end
 
@@ -138,18 +186,18 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       signal = Signal.new!(%{type: "test.emitted", source: "/test", data: %{}})
       directive = %Directive.Emit{signal: signal, dispatch: nil}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
       assert_receive {:signal, %Signal{type: "test.emitted"}}
     end
 
-    test "returns async tuple when dispatch config provided", %{
+    test "returns ok when dispatch config provided", %{
       state: state,
       input_signal: input_signal
     } do
       signal = Signal.new!(%{type: "test.emitted", source: "/test", data: %{}})
       directive = %Directive.Emit{signal: signal, dispatch: {:logger, level: :info}}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
 
     test "uses default_dispatch from state when directive dispatch is nil", %{
@@ -170,7 +218,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       signal = Signal.new!(%{type: "test.emitted", source: "/test", data: %{}})
       directive = %Directive.Emit{signal: signal, dispatch: nil}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
   end
 
@@ -182,7 +230,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       error = Jido.Error.validation_error("Test error")
       directive = %Directive.Error{error: error, context: :test}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
   end
 
@@ -212,7 +260,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       child_spec = {Task, fn -> :ok end}
       directive = %Directive.Spawn{child_spec: child_spec, tag: :worker}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
       assert_receive {:spawn_called, ^child_spec}
     end
 
@@ -238,7 +286,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       child_spec = {Task, fn -> :ok end}
       directive = %Directive.Spawn{child_spec: child_spec, tag: :worker}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
 
     test "handles spawn returning {:ok, pid, info} tuple", %{
@@ -266,7 +314,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       child_spec = {Task, fn -> :ok end}
       directive = %Directive.Spawn{child_spec: child_spec, tag: :worker}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
       assert_receive {:spawn_called, ^child_spec}
     end
 
@@ -292,50 +340,92 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       child_spec = {Task, fn -> :ok end}
       directive = %Directive.Spawn{child_spec: child_spec, tag: :worker}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
   end
 
-  describe "RunInstruction directive" do
-    test "executes instruction and routes result via result_action", %{
-      state: state,
-      input_signal: input_signal
-    } do
+  describe "RunInstruction directive (signal-routed result)" do
+    test "executes instruction and routes result via result_signal_type", %{jido: jido} do
+      pid = start_server(%{jido: jido}, RunInstructionRoutedAgent, id: "run-instr-success")
+
       instruction = Jido.Instruction.new!(%{action: RunInstructionSuccessAction})
 
       directive =
         Directive.run_instruction(instruction,
-          result_action: CaptureResultAction,
+          result_signal_type: "test.run_instruction.captured",
           meta: %{source: :test}
         )
 
-      assert {:ok, state} = DirectiveExec.exec(directive, input_signal, state)
+      AgentServer.cast(pid, signal_carrying_directive(directive))
 
-      assert state.agent.state.domain.captured_status == :ok
-      assert state.agent.state.domain.captured_result == %{ran: true}
-      assert state.agent.state.domain.captured_reason == nil
-      assert state.agent.state.domain.captured_meta == %{source: :test}
+      domain =
+        await_state_value(pid, fn s ->
+          if s.agent.state.domain.captured_status, do: s.agent.state.domain
+        end)
+
+      assert domain.captured_status == :ok
+      assert domain.captured_result == %{ran: true}
+      assert domain.captured_reason == nil
+      assert domain.captured_meta == %{source: :test}
     end
 
-    test "normalizes failures and runs result_action's directives inline", %{
-      state: state,
-      input_signal: input_signal
-    } do
+    test "normalizes failures and the routed action sees status :error", %{jido: jido} do
+      pid = start_server(%{jido: jido}, RunInstructionRoutedAgent, id: "run-instr-failure")
+
       instruction = Jido.Instruction.new!(%{action: RunInstructionFailureAction})
 
       directive =
         Directive.run_instruction(instruction,
-          result_action: CaptureResultEmitAction
+          result_signal_type: "test.run_instruction.failure"
         )
 
-      assert {:ok, state} = DirectiveExec.exec(directive, input_signal, state)
-      assert state.agent.state.domain.captured_emit == true
+      AgentServer.cast(pid, signal_carrying_directive(directive))
 
-      # CaptureResultEmitAction emitted a `capture.result.event` signal;
-      # Emit's local dispatch does send(self(), {:signal, signal}). (The
-      # test uses Directive.emit/2 with a bare map, so the emitted signal
-      # keeps that shape here.)
-      assert_receive {:signal, %{type: "capture.result.event"}}
+      domain =
+        await_state_value(pid, fn s ->
+          if s.agent.state.domain.captured_emit, do: s.agent.state.domain
+        end)
+
+      assert domain.captured_emit == true
+
+      # CaptureResultEmitAction emitted a `capture.result.event` signal —
+      # Emit's local dispatch sends `{:signal, signal}` to self(), but
+      # since we're not the agent process here, we won't receive it.
+      # The `captured_emit` slice update is the observable side-effect.
+    end
+
+    test "directive itself does not write agent.state — strict ADR 0019 separation", %{
+      jido: jido
+    } do
+      pid = start_server(%{jido: jido}, RunInstructionRoutedAgent, id: "run-instr-strict")
+
+      instruction = Jido.Instruction.new!(%{action: RunInstructionSuccessAction})
+
+      directive =
+        Directive.run_instruction(instruction,
+          result_signal_type: "test.run_instruction.captured",
+          meta: %{source: :test}
+        )
+
+      input_signal = Signal.new!(%{type: "test.harness", source: "/test", data: %{}})
+
+      {:ok, %{before: before_state, after: after_state}} =
+        AgentServer.state(pid, fn s ->
+          before_state = s.agent.state
+          :ok = DirectiveExec.exec(directive, input_signal, s)
+          {:ok, %{before: before_state, after: s.agent.state}}
+        end)
+
+      assert before_state == after_state
+
+      # The natural cascade — the result signal routed to
+      # CaptureResultAction — populates the slice on a later mailbox turn.
+      domain =
+        await_state_value(pid, fn s ->
+          if s.agent.state.domain.captured_status, do: s.agent.state.domain
+        end)
+
+      assert domain.captured_status == :ok
     end
   end
 
@@ -344,7 +434,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       signal = Signal.new!(%{type: "scheduled.ping", source: "/test", data: %{}})
       directive = %Directive.Schedule{delay_ms: 10, message: signal}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
       assert_receive {:scheduled_signal, received_signal}, 100
       assert received_signal.type == "scheduled.ping"
     end
@@ -352,7 +442,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
     test "wraps non-signal message in signal", %{state: state, input_signal: input_signal} do
       directive = %Directive.Schedule{delay_ms: 10, message: :timeout}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
       assert_receive {:scheduled_signal, received_signal}, 100
       assert received_signal.type == "jido.scheduled"
       assert received_signal.data.message == :timeout
@@ -363,19 +453,23 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
     test "returns stop tuple with reason", %{state: state, input_signal: input_signal} do
       directive = %Directive.Stop{reason: :normal}
 
-      assert {:stop, :normal, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert {:stop, :normal} = DirectiveExec.exec(directive, input_signal, state)
     end
 
     test "returns stop tuple with custom reason", %{state: state, input_signal: input_signal} do
       directive = %Directive.Stop{reason: {:shutdown, :user_requested}}
 
-      assert {:stop, {:shutdown, :user_requested}, ^state} =
+      assert {:stop, {:shutdown, :user_requested}} =
                DirectiveExec.exec(directive, input_signal, state)
     end
   end
 
   describe "SpawnAgent directive" do
-    test "spawns child agent with module", %{state: state, input_signal: input_signal} do
+    test "natural child.started cascade adds the child after the directive returns", %{
+      jido: jido
+    } do
+      parent_pid = start_server(%{jido: jido}, TestAgent, id: "spawn-cascade-parent")
+
       directive = %Directive.SpawnAgent{
         agent: TestAgent,
         tag: :child_worker,
@@ -383,45 +477,51 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: %{role: :worker}
       }
 
-      assert {:ok, new_state} = DirectiveExec.exec(directive, input_signal, state)
-      assert Map.has_key?(new_state.children, :child_worker)
-      child_info = new_state.children[:child_worker]
+      AgentServer.cast(parent_pid, signal_carrying_directive(directive))
+
+      child_info =
+        await_state_value(
+          parent_pid,
+          fn s -> Map.get(s.children, :child_worker) end,
+          pattern: "jido.agent.child.started"
+        )
+
+      assert is_pid(child_info.pid)
       assert child_info.module == TestAgent
       assert child_info.tag == :child_worker
       assert child_info.meta == %{role: :worker}
-      assert is_pid(child_info.pid)
 
       GenServer.stop(child_info.pid)
     end
 
-    test "spawns child agent with struct agent (resolve_agent_module for struct)", %{
-      state: state,
-      input_signal: input_signal
+    test "directive itself does not write state.children — strict ADR 0019 separation", %{
+      jido: jido
     } do
-      agent_struct = TestAgent.new()
+      parent_pid = start_server(%{jido: jido}, TestAgent, id: "spawn-strict-parent")
 
       directive = %Directive.SpawnAgent{
-        agent: agent_struct,
-        tag: :struct_child,
+        agent: TestAgent,
+        tag: :strict_child,
         opts: %{},
         meta: %{}
       }
 
-      assert {:ok, new_state} = DirectiveExec.exec(directive, input_signal, state)
-      assert Map.has_key?(new_state.children, :struct_child)
-      child_info = new_state.children[:struct_child]
-      # resolve_agent_module extracts __struct__ from the agent struct
-      assert child_info.module == agent_struct.__struct__
-      assert is_pid(child_info.pid)
+      input_signal = Signal.new!(%{type: "test.harness", source: "/test", data: %{}})
 
-      # Stop the child without relying on catch_exit's generated AST handling.
-      if Process.alive?(child_info.pid) do
-        try do
-          GenServer.stop(child_info.pid, :normal, 100)
-        catch
-          :exit, _ -> :ok
-        end
-      end
+      {:ok, before_children} =
+        AgentServer.state(parent_pid, fn s ->
+          children_before = s.children
+          :ok = DirectiveExec.exec(directive, input_signal, s)
+          {:ok, %{before: children_before, after: s.children}}
+        end)
+
+      # The directive's exec doesn't mutate state — `before` and `after`
+      # captured inside the same selector turn must be identical.
+      assert before_children.before == before_children.after
+
+      # The natural child.started cascade fires on the next mailbox turn.
+      child_pid = await_child_pid(parent_pid, :strict_child)
+      GenServer.stop(child_pid)
     end
 
     test "handles spawn failure gracefully", %{state: state, input_signal: input_signal} do
@@ -432,7 +532,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: %{}
       }
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
       refute Map.has_key?(state.children, :failing_child)
     end
 
@@ -440,7 +540,6 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       state: state,
       input_signal: input_signal
     } do
-      # Pass a string as agent to hit the fallback resolve_agent_module/1 clause
       directive = %Directive.SpawnAgent{
         agent: "not_a_module_or_struct",
         tag: :unknown_agent,
@@ -448,8 +547,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: %{}
       }
 
-      # This will fail to spawn but should handle gracefully
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
 
     test "rejects unsupported lifecycle opts even for raw SpawnAgent structs", %{
@@ -463,7 +561,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: %{}
       }
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
       refute Map.has_key?(state.children, :managed_child)
     end
 
@@ -478,13 +576,15 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: %{}
       }
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
       refute Map.has_key?(state.children, :bad_opts_child)
     end
   end
 
   describe "StopChild directive" do
-    test "sends jido.agent.stop to child", %{state: state, input_signal: input_signal} do
+    test "sends jido.agent.stop to child", %{jido: jido} do
+      parent_pid = start_server(%{jido: jido}, StopAwareAgent, id: "stop-aware-parent-1")
+
       spawn_directive = %Directive.SpawnAgent{
         agent: StopAwareAgent,
         tag: :stop_signal_child,
@@ -492,24 +592,21 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: %{}
       }
 
-      {:ok, state_with_child} = DirectiveExec.exec(spawn_directive, input_signal, state)
-      assert Map.has_key?(state_with_child.children, :stop_signal_child)
-      child_pid = state_with_child.children[:stop_signal_child].pid
+      AgentServer.cast(parent_pid, signal_carrying_directive(spawn_directive))
+
+      child_pid = await_child_pid(parent_pid, :stop_signal_child)
       child_ref = Process.monitor(child_pid)
 
       stop_directive = %Directive.StopChild{tag: :stop_signal_child, reason: :shutdown}
-
-      assert {:ok, ^state_with_child} =
-               DirectiveExec.exec(stop_directive, input_signal, state_with_child)
+      AgentServer.cast(parent_pid, signal_carrying_directive(stop_directive))
 
       assert_receive {:child_stop_signal_received, :shutdown}, 1_000
       assert_receive {:DOWN, ^child_ref, :process, ^child_pid, :shutdown}, 1_000
     end
 
-    test "wraps custom stop reasons as clean shutdowns", %{
-      state: state,
-      input_signal: input_signal
-    } do
+    test "wraps custom stop reasons as clean shutdowns", %{jido: jido} do
+      parent_pid = start_server(%{jido: jido}, StopAwareAgent, id: "stop-aware-parent-2")
+
       spawn_directive = %Directive.SpawnAgent{
         agent: StopAwareAgent,
         tag: :custom_reason_child,
@@ -517,20 +614,21 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: %{}
       }
 
-      {:ok, state_with_child} = DirectiveExec.exec(spawn_directive, input_signal, state)
-      child_pid = state_with_child.children[:custom_reason_child].pid
+      AgentServer.cast(parent_pid, signal_carrying_directive(spawn_directive))
+
+      child_pid = await_child_pid(parent_pid, :custom_reason_child)
       child_ref = Process.monitor(child_pid)
 
       stop_directive = %Directive.StopChild{tag: :custom_reason_child, reason: :cleanup}
-
-      assert {:ok, ^state_with_child} =
-               DirectiveExec.exec(stop_directive, input_signal, state_with_child)
+      AgentServer.cast(parent_pid, signal_carrying_directive(stop_directive))
 
       assert_receive {:child_stop_signal_received, {:shutdown, :cleanup}}, 1_000
       assert_receive {:DOWN, ^child_ref, :process, ^child_pid, {:shutdown, :cleanup}}, 1_000
     end
 
-    test "stops existing child", %{state: state, input_signal: input_signal} do
+    test "stops existing child", %{jido: jido} do
+      parent_pid = start_server(%{jido: jido}, TestAgent, id: "stop-child-parent")
+
       spawn_directive = %Directive.SpawnAgent{
         agent: TestAgent,
         tag: :child_to_stop,
@@ -538,14 +636,11 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
         meta: %{}
       }
 
-      {:ok, state_with_child} = DirectiveExec.exec(spawn_directive, input_signal, state)
-      assert Map.has_key?(state_with_child.children, :child_to_stop)
-      child_pid = state_with_child.children[:child_to_stop].pid
+      AgentServer.cast(parent_pid, signal_carrying_directive(spawn_directive))
+      child_pid = await_child_pid(parent_pid, :child_to_stop)
 
       stop_directive = %Directive.StopChild{tag: :child_to_stop, reason: :normal}
-
-      assert {:ok, ^state_with_child} =
-               DirectiveExec.exec(stop_directive, input_signal, state_with_child)
+      AgentServer.cast(parent_pid, signal_carrying_directive(stop_directive))
 
       refute_eventually(Process.alive?(child_pid))
     end
@@ -553,7 +648,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
     test "returns ok when child tag not found", %{state: state, input_signal: input_signal} do
       directive = %Directive.StopChild{tag: :nonexistent_child, reason: :normal}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
   end
 
@@ -561,7 +656,36 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
     test "returns ok for unknown directive types", %{state: state, input_signal: input_signal} do
       directive = %CustomDirective{value: 42}
 
-      assert {:ok, ^state} = DirectiveExec.exec(directive, input_signal, state)
+      assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
+  end
+
+  # Cast a synthetic signal whose default `signal_routes` route
+  # (`test.directive` → `EmitDirectiveAction`) yields `directive` from
+  # the action's directive list. This pushes the directive through the
+  # agent's actual pipeline so cascade callbacks can fire.
+  defp signal_carrying_directive(directive) do
+    Signal.new!(%{
+      type: "test.directive",
+      source: "/test",
+      data: %{directive: directive}
+    })
+  end
+
+  # Subscribe-based child wait that closes the registration race in
+  # `AgentServer.await_child/3` (the underlying API doesn't re-check
+  # state after subscribing — when the natural `child.started` cast
+  # arrives between the initial `:get_child_pid` call and the
+  # `subscribe` call, the subscriber misses it). `await_state_value/3`
+  # has the re-check built in.
+  defp await_child_pid(parent_pid, tag) do
+    info =
+      await_state_value(
+        parent_pid,
+        fn s -> Map.get(s.children, tag) end,
+        pattern: "jido.agent.child.started"
+      )
+
+    info.pid
   end
 end

@@ -32,72 +32,71 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.CronCancel do
   @moduledoc false
 
   require Logger
+
+  alias Jido.AgentServer
+  alias Jido.AgentServer.Signal.CronCancelled
   alias Jido.AgentServer.State
 
-  def exec(%{job_id: logical_id}, _input_signal, state) do
-    agent_id = state.id
+  def exec(%{job_id: logical_id}, _input_signal, %State{} = state) do
+    pid = Map.get(state.cron_jobs, logical_id)
+    monitor_ref = Map.get(state.cron_monitors, logical_id)
     proposed_specs = Map.delete(state.cron_specs, logical_id)
 
-    case persist_cron_specs(state, proposed_specs) do
+    cancel_io(pid, monitor_ref)
+
+    case AgentServer.persist_cron_specs(state, proposed_specs) do
       :ok ->
-        {_pid, runtime_state} = drop_runtime_job(state, logical_id)
-
-        new_state = %{runtime_state | cron_specs: proposed_specs}
-
-        Logger.debug("AgentServer #{agent_id} cancelled cron job #{inspect(logical_id)}")
-
-        emit_telemetry(new_state, :cancel, %{job_id: logical_id})
-        {:ok, new_state}
+        emit_cancellation(state, logical_id, pid, monitor_ref)
 
       {:error, {:invalid_checkpoint, _} = reason} ->
-        {_pid, runtime_state} = drop_runtime_job(state, logical_id)
-        new_state = %{runtime_state | cron_specs: proposed_specs}
-
-        Logger.error(
-          "AgentServer #{agent_id} failed to persist cron cancellation for #{inspect(logical_id)}: #{inspect(reason)}"
-        )
-
-        emit_telemetry(state, :persist_failure, %{
+        AgentServer.emit_cron_telemetry_event(state, :persist_failure, %{
           job_id: logical_id,
           reason: reason
         })
 
-        emit_telemetry(new_state, :cancel, %{job_id: logical_id})
-        {:ok, new_state}
+        emit_cancellation(state, logical_id, pid, monitor_ref)
 
       {:error, reason} ->
         Logger.error(
-          "AgentServer #{agent_id} failed to persist cron cancellation for #{inspect(logical_id)}: #{inspect(reason)}"
+          "AgentServer #{state.id} failed to persist cron cancellation for #{inspect(logical_id)}: #{inspect(reason)}"
         )
 
-        emit_telemetry(state, :persist_failure, %{
+        AgentServer.emit_cron_telemetry_event(state, :persist_failure, %{
           job_id: logical_id,
           reason: reason
         })
-
-        {:ok, state}
     end
+
+    :ok
   end
 
-  defp persist_cron_specs(%State{} = state, cron_specs),
-    do: Jido.AgentServer.persist_cron_specs(state, cron_specs)
+  defp cancel_io(pid, monitor_ref) do
+    if is_pid(pid) and Process.alive?(pid) do
+      Jido.Scheduler.cancel(pid)
+    end
 
-  defp persist_cron_specs(_state, _cron_specs), do: :ok
+    if is_reference(monitor_ref) do
+      Process.demonitor(monitor_ref, [:flush])
+    end
 
-  defp drop_runtime_job(%State{} = state, logical_id),
-    do:
-      Jido.AgentServer.untrack_cron_job(state, logical_id,
-        cancel?: true,
-        drop_runtime_spec?: true
+    :ok
+  end
+
+  defp emit_cancellation(%State{} = state, logical_id, pid, monitor_ref) do
+    signal =
+      CronCancelled.new!(
+        %{
+          job_id: logical_id,
+          pid: pid,
+          monitor_ref: monitor_ref
+        },
+        source: "/agent/#{state.id}"
       )
 
-  defp drop_runtime_job(state, logical_id) do
-    {Map.get(state.cron_jobs, logical_id),
-     %{state | cron_jobs: Map.delete(state.cron_jobs, logical_id)}}
+    _ = AgentServer.cast(self(), signal)
+
+    Logger.debug("AgentServer #{state.id} cancelled cron job #{inspect(logical_id)}")
+
+    AgentServer.emit_cron_telemetry_event(state, :cancel, %{job_id: logical_id})
   end
-
-  defp emit_telemetry(%State{} = state, event, metadata),
-    do: Jido.AgentServer.emit_cron_telemetry_event(state, event, metadata)
-
-  defp emit_telemetry(_state, _event, _metadata), do: :ok
 end

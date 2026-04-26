@@ -16,7 +16,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Emit do
 
     dispatch_signal(traced_signal, cfg, state)
 
-    {:ok, state}
+    :ok
   end
 
   defp dispatch_signal(traced_signal, nil, _state) do
@@ -51,7 +51,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Error do
   def exec(%Jido.Agent.Directive.Error{error: error, context: context}, _input_signal, state) do
     Logger.error("Agent #{state.id}#{format_context(context)}: #{format_error(error)}")
 
-    {:ok, state}
+    :ok
   end
 
   defp format_context(nil), do: ""
@@ -62,17 +62,21 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Error do
 end
 
 defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction do
-  @moduledoc false
-
-  require Logger
+  @moduledoc """
+  Pure I/O directive: runs the instruction and emits a result signal of
+  type `result_signal_type`. Per ADR 0019 §1 / task 0015, the directive
+  no longer calls `cmd/2` directly — the agent's `signal_routes` binds
+  `result_signal_type` to a handler action that performs the slice
+  update via its return value. The handler runs on the next mailbox
+  turn through the normal pipeline.
+  """
 
   alias Jido.AgentServer
-  alias Jido.AgentServer.State
   alias Jido.Observe.Config, as: ObserveConfig
 
   def exec(
-        %{instruction: instruction, result_action: result_action, meta: meta},
-        input_signal,
+        %{instruction: instruction, result_signal_type: signal_type, meta: meta},
+        _input_signal,
         state
       ) do
     enriched_instruction = %{
@@ -90,21 +94,11 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction
       |> Map.put(:instruction, instruction)
       |> Map.put(:meta, meta || %{})
 
-    case state.agent_module.cmd(
-           state.agent,
-           {result_action, execution_payload},
-           ctx: %{jido_instance: state.jido, partition: state.partition, agent_id: state.agent.id},
-           input_signal: input_signal
-         ) do
-      {:ok, agent, directives} ->
-        state = State.update_agent(state, agent)
-        AgentServer.execute_directives(List.wrap(directives), input_signal, state)
+    result_signal =
+      Jido.Signal.new!(signal_type, execution_payload, source: "/agent/#{state.id}")
 
-      {:error, reason} ->
-        Logger.error("RunInstruction settle for #{state.id}: cmd/2 errored — #{inspect(reason)}")
-
-        {:ok, state}
-    end
+    _ = AgentServer.cast(self(), result_signal)
+    :ok
   end
 
   defp normalize_result_payload({:ok, result, effects}) do
@@ -143,18 +137,18 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Spawn do
     case result do
       {:ok, pid} ->
         Logger.debug("Spawned child process #{inspect(pid)} with tag #{inspect(tag)}")
-        {:ok, state}
+        :ok
 
       {:ok, pid, _info} ->
         Logger.debug("Spawned child process #{inspect(pid)} with tag #{inspect(tag)}")
-        {:ok, state}
+        :ok
 
       {:error, reason} ->
         Logger.error("Failed to spawn child: #{inspect(reason)}")
-        {:ok, state}
+        :ok
 
       :ignored ->
-        {:ok, state}
+        :ok
     end
   end
 end
@@ -185,18 +179,29 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Schedule do
       end
 
     Process.send_after(self(), {:scheduled_signal, traced_signal}, delay)
-    {:ok, state}
+    :ok
   end
 end
 
 defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
-  @moduledoc false
+  @moduledoc """
+  Pure I/O directive: spawns the child via the agent supervisor and
+  persists the parent ⇒ child relationship in `Jido.RuntimeStore`. The
+  child's own `notify_parent_of_startup/1` then casts
+  `jido.agent.child.started` back to this agent, where
+  `maybe_track_child_started/2` records the `%ChildInfo{}` and creates
+  the parent-side monitor — see ADR 0019 §1 / task 0015.
+
+  Async window: between the directive returning and the natural
+  `child.started` arriving, `state.children[tag]` is `nil`. Tests should
+  use `AgentServer.await_child/3` rather than peeking at `state.children`
+  immediately.
+  """
 
   require Logger
 
   alias Jido.Agent.Directive
   alias Jido.AgentServer
-  alias Jido.AgentServer.{ChildInfo, State}
   alias Jido.RuntimeStore
 
   @relationship_hive :relationships
@@ -213,7 +218,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
     else
       {:error, reason} ->
         Logger.error("AgentServer #{state.id} failed to spawn child: #{reason}")
-        {:ok, state}
+        :ok
     end
   end
 
@@ -253,26 +258,11 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
       {:ok, pid} ->
         case persist_relationship(state, child_id, child_partition, tag, meta) do
           :ok ->
-            ref = Process.monitor(pid)
-
-            child_info =
-              ChildInfo.new!(%{
-                pid: pid,
-                ref: ref,
-                module: resolve_agent_module(agent),
-                id: child_id,
-                partition: child_partition,
-                tag: tag,
-                meta: meta
-              })
-
-            new_state = State.add_child(state, tag, child_info)
-
             Logger.debug(
               "AgentServer #{state.id} spawned child #{child_id} with tag #{inspect(tag)}"
             )
 
-            {:ok, new_state}
+            :ok
 
           {:error, reason} ->
             _ = DynamicSupervisor.terminate_child(supervisor, pid)
@@ -281,7 +271,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
               "AgentServer #{state.id} failed to persist relationship for child #{child_id}: #{inspect(reason)}"
             )
 
-            {:ok, state}
+            :ok
         end
 
       {:error, reason} ->
@@ -289,7 +279,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
           "AgentServer #{state.id} failed to spawn child with restart #{inspect(restart)}: #{inspect(reason)}"
         )
 
-        {:ok, state}
+        :ok
     end
   end
 
@@ -315,41 +305,47 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
 end
 
 defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.AdoptChild do
-  @moduledoc false
+  @moduledoc """
+  Pure I/O directive: pushes a fresh `%ParentRef{}` into the live child
+  via `AgentServer.adopt_parent/2`. The child's
+  `notify_parent_of_startup/1` then casts `jido.agent.child.started`
+  back to this agent, where `maybe_track_child_started/2` records the
+  `%ChildInfo{}` and creates the parent-side monitor — see ADR 0019 §1
+  / task 0015.
+
+  This is the directive form. The imperative
+  `Jido.AgentServer.adopt_child/4` (a `handle_call` callback) keeps
+  doing the state mutation directly per ADR 0019 §5; only the directive
+  defers to the cascade.
+
+  Async window: between the directive returning and the natural
+  `child.started` arriving, `state.children[tag]` is `nil`. Tests should
+  use `AgentServer.await_child/3` rather than peeking at `state.children`
+  immediately.
+  """
 
   require Logger
 
   alias Jido.AgentServer
-  alias Jido.AgentServer.{ChildInfo, ParentRef, State}
+  alias Jido.AgentServer.{ParentRef, State}
 
   def exec(%{child: child, tag: tag, meta: meta}, _input_signal, state) do
     with :ok <- ensure_tag_available(state, tag),
          {:ok, child_pid} <- resolve_child(child, state),
          :ok <- ensure_not_self(child_pid),
          {:ok, child_runtime} <- adopt_child(child_pid, tag, meta, state) do
-      child_info =
-        ChildInfo.new!(%{
-          pid: child_pid,
-          ref: Process.monitor(child_pid),
-          module: child_runtime.agent_module,
-          id: child_runtime.id,
-          partition: child_runtime.partition,
-          tag: tag,
-          meta: meta
-        })
-
       Logger.debug(
-        "AgentServer #{state.id} adopted child #{child_runtime.id} with tag #{inspect(tag)}"
+        "AgentServer #{state.id} initiated adoption of child #{child_runtime.id} with tag #{inspect(tag)}"
       )
 
-      {:ok, State.add_child(state, tag, child_info)}
+      :ok
     else
       {:error, reason} ->
         Logger.warning(
           "AgentServer #{state.id} failed to adopt child #{inspect(child)} with tag #{inspect(tag)}: #{inspect(reason)}"
         )
 
-        {:ok, state}
+        :ok
     end
   end
 
@@ -403,8 +399,8 @@ end
 defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Stop do
   @moduledoc false
 
-  def exec(%{reason: reason}, _input_signal, state) do
-    {:stop, reason, state}
+  def exec(%{reason: reason}, _input_signal, _state) do
+    {:stop, reason}
   end
 end
 
@@ -417,7 +413,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnManagedAg
 
   # Delegate to SpawnManagedAgent.execute/2 (the single source of truth for
   # "spawn via InstanceManager with a parent ref") and discard the pid to
-  # fit the DirectiveExec {:ok, state} contract. Non-directive callers like
+  # fit the DirectiveExec :ok contract. Non-directive callers like
   # Jido.Pod.Runtime use execute/2 directly and keep the pid.
   def exec(directive, _input_signal, state) do
     case SpawnManagedAgent.execute(directive, state) do
@@ -426,12 +422,12 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnManagedAg
           "SpawnManagedAgent #{state.id}: #{directive.tag} at #{directive.namespace}/#{directive.key}"
         )
 
-        {:ok, state}
+        :ok
 
       {:error, reason} ->
         Logger.error("SpawnManagedAgent #{state.id}: failed #{directive.tag}: #{inspect(reason)}")
 
-        {:ok, state}
+        :ok
     end
   end
 end
@@ -444,12 +440,12 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Reply do
   alias Jido.Signal
   alias Jido.Signal.Dispatch
 
-  def exec(%{input_signal: nil}, _input_signal, state), do: {:ok, state}
+  def exec(%{input_signal: nil}, _input_signal, _state), do: :ok
 
-  def exec(%{input_signal: %{jido_dispatch: nil}}, _input_signal, state) do
+  def exec(%{input_signal: %{jido_dispatch: nil}}, _input_signal, _state) do
     # No reply channel on the input signal — caller wasn't using
     # Signal.Call.call/3, so there's no one to reply to.
-    {:ok, state}
+    :ok
   end
 
   def exec(
@@ -478,7 +474,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Reply do
         )
     end
 
-    {:ok, state}
+    :ok
   end
 end
 
@@ -487,8 +483,8 @@ defimpl Jido.AgentServer.DirectiveExec, for: Any do
 
   require Logger
 
-  def exec(directive, _input_signal, state) do
+  def exec(directive, _input_signal, _state) do
     Logger.debug("Ignoring unknown directive: #{inspect(directive.__struct__)}")
-    {:ok, state}
+    :ok
   end
 end

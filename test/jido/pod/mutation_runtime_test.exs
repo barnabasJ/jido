@@ -610,8 +610,8 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
         before_state = s.agent.state
         directive = StartNode.new!("planner")
         signal = Signal.new!("noop", %{}, source: "/test")
-        {:ok, next_state} = Jido.AgentServer.DirectiveExec.exec(directive, signal, s)
-        {:ok, %{before: before_state, after: next_state.agent.state}}
+        :ok = Jido.AgentServer.DirectiveExec.exec(directive, signal, s)
+        {:ok, %{before: before_state, after: s.agent.state}}
       end)
 
     assert before_state == after_state

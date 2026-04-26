@@ -12,10 +12,10 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Pod.Directive.StartNode do
       |> Keyword.merge(if initial, do: [initial_state: initial], else: [])
 
     case Runtime.start_node(state, name, runtime_opts) do
-      {:ok, next_state, _pid_or_adopted} ->
-        {:ok, next_state}
+      {:ok, _next_state, _pid_or_adopted} ->
+        :ok
 
-      {:error, next_state, reason} ->
+      {:error, _next_state, reason} ->
         # Synthesize a child.exit so MutateProgress treats this as a startup
         # failure and finalizes the mutation rather than hanging on a
         # child.started that will never arrive.
@@ -26,7 +26,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Pod.Directive.StartNode do
           )
 
         _ = AgentServer.cast(self(), synthetic)
-        {:ok, next_state}
+        :ok
     end
   end
 end
@@ -37,7 +37,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Pod.Directive.StopNode do
   alias Jido.Pod.Runtime
 
   def exec(%{name: name, reason: reason}, _input_signal, state) do
-    {:ok, next_state} = Runtime.stop_node(state, name, reason)
-    {:ok, next_state}
+    {:ok, _next_state} = Runtime.stop_node(state, name, reason)
+    :ok
   end
 end

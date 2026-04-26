@@ -28,7 +28,7 @@ defmodule Jido.Agent.Directive do
     * `%AdoptChild{}` - Attach an orphaned or unattached child to the current parent
     * `%StopChild{}` - Request a tracked child agent to stop gracefully
     * `%Schedule{}` - Schedule a delayed message
-    * `%RunInstruction{}` - Execute an instruction at runtime and route result to `cmd/2`
+    * `%RunInstruction{}` - Execute an instruction at runtime and route the result via signal_routes
     * `%Stop{}` - Stop the agent process (self)
 
   ## Usage
@@ -44,7 +44,7 @@ defmodule Jido.Agent.Directive do
       %Directive.Schedule{delay_ms: 5000, message: :timeout}
 
       # Execute instruction at runtime
-      %Directive.RunInstruction{instruction: instruction, result_action: :fsm_instruction_result}
+      %Directive.RunInstruction{instruction: instruction, result_signal_type: "fsm.instruction.replied"}
 
   ## Extensibility
 
@@ -632,28 +632,54 @@ defmodule Jido.Agent.Directive do
 
   defmodule RunInstruction do
     @moduledoc """
-    Execute a `%Jido.Instruction{}` at runtime and route the result back to `cmd/2`.
+    Execute a `%Jido.Instruction{}` at runtime and route the result via
+    a signal. Per ADR 0019 §1 / task 0015, the directive does the I/O
+    only — running the instruction and emitting a result signal. The
+    state mutation that consumes the result happens in an action bound
+    to `result_signal_type` via the agent's `signal_routes/1`.
 
-    This directive lets strategies keep `cmd/2` pure by emitting instruction execution
-    requests instead of calling `Jido.Exec.run/1` directly. The runtime executes the
-    instruction, builds a result payload, then calls:
+    The framework does **not** call `cmd/2` directly from the directive
+    body anymore — that crossed the directive/action boundary. Wire a
+    handler:
 
-        agent_module.cmd(agent, {result_action, payload})
+        # in the agent
+        def signal_routes(_ctx) do
+          [{"myapp.async.result", MyApp.HandleAsyncResult}]
+        end
+
+        # the directive
+        Directive.run_instruction(instruction,
+          result_signal_type: "myapp.async.result"
+        )
 
     ## Fields
 
     - `instruction` - The `%Jido.Instruction{}` to execute
-    - `result_action` - Internal action atom/module for result handling in `cmd/2`
+    - `result_signal_type` - Type of the signal emitted with the result
+      payload. The agent's `signal_routes` should bind this type to a
+      handler action that sets the appropriate slice fields.
     - `meta` - Optional metadata echoed in the result payload
+
+    The result-signal payload shape:
+
+        %{
+          status: :ok | :error,
+          result: any(),     # only when :ok
+          reason: any(),     # only when :error
+          effects: [...],    # action's directives, only when :ok
+          instruction: %Jido.Instruction{},
+          meta: map()
+        }
     """
 
     @schema Zoi.struct(
               __MODULE__,
               %{
                 instruction: Zoi.any(description: "%Jido.Instruction{} to execute"),
-                result_action:
+                result_signal_type:
                   Zoi.any(
-                    description: "Action used when routing execution result back into cmd/2"
+                    description:
+                      "Signal type used to route the execution result. Bind via signal_routes."
                   ),
                 meta:
                   Zoi.map(Zoi.any(), Zoi.any(),
@@ -878,19 +904,30 @@ defmodule Jido.Agent.Directive do
 
   ## Options
 
-  - `:result_action` - Internal action atom/module to receive execution results (default: `:instruction_result`)
+  - `:result_signal_type` - Required signal type used to route the
+    execution result. Bind it via the agent's `signal_routes/1` to an
+    action that consumes the result payload.
   - `:meta` - Optional metadata echoed in result payload (map)
 
   ## Examples
 
-      Directive.run_instruction(instruction)
-      Directive.run_instruction(instruction, result_action: :fsm_instruction_result)
+      Directive.run_instruction(instruction,
+        result_signal_type: "myapp.instruction.replied"
+      )
+
+      # In the agent:
+      def signal_routes(_ctx) do
+        [{"myapp.instruction.replied", MyApp.HandleInstructionResult}]
+      end
   """
   @spec run_instruction(Jido.Instruction.t(), keyword()) :: RunInstruction.t()
-  def run_instruction(%Jido.Instruction{} = instruction, opts \\ []) do
+  def run_instruction(%Jido.Instruction{} = instruction, opts) do
+    result_signal_type =
+      Keyword.fetch!(opts, :result_signal_type)
+
     %RunInstruction{
       instruction: instruction,
-      result_action: Keyword.get(opts, :result_action, :instruction_result),
+      result_signal_type: result_signal_type,
       meta: Keyword.get(opts, :meta, %{})
     }
   end
