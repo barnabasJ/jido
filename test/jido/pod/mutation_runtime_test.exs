@@ -473,27 +473,36 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
   test "concurrent mutate while one is in-flight rejects with :mutation_in_progress",
        %{pod_id: pod_id, jido: jido} do
     # Mutation A spawns a slow-booting worker (its lifecycle.starting middleware
-    # blocks 500ms). While that worker is mid-boot, the pod's mutation slice
-    # stays :running. Mutation B casts during that window and is rejected via
-    # the natural ensure_mutation_idle guard — no StuckMutationAction shim.
+    # blocks 500ms). Cast (not call) mutation A so the test isn't blocked
+    # waiting for the worker's init to return — the pod's process_signal IS
+    # blocked though, since SpawnManagedAgent.execute waits for the child's
+    # init. Once the SlowStartingMiddleware sends :slow_starting, the test
+    # knows the worker is mid-boot, the pod's mutation slice is :running,
+    # and a second mutate cast (queued behind A in the pod's mailbox) will
+    # reject via the natural ensure_mutation_idle guard — no
+    # StuckMutationAction shim required.
     :persistent_term.put({SlowStartingMiddleware, :notify_pid}, self())
 
     {:ok, pod_pid} = AgentServer.start_link(agent_module: EmptyMutablePod, id: pod_id, jido: jido)
 
-    assert {:ok, %{queued: true}} =
-             Pod.mutate(
-               pod_pid,
-               [
-                 Mutation.add_node("planner", %{
-                   agent: SlowBootWorker,
-                   manager: @slow_manager,
-                   activation: :eager
-                 })
-               ]
-             )
+    mutate_a_signal =
+      Signal.new!(
+        "pod.mutate",
+        %{
+          ops: [
+            Mutation.add_node("planner", %{
+              agent: SlowBootWorker,
+              manager: @slow_manager,
+              activation: :eager
+            })
+          ],
+          opts: %{}
+        },
+        source: "/test"
+      )
 
-    # Once SlowStartingMiddleware fires :slow_starting, the worker is mid-boot
-    # and the pod's mutation slice is :running — second mutate must reject.
+    :ok = AgentServer.cast(pod_pid, mutate_a_signal)
+
     assert_receive :slow_starting, 5_000
 
     result =
