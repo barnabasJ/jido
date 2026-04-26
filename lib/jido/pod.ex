@@ -200,8 +200,8 @@ defmodule Jido.Pod do
 
   For the post-completion mutation report, use `mutate_and_wait/3`.
 
-  `server` follows the same resolution rules as `Jido.AgentServer.state/1` and
-  `Jido.AgentServer.call/3`. Pass the running pod pid, a locally registered
+  `server` follows the same resolution rules as `Jido.AgentServer.state/3` and
+  `Jido.AgentServer.call/4`. Pass the running pod pid, a locally registered
   server name, or another resolvable runtime server reference. Raw string ids
   still require explicit registry lookup before use.
 

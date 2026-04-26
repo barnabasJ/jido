@@ -161,7 +161,9 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
     test "schedule tick delivers signal and updates state", %{jido: jido} do
       pid = start_server(%{jido: jido}, ScheduledAgent)
 
-      eventually_state(pid, fn state -> state.agent.state.domain.tick_count > 0 end, timeout: 5_000)
+      eventually_state(pid, fn state -> state.agent.state.domain.tick_count > 0 end,
+        timeout: 5_000
+      )
     end
   end
 end

@@ -54,7 +54,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
 
       assert Trace.get(signal) == nil
 
-      {:ok, _agent} = AgentServer.call(pid, signal)
+      {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert_receive {:telemetry, metadata}, 1000
       assert is_binary(metadata[:jido_trace_id])
@@ -83,7 +83,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, traced_signal} = Trace.put(signal, ctx)
 
-      {:ok, _agent} = AgentServer.call(pid, traced_signal)
+      {:ok, _agent} = AgentServer.call(pid, traced_signal, fn s -> {:ok, s.agent} end)
 
       assert_receive {:telemetry, metadata}, 1000
       assert metadata[:jido_trace_id] == ctx.trace_id
@@ -116,7 +116,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
       signal = Signal.new!("emit", %{}, source: "/test")
       {:ok, traced_signal} = Trace.put(signal, ctx)
 
-      {:ok, _agent} = AgentServer.call(pid, traced_signal)
+      {:ok, _agent} = AgentServer.call(pid, traced_signal, fn s -> {:ok, s.agent} end)
 
       assert_receive {:telemetry, metadata}, 1000
       assert metadata[:jido_trace_id] == ctx.trace_id
@@ -147,7 +147,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, traced_signal} = Trace.put(signal, child_ctx)
 
-      {:ok, _agent} = AgentServer.call(pid, traced_signal)
+      {:ok, _agent} = AgentServer.call(pid, traced_signal, fn s -> {:ok, s.agent} end)
 
       assert_receive {:telemetry, metadata}, 1000
       assert metadata[:jido_trace_id] == parent_ctx.trace_id
@@ -178,7 +178,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
       signal = Signal.new!("emit", %{}, source: "/test")
       {:ok, traced_signal} = Trace.put(signal, ctx)
 
-      {:ok, _agent} = AgentServer.call(pid, traced_signal)
+      {:ok, _agent} = AgentServer.call(pid, traced_signal, fn s -> {:ok, s.agent} end)
 
       metadata = wait_for_trace(ctx.trace_id)
       assert metadata[:jido_trace_id] == ctx.trace_id

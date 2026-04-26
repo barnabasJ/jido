@@ -4,7 +4,8 @@ defmodule Jido.AgentServer.State do
 
   > #### Internal Module {: .warning}
   > This module is internal to the AgentServer implementation. Its API may
-  > change without notice. Use `Jido.AgentServer.state/1` to retrieve state.
+  > change without notice. Use `Jido.AgentServer.state/3` with a selector
+  > to retrieve a projection of state.
 
   This struct holds all runtime state for an agent instance including
   the agent itself, hierarchy tracking, and configuration.
@@ -92,12 +93,6 @@ defmodule Jido.AgentServer.State do
                 Zoi.integer(description: "Count of errors for max_errors policy")
                 |> Zoi.default(0),
               metrics: Zoi.map(description: "Runtime metrics") |> Zoi.default(%{}),
-              pending_acks:
-                Zoi.map(
-                  description:
-                    "Map of signal id => %{caller_pid, ref, monitor_ref, selector} for cast_and_await"
-                )
-                |> Zoi.default(%{}),
               signal_subscribers:
                 Zoi.map(
                   description:
@@ -192,7 +187,6 @@ defmodule Jido.AgentServer.State do
         skip_schedules: opts.skip_schedules,
         error_count: 0,
         metrics: %{},
-        pending_acks: %{},
         signal_subscribers: %{},
         ready_waiters: %{},
         lifecycle: lifecycle,

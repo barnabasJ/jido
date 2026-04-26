@@ -27,7 +27,8 @@ defmodule JidoTest.Plugin.FSMTest do
              "done" => [],
              "errored" => []
            },
-           terminal_states: ["done", "errored"]}}
+           terminal_states: ["done", "errored"]
+         }}
       ]
   end
 
@@ -94,6 +95,7 @@ defmodule JidoTest.Plugin.FSMTest do
 
     test "rejects a transition not in the allowed list" do
       agent = ConfiguredFSMAgent.new()
+
       assert {:error, _reason} =
                ConfiguredFSMAgent.cmd(agent, {Transition, %{to: "unknown"}})
     end

@@ -50,7 +50,6 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     @moduledoc false
     use Jido.Agent,
       name: "pod_mutation_slow_worker",
-
       path: :domain,
       schema: [],
       plugins: [SlowMountPlugin]
@@ -235,7 +234,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     assert {:ok, topology} = Pod.fetch_topology(pod_pid)
     assert Map.has_key?(topology.nodes, "planner")
     assert {:ok, planner_pid} = Pod.lookup_node(pod_pid, "planner")
-    assert {:ok, planner_state} = AgentServer.state(planner_pid)
+    assert {:ok, planner_state} = AgentServer.state(planner_pid, fn s -> {:ok, s} end)
     assert planner_state.agent.state.domain.role == "planner"
   end
 
@@ -322,7 +321,9 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     assert {:ok, planner_pid} = Pod.lookup_node(pod_pid, "planner")
     assert {:ok, reviewer_pid} = Pod.lookup_node(pod_pid, "reviewer")
 
-    assert {:ok, reviewer_report} = Pod.mutate_and_wait(pod_pid, [Mutation.remove_node("reviewer")])
+    assert {:ok, reviewer_report} =
+             Pod.mutate_and_wait(pod_pid, [Mutation.remove_node("reviewer")])
+
     assert reviewer_report.status == :completed
     eventually(fn -> not Process.alive?(reviewer_pid) end)
     assert {:error, :unknown_node} = Pod.lookup_node(pod_pid, "reviewer")
@@ -413,7 +414,9 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     {:ok, pod_pid} = AgentServer.start_link(agent_module: SelfMutatingPod, id: pod_id, jido: jido)
 
     assert {:ok, _agent} =
-             AgentServer.call(pod_pid, Signal.new!("expand", %{}, source: "/test"))
+             AgentServer.call(pod_pid, Signal.new!("expand", %{}, source: "/test"), fn s ->
+               {:ok, s.agent}
+             end)
 
     state =
       JidoTest.Eventually.eventually_state(
@@ -454,7 +457,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     assert byte_size(id) > 0
 
     # Slice reflects the same mutation_id once execute_mutation_plan finishes.
-    {:ok, state} = AgentServer.state(pod_pid)
+    {:ok, state} = AgentServer.state(pod_pid, fn s -> {:ok, s} end)
     assert get_in(state.agent.state, [:pod, :mutation, :id]) == id
   end
 
@@ -467,9 +470,11 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     # AgentServer.call returns once the directive is applied, so when control
     # returns here the slice is in the stuck state.
     assert {:ok, _agent} =
-             AgentServer.call(pod_pid, Signal.new!("stuck", %{}, source: "/test"))
+             AgentServer.call(pod_pid, Signal.new!("stuck", %{}, source: "/test"), fn s ->
+               {:ok, s.agent}
+             end)
 
-    {:ok, state} = AgentServer.state(pod_pid)
+    {:ok, state} = AgentServer.state(pod_pid, fn s -> {:ok, s} end)
     assert get_in(state.agent.state, [:pod, :mutation, :status]) == :running
 
     result =
@@ -574,10 +579,14 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
       AgentServer.start_link(agent_module: StuckMutationPod, id: pod_id, jido: jido)
 
     # Pre-stick the slice so the action error path returns immediately on the
-    # second mutation. mutate_and_wait gets {:error, _} from cast_and_await and
+    # second mutation. mutate_and_wait gets {:error, _} from call/4 and
     # unsubscribes both lifecycle subscriptions before returning.
-    assert {:ok, _agent} =
-             AgentServer.call(pod_pid, Signal.new!("stuck", %{}, source: "/test"))
+    assert {:ok, :done} =
+             AgentServer.call(
+               pod_pid,
+               Signal.new!("stuck", %{}, source: "/test"),
+               fn _s -> {:ok, :done} end
+             )
 
     result =
       Pod.mutate_and_wait(

@@ -32,7 +32,6 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
     @moduledoc false
     use Jido.Agent,
       name: "example_nested_pod_worker",
-
       path: :domain,
       schema: [
         role: [type: :string, default: "worker"]
@@ -155,11 +154,11 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
     assert {:ok, nested_pid} = Pod.lookup_node(parent_pid, :editorial)
     assert {:ok, ^nested_pid} = InstanceManager.lookup(@child_pod_manager, parent_nested_key)
 
-    {:ok, parent_state} = AgentServer.state(parent_pid)
+    {:ok, parent_state} = AgentServer.state(parent_pid, fn s -> {:ok, s} end)
     assert parent_state.children.coordinator.pid == coordinator_pid
     refute Map.has_key?(parent_state.children, :editorial)
 
-    {:ok, coordinator_state} = AgentServer.state(coordinator_pid)
+    {:ok, coordinator_state} = AgentServer.state(coordinator_pid, fn s -> {:ok, s} end)
     assert coordinator_state.children.editorial.pid == nested_pid
 
     assert {:ok, editor_pid} = Pod.lookup_node(nested_pid, :editor)
@@ -188,24 +187,24 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
     assert Process.alive?(nested_pid)
     assert Process.alive?(editor_pid)
 
-    {:ok, coordinator_state} = AgentServer.state(coordinator_pid)
+    {:ok, coordinator_state} = AgentServer.state(coordinator_pid, fn s -> {:ok, s} end)
     assert coordinator_state.parent == nil
     assert coordinator_state.orphaned_from.id == pod_key
 
-    {:ok, nested_state} = AgentServer.state(nested_pid)
+    {:ok, nested_state} = AgentServer.state(nested_pid, fn s -> {:ok, s} end)
     assert nested_state.parent.pid == coordinator_pid
 
-    {:ok, editor_state} = AgentServer.state(editor_pid)
+    {:ok, editor_state} = AgentServer.state(editor_pid, fn s -> {:ok, s} end)
     assert editor_state.parent.pid == nested_pid
 
     assert {:ok, restored_pid} = Pod.get(@parent_pod_manager, pod_key)
     assert restored_pid != parent_pid
     assert {:ok, ^nested_pid} = Pod.lookup_node(restored_pid, :editorial)
 
-    {:ok, restored_parent_state} = AgentServer.state(restored_pid)
+    {:ok, restored_parent_state} = AgentServer.state(restored_pid, fn s -> {:ok, s} end)
     assert restored_parent_state.children.coordinator.pid == coordinator_pid
 
-    {:ok, restored_nested_state} = AgentServer.state(nested_pid)
+    {:ok, restored_nested_state} = AgentServer.state(nested_pid, fn s -> {:ok, s} end)
     assert restored_nested_state.children.editor.pid == editor_pid
   end
 end

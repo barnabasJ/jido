@@ -27,7 +27,7 @@ defmodule JidoTest.AgentServer.LifecycleSignalsTest do
           id: "ready-1"
         )
 
-      assert :ok = AgentServer.await_ready(pid, 5_000)
+      assert :ok = AgentServer.await_ready(pid, timeout: 5_000)
     end
 
     test "is idempotent — subsequent calls return :ok immediately", %{jido: jido} do
@@ -38,12 +38,12 @@ defmodule JidoTest.AgentServer.LifecycleSignalsTest do
           id: "ready-2"
         )
 
-      assert :ok = AgentServer.await_ready(pid, 5_000)
-      assert :ok = AgentServer.await_ready(pid, 100)
+      assert :ok = AgentServer.await_ready(pid, timeout: 5_000)
+      assert :ok = AgentServer.await_ready(pid, timeout: 100)
     end
 
     test "returns an error tuple for an unresolvable server reference" do
-      assert {:error, _} = AgentServer.await_ready("never-started-agent-id", 100)
+      assert {:error, _} = AgentServer.await_ready("never-started-agent-id", timeout: 100)
     end
   end
 end

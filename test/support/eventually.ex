@@ -56,7 +56,12 @@ defmodule JidoTest.Eventually do
   end
 
   @doc """
-  Polls AgentServer.state/1 until `fun.(state)` returns true.
+  Polls `AgentServer.state/3` (with a `fn s -> {:ok, s} end` selector) until
+  `fun.(state)` returns true.
+
+  Uses the verbose full-state selector deliberately: the predicate is a
+  test-time inspection that may touch any field, and reproducing each
+  call site as a tailored selector buys nothing for test assertions.
 
   ## Examples
 
@@ -71,7 +76,7 @@ defmodule JidoTest.Eventually do
   end
 
   defp check_state(pid, fun) do
-    case Jido.AgentServer.state(pid) do
+    case Jido.AgentServer.state(pid, fn s -> {:ok, s} end) do
       {:ok, state} -> if fun.(state), do: state, else: false
       _ -> false
     end

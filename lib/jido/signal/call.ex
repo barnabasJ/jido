@@ -2,12 +2,14 @@ defmodule Jido.Signal.Call do
   @moduledoc """
   Synchronous request / reply over signals.
 
-  The standard way to ask an agent for information today is
-  `Jido.AgentServer.state/1` — pull the whole state struct out and dig. That
-  leaks internal layout to callers and forces the agent to be transparent.
-  Signals are the natural alternative: the caller dispatches a query
+  `Jido.AgentServer.state/3` and `Jido.AgentServer.call/4` already cross
+  the boundary safely (every call hands a selector that decides what is
+  exposed). This primitive solves the *different* problem of letting the
+  agent author decide the answer's shape: the caller dispatches a query
   signal, the agent routes it to an action that produces an answer, and
-  the answer comes back as its own signal.
+  the answer comes back as its own signal — the action body controls the
+  reply payload directly without the caller writing a state-projection
+  selector.
 
   `call/3` wires the two halves together:
 
@@ -32,13 +34,15 @@ defmodule Jido.Signal.Call do
         {:ok, %{}, List.wrap(emit)}
       end
 
-  ## Why not `Jido.AgentServer.call/2`?
+  ## Why not `Jido.AgentServer.call/4`?
 
-  `AgentServer.call/2` does synchronously dispatch a signal, but it
-  replies with the full agent struct — the caller still has to reach
-  into private state. This primitive keeps the reply's shape under the
-  agent's control (it emits a signal whose `data` is exactly what the
-  caller needs, nothing more).
+  `AgentServer.call/4` synchronously dispatches a signal and projects the
+  post-pipeline state through a caller-supplied selector. The caller
+  decides what crosses the boundary. `Signal.Call.call/3` flips the
+  control: the *action* decides what crosses the boundary — useful when
+  the answer is an aggregation of server-side internals (running pids,
+  registry lookups, etc.) that the caller can't formulate as a selector
+  over `%State{}`. Both still coexist.
 
   ## Options
 

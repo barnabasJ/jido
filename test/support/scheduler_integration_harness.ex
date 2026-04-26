@@ -156,15 +156,9 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
   def wait_for_job(pid, job_id, opts \\ []) do
     eventually(
       fn ->
-        case AgentServer.state(pid) do
-          {:ok, state} ->
-            case Map.get(state.cron_jobs, job_id) do
-              job_pid when is_pid(job_pid) ->
-                if Process.alive?(job_pid), do: job_pid, else: false
-
-              _ ->
-                false
-            end
+        case AgentServer.state(pid, fn s -> {:ok, Map.get(s.cron_jobs, job_id)} end) do
+          {:ok, job_pid} when is_pid(job_pid) ->
+            if Process.alive?(job_pid), do: job_pid, else: false
 
           _ ->
             false
@@ -196,7 +190,7 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
   end
 
   def state(pid) do
-    {:ok, state} = AgentServer.state(pid)
+    {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
     state
   end
 end

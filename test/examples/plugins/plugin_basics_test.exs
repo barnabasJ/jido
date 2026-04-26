@@ -93,7 +93,6 @@ defmodule JidoExampleTest.PluginBasicsTest do
     @moduledoc false
     use Jido.Agent,
       name: "notes_agent",
-
       path: :domain,
       plugins: [JidoExampleTest.PluginBasicsTest.NotesPlugin]
   end
@@ -102,7 +101,6 @@ defmodule JidoExampleTest.PluginBasicsTest do
     @moduledoc false
     use Jido.Agent,
       name: "configured_notes_agent",
-
       path: :domain,
       plugins: [{JidoExampleTest.PluginBasicsTest.NotesPlugin, %{label: "work"}}]
   end
@@ -132,7 +130,7 @@ defmodule JidoExampleTest.PluginBasicsTest do
       {:ok, pid} = Jido.start_agent(jido, NotesAgent, id: unique_id("notes"))
 
       signal = Signal.new!("notes.add", %{text: "hello world"}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert length(agent.state.notes.entries) == 1
       [note] = agent.state.notes.entries
@@ -143,12 +141,18 @@ defmodule JidoExampleTest.PluginBasicsTest do
       {:ok, pid} = Jido.start_agent(jido, NotesAgent, id: unique_id("notes"))
 
       {:ok, _} =
-        AgentServer.call(pid, Signal.new!("notes.add", %{text: "first"}, source: "/test"))
+        AgentServer.call(pid, Signal.new!("notes.add", %{text: "first"}, source: "/test"), fn s ->
+          {:ok, s.agent}
+        end)
 
       {:ok, _} =
-        AgentServer.call(pid, Signal.new!("notes.add", %{text: "second"}, source: "/test"))
+        AgentServer.call(
+          pid,
+          Signal.new!("notes.add", %{text: "second"}, source: "/test"),
+          fn s -> {:ok, s.agent} end
+        )
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       entries = state.agent.state.notes.entries
 
       assert length(entries) == 2
@@ -156,7 +160,11 @@ defmodule JidoExampleTest.PluginBasicsTest do
       assert "first" in texts
       assert "second" in texts
 
-      {:ok, agent} = AgentServer.call(pid, Signal.new!("notes.clear", %{}, source: "/test"))
+      {:ok, agent} =
+        AgentServer.call(pid, Signal.new!("notes.clear", %{}, source: "/test"), fn s ->
+          {:ok, s.agent}
+        end)
+
       assert agent.state.notes.entries == []
     end
   end

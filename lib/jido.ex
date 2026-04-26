@@ -52,8 +52,8 @@ defmodule Jido do
       end
 
   See `Jido.Agent` for defining agents and `Jido.AgentServer` for the
-  signal-driven runtime (including the `cast_and_await/4` and
-  `subscribe/4` primitives for coordination).
+  signal-driven runtime (including the `call/4` and `subscribe/4`
+  primitives for coordination).
   """
 
   @doc """
@@ -432,8 +432,7 @@ defmodule Jido do
   def start_agent(jido_instance, agent_module, opts \\ [])
       when is_atom(jido_instance) and is_atom(agent_module) do
     child_spec =
-      {Jido.AgentServer,
-       Keyword.merge(opts, agent_module: agent_module, jido: jido_instance)}
+      {Jido.AgentServer, Keyword.merge(opts, agent_module: agent_module, jido: jido_instance)}
 
     DynamicSupervisor.start_child(agent_supervisor_name(jido_instance), child_spec)
   end
@@ -660,5 +659,4 @@ defmodule Jido do
 
   @doc "Refreshes the Discovery catalog."
   defdelegate refresh_discovery(), to: Jido.Discovery, as: :refresh
-
 end

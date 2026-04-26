@@ -86,7 +86,7 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
         state.agent.state.domain.step2_saw_cmd_ran
       end)
 
-      {:ok, state} = Jido.AgentServer.state(pid)
+      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
       agent_state = state.agent.state.domain
 
       assert agent_state.step1_cmd_ran == true

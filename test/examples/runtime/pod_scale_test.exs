@@ -254,7 +254,7 @@ defmodule JidoExampleTest.PodScaleTest do
       assert map_size(snapshots) == TopologyBuilder.total_nodes()
       assert adopted_count(snapshots) == TopologyBuilder.total_nodes()
 
-      {:ok, manager_state} = AgentServer.state(pod_pid)
+      {:ok, manager_state} = AgentServer.state(pod_pid, fn s -> {:ok, s} end)
 
       assert manager_state.children
              |> Map.keys()
@@ -271,10 +271,10 @@ defmodule JidoExampleTest.PodScaleTest do
       {:ok, squad_pid} = Pod.lookup_node(pod_pid, :squad_1_1)
       {:ok, worker_pid} = Pod.lookup_node(pod_pid, :worker_1_1_1)
 
-      {:ok, lead_state} = AgentServer.state(lead_pid)
+      {:ok, lead_state} = AgentServer.state(lead_pid, fn s -> {:ok, s} end)
       assert lead_state.children.squad_1_1.pid == squad_pid
 
-      {:ok, squad_state} = AgentServer.state(squad_pid)
+      {:ok, squad_state} = AgentServer.state(squad_pid, fn s -> {:ok, s} end)
       assert squad_state.children.worker_1_1_1.pid == worker_pid
     end
 
@@ -301,14 +301,16 @@ defmodule JidoExampleTest.PodScaleTest do
       assert Process.alive?(sample_pids.worker_1_1_1)
       assert Process.alive?(sample_pids.worker_10_9_10)
 
-      assert {:ok, lead_state} = AgentServer.state(sample_pids.lead_1)
+      assert {:ok, lead_state} = AgentServer.state(sample_pids.lead_1, fn s -> {:ok, s} end)
       assert lead_state.parent == nil
       assert lead_state.orphaned_from.id == pod_key
 
-      assert {:ok, squad_state} = AgentServer.state(sample_pids.squad_1_1)
+      assert {:ok, squad_state} = AgentServer.state(sample_pids.squad_1_1, fn s -> {:ok, s} end)
       assert squad_state.parent.pid == sample_pids.lead_1
 
-      assert {:ok, worker_state} = AgentServer.state(sample_pids.worker_1_1_1)
+      assert {:ok, worker_state} =
+               AgentServer.state(sample_pids.worker_1_1_1, fn s -> {:ok, s} end)
+
       assert worker_state.parent.pid == sample_pids.squad_1_1
 
       assert {:ok, restored_pid} = Pod.get(@pod_manager, pod_key)

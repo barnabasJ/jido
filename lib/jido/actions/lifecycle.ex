@@ -175,7 +175,13 @@ defmodule Jido.Actions.Lifecycle do
 
     def run(
           %Jido.Signal{
-            data: %{agent_module: mod, tag: tag, initial_state: state, meta: meta, restart: restart}
+            data: %{
+              agent_module: mod,
+              tag: tag,
+              initial_state: state,
+              meta: meta,
+              restart: restart
+            }
           },
           _slice,
           _opts,

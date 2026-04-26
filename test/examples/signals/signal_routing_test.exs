@@ -104,7 +104,7 @@ defmodule JidoExampleTest.SignalRoutingTest do
       {:ok, pid} = Jido.start_agent(jido, RoutedAgent, id: unique_id("routed"))
 
       signal = Signal.new!("increment", %{amount: 5}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.counter == 5
     end
@@ -113,10 +113,10 @@ defmodule JidoExampleTest.SignalRoutingTest do
       {:ok, pid} = Jido.start_agent(jido, RoutedAgent, id: unique_id("routed"))
 
       increment_signal = Signal.new!("increment", %{amount: 10}, source: "/test")
-      {:ok, _} = AgentServer.call(pid, increment_signal)
+      {:ok, _} = AgentServer.call(pid, increment_signal, fn s -> {:ok, s.agent} end)
 
       name_signal = Signal.new!("set_name", %{name: "TestAgent"}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, name_signal)
+      {:ok, agent} = AgentServer.call(pid, name_signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.counter == 10
       assert agent.state.domain.name == "TestAgent"
@@ -132,7 +132,7 @@ defmodule JidoExampleTest.SignalRoutingTest do
           source: "/test"
         )
 
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert length(agent.state.domain.events) == 1
       [event] = agent.state.domain.events
@@ -153,7 +153,7 @@ defmodule JidoExampleTest.SignalRoutingTest do
 
       final_agent =
         Enum.reduce(signals, nil, fn signal, _acc ->
-          {:ok, agent} = AgentServer.call(pid, signal)
+          {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
           agent
         end)
 
@@ -163,20 +163,31 @@ defmodule JidoExampleTest.SignalRoutingTest do
     test "different signal types interleave correctly", %{jido: jido} do
       {:ok, pid} = Jido.start_agent(jido, RoutedAgent, id: unique_id("routed"))
 
-      {:ok, _} = AgentServer.call(pid, Signal.new!("increment", %{amount: 5}, source: "/test"))
-
       {:ok, _} =
-        AgentServer.call(pid, Signal.new!("set_name", %{name: "Counter"}, source: "/test"))
+        AgentServer.call(pid, Signal.new!("increment", %{amount: 5}, source: "/test"), fn s ->
+          {:ok, s.agent}
+        end)
 
       {:ok, _} =
         AgentServer.call(
           pid,
-          Signal.new!("record_event", %{event_type: "checkpoint"}, source: "/test")
+          Signal.new!("set_name", %{name: "Counter"}, source: "/test"),
+          fn s -> {:ok, s.agent} end
         )
 
-      {:ok, _} = AgentServer.call(pid, Signal.new!("increment", %{amount: 3}, source: "/test"))
+      {:ok, _} =
+        AgentServer.call(
+          pid,
+          Signal.new!("record_event", %{event_type: "checkpoint"}, source: "/test"),
+          fn s -> {:ok, s.agent} end
+        )
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, _} =
+        AgentServer.call(pid, Signal.new!("increment", %{amount: 3}, source: "/test"), fn s ->
+          {:ok, s.agent}
+        end)
+
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
       assert state.agent.state.domain.counter == 8
       assert state.agent.state.domain.name == "Counter"

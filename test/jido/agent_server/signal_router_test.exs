@@ -114,7 +114,6 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
       skip_schedules: false,
       error_count: 0,
       metrics: %{},
-      pending_acks: %{},
       signal_subscribers: %{},
       ready_waiters: %{},
       lifecycle: lifecycle,

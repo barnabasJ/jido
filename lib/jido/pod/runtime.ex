@@ -56,7 +56,7 @@ defmodule Jido.Pod.Runtime do
   end
 
   def ensure_node(server, name, opts \\ []) when is_node_name(name) and is_list(opts) do
-    with {:ok, state} <- AgentServer.state(server),
+    with {:ok, state} <- fetch_runtime_state(server),
          {:ok, topology} <- TopologyState.fetch_topology(state),
          {:ok, node} <- fetch_node(topology, name),
          :ok <- ensure_runtime_supported(node, name),
@@ -73,7 +73,7 @@ defmodule Jido.Pod.Runtime do
   end
 
   def reconcile(server, opts \\ []) when is_list(opts) do
-    with {:ok, state} <- AgentServer.state(server),
+    with {:ok, state} <- fetch_runtime_state(server),
          {:ok, topology} <- TopologyState.fetch_topology(state),
          {:ok, server_pid} <- resolve_runtime_server(server, state) do
       observe_pod_operation(
@@ -192,7 +192,7 @@ defmodule Jido.Pod.Runtime do
   @spec teardown_runtime(AgentServer.server(), keyword()) ::
           {:ok, map()} | {:error, map() | term()}
   def teardown_runtime(server, opts \\ []) when is_list(opts) do
-    with {:ok, state} <- AgentServer.state(server),
+    with {:ok, state} <- fetch_runtime_state(server),
          {:ok, topology} <- TopologyState.fetch_topology(state),
          {:ok, server_pid} <- resolve_runtime_server(server, state),
          {:ok, stop_waves} <- Planner.stop_waves(topology, Map.keys(topology.nodes)) do
@@ -628,15 +628,7 @@ defmodule Jido.Pod.Runtime do
   # the pod's own `signal_routes:` for user-defined handling (auto-wiring,
   # observability, etc.).
   defp build_parent_ref(parent_pid, %State{} = state, %Topology{} = topology, name, meta) do
-    parent_id =
-      if parent_pid == self() do
-        state.id
-      else
-        case AgentServer.state(parent_pid) do
-          {:ok, parent_state} -> parent_state.id
-          {:error, _} -> state.id
-        end
-      end
+    parent_id = resolve_parent_id(parent_pid, state)
 
     _ = topology
 
@@ -649,6 +641,19 @@ defmodule Jido.Pod.Runtime do
        meta: meta || %{}
      })}
   end
+
+  defp resolve_parent_id(parent_pid, %State{id: state_id}) do
+    if parent_pid == self() do
+      state_id
+    else
+      case AgentServer.state(parent_pid, &id_selector/1) do
+        {:ok, id} -> id
+        {:error, _} -> state_id
+      end
+    end
+  end
+
+  defp id_selector(%State{id: id}), do: {:ok, id}
 
   defp ensure_planned_pod_node(
          server_pid,
@@ -803,7 +808,7 @@ defmodule Jido.Pod.Runtime do
         {:error, {:tag_in_use, name}}
 
       nil ->
-        with {:ok, child_runtime} <- AgentServer.state(child_pid) do
+        with {:ok, child_runtime} <- AgentServer.state(child_pid, &child_runtime_selector/1) do
           # Re-attach the orphaned child to this pod via the adopt_parent
           # round-trip. Without this, the child's runtime keeps `parent: nil`
           # and `parent_matches?/2` returns false even though we hold its
@@ -833,6 +838,10 @@ defmodule Jido.Pod.Runtime do
           {:ok, State.add_child(state, name, child_info)}
         end
     end
+  end
+
+  defp child_runtime_selector(%State{} = s) do
+    {:ok, %{agent_module: s.agent_module, id: s.id, partition: s.partition}}
   end
 
   defp merge_wave_results(report, wave_results, waves, wave_index) do
@@ -1135,6 +1144,16 @@ defmodule Jido.Pod.Runtime do
         nil -> {:error, :not_found}
       end
     end
+  end
+
+  # Pod runtime is the framework-level pod orchestrator: it operates on
+  # the full %State{} (id, registry, partition, agent for topology) the
+  # way a generic process supervisor operates on a child's full struct.
+  # The selector here returns the whole state — verbose enough to make
+  # the deliberate decision visible, narrow enough that the boundary is
+  # still policed by the framework.
+  defp fetch_runtime_state(server) do
+    AgentServer.state(server, fn s -> {:ok, s} end)
   end
 
   defp pod_ancestry(opts, %State{agent_module: agent_module}) when is_list(opts) do

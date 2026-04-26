@@ -174,7 +174,8 @@ defmodule JidoExampleTest.MemoryPluginTest do
         MemoryAgent.new()
         |> MemAgent.ensure()
 
-      {:ok, agent, []} = MemoryAgent.cmd(agent, {UpdateWorldAction, %{key: :location, value: "lab"}})
+      {:ok, agent, []} =
+        MemoryAgent.cmd(agent, {UpdateWorldAction, %{key: :location, value: "lab"}})
 
       assert MemAgent.has_memory?(agent)
       assert MemAgent.get_in_space(agent, :world, :location) == "lab"

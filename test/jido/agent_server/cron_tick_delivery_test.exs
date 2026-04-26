@@ -73,7 +73,11 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
     test "cron tick actually delivers signal and updates agent state", %{jido: jido} do
       # Use extended 7-field cron: fires every second
       {:ok, pid} =
-        AgentServer.start_link(agent_module: CronTickAgent, id: unique_id("cron-tick"), jido: jido)
+        AgentServer.start_link(
+          agent_module: CronTickAgent,
+          id: unique_id("cron-tick"),
+          jido: jido
+        )
 
       register_signal =
         Signal.new!("register_cron", %{job_id: :tick_test, cron: "* * * * * * *"},
@@ -88,7 +92,9 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
       # The actual regression: before the fix, ticks would silently fail
       # because cast(string_id, signal) was rejected by resolve_server/1.
       # With the fix, ticks should deliver and increment tick_count.
-      eventually_state(pid, fn state -> state.agent.state.domain.tick_count > 0 end, timeout: 5_000)
+      eventually_state(pid, fn state -> state.agent.state.domain.tick_count > 0 end,
+        timeout: 5_000
+      )
 
       GenServer.stop(pid)
     end
@@ -106,7 +112,8 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
       eventually_state(pid, fn state -> state.agent.state.domain.tick_count == 1 end)
 
       # Cast with string ID should fail (the original bug)
-      assert {:error, {:invalid_server, _}} = AgentServer.call(id, tick_signal)
+      assert {:error, {:invalid_server, _}} =
+               AgentServer.call(id, tick_signal, fn s -> {:ok, s.agent} end)
 
       GenServer.stop(pid)
     end
@@ -129,7 +136,9 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
       eventually_state(pid, fn state -> Map.has_key?(state.cron_jobs, :multi_tick) end)
 
       # Wait for at least 2 ticks to confirm accumulation
-      eventually_state(pid, fn state -> state.agent.state.domain.tick_count >= 2 end, timeout: 5_000)
+      eventually_state(pid, fn state -> state.agent.state.domain.tick_count >= 2 end,
+        timeout: 5_000
+      )
 
       GenServer.stop(pid)
     end

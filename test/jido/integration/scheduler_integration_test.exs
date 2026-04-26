@@ -47,7 +47,6 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "scheduler_integration_plugin_agent",
-
       path: :domain,
       schema: [
         tick_count: [type: :integer, default: 0],
@@ -89,7 +88,7 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
         timeout: 5_000
       )
 
-      {:ok, state_during_outage} = AgentServer.state(pid)
+      {:ok, state_during_outage} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state_during_outage.cron_jobs[:heartbeat] == job_pid
       assert Process.alive?(job_pid)
 

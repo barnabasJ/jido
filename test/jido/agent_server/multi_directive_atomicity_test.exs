@@ -80,7 +80,7 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
         state.agent.state.domain.saw_d3
       end)
 
-      {:ok, state} = Jido.AgentServer.state(pid)
+      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
       domain = state.agent.state.domain
 
       assert domain.cmd_ran

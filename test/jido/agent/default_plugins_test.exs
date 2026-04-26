@@ -152,7 +152,6 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentDisableDefaults do
         use Jido.Agent,
           name: "dp_agent_disable_defaults",
-
           path: :domain,
           default_plugins: false
       end
@@ -164,7 +163,6 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentUserPluginsOnly do
         use Jido.Agent,
           name: "dp_agent_user_only",
-
           path: :domain,
           default_plugins: false,
           plugins: [UserPlugin]
@@ -183,7 +181,6 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentWithJido do
         use Jido.Agent,
           name: "dp_agent_with_jido",
-
           path: :domain,
           jido: FakeJido
       end
@@ -201,7 +198,6 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentWithJidoOverride do
         use Jido.Agent,
           name: "dp_agent_jido_override",
-
           path: :domain,
           jido: FakeJido2,
           default_plugins: %{thread: false}
@@ -220,7 +216,6 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentWithReplacement do
         use Jido.Agent,
           name: "dp_agent_replacement",
-
           path: :domain,
           jido: FakeJido3,
           default_plugins: %{memory: ReplacementMemoryPlugin}
@@ -241,7 +236,6 @@ defmodule JidoTest.Agent.DefaultPluginsTest do
       defmodule AgentMountOrder do
         use Jido.Agent,
           name: "dp_agent_mount_order",
-
           path: :domain,
           jido: FakeJido4,
           plugins: [UserPlugin]

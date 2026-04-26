@@ -157,7 +157,12 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         count: [type: :integer, required: true]
       ]
 
-    def run(%Jido.Signal{data: %{previous_count: previous_count, count: count}}, slice, _opts, _ctx) do
+    def run(
+          %Jido.Signal{data: %{previous_count: previous_count, count: count}},
+          slice,
+          _opts,
+          _ctx
+        ) do
       if is_pid(slice.observer),
         do: send(slice.observer, {:print_count, previous_count, count})
 
@@ -209,7 +214,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
           source: "/test"
         )
 
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.last_order_id == "ORD-001"
       assert length(agent.state.domain.orders) == 1
@@ -250,7 +255,8 @@ defmodule JidoExampleTest.EmitDirectiveTest do
             "create_order",
             %{order_id: "ORD-100", total: 1000},
             source: "/test"
-          )
+          ),
+          fn s -> {:ok, s.agent} end
         )
 
       {:ok, _} =
@@ -260,10 +266,11 @@ defmodule JidoExampleTest.EmitDirectiveTest do
             "process_payment",
             %{order_id: "ORD-100", payment_method: "paypal"},
             source: "/test"
-          )
+          ),
+          fn s -> {:ok, s.agent} end
         )
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.agent.state.domain.last_order_id == "ORD-100"
       assert state.agent.state.domain.last_payment.status == :success
 
@@ -298,7 +305,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         )
 
       signal = Signal.new!("multi_emit", %{event_count: 5}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.emitted_count == 5
 
@@ -327,7 +334,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         )
 
       signal = Signal.new!("count.increment", %{amount: 1}, source: "/test")
-      {:ok, _agent} = AgentServer.call(pid, signal)
+      {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert_receive {:print_count, 0, 1}, 2_000
     end

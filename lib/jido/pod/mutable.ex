@@ -23,12 +23,12 @@ defmodule Jido.Pod.Mutable do
         source: "/jido/pod/mutate"
       )
 
-    await_timeout =
+    call_timeout =
       Keyword.get(opts, :await_timeout, Keyword.get(opts, :timeout, :timer.seconds(30)))
 
     selector = Keyword.get(opts, :selector, &default_selector/1)
 
-    AgentServer.cast_and_await(server, signal, selector, timeout: await_timeout)
+    AgentServer.call(server, signal, selector, timeout: call_timeout)
   end
 
   @spec mutate_and_wait(AgentServer.server(), [Mutation.t() | term()], keyword()) ::
@@ -48,7 +48,7 @@ defmodule Jido.Pod.Mutable do
 
     # Subscribe FIRST. The lifecycle signal can't fire before the trigger
     # signal's pipeline runs, and `subscribe/4` is a synchronous GenServer.call,
-    # so the subscription is registered before the cast hits the mailbox.
+    # so the subscription is registered before the call hits the mailbox.
     with {:ok, completion_ref} <-
            AgentServer.subscribe(
              server,
@@ -63,10 +63,10 @@ defmodule Jido.Pod.Mutable do
              failure_selector(expected_signal_id),
              once: true
            ) do
-      cast_result =
-        AgentServer.cast_and_await(server, signal, &default_selector/1, timeout: await_timeout)
+      call_result =
+        AgentServer.call(server, signal, &default_selector/1, timeout: await_timeout)
 
-      case cast_result do
+      case call_result do
         {:ok, %{queued: true}} ->
           wait_for_lifecycle(server, completion_ref, failure_ref, await_timeout)
 

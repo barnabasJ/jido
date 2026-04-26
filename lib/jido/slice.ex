@@ -61,8 +61,7 @@ defmodule Jido.Slice do
                                  "The name of the Slice. Must contain only letters, numbers, and underscores."
                              )
                              |> Zoi.refine({__MODULE__, :validate_slice_name, []}),
-                           path:
-                             Zoi.atom(description: "The flat slice key in agent.state."),
+                           path: Zoi.atom(description: "The flat slice key in agent.state."),
                            actions:
                              Zoi.list(Zoi.atom(), description: "List of action modules.")
                              |> Zoi.refine({__MODULE__, :validate_slice_actions, []})

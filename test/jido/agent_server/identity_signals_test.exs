@@ -40,7 +40,7 @@ defmodule JidoTest.AgentServer.IdentitySignalsTest do
 
       :ok = AgentServer.await_ready(pid)
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       events = state.agent.state.app.identity_events
 
       assert Enum.any?(events, fn e ->
@@ -53,7 +53,7 @@ defmodule JidoTest.AgentServer.IdentitySignalsTest do
       pid = start_server(%{jido: jido}, WatcherAgent, id: "identity-2")
       :ok = AgentServer.await_ready(pid)
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       events = state.agent.state.app.identity_events
 
       assert Enum.any?(events, fn e ->

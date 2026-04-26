@@ -284,7 +284,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         timeout: 2_000
       )
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.agent.state.domain.attempts >= 3
     end
 
@@ -310,7 +310,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         )
 
       recover_signal = Signal.new!("recover", %{}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, recover_signal)
+      {:ok, agent} = AgentServer.call(pid, recover_signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.status == :recovered
       assert agent.state.domain.error == nil
@@ -362,7 +362,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         timeout: 2_000
       )
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.agent.state.domain.attempts >= 3
       assert state.agent.state.domain.result == :max_retries_reached
     end
@@ -379,7 +379,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         timeout: 2_000
       )
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.agent.state.domain.attempts == 3
       assert state.agent.state.domain.result == "finally succeeded"
     end

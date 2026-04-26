@@ -253,7 +253,7 @@ defmodule JidoExampleTest.NestedPodScaleTest do
       assert adopted_count(root_snapshots) == RootTopologyBuilder.total_nodes()
 
       assert {:ok, coordinator_pid} = Pod.lookup_node(root_pid, :coordinator)
-      {:ok, coordinator_state} = AgentServer.state(coordinator_pid)
+      {:ok, coordinator_state} = AgentServer.state(coordinator_pid, fn s -> {:ok, s} end)
 
       Enum.each(RootTopologyBuilder.sample_groups(), fn group_name ->
         assert {:ok, group_pid} = Pod.lookup_node(root_pid, group_name)
@@ -274,7 +274,7 @@ defmodule JidoExampleTest.NestedPodScaleTest do
       assert {:ok, lead_pid} = Pod.lookup_node(group_pid, :lead_1)
       assert {:ok, worker_pid} = Pod.lookup_node(group_pid, :worker_1_1)
 
-      {:ok, lead_state} = AgentServer.state(lead_pid)
+      {:ok, lead_state} = AgentServer.state(lead_pid, fn s -> {:ok, s} end)
       assert lead_state.children.worker_1_1.pid == worker_pid
     end
 
@@ -299,14 +299,14 @@ defmodule JidoExampleTest.NestedPodScaleTest do
       assert Process.alive?(lead_pid)
       assert Process.alive?(worker_pid)
 
-      {:ok, coordinator_state} = AgentServer.state(coordinator_pid)
+      {:ok, coordinator_state} = AgentServer.state(coordinator_pid, fn s -> {:ok, s} end)
       assert coordinator_state.parent == nil
       assert coordinator_state.orphaned_from.id == pod_key
 
-      {:ok, group_state} = AgentServer.state(group_1_pid)
+      {:ok, group_state} = AgentServer.state(group_1_pid, fn s -> {:ok, s} end)
       assert group_state.parent.pid == coordinator_pid
 
-      {:ok, worker_state} = AgentServer.state(worker_pid)
+      {:ok, worker_state} = AgentServer.state(worker_pid, fn s -> {:ok, s} end)
       assert worker_state.parent.pid == lead_pid
 
       assert {:ok, restored_root_pid} = Pod.get(@root_pod_manager, pod_key)
@@ -325,7 +325,7 @@ defmodule JidoExampleTest.NestedPodScaleTest do
       assert {:ok, group_snapshots} = Pod.nodes(group_1_pid)
       assert adopted_count(group_snapshots) == GroupTopologyBuilder.total_nodes()
 
-      {:ok, restored_coordinator_state} = AgentServer.state(coordinator_pid)
+      {:ok, restored_coordinator_state} = AgentServer.state(coordinator_pid, fn s -> {:ok, s} end)
       assert restored_coordinator_state.children.group_1.pid == group_1_pid
     end
   end

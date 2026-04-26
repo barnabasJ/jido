@@ -58,7 +58,8 @@ defmodule JidoTest.JidoTest do
       {:ok, parent_pid} =
         AgentServer.start(agent_module: Minimal, id: "parent-binding-parent", jido: jido)
 
-      {:ok, child_pid} = AgentServer.start(agent_module: Minimal, id: "parent-binding-child", jido: jido)
+      {:ok, child_pid} =
+        AgentServer.start(agent_module: Minimal, id: "parent-binding-child", jido: jido)
 
       assert {:ok, ^child_pid} = AgentServer.adopt_child(parent_pid, child_pid, :worker)
 
@@ -71,10 +72,20 @@ defmodule JidoTest.JidoTest do
 
     test "respects partitioned bindings", %{jido: jido} do
       {:ok, parent_pid} =
-        AgentServer.start(agent_module: Minimal, id: "partitioned-parent", jido: jido, partition: :alpha)
+        AgentServer.start(
+          agent_module: Minimal,
+          id: "partitioned-parent",
+          jido: jido,
+          partition: :alpha
+        )
 
       {:ok, alpha_child_pid} =
-        AgentServer.start(agent_module: Minimal, id: "shared-child", jido: jido, partition: :alpha)
+        AgentServer.start(
+          agent_module: Minimal,
+          id: "shared-child",
+          jido: jido,
+          partition: :alpha
+        )
 
       {:ok, _beta_child_pid} =
         AgentServer.start(agent_module: Minimal, id: "shared-child", jido: jido, partition: :beta)

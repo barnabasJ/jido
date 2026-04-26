@@ -320,11 +320,11 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert snapshots.planner.actual_parent.pid == pod_pid
     assert snapshots.reviewer.actual_parent.pid == planner_pid
 
-    {:ok, manager_state} = AgentServer.state(pod_pid)
+    {:ok, manager_state} = AgentServer.state(pod_pid, fn s -> {:ok, s} end)
     assert manager_state.children.planner.pid == planner_pid
     refute Map.has_key?(manager_state.children, :reviewer)
 
-    {:ok, planner_state} = AgentServer.state(planner_pid)
+    {:ok, planner_state} = AgentServer.state(planner_pid, fn s -> {:ok, s} end)
     assert planner_state.children.reviewer.pid == reviewer_pid
   end
 
@@ -349,10 +349,10 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert {:ok, ^planner_pid} = InstanceManager.lookup(@planner_manager, planner_key)
     assert {:ok, ^reviewer_pid} = InstanceManager.lookup(@reviewer_manager, reviewer_key)
 
-    assert {:ok, planner_state} = AgentServer.state(planner_pid)
+    assert {:ok, planner_state} = AgentServer.state(planner_pid, fn s -> {:ok, s} end)
     assert planner_state.agent.state.domain.role == "planner"
 
-    assert {:ok, reviewer_state} = AgentServer.state(reviewer_pid)
+    assert {:ok, reviewer_state} = AgentServer.state(reviewer_pid, fn s -> {:ok, s} end)
     assert reviewer_state.agent.state.domain.role == "override"
   end
 
@@ -365,7 +365,7 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert_receive {:DOWN, ^pod_ref, :process, ^pod_pid, _reason}, 1_000
 
     assert Process.alive?(planner_pid)
-    assert {:ok, planner_state} = AgentServer.state(planner_pid)
+    assert {:ok, planner_state} = AgentServer.state(planner_pid, fn s -> {:ok, s} end)
     assert planner_state.parent == nil
     assert planner_state.orphaned_from.id == pod_key
 
@@ -414,10 +414,10 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert {:ok, ^nested_planner_pid} =
              InstanceManager.lookup(@planner_manager, nested_planner_key)
 
-    {:ok, parent_state} = AgentServer.state(pid)
+    {:ok, parent_state} = AgentServer.state(pid, fn s -> {:ok, s} end)
     assert parent_state.children.nested.pid == nested_pid
 
-    {:ok, nested_state} = AgentServer.state(nested_pid)
+    {:ok, nested_state} = AgentServer.state(nested_pid, fn s -> {:ok, s} end)
     assert nested_state.children.planner.pid == nested_planner_pid
   end
 
@@ -594,13 +594,13 @@ defmodule JidoTest.Pod.RuntimeTest do
 
     assert InstanceManager.lookup(@reviewer_manager, reviewer_key, partition: :beta) == :error
 
-    {:ok, alpha_pod_state} = AgentServer.state(alpha_pod_pid)
-    {:ok, beta_pod_state} = AgentServer.state(beta_pod_pid)
+    {:ok, alpha_pod_state} = AgentServer.state(alpha_pod_pid, fn s -> {:ok, s} end)
+    {:ok, beta_pod_state} = AgentServer.state(beta_pod_pid, fn s -> {:ok, s} end)
     assert alpha_pod_state.partition == :alpha
     assert beta_pod_state.partition == :beta
 
-    {:ok, alpha_planner_state} = AgentServer.state(alpha_planner_pid)
-    {:ok, beta_planner_state} = AgentServer.state(beta_planner_pid)
+    {:ok, alpha_planner_state} = AgentServer.state(alpha_planner_pid, fn s -> {:ok, s} end)
+    {:ok, beta_planner_state} = AgentServer.state(beta_planner_pid, fn s -> {:ok, s} end)
     assert alpha_planner_state.partition == :alpha
     assert alpha_planner_state.parent.partition == :alpha
     assert beta_planner_state.partition == :beta
@@ -660,8 +660,8 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert {:ok, ^beta_nested_planner_pid} =
              InstanceManager.lookup(@planner_manager, nested_planner_key, partition: :beta)
 
-    {:ok, alpha_nested_state} = AgentServer.state(alpha_nested_pid)
-    {:ok, beta_nested_state} = AgentServer.state(beta_nested_pid)
+    {:ok, alpha_nested_state} = AgentServer.state(alpha_nested_pid, fn s -> {:ok, s} end)
+    {:ok, beta_nested_state} = AgentServer.state(beta_nested_pid, fn s -> {:ok, s} end)
     assert alpha_nested_state.partition == :alpha
     assert alpha_nested_state.parent.partition == :alpha
     assert beta_nested_state.partition == :beta
@@ -684,9 +684,9 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert Process.alive?(beta_pod_pid)
     assert Process.alive?(beta_planner_pid)
 
-    {:ok, alpha_planner_state} = AgentServer.state(alpha_planner_pid)
-    {:ok, beta_pod_state} = AgentServer.state(beta_pod_pid)
-    {:ok, beta_planner_state} = AgentServer.state(beta_planner_pid)
+    {:ok, alpha_planner_state} = AgentServer.state(alpha_planner_pid, fn s -> {:ok, s} end)
+    {:ok, beta_pod_state} = AgentServer.state(beta_pod_pid, fn s -> {:ok, s} end)
+    {:ok, beta_planner_state} = AgentServer.state(beta_planner_pid, fn s -> {:ok, s} end)
 
     assert alpha_planner_state.partition == :alpha
     assert alpha_planner_state.parent == nil

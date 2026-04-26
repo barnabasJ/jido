@@ -49,7 +49,6 @@ defmodule JidoExampleTest.IdentityPluginTest do
     @moduledoc false
     use Jido.Agent,
       name: "web_crawler",
-
       path: :domain,
       description: "Agent with identity for capability-based routing",
       schema: []
@@ -65,7 +64,6 @@ defmodule JidoExampleTest.IdentityPluginTest do
     @moduledoc false
     use Jido.Agent,
       name: "pre_configured",
-
       path: :domain,
       description: "Agent with custom identity plugin that auto-initializes",
       default_plugins: %{
@@ -80,7 +78,6 @@ defmodule JidoExampleTest.IdentityPluginTest do
     @moduledoc false
     use Jido.Agent,
       name: "no_identity",
-
       path: :domain,
       description: "Agent with identity plugin disabled",
       default_plugins: %{identity: false},

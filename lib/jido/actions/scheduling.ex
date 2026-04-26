@@ -50,7 +50,14 @@ defmodule Jido.Actions.Scheduling do
         source: [type: :string, default: "/scheduler", doc: "Signal source path"]
       ]
 
-    def run(%Jido.Signal{data: %{delay_ms: delay, signal_type: type, payload: payload, source: source}}, _slice, _opts, _ctx) do
+    def run(
+          %Jido.Signal{
+            data: %{delay_ms: delay, signal_type: type, payload: payload, source: source}
+          },
+          _slice,
+          _opts,
+          _ctx
+        ) do
       signal = Signal.new!(type, payload, source: source)
       directive = Directive.schedule(delay, signal)
       {:ok, %{scheduled_for_ms: delay, signal_type: type}, [directive]}
@@ -87,7 +94,12 @@ defmodule Jido.Actions.Scheduling do
         signal_type: [type: :string, default: "agent.timeout", doc: "Timeout signal type"]
       ]
 
-    def run(%Jido.Signal{data: %{timeout_ms: timeout, timeout_id: id, signal_type: type}}, _slice, _opts, _ctx) do
+    def run(
+          %Jido.Signal{data: %{timeout_ms: timeout, timeout_id: id, signal_type: type}},
+          _slice,
+          _opts,
+          _ctx
+        ) do
       signal = Signal.new!(type, %{timeout_id: id}, source: "/timeout")
       directive = Directive.schedule(timeout, signal)
       {:ok, %{timeout_set: id, expires_in_ms: timeout}, [directive]}

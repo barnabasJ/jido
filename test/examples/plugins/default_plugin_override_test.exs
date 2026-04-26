@@ -42,7 +42,6 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
     @moduledoc false
     use Jido.Agent,
       name: "default_agent",
-
       path: :domain,
       description: "Plain agent — gets Thread.Plugin automatically",
       schema: [
@@ -54,7 +53,6 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
     @moduledoc false
     use Jido.Agent,
       name: "overridden_agent",
-
       path: :domain,
       description: "Replaces Thread.Plugin with CustomThreadPlugin",
       schema: [
@@ -67,7 +65,6 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
     @moduledoc false
     use Jido.Agent,
       name: "configured_agent",
-
       path: :domain,
       description: "Replaces Thread.Plugin with CustomThreadPlugin + config",
       schema: [
@@ -80,7 +77,6 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
     @moduledoc false
     use Jido.Agent,
       name: "disabled_agent",
-
       path: :domain,
       description: "Disables only the __thread__ default plugin",
       schema: [
@@ -93,7 +89,6 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
     @moduledoc false
     use Jido.Agent,
       name: "bare_agent",
-
       path: :domain,
       description: "Disables all default plugins entirely",
       schema: [

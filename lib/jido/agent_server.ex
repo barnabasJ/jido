@@ -24,19 +24,21 @@ defmodule Jido.AgentServer do
 
   - `start/1` - Start under DynamicSupervisor
   - `start_link/1` - Start linked to caller
-  - `call/3` - Synchronous signal processing
-  - `cast/2` - Asynchronous signal processing
-  - `state/1` - Get full State struct
+  - `call/4` - Synchronous signal processing with selector projection
+  - `cast/3` - Asynchronous signal processing
+  - `state/3` - Synchronous selector-driven state read (no signal pipeline)
   - `whereis/1` - Registry lookup by ID (default registry)
   - `whereis/2` - Registry lookup by ID (specific registry)
 
   ## Signal Flow
 
   ```
-  Signal → AgentServer.call/cast
+  Signal → AgentServer.call/4 (or cast/3)
         → middleware chain (`on_signal/4` wrap)
             → routing → Agent.cmd/2 → {agent, directives}
         → Directives executed inline via DirectiveExec protocol
+        → call/4 selector runs over post-pipeline state and the result
+          is returned to the caller
   ```
 
   Signal routing is owned by AgentServer, not the Agent. Plugins and the
@@ -86,14 +88,16 @@ defmodule Jido.AgentServer do
       slice = put_in(slice, [:last_answer], answer)
       {:ok, slice}
 
-      # External code polls for completion:
-      {:ok, state} = AgentServer.state(server)
-      domain = state.agent_module.path()
-      case get_in(state.agent.state, [domain, :status]) do
-        :completed -> get_in(state.agent.state, [domain, :last_answer])
-        :failed -> {:error, get_in(state.agent.state, [domain, :error])}
-        _ -> :still_running
-      end
+      # External code polls for completion via a selector:
+      {:ok, status} =
+        AgentServer.state(server, fn s ->
+          domain = s.agent_module.path()
+          case get_in(s.agent.state, [domain, :status]) do
+            :completed -> {:ok, {:completed, get_in(s.agent.state, [domain, :last_answer])}}
+            :failed -> {:ok, {:failed, get_in(s.agent.state, [domain, :error])}}
+            _ -> {:ok, :still_running}
+          end
+        end)
 
   This follows Elm/Redux semantics where completion is a state concern.
   The process stays alive until explicitly stopped or supervised.
@@ -151,19 +155,18 @@ defmodule Jido.AgentServer do
 
   ## Waiting Primitives
 
-  Two selector-based primitives let callers wait on agent activity without
-  polling:
+  Two selector-based primitives let callers wait on agent activity:
 
-  - `cast_and_await/4` — per-signal ack. The caller registers synchronously
-    with the cast; after the outermost middleware unwinds and directives
-    have executed, the selector runs over `agent.state` and the tagged
-    result is delivered to the caller.
+  - `call/4` — synchronous request. The caller's selector runs after the
+    outermost middleware unwinds and the signal's directives have executed;
+    the tagged result is returned to the caller. The same selector contract
+    applies as `subscribe/4` (no `:skip` — the caller is blocking).
   - `subscribe/4` + `unsubscribe/2` — ambient subscribe on a signal pattern
     plus a selector. Matching signals fire the selector and dispatch
     `{:ok, _}` / `{:error, _}` to the subscriber; `:skip` keeps listening.
 
   Both fire after the outermost middleware unwinds, so retry middleware
-  that re-invokes `next` produces exactly one ack/notification per
+  that re-invokes `next` produces exactly one return/notification per
   triggering signal.
   """
 
@@ -183,6 +186,7 @@ defmodule Jido.AgentServer do
   }
 
   alias Jido.Agent.Directive
+
   alias Jido.AgentServer.Signal.{
     ChildExit,
     ChildStarted,
@@ -194,6 +198,7 @@ defmodule Jido.AgentServer do
     ParentDied,
     PartitionAssigned
   }
+
   alias Jido.Config.Defaults
   alias Jido.RuntimeStore
   alias Jido.Sensor.Runtime, as: SensorRuntime
@@ -286,40 +291,70 @@ defmodule Jido.AgentServer do
     }
   end
 
+  @typedoc """
+  Selector for `call/4` and `state/3`. Receives the full
+  `%AgentServer.State{}`; the slice the user cares about lives at
+  `state.agent.state` (or under the agent's declared `path/0`). Must
+  return a tagged `{:ok, _}` or `{:error, _}` tuple.
+
+  Selectors run synchronously in the agent process. A raising selector is
+  caught and surfaces to the caller as
+  `{:error, {:selector_raised, exception, stacktrace}}`.
+
+  No `:skip` return — the caller is blocking, so "skip" has no meaning.
+  Use `subscribe/4` for the ambient pattern that supports `:skip`.
+  """
+  @type call_selector :: (State.t() -> {:ok, term()} | {:error, term()})
+
+  @typedoc """
+  Selector for `subscribe/4`. Same calling convention as `call_selector/0`,
+  with one extra return value: `:skip` keeps the subscription alive and
+  delivers nothing to the subscriber.
+  """
+  @type subscribe_selector :: (State.t() -> {:ok, term()} | {:error, term()} | :skip)
+
   @doc """
-  Synchronously sends a signal and waits for the agent to finish processing
-  it, returning the updated agent struct.
+  Synchronously sends a signal, runs the pipeline, and projects the
+  post-pipeline state through `selector`.
 
-  Useful as a sync barrier after a mutation (e.g. "cmd must land before I
-  proceed"). If what you want is *a specific answer* — a query — prefer
-  `Jido.Signal.Call.call/3`: it lets the agent decide what to expose via
-  a reply signal instead of handing the full agent struct to the caller.
+  After the outermost middleware unwinds and the signal's directives
+  execute, `selector` runs over `%AgentServer.State{}` and its tagged
+  return is delivered to the caller. On chain error, the selector is
+  **not** invoked — the chain's error is delivered verbatim per
+  [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md) §3.
 
-  The signal's directives run inline before the reply, so the returned
-  agent reflects every synchronous directive's state update.
+  Retry middleware that re-invokes `next` does not fire the selector
+  multiple times — it fires once per outermost return.
 
-  Returns `{:ok, agent}` regardless of the action's outcome. To receive
-  action errors, use `cast_and_await/4` — the error-aware variant. See
-  [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md) for the
-  rationale behind this split.
+  ## Options
+
+  - `:timeout` — ms to wait (default `Defaults.agent_server_call_timeout_ms/0`)
 
   ## Returns
 
-  * `{:ok, agent}` - Signal processed (the chain may have returned an error
-    internally; that error is not surfaced to `call/2` callers)
-  * `{:error, :not_found}` - Server not found via registry
-  * `{:error, :invalid_server}` - Unsupported server reference
-  * Exits with `{:noproc, ...}` if process dies during call
+  - `{:ok, value}` / `{:error, reason}` — selector return passed through verbatim
+  - `{:error, reason}` — chain error from the action / middleware (selector skipped)
+  - `{:error, {:selector_raised, exception, stacktrace}}` — selector raised
+  - `{:error, :not_found}` / `{:error, :invalid_server}` — server lookup failed
+  - Exits with `{:noproc, ...}` / `{:timeout, ...}` if the agent dies or the
+    GenServer.call times out
 
   ## Examples
 
-      {:ok, agent} = Jido.AgentServer.call(pid, signal)
-      {:ok, agent} = Jido.AgentServer.call("agent-id", signal, 10_000)
+      {:ok, counter} =
+        AgentServer.call(pid, signal, fn s -> {:ok, s.agent.state.counter} end)
+
+      {:ok, :done} =
+        AgentServer.call(pid, signal, fn _s -> {:ok, :done} end, timeout: 10_000)
   """
-  @spec call(server(), Signal.t(), timeout()) :: {:ok, struct()} | {:error, term()}
-  def call(server, %Signal{} = signal, timeout \\ Defaults.agent_server_call_timeout_ms()) do
+  @spec call(server(), Signal.t(), call_selector(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  def call(server, %Signal{} = signal, selector, opts \\ [])
+      when is_function(selector, 1) do
+    timeout = Keyword.get(opts, :timeout, Defaults.agent_server_call_timeout_ms())
+
     with {:ok, pid} <- resolve_server(server) do
-      GenServer.call(pid, {:signal, signal}, timeout)
+      GenServer.call(pid, {:signal_with_selector, signal, selector}, timeout)
     end
   end
 
@@ -327,6 +362,12 @@ defmodule Jido.AgentServer do
   Asynchronously sends a signal for processing.
 
   Returns immediately. The signal is processed in the background.
+
+  ## Options
+
+  Reserved for dispatch overrides, telemetry tags, and future knobs.
+  Currently unused — adding it now means callers don't break when knobs
+  land later.
 
   ## Returns
 
@@ -337,111 +378,55 @@ defmodule Jido.AgentServer do
   ## Examples
 
       :ok = Jido.AgentServer.cast(pid, signal)
-      :ok = Jido.AgentServer.cast("agent-id", signal)
+      :ok = Jido.AgentServer.cast(pid, signal, [])
   """
-  @spec cast(server(), Signal.t()) :: :ok | {:error, term()}
-  def cast(server, %Signal{} = signal) do
+  @spec cast(server(), Signal.t(), keyword()) :: :ok | {:error, term()}
+  def cast(server, %Signal{} = signal, opts \\ []) when is_list(opts) do
     with {:ok, pid} <- resolve_server(server) do
+      _ = opts
       GenServer.cast(pid, {:signal, signal})
     end
   end
 
   @doc """
-  Gets the full State struct for an agent.
+  Synchronously read a projection of the agent's `%State{}` without
+  running the signal pipeline.
 
-  ## Returns
+  `selector` runs over the current `%State{}` and its tagged return is
+  delivered to the caller. No signal is processed — this is a pure read.
 
-  * `{:ok, state}` - Full State struct retrieved
-  * `{:error, :not_found}` - Server not found via registry
-  * `{:error, :invalid_server}` - Unsupported server reference
-
-  ## Examples
-
-      {:ok, state} = Jido.AgentServer.state(pid)
-      {:ok, state} = Jido.AgentServer.state("agent-id")
-  """
-  @spec state(server()) :: {:ok, State.t()} | {:error, term()}
-  def state(server) do
-    with {:ok, pid} <- resolve_server(server) do
-      GenServer.call(pid, :get_state)
-    end
-  end
-
-  @typedoc """
-  Selector for `cast_and_await/4`. Receives the full `%AgentServer.State{}`
-  after the outermost middleware unwinds and the signal's directives
-  execute; the slice the user cares about lives at `state.agent.state`
-  (or under the agent's declared `path/0`). Must return a tagged tuple.
-
-  Selectors run synchronously in the agent process and must be pure — a
-  raise crashes the agent and the caller's `:DOWN` monitor surfaces it as
-  `{:error, {:agent_down, _}}`.
-  """
-  @type ack_selector :: (State.t() -> {:ok, term()} | {:error, term()})
-
-  @typedoc """
-  Selector for `subscribe/4`. Same calling convention as `ack_selector/0`,
-  with one extra return value: `:skip` keeps the subscription alive and
-  delivers nothing to the subscriber.
-  """
-  @type subscribe_selector :: (State.t() -> {:ok, term()} | {:error, term()} | :skip)
-
-  @doc """
-  Cast a signal and wait for the per-signal ack.
-
-  Registers `selector` against `signal.id`, casts the signal, then blocks
-  until the agent runs the selector after the outermost middleware unwinds
-  and the signal's directives have executed. Retry middleware that
-  re-invokes `next` does not fire the selector multiple times — the ack
-  fires once per outermost return.
+  Use this for liveness checks, bootstrap reads, or test inspection.
+  Pod-level helpers like `Pod.fetch_state/1`, `Pod.fetch_topology/1`, and
+  similar typed projections wrap this primitive with a baked-in selector.
 
   ## Options
 
-  - `:timeout` — ms to wait (default `Defaults.agent_server_await_timeout_ms/0`)
+  - `:timeout` — ms to wait (default `Defaults.agent_server_call_timeout_ms/0`)
 
   ## Returns
 
   - `{:ok, value}` / `{:error, reason}` — selector return passed through verbatim
-  - `{:error, :timeout}` — caller timed out; ack registration is canceled
-  - `{:error, {:agent_down, reason}}` — agent process exited while waiting
-  - `{:error, :not_found}` — server reference did not resolve
+  - `{:error, {:selector_raised, exception, stacktrace}}` — selector raised
+  - `{:error, :not_found}` / `{:error, :invalid_server}` — server lookup failed
+
+  ## Examples
+
+      # Liveness check
+      {:ok, :ok} = AgentServer.state(pid, fn _ -> {:ok, :ok} end)
+
+      # Bootstrap / "what's my agent_id?"
+      {:ok, id} = AgentServer.state(pid, fn s -> {:ok, s.id} end)
+
+      # Test inspection
+      {:ok, counter} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.counter} end)
   """
-  @spec cast_and_await(server(), Signal.t(), ack_selector(), keyword()) ::
-          {:ok, term()} | {:error, term()}
-  def cast_and_await(server, %Signal{} = signal, selector, opts \\ [])
-      when is_function(selector, 1) do
-    timeout = Keyword.get(opts, :timeout, Defaults.agent_server_await_timeout_ms())
+  @spec state(server(), call_selector(), keyword()) :: {:ok, term()} | {:error, term()}
+  def state(server, selector, opts \\ []) when is_function(selector, 1) and is_list(opts) do
+    timeout = Keyword.get(opts, :timeout, Defaults.agent_server_call_timeout_ms())
 
-    case resolve_server(server) do
-      {:ok, pid} ->
-        ref = make_ref()
-        monitor_ref = Process.monitor(pid)
-
-        case GenServer.call(pid, {:register_ack, signal.id, selector, self(), ref}) do
-          :ok ->
-            :ok = GenServer.cast(pid, {:signal, signal})
-
-            receive do
-              {:jido_ack, ^ref, {:ok, _} = result} ->
-                Process.demonitor(monitor_ref, [:flush])
-                result
-
-              {:jido_ack, ^ref, {:error, _} = result} ->
-                Process.demonitor(monitor_ref, [:flush])
-                result
-
-              {:DOWN, ^monitor_ref, :process, ^pid, reason} ->
-                {:error, {:agent_down, reason}}
-            after
-              timeout ->
-                GenServer.cast(pid, {:cancel_ack, signal.id, ref})
-                Process.demonitor(monitor_ref, [:flush])
-                {:error, :timeout}
-            end
-        end
-
-      {:error, _} = error ->
-        error
+    with {:ok, pid} <- resolve_server(server) do
+      GenServer.call(pid, {:read_state_with_selector, selector}, timeout)
     end
   end
 
@@ -450,10 +435,10 @@ defmodule Jido.AgentServer do
   the subscriber sees.
 
   The selector runs after the outermost middleware unwinds (same hook
-  point as `cast_and_await/4`). Returning `:skip` keeps the subscription
-  silent and alive; `{:ok, _}` / `{:error, _}` dispatches the result to
-  the subscriber. With `once: true`, the subscription is removed after
-  the first non-`:skip` selector return.
+  point as `call/4`). Returning `:skip` keeps the subscription silent and
+  alive; `{:ok, _}` / `{:error, _}` dispatches the result to the
+  subscriber. With `once: true`, the subscription is removed after the
+  first non-`:skip` selector return.
 
   Patterns are compiled by `Jido.Signal.Router` and have identical
   semantics to `signal_routes/1` declarations (`"work.*"`, `"audit.**"`,
@@ -505,6 +490,10 @@ defmodule Jido.AgentServer do
   reading agent state. If the agent is already past `:idle` (ready
   fired before the call), replies immediately.
 
+  ## Options
+
+  - `:timeout` — ms to wait (default `Defaults.agent_server_await_timeout_ms/0`)
+
   ## Returns
 
   - `:ok` - Agent is ready
@@ -512,9 +501,11 @@ defmodule Jido.AgentServer do
   - `{:error, {:down, reason}}` - Agent process exited while waiting
   - `{:error, :not_found}` - Server reference did not resolve
   """
-  @spec await_ready(server(), timeout()) ::
+  @spec await_ready(server(), keyword()) ::
           :ok | {:error, :timeout | {:down, term()} | term()}
-  def await_ready(server, timeout \\ Defaults.agent_server_await_timeout_ms()) do
+  def await_ready(server, opts \\ []) when is_list(opts) do
+    timeout = Keyword.get(opts, :timeout, Defaults.agent_server_await_timeout_ms())
+
     case resolve_server(server) do
       {:ok, pid} ->
         ref = Process.monitor(pid)
@@ -1131,24 +1122,49 @@ defmodule Jido.AgentServer do
   end
 
   @impl true
-  def handle_call({:signal, %Signal{} = signal}, _from, state) do
+  def handle_call({:signal_with_selector, %Signal{} = signal, selector}, _from, state)
+      when is_function(selector, 1) do
     {traced_signal, _ctx} = TraceContext.ensure_from_signal(signal)
 
     try do
-      case process_signal_sync(traced_signal, state) do
-        {:reply, reply, new_state} ->
-          {:reply, reply, new_state}
+      case process_signal(state, traced_signal) do
+        {:ok, new_state, _directives} ->
+          {:reply, invoke_call_selector(selector, new_state), new_state}
 
-        {:stop, reason, reply, new_state} ->
-          {:stop, reason, reply, State.set_status(new_state, :stopping)}
+        {:error, committed_state, reason} ->
+          # ADR 0018 §3: chain error short-circuits selector evaluation;
+          # reason is delivered to the caller verbatim.
+          {:reply, {:error, reason}, committed_state}
+
+        {:stop, stop_reason, executed_state} ->
+          # A directive returned :stop. Run the selector against the
+          # post-directive state so the caller still gets a tagged tuple,
+          # then stop after replying.
+          reply = invoke_call_selector(selector, executed_state)
+          {:stop, stop_reason, reply, State.set_status(executed_state, :stopping)}
       end
+    catch
+      kind, reason ->
+        stacktrace = __STACKTRACE__
+
+        Logger.error(
+          "Signal call failed for #{state.id}: #{inspect(kind)} #{inspect(reason)}\n" <>
+            Exception.format_stacktrace(stacktrace)
+        )
+
+        # Return a clean error to the caller; agent stays alive.
+        {:reply, {:error, reason}, state}
     after
       TraceContext.clear()
     end
   end
 
-  def handle_call(:get_state, _from, state) do
-    {:reply, {:ok, state}, state}
+  def handle_call({:read_state_with_selector, selector}, _from, %State{} = state)
+      when is_function(selector, 1) do
+    # Pure read — no signal pipeline runs. Selector projects %State{}
+    # to whatever the caller asked for. Wrap in try/rescue so a raising
+    # selector doesn't crash the agent.
+    {:reply, invoke_call_selector(selector, state), state}
   end
 
   def handle_call({:set_debug, enabled}, _from, %State{} = state) do
@@ -1170,24 +1186,6 @@ defmodule Jido.AgentServer do
       %ChildInfo{pid: pid} when is_pid(pid) -> {:reply, {:ok, pid}, state}
       _ -> {:reply, :not_found, state}
     end
-  end
-
-  def handle_call(
-        {:register_ack, signal_id, selector, caller_pid, ref},
-        _from,
-        %State{} = state
-      )
-      when is_function(selector, 1) and is_pid(caller_pid) and is_reference(ref) do
-    monitor_ref = Process.monitor(caller_pid)
-
-    entry = %{
-      caller_pid: caller_pid,
-      ref: ref,
-      monitor_ref: monitor_ref,
-      selector: selector
-    }
-
-    {:reply, :ok, %{state | pending_acks: Map.put(state.pending_acks, signal_id, entry)}}
   end
 
   def handle_call(
@@ -1324,17 +1322,6 @@ defmodule Jido.AgentServer do
     end
   end
 
-  def handle_cast({:cancel_ack, signal_id, ref}, %State{} = state) do
-    case Map.fetch(state.pending_acks, signal_id) do
-      {:ok, %{ref: ^ref, monitor_ref: monitor_ref}} ->
-        Process.demonitor(monitor_ref, [:flush])
-        {:noreply, %{state | pending_acks: Map.delete(state.pending_acks, signal_id)}}
-
-      _ ->
-        {:noreply, state}
-    end
-  end
-
   def handle_cast({:unsubscribe, sub_ref}, %State{} = state) when is_reference(sub_ref) do
     case Map.pop(state.signal_subscribers, sub_ref) do
       {nil, _} ->
@@ -1365,8 +1352,9 @@ defmodule Jido.AgentServer do
     {traced_signal, _ctx} = TraceContext.ensure_from_signal(signal)
 
     try do
-      case process_signal_async(traced_signal, state) do
-        {:ok, new_state} -> {:noreply, new_state}
+      case process_signal(state, traced_signal) do
+        {:ok, new_state, _directives} -> {:noreply, new_state}
+        {:error, committed_state, _reason} -> {:noreply, committed_state}
         {:stop, reason, new_state} -> {:stop, reason, State.set_status(new_state, :stopping)}
       end
     after
@@ -1383,8 +1371,9 @@ defmodule Jido.AgentServer do
     {traced_signal, _ctx} = TraceContext.ensure_from_signal(signal)
 
     try do
-      case process_signal_async(traced_signal, state) do
-        {:ok, new_state} -> {:noreply, new_state}
+      case process_signal(state, traced_signal) do
+        {:ok, new_state, _directives} -> {:noreply, new_state}
+        {:error, committed_state, _reason} -> {:noreply, committed_state}
         {:stop, reason, new_state} -> {:stop, reason, State.set_status(new_state, :stopping)}
       end
     after
@@ -1405,9 +1394,8 @@ defmodule Jido.AgentServer do
       _ ->
         case Map.get(state.cron_monitor_refs, ref) do
           nil ->
-            # Not an attachment, clean up any pending ack / subscriber whose
-            # caller pid died. Both maps' entries carry the caller's monitor_ref.
-            state = drop_dead_pending_ack(state, ref)
+            # Not an attachment, clean up any subscriber whose caller pid
+            # died. The subscriber entry carries the caller's monitor_ref.
             state = drop_dead_subscriber(state, ref)
 
             if match?(%{parent: %ParentRef{pid: ^pid}}, state) do
@@ -1469,8 +1457,9 @@ defmodule Jido.AgentServer do
     {traced_signal, _ctx} = TraceContext.ensure_from_signal(signal)
 
     try do
-      case process_signal_async(traced_signal, state) do
-        {:ok, new_state} -> {:noreply, new_state}
+      case process_signal(state, traced_signal) do
+        {:ok, new_state, _directives} -> {:noreply, new_state}
+        {:error, committed_state, _reason} -> {:noreply, committed_state}
         {:stop, reason, new_state} -> {:stop, reason, State.set_status(new_state, :stopping)}
       end
     after
@@ -1514,14 +1503,25 @@ defmodule Jido.AgentServer do
   # ---------------------------------------------------------------------------
   # Internal: Signal Processing
   #
-  # Both sync (`handle_call`) and async (`handle_cast` / `handle_info`) signal
-  # paths share `process_signal_common/2`: run plugin hooks, route to actions,
-  # invoke `cmd/2`, then execute the returned directives inline via
-  # `execute_directives/3`. The Erlang mailbox is the only queue; new incoming
-  # signals wait there until the current handler returns.
+  # `process_signal/2` is shared between every signal entry point —
+  # `handle_call({:signal_with_selector, ...})`, `handle_cast({:signal, ...})`,
+  # `handle_info({:scheduled_signal, ...})`, and the lifecycle-signal
+  # `emit_through_chain/2`. It runs the middleware chain, executes the
+  # returned directives inline, and fires `subscribe/4` subscribers — then
+  # hands back the committed state and the chain's tagged result.
+  #
+  # Uncaught raises propagate up; the `handle_call` handler catches them
+  # and surfaces a clean `{:error, _}` reply, while cast/info handlers
+  # let the GenServer crash so supervision can react. The Erlang mailbox
+  # is the only queue; new incoming signals wait there until the current
+  # handler returns.
   # ---------------------------------------------------------------------------
 
-  defp process_signal_sync(%Signal{} = signal, %State{} = state) do
+  @spec process_signal(State.t(), Signal.t()) ::
+          {:ok, State.t(), [struct()]}
+          | {:error, State.t(), term()}
+          | {:stop, term(), State.t()}
+  defp process_signal(%State{} = state, %Signal{} = signal) do
     start_time = System.monotonic_time()
     metadata = build_signal_metadata(state, signal)
 
@@ -1549,82 +1549,21 @@ defmodule Jido.AgentServer do
         {:ok, new_state, directives} ->
           case execute_directives(directives, signal, new_state) do
             {:ok, executed_state} ->
-              executed_state =
-                fire_post_signal_hooks(executed_state, signal, {:ok, executed_state, directives})
-
-              {:reply, {:ok, executed_state.agent}, executed_state}
+              executed_state = fire_post_signal_hooks(executed_state, signal)
+              {:ok, executed_state, directives}
 
             {:stop, reason, executed_state} ->
-              # Caller's :DOWN monitor on the agent surfaces the stop; no
-              # separate ack fired here. See ADR 0016 stop semantics.
-              {:stop, reason, {:ok, executed_state.agent}, executed_state}
+              # Subscribers are intentionally not fired on the stop branch
+              # — the agent is going down; observers see the :DOWN monitor.
+              {:stop, reason, executed_state}
           end
 
         {:error, new_state, reason} ->
           # Chain returned an error. `new_state` already has any
           # middleware-staged mutations committed; no directives to run on
-          # this branch. AgentServer.call/2 still replies {:ok, agent} —
-          # cast_and_await is the error-aware variant per ADR 0018.
-          new_state = fire_post_signal_hooks(new_state, signal, {:error, reason})
-          {:reply, {:ok, new_state.agent}, new_state}
-      end
-    catch
-      kind, reason ->
-        stacktrace = __STACKTRACE__
-
-        emit_telemetry(
-          [:jido, :agent_server, :signal, :exception],
-          %{duration: System.monotonic_time() - start_time},
-          Map.merge(metadata, %{kind: kind, error: reason})
-        )
-
-        Logger.error(
-          "Signal call failed for #{state.id}: #{inspect(kind)} #{inspect(reason)}\n" <>
-            Exception.format_stacktrace(stacktrace)
-        )
-
-        state = fire_post_signal_hooks(state, signal, {:error, reason})
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  defp process_signal_async(%Signal{} = signal, %State{} = state) do
-    start_time = System.monotonic_time()
-    metadata = build_signal_metadata(state, signal)
-
-    state =
-      state
-      |> State.record_debug_event(:signal_received, %{type: signal.type, id: signal.id})
-      |> maybe_track_child_started(signal)
-
-    emit_telemetry(
-      [:jido, :agent_server, :signal, :start],
-      %{system_time: System.system_time()},
-      metadata
-    )
-
-    try do
-      result = run_chain(signal, state)
-
-      emit_telemetry(
-        [:jido, :agent_server, :signal, :stop],
-        %{duration: System.monotonic_time() - start_time},
-        Map.merge(metadata, signal_stop_metadata_for(result))
-      )
-
-      case result do
-        {:ok, new_state, directives} ->
-          case execute_directives(directives, signal, new_state) do
-            {:ok, executed_state} ->
-              {:ok,
-               fire_post_signal_hooks(executed_state, signal, {:ok, executed_state, directives})}
-
-            {:stop, reason, executed_state} ->
-              {:stop, reason, executed_state}
-          end
-
-        {:error, new_state, reason} ->
-          {:ok, fire_post_signal_hooks(new_state, signal, {:error, reason})}
+          # this branch. Subscribers still fire per ADR 0018 §3.
+          new_state = fire_post_signal_hooks(new_state, signal)
+          {:error, new_state, reason}
       end
     catch
       kind, reason ->
@@ -1635,6 +1574,20 @@ defmodule Jido.AgentServer do
         )
 
         :erlang.raise(kind, reason, __STACKTRACE__)
+    end
+  end
+
+  # Invokes a `call/4` / `state/3` selector in a try/rescue so a raising
+  # selector doesn't crash the agent. Returns the selector's tagged tuple
+  # on success or `{:error, {:selector_raised, exception, stacktrace}}` on
+  # rescue.
+  @spec invoke_call_selector(call_selector(), State.t()) ::
+          {:ok, term()} | {:error, term()}
+  defp invoke_call_selector(selector, %State{} = state) when is_function(selector, 1) do
+    try do
+      selector.(state)
+    rescue
+      exception -> {:error, {:selector_raised, exception, __STACKTRACE__}}
     end
   end
 
@@ -1668,8 +1621,8 @@ defmodule Jido.AgentServer do
   # directives inline so middleware-emitted side-effect signals (e.g.
   # `jido.persist.thaw.completed`) reach observers.
   #
-  # Like the user-signal path, ack/subscriber hooks fire after the
-  # outermost middleware unwinds and directives have executed.
+  # Like the user-signal path, subscribers fire after the outermost
+  # middleware unwinds and directives have executed.
   defp emit_through_chain(%State{} = state, %Signal{} = signal) do
     case run_chain(signal, state) do
       {:ok, new_state, directives} ->
@@ -1679,12 +1632,12 @@ defmodule Jido.AgentServer do
             {:stop, _reason, s} -> s
           end
 
-        fire_post_signal_hooks(executed_state, signal, {:ok, executed_state, directives})
+        fire_post_signal_hooks(executed_state, signal)
 
-      {:error, new_state, reason} ->
+      {:error, new_state, _reason} ->
         # state has middleware mutations committed; no directives to run on
-        # the error branch. Fire post-signal hooks against the updated state.
-        fire_post_signal_hooks(new_state, signal, {:error, reason})
+        # the error branch. Fire subscribers against the updated state.
+        fire_post_signal_hooks(new_state, signal)
     end
   end
 
@@ -1819,49 +1772,19 @@ defmodule Jido.AgentServer do
   end
 
   # ---------------------------------------------------------------------------
-  # Internal: ack / subscriber dispatch
+  # Internal: subscriber dispatch
   #
-  # Both run after the outermost middleware unwinds and directives have
-  # executed (the "post-signal" hook point). Order is fixed: ack first,
-  # then subscribers, both deterministic so observers can reason about
-  # the sequence.
-  #
-  # The chain's tagged result drives ack delivery:
-  #   - on `{:ok, _, _}` the selector runs against state.
-  #   - on `{:error, reason}` the selector is skipped and `{:error, reason}`
-  #     is delivered to the caller verbatim.
-  #
-  # Subscribers are unchanged — they always run their selector against
-  # state, independent of the chain outcome. See ADR 0018 §3.
+  # Subscribers fire after the outermost middleware unwinds and directives
+  # have executed (the "post-signal" hook point). Per ADR 0018 §3, they
+  # always run their selector against state, independent of the chain
+  # outcome. The synchronous `call/4` path delivers its result directly
+  # from `handle_call({:signal_with_selector, ...})` — there is no ack
+  # table to fire alongside subscribers.
   # ---------------------------------------------------------------------------
 
-  @typep chain_result ::
-           {:ok, State.t(), [struct()]} | {:error, term()}
-
-  @spec fire_post_signal_hooks(State.t(), Signal.t(), chain_result()) :: State.t()
-  defp fire_post_signal_hooks(%State{} = state, %Signal{} = signal, result) do
-    state
-    |> fire_ack_for_signal(signal, result)
-    |> fire_subscribers(signal)
-  end
-
-  defp fire_ack_for_signal(%State{pending_acks: acks} = state, %Signal{id: id}, _result)
-       when map_size(acks) == 0 or not is_map_key(acks, id) do
-    state
-  end
-
-  defp fire_ack_for_signal(%State{pending_acks: acks} = state, %Signal{id: id}, result) do
-    {entry, remaining} = Map.pop(acks, id)
-
-    payload =
-      case result do
-        {:ok, _new_state, _dirs} -> entry.selector.(state)
-        {:error, _reason} = err -> err
-      end
-
-    send(entry.caller_pid, {:jido_ack, entry.ref, payload})
-    Process.demonitor(entry.monitor_ref, [:flush])
-    %{state | pending_acks: remaining}
+  @spec fire_post_signal_hooks(State.t(), Signal.t()) :: State.t()
+  defp fire_post_signal_hooks(%State{} = state, %Signal{} = signal) do
+    fire_subscribers(state, signal)
   end
 
   defp fire_subscribers(%State{signal_subscribers: subs} = state, _signal)
@@ -2054,9 +1977,7 @@ defmodule Jido.AgentServer do
   # before directives run, so log inline to preserve the operator-visible
   # signal.
   defp log_routing_error(ctx, %{message: message}) do
-    Logger.debug(
-      "Agent #{Map.get(ctx, :agent_id, "unknown")} [routing]: #{message}"
-    )
+    Logger.debug("Agent #{Map.get(ctx, :agent_id, "unknown")} [routing]: #{message}")
   end
 
   # ---------------------------------------------------------------------------
@@ -2434,16 +2355,6 @@ defmodule Jido.AgentServer do
     %{state | ready_waiters: %{}}
   end
 
-  defp drop_dead_pending_ack(%State{pending_acks: acks} = state, monitor_ref) do
-    case Enum.find(acks, fn {_id, %{monitor_ref: ref}} -> ref == monitor_ref end) do
-      {signal_id, _entry} ->
-        %{state | pending_acks: Map.delete(acks, signal_id)}
-
-      nil ->
-        state
-    end
-  end
-
   defp drop_dead_subscriber(%State{signal_subscribers: subs} = state, monitor_ref) do
     case Enum.find(subs, fn {_ref, %{monitor_ref: ref}} -> ref == monitor_ref end) do
       {sub_ref, _entry} ->
@@ -2461,7 +2372,7 @@ defmodule Jido.AgentServer do
   @doc """
   Resolves a server reference to a pid.
 
-  Accepts the same reference types as `cast/2` and `call/2` — a pid, a
+  Accepts the same reference types as `cast/3` and `call/4` — a pid, a
   registered atom, or a `{:via, ...}` tuple. Returns `{:error, :not_found}`
   when a registered name doesn't currently point at a process; does not
   check process liveness for direct pids (`is_pid/1` alone is enough to
@@ -2570,7 +2481,11 @@ defmodule Jido.AgentServer do
 
   defp notify_parent_of_startup(_state), do: :ok
 
-  defp handle_parent_down(%State{on_parent_death: :stop, parent: former_parent} = state, _pid, reason) do
+  defp handle_parent_down(
+         %State{on_parent_death: :stop, parent: former_parent} = state,
+         _pid,
+         reason
+       ) do
     _ = clear_parent_binding(state.jido, state.id, state.partition)
     state = emit_parent_died(state, former_parent, reason)
     stop_reason = wrap_parent_down_reason(reason)
@@ -2616,8 +2531,9 @@ defmodule Jido.AgentServer do
         {:error, _} -> signal
       end
 
-    case process_signal_async(traced_signal, orphaned_state) do
-      {:ok, new_state} -> {:noreply, new_state}
+    case process_signal(orphaned_state, traced_signal) do
+      {:ok, new_state, _directives} -> {:noreply, new_state}
+      {:error, committed_state, _reason} -> {:noreply, committed_state}
       {:stop, reason, new_state} -> {:stop, reason, State.set_status(new_state, :stopping)}
     end
   end
@@ -2653,8 +2569,9 @@ defmodule Jido.AgentServer do
         {:error, _} -> signal
       end
 
-    case process_signal_async(traced_signal, state) do
-      {:ok, new_state} -> new_state
+    case process_signal(state, traced_signal) do
+      {:ok, new_state, _directives} -> new_state
+      {:error, committed_state, _reason} -> committed_state
       {:stop, _reason, new_state} -> new_state
     end
   end
@@ -2677,8 +2594,9 @@ defmodule Jido.AgentServer do
           {:error, _} -> signal
         end
 
-      case process_signal_async(traced_signal, state) do
-        {:ok, new_state} -> {:noreply, new_state}
+      case process_signal(state, traced_signal) do
+        {:ok, new_state, _directives} -> {:noreply, new_state}
+        {:error, committed_state, _reason} -> {:noreply, committed_state}
         {:stop, reason, new_state} -> {:stop, reason, State.set_status(new_state, :stopping)}
       end
     else
@@ -2854,7 +2772,7 @@ defmodule Jido.AgentServer do
     This is a HARD STOP: pending directives and async work will be lost, and on_after_cmd/3 will NOT run.
 
     For normal completion, set state.status to :completed/:failed instead and avoid returning {:stop, ...}.
-    External code should poll AgentServer.state/1 and check status, not rely on process death.
+    External code should poll AgentServer.state/3 with a status selector, not rely on process death.
 
     {:stop, ...} should only be used for abnormal/framework-level termination.
     """)

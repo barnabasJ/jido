@@ -15,7 +15,7 @@ defmodule JidoTest.AgentPoolTest do
     use Jido.Action, name: "get_count", schema: []
 
     def run(_signal, slice, _opts, _ctx) do
-      {:ok, Map.put(slice, :last_count, Map.get(slice, :counter, 0))}
+      {:ok, Map.put(slice, :last_count, Map.get(slice, :counter, 0)), []}
     end
   end
 
@@ -116,7 +116,7 @@ defmodule JidoTest.AgentPoolTest do
 
       result =
         AgentPool.with_agent(jido_name, :test_pool, fn pid ->
-          {:ok, agent} = AgentServer.call(pid, signal)
+          {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
           agent.state.domain.counter
         end)
 
@@ -139,12 +139,12 @@ defmodule JidoTest.AgentPoolTest do
       signal = Signal.new!("increment", %{}, source: "/test")
 
       AgentPool.with_agent(jido_name, :test_pool, fn pid ->
-        AgentServer.call(pid, signal)
+        AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
       end)
 
       result =
         AgentPool.with_agent(jido_name, :test_pool, fn pid ->
-          {:ok, agent} = AgentServer.call(pid, signal)
+          {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
           agent.state.domain.counter
         end)
 
@@ -154,7 +154,7 @@ defmodule JidoTest.AgentPoolTest do
     end
   end
 
-  describe "call/4" do
+  describe "call/5" do
     test "sends signal to pooled agent" do
       jido_name = unique_jido_name()
 
@@ -167,7 +167,7 @@ defmodule JidoTest.AgentPoolTest do
         )
 
       signal = Signal.new!("increment", %{}, source: "/test")
-      {:ok, agent} = AgentPool.call(jido_name, :test_pool, signal)
+      {:ok, agent} = AgentPool.call(jido_name, :test_pool, signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.counter == 1
 
@@ -193,7 +193,9 @@ defmodule JidoTest.AgentPoolTest do
       get_signal = Signal.new!("get_count", %{}, source: "/test")
 
       eventually(fn ->
-        {:ok, agent} = AgentPool.call(jido_name, :test_pool, get_signal)
+        {:ok, agent} =
+          AgentPool.call(jido_name, :test_pool, get_signal, fn s -> {:ok, s.agent} end)
+
         agent.state.domain.counter >= 1
       end)
 
@@ -264,7 +266,7 @@ defmodule JidoTest.AgentPoolTest do
       assert is_pid(pid)
 
       signal = Signal.new!("increment", %{}, source: "/test")
-      {:ok, _agent} = AgentServer.call(pid, signal)
+      {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert :ok = AgentPool.checkin(jido_name, :test_pool, pid)
 
@@ -285,7 +287,7 @@ defmodule JidoTest.AgentPoolTest do
         )
 
       get_signal = Signal.new!("get_count", %{}, source: "/test")
-      {:ok, agent} = AgentPool.call(jido_name, :test_pool, get_signal)
+      {:ok, agent} = AgentPool.call(jido_name, :test_pool, get_signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.counter == 100
 
@@ -310,7 +312,7 @@ defmodule JidoTest.AgentPoolTest do
       tasks =
         for _ <- 1..10 do
           Task.async(fn ->
-            AgentPool.call(jido_name, :test_pool, signal)
+            AgentPool.call(jido_name, :test_pool, signal, fn s -> {:ok, s.agent} end)
           end)
         end
 

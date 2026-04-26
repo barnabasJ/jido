@@ -138,7 +138,6 @@ defmodule JidoTest.AgentTest do
       assert agent.tags == ["test", "basic"]
       assert agent.vsn == "1.0.0"
     end
-
   end
 
   describe "set/2" do
@@ -237,6 +236,7 @@ defmodule JidoTest.AgentTest do
 
     test "single-instruction error returns {:error, %Jido.Error{}}" do
       agent = TestAgents.Basic.new()
+
       assert {:error, %Jido.Error.ExecutionError{}} =
                TestAgents.Basic.cmd(agent, {TestActions.BasicAction, %{}})
     end
@@ -403,9 +403,7 @@ defmodule JidoTest.AgentTest do
 
     test "SliceUpdate writes multiple slices in one action turn" do
       agent =
-        TestAgents.Basic.new(
-          state: %{domain: %{prior: true}, audit: %{last_event: :none}}
-        )
+        TestAgents.Basic.new(state: %{domain: %{prior: true}, audit: %{last_event: :none}})
 
       {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.MultiSliceAction)
 

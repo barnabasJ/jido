@@ -372,9 +372,7 @@ defmodule Jido.Action do
   @callback on_after_validate_params(params :: map()) :: {:ok, map()} | {:error, any()}
   @callback on_before_validate_output(output :: map()) :: {:ok, map()} | {:error, any()}
   @callback on_after_validate_output(output :: map()) :: {:ok, map()} | {:error, any()}
-  @callback on_after_run(
-              result :: {:ok, term(), [Jido.Agent.Directive.t()]} | {:error, any()}
-            ) ::
+  @callback on_after_run(result :: {:ok, term(), [Jido.Agent.Directive.t()]} | {:error, any()}) ::
               {:ok, term(), [Jido.Agent.Directive.t()]} | {:error, any()}
 
   @optional_callbacks [

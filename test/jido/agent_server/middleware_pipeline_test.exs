@@ -37,7 +37,8 @@ defmodule JidoTest.AgentServer.MiddlewarePipelineTest do
         {JidoTest.AgentServer.MiddlewarePipelineTest.TaggingMiddleware, %{tag: :inner}}
       ]
 
-    def signal_routes(_ctx), do: [{"inspect", JidoTest.AgentServer.MiddlewarePipelineTest.InspectAction}]
+    def signal_routes(_ctx),
+      do: [{"inspect", JidoTest.AgentServer.MiddlewarePipelineTest.InspectAction}]
   end
 
   defp inspect_sig do
@@ -50,7 +51,7 @@ defmodule JidoTest.AgentServer.MiddlewarePipelineTest do
       pid = start_server(%{jido: jido}, MiddlewareAgent)
       :ok = AgentServer.await_ready(pid)
 
-      {:ok, agent} = AgentServer.call(pid, inspect_sig())
+      {:ok, agent} = AgentServer.call(pid, inspect_sig(), fn s -> {:ok, s.agent} end)
       assert agent.state.app.last_tags == [:outer, :inner]
     end
   end
@@ -63,7 +64,7 @@ defmodule JidoTest.AgentServer.MiddlewarePipelineTest do
         )
 
       :ok = AgentServer.await_ready(pid)
-      {:ok, agent} = AgentServer.call(pid, inspect_sig())
+      {:ok, agent} = AgentServer.call(pid, inspect_sig(), fn s -> {:ok, s.agent} end)
       assert :runtime in agent.state.app.last_tags
       assert agent.state.app.last_tags == [:outer, :inner, :runtime]
     end

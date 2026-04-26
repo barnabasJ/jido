@@ -77,11 +77,15 @@ defmodule JidoTest.Agent.SignalHandlingTest do
   describe "signal routing via AgentServer" do
     test "signals are routed to actions by type", %{jido: jido} do
       {:ok, pid} =
-        Jido.AgentServer.start_link(agent_module: ActionBasedAgent, id: "signal-route-test", jido: jido)
+        Jido.AgentServer.start_link(
+          agent_module: ActionBasedAgent,
+          id: "signal-route-test",
+          jido: jido
+        )
 
       # Signal type becomes the action: {"increment", signal.data}
       signal = Signal.new!("increment", %{amount: 5}, source: "/test")
-      {:ok, agent} = Jido.AgentServer.call(pid, signal)
+      {:ok, agent} = Jido.AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # The IncrementAction should have been called
       assert agent.state.domain.counter == 5
@@ -91,7 +95,11 @@ defmodule JidoTest.Agent.SignalHandlingTest do
 
     test "multiple signals processed in sequence", %{jido: jido} do
       {:ok, pid} =
-        Jido.AgentServer.start_link(agent_module: ActionBasedAgent, id: "multi-signal-test", jido: jido)
+        Jido.AgentServer.start_link(
+          agent_module: ActionBasedAgent,
+          id: "multi-signal-test",
+          jido: jido
+        )
 
       signals = [
         Signal.new!("increment", %{amount: 1}, source: "/test"),
@@ -101,7 +109,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
 
       final_agent =
         Enum.reduce(signals, nil, fn signal, _acc ->
-          {:ok, agent} = Jido.AgentServer.call(pid, signal)
+          {:ok, agent} = Jido.AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
           agent
         end)
 
@@ -112,10 +120,14 @@ defmodule JidoTest.Agent.SignalHandlingTest do
 
     test "signal data is passed to action", %{jido: jido} do
       {:ok, pid} =
-        Jido.AgentServer.start_link(agent_module: ActionBasedAgent, id: "signal-data-test", jido: jido)
+        Jido.AgentServer.start_link(
+          agent_module: ActionBasedAgent,
+          id: "signal-data-test",
+          jido: jido
+        )
 
       signal = Signal.new!("record", %{message: "hello"}, source: "/test")
-      {:ok, agent} = Jido.AgentServer.call(pid, signal)
+      {:ok, agent} = Jido.AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Fixtures.RecordAction stores the :message value when present
       assert agent.state.domain.messages == ["hello"]
@@ -125,10 +137,14 @@ defmodule JidoTest.Agent.SignalHandlingTest do
 
     test "action can return directives", %{jido: jido} do
       {:ok, pid} =
-        Jido.AgentServer.start_link(agent_module: ActionBasedAgent, id: "directive-test", jido: jido)
+        Jido.AgentServer.start_link(
+          agent_module: ActionBasedAgent,
+          id: "directive-test",
+          jido: jido
+        )
 
       signal = Signal.new!("emit_test", %{}, source: "/test")
-      {:ok, _agent} = Jido.AgentServer.call(pid, signal)
+      {:ok, _agent} = Jido.AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Directive was processed (we can't easily verify Emit was executed,
       # but we verified the action ran without error)
@@ -144,13 +160,14 @@ defmodule JidoTest.Agent.SignalHandlingTest do
         )
 
       signal = Signal.new!("unknown_action", %{}, source: "/test")
-      # Per ADR 0018, the chain returns {:error, %RoutingError{}}; AgentServer.call/2
-      # still replies {:ok, agent} (cast_and_await is the error-aware variant).
-      assert {:ok, _agent} = Jido.AgentServer.call(pid, signal)
+      # Per ADR 0020, AgentServer.call/4 returns {:error, _} from the chain
+      # verbatim — the selector is skipped on the error branch.
+      assert {:error, %Jido.Error.RoutingError{}} =
+               Jido.AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # The agent should still be functional despite the error
       signal2 = Signal.new!("increment", %{amount: 1}, source: "/test")
-      {:ok, agent} = Jido.AgentServer.call(pid, signal2)
+      {:ok, agent} = Jido.AgentServer.call(pid, signal2, fn s -> {:ok, s.agent} end)
       assert agent.state.domain.counter == 1
 
       GenServer.stop(pid)

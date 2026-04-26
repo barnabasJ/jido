@@ -49,9 +49,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Error do
   require Logger
 
   def exec(%Jido.Agent.Directive.Error{error: error, context: context}, _input_signal, state) do
-    Logger.error(
-      "Agent #{state.id}#{format_context(context)}: #{format_error(error)}"
-    )
+    Logger.error("Agent #{state.id}#{format_context(context)}: #{format_error(error)}")
 
     {:ok, state}
   end
@@ -103,9 +101,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction
         AgentServer.execute_directives(List.wrap(directives), input_signal, state)
 
       {:error, reason} ->
-        Logger.error(
-          "RunInstruction settle for #{state.id}: cmd/2 errored — #{inspect(reason)}"
-        )
+        Logger.error("RunInstruction settle for #{state.id}: cmd/2 errored — #{inspect(reason)}")
 
         {:ok, state}
     end
@@ -433,9 +429,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnManagedAg
         {:ok, state}
 
       {:error, reason} ->
-        Logger.error(
-          "SpawnManagedAgent #{state.id}: failed #{directive.tag}: #{inspect(reason)}"
-        )
+        Logger.error("SpawnManagedAgent #{state.id}: failed #{directive.tag}: #{inspect(reason)}")
 
         {:ok, state}
     end

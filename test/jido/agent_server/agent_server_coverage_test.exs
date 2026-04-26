@@ -25,7 +25,6 @@ defmodule JidoTest.AgentServerCoverageTest do
     @moduledoc false
     use Jido.Agent,
       name: "simple_test_agent",
-
       path: :domain,
       schema: [
         counter: [type: :integer, default: 0]
@@ -62,7 +61,6 @@ defmodule JidoTest.AgentServerCoverageTest do
     @moduledoc false
     use Jido.Agent,
       name: "many_directives_agent",
-
       path: :domain,
       schema: [
         counter: [type: :integer, default: 0],
@@ -110,7 +108,6 @@ defmodule JidoTest.AgentServerCoverageTest do
     @moduledoc false
     use Jido.Agent,
       name: "completion_agent",
-
       path: :domain,
       schema: [
         status: [type: :atom, default: :pending],
@@ -132,9 +129,11 @@ defmodule JidoTest.AgentServerCoverageTest do
       nonexistent_via = {:via, Registry, {Jido.registry_name(jido), "nonexistent-via-agent"}}
       signal = Signal.new!("increment", %{}, source: "/test")
 
-      assert {:error, :not_found} = AgentServer.call(nonexistent_via, signal)
+      assert {:error, :not_found} =
+               AgentServer.call(nonexistent_via, signal, fn s -> {:ok, s.agent} end)
+
       assert {:error, :not_found} = AgentServer.cast(nonexistent_via, signal)
-      assert {:error, :not_found} = AgentServer.state(nonexistent_via)
+      assert {:error, :not_found} = AgentServer.state(nonexistent_via, fn s -> {:ok, s} end)
     end
 
     test "via tuple that exists works", %{jido: jido} do
@@ -148,7 +147,7 @@ defmodule JidoTest.AgentServerCoverageTest do
       via = {:via, Registry, {Jido.registry_name(jido), "via-test-exists"}}
       signal = Signal.new!("increment", %{}, source: "/test")
 
-      {:ok, agent} = AgentServer.call(via, signal)
+      {:ok, agent} = AgentServer.call(via, signal, fn s -> {:ok, s.agent} end)
       assert agent.state.domain.counter == 1
     end
   end
@@ -157,7 +156,9 @@ defmodule JidoTest.AgentServerCoverageTest do
     test "string ID returns error with helpful message", %{jido: _jido} do
       signal = Signal.new!("increment", %{}, source: "/test")
 
-      assert {:error, {:invalid_server, message}} = AgentServer.call("some-string-id", signal)
+      assert {:error, {:invalid_server, message}} =
+               AgentServer.call("some-string-id", signal, fn s -> {:ok, s.agent} end)
+
       assert message =~ "String IDs require explicit registry lookup"
       assert message =~ "some-string-id"
     end
@@ -168,14 +169,17 @@ defmodule JidoTest.AgentServerCoverageTest do
     end
 
     test "string ID error on state", %{jido: _jido} do
-      assert {:error, {:invalid_server, _}} = AgentServer.state("some-string-id")
+      assert {:error, {:invalid_server, _}} =
+               AgentServer.state("some-string-id", fn s -> {:ok, s} end)
     end
   end
 
   describe "resolve_server with atom name" do
     test "atom name that doesn't exist returns error", %{jido: _jido} do
       signal = Signal.new!("increment", %{}, source: "/test")
-      assert {:error, :not_found} = AgentServer.call(:nonexistent_atom_server, signal)
+
+      assert {:error, :not_found} =
+               AgentServer.call(:nonexistent_atom_server, signal, fn s -> {:ok, s.agent} end)
     end
   end
 
@@ -183,7 +187,7 @@ defmodule JidoTest.AgentServerCoverageTest do
     test "agent uses default values from schema", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: SimpleTestAgent, jido: jido)
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.agent.state.domain.counter == 0
 
       GenServer.stop(pid)
@@ -198,7 +202,7 @@ defmodule JidoTest.AgentServerCoverageTest do
           jido: jido
         )
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.id == "custom-id-123"
       assert state.agent.state.domain.counter == 999
 
@@ -219,13 +223,13 @@ defmodule JidoTest.AgentServerCoverageTest do
           jido: jido
         )
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.id == "prebuilt-struct-test"
       assert state.agent.state.domain.counter == 50
       assert state.agent_module == Counter
 
       signal = Signal.new!("increment", %{}, source: "/test")
-      {:ok, updated_agent} = AgentServer.call(pid, signal)
+      {:ok, updated_agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
       assert updated_agent.state.domain.counter == 51
 
       GenServer.stop(pid)
@@ -237,11 +241,12 @@ defmodule JidoTest.AgentServerCoverageTest do
       {:ok, pid} = AgentServer.start_link(agent_module: JidoTest.TestAgents.Minimal, jido: jido)
 
       signal = Signal.new!("nonexistent_action", %{}, source: "/test")
-      # AgentServer.call returns {:ok, agent} even on routing error;
-      # the error surfaces as a %Directive.Error{} in the directive stream,
-      # which is logged but doesn't fail the call.
-      assert {:ok, _agent} = AgentServer.call(pid, signal)
+      # Per ADR 0020, AgentServer.call/4 surfaces the chain's tagged error
+      # verbatim — the selector is skipped on the routing-failure branch.
+      assert {:error, %Jido.Error.RoutingError{}} =
+               AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
+      assert Process.alive?(pid)
       GenServer.stop(pid)
     end
   end

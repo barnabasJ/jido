@@ -84,14 +84,13 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
     end
   end
 
-
-  describe "cast_and_await/4" do
-    test "fires the selector after the signal completes and returns its value", %{jido: jido} do
+  describe "call/4" do
+    test "runs the selector after the signal completes and returns its value", %{jido: jido} do
       pid = start_server(%{jido: jido}, TestAgent)
       :ok = AgentServer.await_ready(pid)
 
       result =
-        AgentServer.cast_and_await(
+        AgentServer.call(
           pid,
           signal("write", %{value: 7}),
           fn %AgentServer.State{agent: agent} ->
@@ -111,7 +110,7 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
       :ok = AgentServer.await_ready(pid)
 
       result =
-        AgentServer.cast_and_await(
+        AgentServer.call(
           pid,
           signal("write", %{value: 1}),
           fn _state -> {:error, :selector_says_no} end,
@@ -121,31 +120,13 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
       assert {:error, :selector_says_no} = result
     end
 
-    test "returns {:error, :timeout} when the selector keeps returning :skip", %{jido: jido} do
-      pid = start_server(%{jido: jido}, TestAgent)
-      :ok = AgentServer.await_ready(pid)
-
-      result =
-        AgentServer.cast_and_await(
-          pid,
-          signal("write", %{value: 1}),
-          fn _state -> :skip end,
-          timeout: 100
-        )
-
-      # Per ADR 0018, ack delivery hands the selector return verbatim. `:skip`
-      # is not a valid ack tuple, so the receive-loop never matches and we hit
-      # the caller-side timeout.
-      assert {:error, :timeout} = result
-    end
-
     test "delivers {:error, %Jido.Error{}} verbatim when the action errors; selector is skipped",
          %{jido: jido} do
       pid = start_server(%{jido: jido}, TestAgent)
       :ok = AgentServer.await_ready(pid)
 
       result =
-        AgentServer.cast_and_await(
+        AgentServer.call(
           pid,
           signal("fail"),
           fn _state -> {:ok, :selector_should_be_skipped} end,
@@ -178,7 +159,7 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
       :ok = AgentServer.unsubscribe(pid, ref)
     end
 
-    test "Retry middleware re-invokes next on {:error, _}; ack fires once with the eventual success",
+    test "Retry middleware re-invokes next on {:error, _}; selector fires once with the eventual success",
          %{jido: jido} do
       pid = start_server(%{jido: jido}, RetryingAgent)
       :ok = AgentServer.await_ready(pid)
@@ -190,7 +171,7 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
       # calls the action ≥1 time (Exec may also retry), so 3 middleware
       # attempts × ≥1 invocation comfortably exceeds 4.
       result =
-        AgentServer.cast_and_await(
+        AgentServer.call(
           pid,
           signal("flaky", %{name: key, succeed_after: 4}),
           fn %AgentServer.State{agent: agent} ->
@@ -202,13 +183,13 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
           timeout: 2_000
         )
 
-      # Eventual success crosses the boundary as a single ack
-      # (Retry retries internally; the outermost return fires the ack once).
+      # Eventual success crosses the boundary as a single reply
+      # (Retry retries internally; the outermost return fires the selector once).
       assert {:ok, 4} = result
       assert FlakyAction.attempts(key) >= 4
     end
 
-    test "Retry middleware exhausts max_attempts; ack receives the final {:error, _}",
+    test "Retry middleware exhausts max_attempts; caller receives the final {:error, _}",
          %{jido: jido} do
       pid = start_server(%{jido: jido}, RetryingAgent)
       :ok = AgentServer.await_ready(pid)
@@ -217,7 +198,7 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
       FlakyAction.reset(key)
 
       result =
-        AgentServer.cast_and_await(
+        AgentServer.call(
           pid,
           signal("flaky", %{name: key, succeed_after: 9_999}),
           fn _state -> {:ok, :should_be_skipped} end,
@@ -227,6 +208,25 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
       assert {:error, %Jido.Error.ExecutionError{}} = result
       # Three middleware attempts, each may also Exec-retry, so >= 3.
       assert FlakyAction.attempts(key) >= 3
+    end
+
+    test "raising selector surfaces as {:error, {:selector_raised, _, _}}; agent stays alive",
+         %{jido: jido} do
+      pid = start_server(%{jido: jido}, TestAgent)
+      :ok = AgentServer.await_ready(pid)
+
+      result =
+        AgentServer.call(
+          pid,
+          signal("write", %{value: 9}),
+          fn _state -> raise "selector boom" end,
+          timeout: 1_000
+        )
+
+      assert {:error, {:selector_raised, %RuntimeError{message: "selector boom"}, _stacktrace}} =
+               result
+
+      assert Process.alive?(pid)
     end
   end
 

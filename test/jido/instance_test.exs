@@ -147,7 +147,9 @@ defmodule JidoTest.InstanceTest do
 
       agent =
         RedisTestAgent.new(id: "redis-instance-agent")
-        |> then(fn agent -> %{agent | state: %{agent.state | domain: %{agent.state.domain | counter: 42}}} end)
+        |> then(fn agent ->
+          %{agent | state: %{agent.state | domain: %{agent.state.domain | counter: 42}}}
+        end)
         |> then(fn agent ->
           thread =
             Thread.new(id: "redis-thread")
@@ -169,12 +171,18 @@ defmodule JidoTest.InstanceTest do
 
       unpartitioned =
         RedisTestAgent.new(id: "shared-partition-key")
-        |> then(fn agent -> %{agent | state: %{agent.state | domain: %{agent.state.domain | counter: 10}}} end)
+        |> then(fn agent ->
+          %{agent | state: %{agent.state | domain: %{agent.state.domain | counter: 10}}}
+        end)
 
       partitioned =
         RedisTestAgent.new(id: "shared-partition-key")
         |> then(fn agent ->
-          %{agent | state: agent.state |> put_in([:domain, :counter], 20) |> Map.put(:__partition__, :blue)}
+          %{
+            agent
+            | state:
+                agent.state |> put_in([:domain, :counter], 20) |> Map.put(:__partition__, :blue)
+          }
         end)
 
       assert :ok = module.hibernate(unpartitioned)
@@ -191,7 +199,6 @@ defmodule JidoTest.InstanceTest do
       assert thawed_partitioned.state.domain.counter == 20
       assert thawed_partitioned.state.__partition__ == :blue
     end
-
   end
 
   describe "instance lifecycle" do

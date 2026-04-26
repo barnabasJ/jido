@@ -29,15 +29,17 @@ defmodule Jido.Agent.WorkerPool do
 
   ## Usage
 
-  The recommended approach is to use `with_agent/4` or `call/4`:
+  The recommended approach is to use `with_agent/4` or `call/5`:
 
       # Simple call - handles checkout/checkin automatically
-      {:ok, result} = Jido.Agent.WorkerPool.call(MyApp.Jido, :fast_search, signal)
+      {:ok, result} =
+        Jido.Agent.WorkerPool.call(MyApp.Jido, :fast_search, signal,
+          fn s -> {:ok, s.agent.state.app} end)
 
       # Transaction-style for multiple operations
       Jido.Agent.WorkerPool.with_agent(MyApp.Jido, :fast_search, fn pid ->
-        Jido.AgentServer.call(pid, signal1)
-        Jido.AgentServer.call(pid, signal2)
+        Jido.AgentServer.call(pid, signal1, fn _s -> {:ok, :done} end)
+        Jido.AgentServer.call(pid, signal2, fn _s -> {:ok, :done} end)
       end)
 
   ## State Semantics
@@ -76,12 +78,12 @@ defmodule Jido.Agent.WorkerPool do
   ## Examples
 
       Jido.Agent.WorkerPool.with_agent(MyApp.Jido, :fast_search, fn pid ->
-        Jido.AgentServer.call(pid, signal)
+        Jido.AgentServer.call(pid, signal, fn _s -> {:ok, :done} end)
       end)
 
       # With timeout
       Jido.Agent.WorkerPool.with_agent(MyApp.Jido, :fast_search, fn pid ->
-        Jido.AgentServer.call(pid, signal)
+        Jido.AgentServer.call(pid, signal, fn _s -> {:ok, :done} end)
       end, timeout: 10_000)
   """
   @spec with_agent(instance(), pool_name(), (pid() -> result), keyword()) :: result
@@ -100,29 +102,45 @@ defmodule Jido.Agent.WorkerPool do
   end
 
   @doc """
-  Sends a signal to a pooled agent and waits for completion.
+  Sends a signal to a pooled agent, runs the pipeline, and projects the
+  post-pipeline state through `selector`.
 
-  This is a convenience wrapper around `with_agent/4` that sends a single signal.
+  This is a convenience wrapper around `with_agent/4` that sends a single
+  signal and applies the caller's selector to the agent's `%State{}`.
 
   ## Options
 
   - `:timeout` - Checkout timeout in milliseconds (default: 5000)
-  - Additional options are passed to `Jido.AgentServer.call/3`
+  - `:call_timeout` - AgentServer call timeout (default: worker_pool_call_timeout_ms)
+  - Additional options are passed to `Jido.AgentServer.call/4` opts
 
   ## Examples
 
-      {:ok, result} = Jido.Agent.WorkerPool.call(MyApp.Jido, :fast_search, signal)
-      {:ok, result} = Jido.Agent.WorkerPool.call(MyApp.Jido, :fast_search, signal, timeout: 10_000)
+      {:ok, result} =
+        Jido.Agent.WorkerPool.call(MyApp.Jido, :fast_search, signal,
+          fn s -> {:ok, s.agent.state.app} end)
+
+      {:ok, :done} =
+        Jido.Agent.WorkerPool.call(MyApp.Jido, :fast_search, signal,
+          fn _s -> {:ok, :done} end, timeout: 10_000)
   """
-  @spec call(instance(), pool_name(), term(), keyword()) :: term()
-  def call(jido_instance, pool_name, signal, opts \\ []) do
+  @spec call(
+          instance(),
+          pool_name(),
+          Jido.Signal.t(),
+          Jido.AgentServer.call_selector(),
+          keyword()
+        ) ::
+          {:ok, term()} | {:error, term()}
+  def call(jido_instance, pool_name, signal, selector, opts \\ [])
+      when is_function(selector, 1) do
     call_timeout = Keyword.get(opts, :call_timeout, Defaults.worker_pool_call_timeout_ms())
 
     with_agent(
       jido_instance,
       pool_name,
       fn pid ->
-        Jido.AgentServer.call(pid, signal, call_timeout)
+        Jido.AgentServer.call(pid, signal, selector, timeout: call_timeout)
       end,
       opts
     )
@@ -167,7 +185,7 @@ defmodule Jido.Agent.WorkerPool do
 
       pid = Jido.Agent.WorkerPool.checkout(MyApp.Jido, :fast_search)
       try do
-        Jido.AgentServer.call(pid, signal)
+        Jido.AgentServer.call(pid, signal, fn _s -> {:ok, :done} end)
       after
         Jido.Agent.WorkerPool.checkin(MyApp.Jido, :fast_search, pid)
       end

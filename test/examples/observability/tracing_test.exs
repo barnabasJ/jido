@@ -138,7 +138,7 @@ defmodule JidoExampleTest.TracingTest do
 
       assert Trace.get(signal) == nil
 
-      {:ok, _agent} = AgentServer.call(pid, signal)
+      {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       eventually(fn ->
         signals = SignalCollector.get_signals(collector)
@@ -166,13 +166,13 @@ defmodule JidoExampleTest.TracingTest do
         )
 
       signal1 = Signal.new!("start_workflow", %{workflow_name: "payment"}, source: "/test")
-      {:ok, _} = AgentServer.call(pid, signal1)
+      {:ok, _} = AgentServer.call(pid, signal1, fn s -> {:ok, s.agent} end)
 
       signal2 = Signal.new!("process_step", %{step_number: 2}, source: "/test")
-      {:ok, _} = AgentServer.call(pid, signal2)
+      {:ok, _} = AgentServer.call(pid, signal2, fn s -> {:ok, s.agent} end)
 
       signal3 = Signal.new!("complete_workflow", %{}, source: "/test")
-      {:ok, _} = AgentServer.call(pid, signal3)
+      {:ok, _} = AgentServer.call(pid, signal3, fn s -> {:ok, s.agent} end)
 
       eventually(fn ->
         signals = SignalCollector.get_signals(collector)
@@ -209,7 +209,7 @@ defmodule JidoExampleTest.TracingTest do
       signal = Signal.new!("start_workflow", %{workflow_name: "traced"}, source: "/test")
       {:ok, traced_signal} = Trace.put(signal, root_trace)
 
-      {:ok, _} = AgentServer.call(pid, traced_signal)
+      {:ok, _} = AgentServer.call(pid, traced_signal, fn s -> {:ok, s.agent} end)
 
       eventually(fn ->
         signals = SignalCollector.get_signals(collector)
@@ -239,7 +239,7 @@ defmodule JidoExampleTest.TracingTest do
         )
 
       signal = Signal.new!("start_workflow", %{workflow_name: "debug-test"}, source: "/test")
-      {:ok, _} = AgentServer.call(pid, signal)
+      {:ok, _} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       eventually(fn ->
         signals = SignalCollector.get_signals(collector)

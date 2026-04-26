@@ -53,7 +53,6 @@ defmodule JidoTest.AgentServerTest do
     @moduledoc false
     use Jido.Agent,
       name: "test_agent",
-
       path: :domain,
       schema: [
         counter: [type: :integer, default: 0],
@@ -85,13 +84,15 @@ defmodule JidoTest.AgentServerTest do
 
     test "starts with custom id", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: "custom-123", jido: jido)
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.id == "custom-123"
       GenServer.stop(pid)
     end
 
     test "registers in Registry", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: "registry-test", jido: jido)
+      {:ok, pid} =
+        AgentServer.start_link(agent_module: TestAgent, id: "registry-test", jido: jido)
+
       assert AgentServer.whereis(Jido.registry_name(jido), "registry-test") == pid
       GenServer.stop(pid)
     end
@@ -105,7 +106,7 @@ defmodule JidoTest.AgentServerTest do
           jido: jido
         )
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.agent.id == "prebuilt-456"
       assert state.agent.state.domain.counter == 99
       GenServer.stop(pid)
@@ -119,7 +120,7 @@ defmodule JidoTest.AgentServerTest do
           jido: jido
         )
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.agent.state.domain.counter == 42
       GenServer.stop(pid)
     end
@@ -161,7 +162,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
 
       signal = Signal.new!("increment", %{}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.counter == 1
       GenServer.stop(pid)
@@ -172,10 +173,10 @@ defmodule JidoTest.AgentServerTest do
 
       for _ <- 1..5 do
         signal = Signal.new!("increment", %{}, source: "/test")
-        {:ok, _agent} = AgentServer.call(pid, signal)
+        {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
       end
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.agent.state.domain.counter == 5
       GenServer.stop(pid)
     end
@@ -184,7 +185,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
 
       signal = Signal.new!("record", %{message: "hello"}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.messages == ["hello"]
       GenServer.stop(pid)
@@ -194,7 +195,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: "call-id-test", jido: jido)
 
       signal = Signal.new!("increment", %{}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.counter == 1
       GenServer.stop(pid)
@@ -218,7 +219,6 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Agent,
           name: "inline_agent",
-
           path: :domain,
           schema: [
             counter: [type: :integer, default: 0],
@@ -236,7 +236,11 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: InlineAgent, jido: jido)
 
       slow_signal = Signal.new!("slow", %{}, source: "/test")
-      task = Task.async(fn -> AgentServer.call(pid, slow_signal, 2_000) end)
+
+      task =
+        Task.async(fn ->
+          AgentServer.call(pid, slow_signal, fn s -> {:ok, s.agent} end, timeout: 2_000)
+        end)
 
       Process.sleep(15)
       # cast while slow is in-flight — mailbox-queued
@@ -275,7 +279,6 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Agent,
           name: "buffered_signal_agent",
-
           path: :domain,
           schema: [
             counter: [type: :integer, default: 0],
@@ -293,7 +296,11 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: BufferedSignalAgent, jido: jido)
 
       slow_signal = Signal.new!("slow", %{}, source: "/test")
-      task = Task.async(fn -> AgentServer.call(pid, slow_signal, 2_000) end)
+
+      task =
+        Task.async(fn ->
+          AgentServer.call(pid, slow_signal, fn s -> {:ok, s.agent} end, timeout: 2_000)
+        end)
 
       Process.sleep(15)
       increment_signal = Signal.new!("increment", %{}, source: "/test")
@@ -342,7 +349,7 @@ defmodule JidoTest.AgentServerTest do
   describe "state/1" do
     test "returns full State struct", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: "state-test", jido: jido)
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
       assert %State{} = state
       assert state.id == "state-test"
@@ -353,8 +360,10 @@ defmodule JidoTest.AgentServerTest do
     end
 
     test "works with agent ID string", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: "state-id-test", jido: jido)
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, pid} =
+        AgentServer.start_link(agent_module: TestAgent, id: "state-id-test", jido: jido)
+
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
       assert state.id == "state-id-test"
       GenServer.stop(pid)
@@ -363,7 +372,9 @@ defmodule JidoTest.AgentServerTest do
 
   describe "whereis/1 and whereis/2" do
     test "whereis/1 returns pid for registered agent using default registry", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: "whereis-test-1", jido: jido)
+      {:ok, pid} =
+        AgentServer.start_link(agent_module: TestAgent, id: "whereis-test-1", jido: jido)
+
       assert AgentServer.whereis(Jido.registry_name(jido), "whereis-test-1") == pid
       GenServer.stop(pid)
     end
@@ -457,7 +468,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
 
       signal = Signal.new!("emit_test", %{}, source: "/test")
-      {:ok, _agent} = AgentServer.call(pid, signal)
+      {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Drain loop completes and returns to idle
       eventually_state(pid, fn state -> state.status == :idle end)
@@ -469,7 +480,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
 
       signal = Signal.new!("error_test", %{}, source: "/test")
-      {:ok, _agent} = AgentServer.call(pid, signal)
+      {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Drain loop completes and returns to idle
       eventually_state(pid, fn state -> state.status == :idle end)
@@ -481,7 +492,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
 
       signal = Signal.new!("schedule_test", %{}, source: "/test")
-      {:ok, _agent} = AgentServer.call(pid, signal)
+      {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Wait for scheduled signal to be processed (50ms delay + processing)
       eventually_state(pid, fn state -> state.status == :idle end, timeout: 200)
@@ -502,13 +513,17 @@ defmodule JidoTest.AgentServerTest do
   end
 
   describe "unknown signals" do
-    test "logs routing error and returns agent unchanged for unknown signal types", %{jido: jido} do
+    test "logs routing error and surfaces {:error, %RoutingError{}} per ADR 0020",
+         %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
 
       signal = Signal.new!("unknown.signal.type", %{}, source: "/test")
-      # Routing failures log via Directive.Error and the agent is returned unchanged
-      assert {:ok, %Jido.Agent{}} = AgentServer.call(pid, signal)
+      # Per ADR 0020, the chain's error short-circuits the selector and
+      # is delivered verbatim to the caller.
+      assert {:error, %Jido.Error.RoutingError{}} =
+               AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
+      assert Process.alive?(pid)
       GenServer.stop(pid)
     end
 
@@ -549,7 +564,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
 
       # Initially idle
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.status == :idle
 
       GenServer.stop(pid)
@@ -561,7 +576,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
 
       # After post_init continue, should be idle
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.status == :idle
 
       GenServer.stop(pid)
@@ -575,9 +590,9 @@ defmodule JidoTest.AgentServerTest do
       # A synchronous call completes before returning, so external observers
       # always see :idle.
       signal = Signal.new!("increment", %{}, source: "/test")
-      {:ok, _agent} = AgentServer.call(pid, signal)
+      {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.status == :idle
 
       GenServer.stop(pid)
@@ -610,7 +625,6 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Agent,
           name: "schedule_tracking_agent",
-
           path: :domain,
           schema: [
             pings: [type: :integer, default: 0]
@@ -627,10 +641,10 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: ScheduleTrackingAgent, jido: jido)
 
       signal = Signal.new!("start_schedule", %{}, source: "/test")
-      {:ok, _agent} = AgentServer.call(pid, signal)
+      {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Before delay
-      {:ok, state1} = AgentServer.state(pid)
+      {:ok, state1} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state1.agent.state.domain.pings == 0
 
       # Wait for scheduled signal (50ms delay + processing)
@@ -669,7 +683,6 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Agent,
           name: "multi_schedule_agent",
-
           path: :domain,
           schema: [
             events: [type: {:list, :any}, default: []]
@@ -686,11 +699,13 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: MultiScheduleAgent, jido: jido)
 
       signal = Signal.new!("schedule_many", %{}, source: "/test")
-      {:ok, _agent} = AgentServer.call(pid, signal)
+      {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Wait for all 3 scheduled signals (20ms, 40ms, 60ms delays)
       state =
-        eventually_state(pid, fn state -> state.agent.state.domain.events == [1, 2, 3] end, timeout: 200)
+        eventually_state(pid, fn state -> state.agent.state.domain.events == [1, 2, 3] end,
+          timeout: 200
+        )
 
       assert state.agent.state.domain.events == [1, 2, 3]
 
@@ -720,7 +735,6 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Agent,
           name: "wrap_schedule_agent",
-
           path: :domain,
           schema: [
             received: [type: :any, default: nil]
@@ -737,7 +751,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: WrapScheduleAgent, jido: jido)
 
       signal = Signal.new!("schedule_atom", %{}, source: "/test")
-      {:ok, _agent} = AgentServer.call(pid, signal)
+      {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Wait for scheduled atom message (10ms delay + processing)
       state =
@@ -756,29 +770,31 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
       signal = Signal.new!("increment", %{}, source: "/test")
 
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
       assert agent.state.domain.counter == 1
 
       GenServer.stop(pid)
     end
 
     test "resolves via tuple", %{jido: jido} do
-      {:ok, _pid} = AgentServer.start_link(agent_module: TestAgent, id: "via-resolve-test", jido: jido)
+      {:ok, _pid} =
+        AgentServer.start_link(agent_module: TestAgent, id: "via-resolve-test", jido: jido)
 
       via = AgentServer.via_tuple("via-resolve-test", Jido.registry_name(jido))
       signal = Signal.new!("increment", %{}, source: "/test")
 
-      {:ok, agent} = AgentServer.call(via, signal)
+      {:ok, agent} = AgentServer.call(via, signal, fn s -> {:ok, s.agent} end)
       assert agent.state.domain.counter == 1
 
       GenServer.stop(AgentServer.whereis(Jido.registry_name(jido), "via-resolve-test"))
     end
 
     test "resolves string id", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: "string-resolve-test", jido: jido)
+      {:ok, pid} =
+        AgentServer.start_link(agent_module: TestAgent, id: "string-resolve-test", jido: jido)
 
       signal = Signal.new!("increment", %{}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.counter == 1
 
@@ -801,8 +817,10 @@ defmodule JidoTest.AgentServerTest do
     test "returns error for invalid server reference", %{jido: _jido} do
       signal = Signal.new!("increment", %{}, source: "/test")
 
-      assert {:error, :invalid_server} = AgentServer.call(123, signal)
-      assert {:error, :invalid_server} = AgentServer.call({:invalid}, signal)
+      assert {:error, :invalid_server} = AgentServer.call(123, signal, fn s -> {:ok, s.agent} end)
+
+      assert {:error, :invalid_server} =
+               AgentServer.call({:invalid}, signal, fn s -> {:ok, s.agent} end)
     end
 
     test "alive? returns false for non-existent server", %{jido: jido} do
@@ -850,7 +868,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} =
         AgentServer.start_link(agent_module: TestAgent, id: "struct-id-123", jido: jido)
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.id == "struct-id-123"
 
       GenServer.stop(pid)
@@ -858,7 +876,7 @@ defmodule JidoTest.AgentServerTest do
 
     test "generates ID when not provided", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
       assert is_binary(state.id)
       assert String.length(state.id) > 0
@@ -868,7 +886,7 @@ defmodule JidoTest.AgentServerTest do
 
     test "converts atom ID to string", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: :atom_id, jido: jido)
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
       assert state.id == "atom_id"
 
@@ -881,7 +899,10 @@ defmodule JidoTest.AgentServerTest do
       spec = AgentServer.child_spec(agent_module: TestAgent, id: "spec-test")
 
       assert spec.id == "spec-test"
-      assert spec.start == {AgentServer, :start_link, [[agent_module: TestAgent, id: "spec-test"]]}
+
+      assert spec.start ==
+               {AgentServer, :start_link, [[agent_module: TestAgent, id: "spec-test"]]}
+
       assert spec.shutdown == 5_000
       assert spec.restart == :permanent
       assert spec.type == :worker
@@ -898,7 +919,8 @@ defmodule JidoTest.AgentServerTest do
     test "terminates cleanly with :normal reason", %{jido: jido} do
       Process.flag(:trap_exit, true)
 
-      {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: "terminate-test", jido: jido)
+      {:ok, pid} =
+        AgentServer.start_link(agent_module: TestAgent, id: "terminate-test", jido: jido)
 
       GenServer.stop(pid, :normal)
       assert_receive {:EXIT, ^pid, :normal}, 100
@@ -922,7 +944,6 @@ defmodule JidoTest.AgentServerTest do
         @moduledoc false
         use Jido.Agent,
           name: "counter_agent",
-
           path: :domain,
           schema: [drain_count: [type: :integer, default: 0]]
 
@@ -942,9 +963,12 @@ defmodule JidoTest.AgentServerTest do
 
       # Inline processing keeps status at :idle outside the handler; the
       # mailbox drains and a final round-trip confirms everything settled.
-      {:ok, _final} = AgentServer.call(pid, Signal.new!("slow", %{}, source: "/test"))
+      {:ok, _final} =
+        AgentServer.call(pid, Signal.new!("slow", %{}, source: "/test"), fn s ->
+          {:ok, s.agent}
+        end)
 
-      {:ok, final_state} = AgentServer.state(pid)
+      {:ok, final_state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert final_state.status == :idle
       assert {:message_queue_len, 0} = Process.info(pid, :message_queue_len)
 
@@ -978,7 +1002,6 @@ defmodule JidoTest.AgentServerTest do
       @moduledoc false
       use Jido.Agent,
         name: "agent_with_scheduled_plugin",
-
         path: :domain,
         schema: [],
         plugins: [ScheduledPlugin]
@@ -986,7 +1009,7 @@ defmodule JidoTest.AgentServerTest do
 
     test "registers plugin schedules on startup", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: AgentWithScheduledPlugin, jido: jido)
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
       assert map_size(state.cron_jobs) == 1
 
@@ -1002,9 +1025,13 @@ defmodule JidoTest.AgentServerTest do
 
     test "skips schedules when skip_schedules option is true", %{jido: jido} do
       {:ok, pid} =
-        AgentServer.start_link(agent_module: AgentWithScheduledPlugin, jido: jido, skip_schedules: true)
+        AgentServer.start_link(
+          agent_module: AgentWithScheduledPlugin,
+          jido: jido,
+          skip_schedules: true
+        )
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
       assert map_size(state.cron_jobs) == 0
 
@@ -1013,7 +1040,7 @@ defmodule JidoTest.AgentServerTest do
 
     test "cleans up cron jobs on termination", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: AgentWithScheduledPlugin, jido: jido)
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
       job_id = {:plugin_schedule, :scheduled_plugin, ScheduledAction}
       cron_pid = Map.get(state.cron_jobs, job_id)

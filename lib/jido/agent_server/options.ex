@@ -157,8 +157,7 @@ defmodule Jido.AgentServer.Options do
         if function_exported?(mod, :new, 0) or function_exported?(mod, :new, 1) do
           {:ok, mod}
         else
-          {:error,
-           Jido.Error.validation_error("agent_module must implement new/0 or new/1")}
+          {:error, Jido.Error.validation_error("agent_module must implement new/0 or new/1")}
         end
 
       {:error, _} ->

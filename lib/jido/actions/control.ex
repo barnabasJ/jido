@@ -107,7 +107,9 @@ defmodule Jido.Actions.Control do
       ]
 
     def run(
-          %Jido.Signal{data: %{target_pid: pid, signal_type: type, payload: payload, source: source}} =
+          %Jido.Signal{
+            data: %{target_pid: pid, signal_type: type, payload: payload, source: source}
+          } =
             original,
           _slice,
           _opts,
@@ -167,7 +169,14 @@ defmodule Jido.Actions.Control do
         source: [type: :string, default: "/broadcast", doc: "Signal source"]
       ]
 
-    def run(%Jido.Signal{data: %{topic: topic, signal_type: type, payload: payload, source: source}}, _slice, _opts, _ctx) do
+    def run(
+          %Jido.Signal{
+            data: %{topic: topic, signal_type: type, payload: payload, source: source}
+          },
+          _slice,
+          _opts,
+          _ctx
+        ) do
       signal = Signal.new!(type, payload, source: source)
       directive = Directive.emit(signal, {:pubsub, topic: topic})
       {:ok, %{broadcast_to: topic}, [directive]}

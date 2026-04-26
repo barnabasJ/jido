@@ -82,9 +82,7 @@ defmodule Jido.Pod.TopologyState do
 
   defp fetch_topology_via_signal(server) do
     with {:ok, query} <-
-           Signal.new("jido.pod.query.topology", %{},
-             source: "/jido/pod/topology_state"
-           ),
+           Signal.new("jido.pod.query.topology", %{}, source: "/jido/pod/topology_state"),
          {:ok, reply} <- Call.call(server, query) do
       case reply.type do
         "jido.pod.query.topology.reply" -> {:ok, reply.data.topology}

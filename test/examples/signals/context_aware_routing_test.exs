@@ -206,7 +206,7 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
       {:ok, pid} = Jido.start_agent(jido, GatedAgent, id: unique_id("gated"))
 
       signal = signal("process", %{value: 10})
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.counter == 10
       assert agent.state.domain.message == "processed"
@@ -215,18 +215,31 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
     test "set_mode changes agent state", %{jido: jido} do
       {:ok, pid} = Jido.start_agent(jido, GatedAgent, id: unique_id("gated"))
 
-      {:ok, agent} = AgentServer.call(pid, signal("set_mode", %{mode: :maintenance}))
+      {:ok, agent} =
+        AgentServer.call(pid, signal("set_mode", %{mode: :maintenance}), fn s ->
+          {:ok, s.agent}
+        end)
+
       assert agent.state.domain.mode == :maintenance
 
-      {:ok, agent} = AgentServer.call(pid, signal("set_mode", %{mode: :admin}))
+      {:ok, agent} =
+        AgentServer.call(pid, signal("set_mode", %{mode: :admin}), fn s -> {:ok, s.agent} end)
+
       assert agent.state.domain.mode == :admin
     end
 
     test "admin action records commands", %{jido: jido} do
       {:ok, pid} = Jido.start_agent(jido, GatedAgent, id: unique_id("gated"))
 
-      {:ok, _} = AgentServer.call(pid, signal("admin", %{command: "flush_cache"}))
-      {:ok, agent} = AgentServer.call(pid, signal("admin", %{command: "restart_workers"}))
+      {:ok, _} =
+        AgentServer.call(pid, signal("admin", %{command: "flush_cache"}), fn s ->
+          {:ok, s.agent}
+        end)
+
+      {:ok, agent} =
+        AgentServer.call(pid, signal("admin", %{command: "restart_workers"}), fn s ->
+          {:ok, s.agent}
+        end)
 
       assert length(agent.state.domain.admin_log) == 2
       assert "restart_workers" in agent.state.domain.admin_log
@@ -236,12 +249,19 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
     test "sequential signals accumulate state correctly", %{jido: jido} do
       {:ok, pid} = Jido.start_agent(jido, GatedAgent, id: unique_id("gated"))
 
-      {:ok, _} = AgentServer.call(pid, signal("process", %{value: 5}))
-      {:ok, _} = AgentServer.call(pid, signal("set_mode", %{mode: :admin}))
-      {:ok, _} = AgentServer.call(pid, signal("admin", %{command: "check_status"}))
-      {:ok, _} = AgentServer.call(pid, signal("process", %{value: 3}))
+      {:ok, _} = AgentServer.call(pid, signal("process", %{value: 5}), fn s -> {:ok, s.agent} end)
 
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, _} =
+        AgentServer.call(pid, signal("set_mode", %{mode: :admin}), fn s -> {:ok, s.agent} end)
+
+      {:ok, _} =
+        AgentServer.call(pid, signal("admin", %{command: "check_status"}), fn s ->
+          {:ok, s.agent}
+        end)
+
+      {:ok, _} = AgentServer.call(pid, signal("process", %{value: 3}), fn s -> {:ok, s.agent} end)
+
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
       assert state.agent.state.domain.counter == 8
       assert state.agent.state.domain.mode == :admin

@@ -237,7 +237,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
     test "get/3 passes initial_state", %{manager: manager} do
       {:ok, pid} = InstanceManager.get(manager, "key-state", initial_state: %{counter: 42})
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
       assert state.agent.state.domain.counter == 42
     end
@@ -466,7 +466,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       # Start agent with initial state
       {:ok, pid1} = InstanceManager.get(manager, "hibernate-key", initial_state: %{counter: 99})
       ref = Process.monitor(pid1)
-      {:ok, state1} = AgentServer.state(pid1)
+      {:ok, state1} = AgentServer.state(pid1, fn s -> {:ok, s} end)
       assert state1.agent.state.domain.counter == 99
 
       # Wait for idle timeout to hibernate
@@ -492,7 +492,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       assert Process.alive?(pid2)
 
-      {:ok, state2} = AgentServer.state(pid2)
+      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
       # The important assertion: state was preserved
       assert state2.agent.state.domain.counter == 99
 
@@ -505,7 +505,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       # Start agent with initial state
       {:ok, pid} = InstanceManager.get(manager, "stop-persist-key", initial_state: %{counter: 42})
       ref = Process.monitor(pid)
-      {:ok, state} = AgentServer.state(pid)
+      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.agent.state.domain.counter == 42
 
       # Stop the agent (should hibernate first)
@@ -573,8 +573,8 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       {:ok, restored_beta} = InstanceManager.get(manager, "shared-storage-key", partition: :beta)
 
-      {:ok, alpha_state} = AgentServer.state(restored_alpha)
-      {:ok, beta_state} = AgentServer.state(restored_beta)
+      {:ok, alpha_state} = AgentServer.state(restored_alpha, fn s -> {:ok, s} end)
+      {:ok, beta_state} = AgentServer.state(restored_beta, fn s -> {:ok, s} end)
 
       assert alpha_state.partition == :alpha
       assert alpha_state.agent.state.domain.counter == 11
@@ -628,7 +628,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 2000
         )
 
-      {:ok, state2} = AgentServer.state(pid2)
+      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
       assert state2.agent.state.domain.counter == 123
 
       :ok = AgentServer.detach(pid2)
@@ -677,7 +677,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 2000
         )
 
-      {:ok, state2} = AgentServer.state(pid2)
+      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
       assert state2.agent.state.domain.counter == 123
       assert map_size(RedisMock.data()) > 0
 
@@ -732,7 +732,9 @@ defmodule JidoTest.Agent.InstanceManagerTest do
         )
 
       state1 =
-        eventually_state(pid1, fn state -> state.agent.state.domain.tick_count > 0 end, timeout: 3_000)
+        eventually_state(pid1, fn state -> state.agent.state.domain.tick_count > 0 end,
+          timeout: 3_000
+        )
 
       pre_hibernate_ticks = state1.agent.state.domain.tick_count
 
@@ -817,7 +819,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 3_000
         )
 
-      {:ok, state2} = AgentServer.state(pid2)
+      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
       assert map_size(state2.cron_jobs) == 0
       assert map_size(state2.cron_specs) == 0
 
@@ -928,7 +930,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 3_000
         )
 
-      {:ok, state2} = AgentServer.state(pid2)
+      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
       refute Map.has_key?(state2.cron_jobs, :after_kill_cancel)
       refute Map.has_key?(state2.cron_specs, :after_kill_cancel)
 
@@ -1085,7 +1087,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       assert_receive {:DOWN, ^ref, :process, ^pid1, {:shutdown, :idle_timeout}}, 1000
 
       {:ok, pid2} = InstanceManager.get(manager_name, "no-storage")
-      {:ok, state2} = AgentServer.state(pid2)
+      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
       assert state2.agent.state.domain.counter == 0
     end
 
@@ -1162,7 +1164,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 2000
         )
 
-      {:ok, state2} = AgentServer.state(pid2)
+      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
       assert state2.agent.state.domain.counter == 55
       assert String.starts_with?(state2.agent.id, "key_")
 
@@ -1247,8 +1249,8 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 2000
         )
 
-      {:ok, state_a2} = AgentServer.state(pid_a2)
-      {:ok, state_b2} = AgentServer.state(pid_b2)
+      {:ok, state_a2} = AgentServer.state(pid_a2, fn s -> {:ok, s} end)
+      {:ok, state_b2} = AgentServer.state(pid_b2, fn s -> {:ok, s} end)
 
       assert state_a2.agent.state.domain.counter == 11
       assert state_b2.agent.state.domain.counter == 22

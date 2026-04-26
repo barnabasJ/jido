@@ -175,7 +175,7 @@ defmodule JidoExampleTest.ObservabilityTest do
       {:ok, pid} = Jido.start_agent(jido, ObserveExampleAgent, id: unique_id("observe"))
 
       signal = Signal.new!("observed_work", %{work_units: 5}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.last_result == 10
 
@@ -261,7 +261,7 @@ defmodule JidoExampleTest.ObservabilityTest do
       {:ok, pid} = Jido.start_agent(jido, ObserveExampleAgent, id: unique_id("observe"))
 
       signal = Signal.new!("observed_async", %{delay_ms: 5}, source: "/test")
-      {:ok, agent} = AgentServer.call(pid, signal)
+      {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.async_result == 15
 

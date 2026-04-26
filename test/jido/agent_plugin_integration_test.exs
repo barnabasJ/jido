@@ -138,7 +138,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "single_skill_agent",
-
       path: :domain,
       default_plugins: false,
       plugins: [JidoTest.AgentPluginIntegrationTest.CounterPlugin]
@@ -148,7 +147,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "multi_skill_agent",
-
       path: :domain,
       default_plugins: false,
       plugins: [
@@ -161,7 +159,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "configured_skill_agent",
-
       path: :domain,
       default_plugins: false,
       plugins: [
@@ -174,7 +171,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "mixed_schema_agent",
-
       path: :domain,
       default_plugins: false,
       schema: [
@@ -188,7 +184,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "three_skill_agent",
-
       path: :domain,
       default_plugins: false,
       plugins: [
@@ -202,7 +197,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "minimal_skill_agent",
-
       path: :domain,
       default_plugins: false,
       plugins: [JidoTest.AgentPluginIntegrationTest.MinimalPlugin]
@@ -456,7 +450,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       defmodule NoPluginAgent do
         use Jido.Agent,
           name: "no_skill_agent",
-
           path: :domain,
           default_plugins: false
       end
@@ -539,7 +532,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       @moduledoc false
       use Jido.Agent,
         name: "capability_agent",
-
         path: :domain,
         default_plugins: false,
         plugins: [
@@ -574,7 +566,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         @moduledoc false
         use Jido.Agent,
           name: "aliased_cap_agent",
-
           path: :domain,
           default_plugins: false,
           plugins: [
@@ -596,7 +587,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         @moduledoc false
         use Jido.Agent,
           name: "multi_instance_cap_agent",
-
           path: :domain,
           default_plugins: false,
           plugins: [
@@ -618,7 +608,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         @moduledoc false
         use Jido.Agent,
           name: "multi_instance_cap_agent2",
-
           path: :domain,
           default_plugins: false,
           plugins: [
@@ -782,7 +771,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       defmodule DupAgent do
         use Jido.Agent,
           name: "dup_agent",
-
           path: :domain,
           default_plugins: false,
           plugins: [JidoTest.AgentPluginIntegrationTest.DuplicateActionPlugin]
@@ -811,7 +799,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       defmodule SharedActionAgent do
         use Jido.Agent,
           name: "shared_action_agent",
-
           path: :domain,
           default_plugins: false,
           plugins: [
@@ -855,7 +842,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       @moduledoc false
       use Jido.Agent,
         name: "multi_slack_agent",
-
         path: :domain,
         default_plugins: false,
         plugins: [
@@ -868,7 +854,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       @moduledoc false
       use Jido.Agent,
         name: "mixed_instance_agent",
-
         path: :domain,
         default_plugins: false,
         plugins: [
@@ -959,7 +944,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         defmodule DuplicateNoAsAgent do
           use Jido.Agent,
             name: "duplicate_no_as",
-
             path: :domain,
             plugins: [
               JidoTest.AgentPluginIntegrationTest.CounterPlugin,
@@ -974,7 +958,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         defmodule DuplicateSameAsAgent do
           use Jido.Agent,
             name: "duplicate_same_as",
-
             path: :domain,
             plugins: [
               {JidoTest.AgentPluginIntegrationTest.CounterPlugin, as: :primary},
@@ -988,7 +971,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       defmodule DifferentAsAgent do
         use Jido.Agent,
           name: "different_as_agent",
-
           path: :domain,
           default_plugins: false,
           plugins: [

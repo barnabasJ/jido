@@ -113,7 +113,7 @@ defmodule JidoExampleTest.MutablePodRuntimeTest do
     assert :error = Pod.lookup_node(pod_pid, "reviewer")
     assert {:ok, reviewer_pid} = Pod.ensure_node(pod_pid, "reviewer")
 
-    assert {:ok, planner_state} = AgentServer.state(planner_pid)
+    assert {:ok, planner_state} = AgentServer.state(planner_pid, fn s -> {:ok, s} end)
     assert planner_state.children["reviewer"].pid == reviewer_pid
 
     pod_ref = Process.monitor(pod_pid)

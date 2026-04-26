@@ -57,7 +57,6 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "scheduler_integration_plugin_agent",
-
       path: :domain,
       schema: [
         tick_count: [type: :integer, default: 0],
@@ -74,7 +73,6 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
     @moduledoc false
     use Jido.Agent,
       name: "scheduler_restore_counting_agent",
-
       path: :domain,
       schema: [
         counter: [type: :integer, default: 0]

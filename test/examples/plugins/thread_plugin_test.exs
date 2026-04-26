@@ -93,7 +93,6 @@ defmodule JidoExampleTest.ThreadPluginTest do
     @moduledoc false
     use Jido.Agent,
       name: "stateless_agent",
-
       path: :domain,
       description: "Agent with thread plugin explicitly disabled",
       default_plugins: %{thread: false},
@@ -215,17 +214,19 @@ defmodule JidoExampleTest.ThreadPluginTest do
       {:ok, _agent} =
         AgentServer.call(
           pid,
-          signal("record_message", %{role: "user", content: "first message"})
+          signal("record_message", %{role: "user", content: "first message"}),
+          fn s -> {:ok, s.agent} end
         )
 
       {:ok, _agent} =
         AgentServer.call(
           pid,
-          signal("record_message", %{role: "assistant", content: "first reply"})
+          signal("record_message", %{role: "assistant", content: "first reply"}),
+          fn s -> {:ok, s.agent} end
         )
 
       {:ok, agent} =
-        AgentServer.call(pid, signal("summarize"))
+        AgentServer.call(pid, signal("summarize"), fn s -> {:ok, s.agent} end)
 
       assert agent.state.domain.summary == "2 messages in thread"
     end

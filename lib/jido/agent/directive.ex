@@ -970,5 +970,4 @@ defmodule Jido.Agent.Directive do
     opts = Keyword.merge([target: pid], extra_opts)
     %Emit{signal: signal, dispatch: {:pid, opts}}
   end
-
 end

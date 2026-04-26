@@ -79,7 +79,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     @moduledoc false
     use Jido.Agent,
       name: "no_child_agent",
-
       path: :domain,
       plugins: [JidoTest.AgentServer.PluginChildrenTest.NoChildPlugin]
   end
@@ -89,7 +88,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     @moduledoc false
     use Jido.Agent,
       name: "single_child_agent",
-
       path: :domain,
       plugins: [JidoTest.AgentServer.PluginChildrenTest.SingleChildPlugin]
   end
@@ -99,7 +97,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     @moduledoc false
     use Jido.Agent,
       name: "configured_child_agent",
-
       path: :domain,
       plugins: [
         {JidoTest.AgentServer.PluginChildrenTest.SingleChildPlugin, %{initial_value: :custom}}
@@ -111,7 +108,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     @moduledoc false
     use Jido.Agent,
       name: "multi_child_agent",
-
       path: :domain,
       plugins: [{JidoTest.AgentServer.PluginChildrenTest.MultiChildPlugin, %{count: 3}}]
   end
@@ -121,7 +117,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     @moduledoc false
     use Jido.Agent,
       name: "invalid_child_agent",
-
       path: :domain,
       plugins: [JidoTest.AgentServer.PluginChildrenTest.InvalidChildSpecPlugin]
   end
@@ -130,7 +125,7 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "plugin returning nil starts no children", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: NoChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid)
+      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
       assert state.children == %{}
 
       GenServer.stop(pid)
@@ -141,7 +136,7 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "plugin starts child process on AgentServer init", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: SingleChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid)
+      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
 
       # Should have one child
       assert map_size(state.children) == 1
@@ -164,7 +159,7 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "child receives config from plugin config", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: ConfiguredChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid)
+      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
 
       [{_tag, child_info}] = Map.to_list(state.children)
       assert Agent.get(child_info.pid, & &1) == :custom
@@ -175,7 +170,7 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "child is monitored by AgentServer", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: SingleChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid)
+      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
       [{_tag, child_info}] = Map.to_list(state.children)
 
       # Child has a monitor ref
@@ -195,7 +190,7 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "plugin can start multiple child processes", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: MultiChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid)
+      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
 
       # Should have 3 children
       assert map_size(state.children) == 3
@@ -214,7 +209,7 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
       # This should start successfully but log a warning
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: InvalidChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid)
+      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
       # No children should be started due to invalid spec
       assert state.children == %{}
 
@@ -226,7 +221,7 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "children are cleaned up when AgentServer stops", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: SingleChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid)
+      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
       [{_tag, child_info}] = Map.to_list(state.children)
       child_pid = child_info.pid
 

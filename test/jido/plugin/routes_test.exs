@@ -126,7 +126,6 @@ defmodule JidoTest.Plugin.RoutesTest do
 
       assert routes == []
     end
-
   end
 
   describe "detect_conflicts/1" do

@@ -35,7 +35,8 @@ defmodule Jido.Plugin.FSMSmokeTest do
              "done" => [],
              "errored" => []
            },
-           terminal_states: ["done", "errored"]}}
+           terminal_states: ["done", "errored"]
+         }}
       ]
   end
 
