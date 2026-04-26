@@ -4,30 +4,22 @@ defmodule Jido.Pod.Runtime do
   alias Jido.Agent.Directive.SpawnManagedAgent
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
-  alias Jido.AgentServer.{ChildInfo, ParentRef, StopChildRuntime}
-  alias Jido.AgentServer.State
-  alias Jido.Observe
-  alias Jido.Pod.Mutation.Plan
-  alias Jido.Pod.Mutation.Planner
-  alias Jido.Pod.Mutation.Report
-  alias Jido.Pod.Plugin
+  alias Jido.AgentServer.{ParentRef, State}
+  alias Jido.AgentServer.Signal.ChildExit
+  alias Jido.AgentServer.Signal.ChildStarted
+  alias Jido.Pod.Mutable
+  alias Jido.Pod.Mutation
   alias Jido.Pod.Topology
   alias Jido.Pod.Topology.Node
   alias Jido.Pod.TopologyState
-  alias Jido.RuntimeStore
   alias Jido.Signal
 
   defmodule View do
     @moduledoc """
     Narrow projection of `%Jido.AgentServer.State{}` used by `Pod.Runtime`'s
-    internal helpers. Built once at the cross-process boundary (via
-    `Pod.Runtime.fetch_runtime_view/1`) or in-handler (via
-    `Pod.Runtime.view_from_state/2`); never refreshed in place.
-
-    The view never carries `:agent` — the topology is extracted at view
-    construction time and stored in the `:topology` field. Internal
-    helpers' signatures take `View.t()`, advertising what they actually
-    use.
+    internal helpers. Built once at the cross-process boundary (via the
+    private `fetch_runtime_view/1`) or in-handler (via `view_from_state/2`);
+    never refreshed in place.
     """
 
     @enforce_keys [:id, :registry, :partition, :jido, :agent_module, :topology, :pod_key]
@@ -46,15 +38,8 @@ defmodule Jido.Pod.Runtime do
 
   defguardp is_node_name(name) when is_atom(name) or is_binary(name)
 
-  @pod_state_key Plugin.path()
-
   @doc """
   Returns the pod's current topology + per-node runtime snapshots.
-
-  Implemented as a signal-based query — the pod's `Pod.Plugin` routes
-  `jido.pod.query.nodes` to `Pod.Actions.QueryNodes`, which replies via
-  `Jido.Signal.Call`. The caller does not read pod state directly; the
-  pod controls exactly what fields are exposed in the reply.
   """
   def nodes(server) do
     with {:ok, query} <- Signal.new("jido.pod.query.nodes", %{}, source: "/jido/pod/runtime"),
@@ -68,9 +53,6 @@ defmodule Jido.Pod.Runtime do
 
   @doc """
   Returns the pid of the named node if it's running.
-
-  Resolves via the `nodes/1` query and then extracts the `running_pid`
-  field — same "answer over signal, not state extraction" pattern.
   """
   def lookup_node(server, name) when is_node_name(name) do
     with {:ok, snapshots} <- nodes(server) do
@@ -82,202 +64,481 @@ defmodule Jido.Pod.Runtime do
     end
   end
 
+  @doc """
+  Ensures a named node is running by submitting an EnsureNode mutation
+  through the signal-driven state machine and waiting for completion.
+  """
   def ensure_node(server, name, opts \\ []) when is_node_name(name) and is_list(opts) do
-    with {:ok, view} <- fetch_runtime_view(server),
-         {:ok, node} <- fetch_node(view.topology, name),
-         :ok <- ensure_runtime_supported(node, name),
-         {:ok, server_pid} <- resolve_runtime_server(server, view),
-         {:ok, waves} <- Topology.reconcile_waves(view.topology, [name]) do
-      case execute_runtime_plan(server_pid, view, [name], waves, opts) do
-        {:ok, report} ->
-          {:ok, report.nodes[name].pid}
+    {ensure_opts, mutate_opts} = Keyword.split(opts, [:initial_state])
 
-        {:error, report} ->
-          {:error, node_failure_reason_from_report(view.topology, name, report)}
-      end
+    case Mutable.mutate_and_wait(server, [Mutation.ensure_node(name, ensure_opts)], mutate_opts) do
+      {:ok, report} ->
+        case get_in(report, [Access.key!(:nodes), name]) do
+          %{pid: pid} when is_pid(pid) -> {:ok, pid}
+          _ -> lookup_node(server, name)
+        end
+
+      {:error, %{failures: failures} = report} ->
+        case Map.get(failures, name) do
+          nil -> {:error, report}
+          reason -> {:error, reason}
+        end
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
+  @doc """
+  Reconciles a pod by starting any eager nodes that aren't yet running.
+  """
   def reconcile(server, opts \\ []) when is_list(opts) do
-    with {:ok, view} <- fetch_runtime_view(server),
-         {:ok, server_pid} <- resolve_runtime_server(server, view) do
-      observe_pod_operation(
-        [:jido, :pod, :reconcile],
-        pod_event_metadata(view),
-        fn ->
-          eager_node_names =
-            view.topology.nodes
-            |> Enum.filter(fn {_name, node} -> node.activation == :eager end)
-            |> Enum.map(&elem(&1, 0))
-
-          emit_pod_lifecycle(server_pid, view, "jido.pod.reconcile.started", %{
-            requested: eager_node_names
-          })
-
-          result =
-            with {:ok, waves} <- Topology.reconcile_waves(view.topology, eager_node_names) do
-              execute_runtime_plan(server_pid, view, eager_node_names, waves, opts)
-            end
-
-          case result do
-            {:ok, report} ->
-              emit_pod_lifecycle(server_pid, view, "jido.pod.reconcile.completed", %{
-                requested: eager_node_names,
-                started: report[:completed] || [],
-                failed: report[:failed] || []
-              })
-
-            {:error, report_or_reason} ->
-              emit_pod_lifecycle(server_pid, view, "jido.pod.reconcile.failed", %{
-                requested: eager_node_names,
-                error: report_or_reason
-              })
-          end
-
-          result
-        end,
-        &reconcile_measurements/1
-      )
-    end
-  end
-
-  # Cast a pod-lifecycle signal to the pod's AgentServer so it flows through
-  # the pod's signal_routes and any attached plugins — same dispatch path as
-  # jido.agent.child.started, just originated by the runtime. Best effort:
-  # a failed cast is not fatal for the reconcile itself.
-  defp emit_pod_lifecycle(server_pid, %View{} = view, type, data) do
-    case Signal.new(type, data, source: "/pod/#{view.id}") do
-      {:ok, signal} ->
-        _ = AgentServer.cast(server_pid, signal)
-        :ok
-
-      {:error, _reason} ->
-        :ok
-    end
-  end
-
-  @spec execute_mutation_plan(State.t(), Plan.t(), keyword()) :: {:ok, State.t()}
-  def execute_mutation_plan(%State{} = state, %Plan{} = plan, opts \\ []) when is_list(opts) do
-    stop_view = view_from_state(state, plan.current_topology)
-
-    {state, stop_result} =
-      execute_stop_waves_locally(
-        self(),
-        state,
-        stop_view,
-        plan.removed_nodes,
-        plan.stop_waves,
-        plan.mutation_id,
-        opts
-      )
-
-    {state, start_result} =
-      case plan.start_requested do
-        [] ->
-          {state, {:ok, empty_reconcile_report()}}
-
-        _names ->
-          start_view = view_from_state(state, plan.final_topology)
-
-          case execute_runtime_plan_locally(
-                 state,
-                 start_view,
-                 plan.start_requested,
-                 plan.start_waves,
-                 opts
-               ) do
-            {:ok, next_state, report} -> {next_state, {:ok, report}}
-            {:error, next_state, report} -> {next_state, {:error, report}}
-          end
+    with {:ok, eager_unrunning} <- eager_unrunning_nodes(server) do
+      case Mutable.mutate_and_wait(
+             server,
+             Enum.map(eager_unrunning, &Mutation.ensure_node/1),
+             opts
+           ) do
+        {:ok, report} -> {:ok, reconcile_report(report, eager_unrunning)}
+        {:error, report} when is_map(report) -> {:error, reconcile_report(report, eager_unrunning)}
+        {:error, _reason} = error -> error
       end
-
-    report = complete_mutation_report(plan.report, stop_result, start_result)
-    mutation_status = if report.status == :completed, do: :completed, else: :failed
-
-    mutation_state = %{
-      id: plan.mutation_id,
-      status: mutation_status,
-      report: report,
-      error: if(mutation_status == :failed, do: report, else: nil)
-    }
-
-    agent_state = put_in(state.agent.state, [@pod_state_key, :mutation], mutation_state)
-
-    # Lifecycle signal cast back to self() — flows through the pod's own
-    # pipeline so AgentServer.subscribe/4 subscribers see it after the
-    # outermost middleware unwinds (per ADR 0016 hook point). The slice
-    # mutation field above is already in its terminal state by the time
-    # the lifecycle signal is processed.
-    emit_pod_lifecycle(
-      self(),
-      view_from_state(state, plan.final_topology),
-      "jido.pod.mutate.#{mutation_status}",
-      %{
-        mutation_id: plan.mutation_id,
-        report: report,
-        error: if(mutation_status == :failed, do: report, else: nil)
-      }
-    )
-
-    {:ok, State.update_agent(state, %{state.agent | state: agent_state})}
+    end
   end
 
+  defp eager_unrunning_nodes(server) do
+    case AgentServer.state(server, &eager_unrunning_selector/1) do
+      {:ok, names} -> {:ok, names}
+      {:error, _} = err -> err
+    end
+  end
+
+  defp eager_unrunning_selector(%State{} = state) do
+    with {:ok, topology} <- TopologyState.fetch_topology(state) do
+      view = view_from_state(state, topology)
+
+      names =
+        topology.nodes
+        |> Enum.filter(fn {_name, node} -> node.activation == :eager end)
+        |> Enum.reject(fn {name, node} ->
+          snapshot = build_node_snapshot(view, name, node)
+          is_pid(snapshot.running_pid)
+        end)
+        |> Enum.map(&elem(&1, 0))
+
+      {:ok, names}
+    end
+  end
+
+  # Map a mutation report into the legacy reconcile report shape so existing
+  # callers (notably Pod.get's `{:error, %{stage: :reconcile, ...}}` path)
+  # continue to work.
+  defp reconcile_report(%Jido.Pod.Mutation.Report{} = mreport, requested) do
+    requested = Enum.uniq(requested)
+    completed = mreport.started || []
+    failures = mreport.failures || %{}
+    failed = failures |> Map.keys() |> Enum.sort()
+
+    %{
+      requested: requested,
+      waves: [],
+      nodes: Map.get(mreport, :nodes, %{}),
+      failures: failures,
+      completed: completed,
+      failed: failed,
+      pending: []
+    }
+  end
+
+  defp reconcile_report(report, requested) when is_map(report) do
+    failures = Map.get(report, :failures, %{})
+
+    %{
+      requested: requested,
+      waves: [],
+      nodes: Map.get(report, :nodes, %{}),
+      failures: failures,
+      completed: Map.get(report, :started, []),
+      failed: failures |> Map.keys() |> Enum.sort(),
+      pending: []
+    }
+  end
+
+  @doc """
+  Synchronous teardown — directly kills each child pid. Bypasses the state
+  machine intentionally; used during supervisor cleanup where we are not
+  guaranteed a healthy mailbox.
+  """
   @spec teardown_runtime(AgentServer.server(), keyword()) ::
           {:ok, map()} | {:error, map() | term()}
-  def teardown_runtime(server, opts \\ []) when is_list(opts) do
+  def teardown_runtime(server, _opts \\ []) do
     with {:ok, view} <- fetch_runtime_view(server),
          {:ok, server_pid} <- resolve_runtime_server(server, view),
-         {:ok, stop_waves} <- Planner.stop_waves(view.topology, Map.keys(view.topology.nodes)) do
-      stop_result =
-        execute_stop_waves(
-          server_pid,
-          view,
-          view.topology.nodes,
-          stop_waves,
-          "pod-teardown",
-          opts
-        )
+         {:ok, snapshots} <- nodes(server_pid) do
+      requested = Map.keys(view.topology.nodes)
 
-      report = %{
-        requested: Map.keys(view.topology.nodes),
-        waves: stop_waves,
-        stopped: Enum.sort(stop_result.stopped),
-        failures: stop_result.failures
-      }
+      stopped =
+        for name <- requested,
+            snapshot = Map.get(snapshots, name),
+            is_map(snapshot),
+            is_pid(snapshot.running_pid),
+            do: name,
+            into: []
 
-      if map_size(report.failures) == 0 do
-        {:ok, report}
-      else
-        {:error, report}
+      _ =
+        Enum.each(snapshots, fn
+          {_name, %{running_pid: pid}} when is_pid(pid) -> Process.exit(pid, :shutdown)
+          _ -> :ok
+        end)
+
+      {:ok,
+       %{
+         requested: requested,
+         waves: [],
+         stopped: Enum.sort(stopped),
+         failures: %{}
+       }}
+    end
+  end
+
+  @doc """
+  Spawn or adopt one node. Pure I/O — does not modify `state.agent.state`.
+  Returns `{:ok, state, pid}` for a fresh spawn, or `{:ok, state, :adopted}`
+  when the node was already running. The natural `jido.agent.child.started`
+  signal advances the mutation state machine.
+  """
+  @spec start_node(State.t(), Mutation.node_name(), keyword()) ::
+          {:ok, State.t(), pid()}
+          | {:ok, State.t(), :adopted}
+          | {:error, State.t(), term()}
+  def start_node(%State{} = state, name, opts \\ []) when is_node_name(name) and is_list(opts) do
+    ancestry = Keyword.get(opts, :pod_ancestry, [state.agent_module])
+
+    with {:ok, topology} <- TopologyState.fetch_topology(state),
+         {:ok, node} <- fetch_node(topology, name),
+         :ok <- ensure_runtime_supported(node, name, ancestry) do
+      view = view_from_state(state, topology)
+      snapshot = build_node_snapshot(view, name, node)
+
+      cond do
+        is_pid(snapshot.running_pid) ->
+          adopt_existing(state, view, name, node, snapshot.running_pid)
+
+        true ->
+          spawn_new(state, view, name, node, opts)
       end
     end
-  end
-
-  defp fetch_node(%Topology{} = topology, name) when is_node_name(name) do
-    case Topology.fetch_node(topology, name) do
-      {:ok, %Node{} = node} ->
-        {:ok, node}
-
-      :error ->
-        {:error, :unknown_node}
+    |> case do
+      {:ok, _state, _result} = ok -> ok
+      {:error, reason} -> {:error, state, reason}
+      {:error, _state, _reason} = err -> err
     end
   end
 
-  defp ensure_runtime_supported(%Node{kind: :agent}, _name), do: :ok
+  @doc """
+  Send shutdown to one node's child. Pure I/O — does not modify
+  `state.agent.state`. Returns `{:ok, state}`. For root-owned children
+  the natural `jido.agent.child.exit` (from the pod's own monitor's
+  DOWN) advances the state machine. For owner-owned children (where the
+  pod doesn't hold the monitor) the stop is cast to the looked-up pid
+  and a synthetic `jido.agent.child.exit` is dispatched immediately so
+  the state machine still advances.
+  """
+  @spec stop_node(State.t(), Mutation.node_name(), term()) :: {:ok, State.t()}
+  def stop_node(%State{} = state, name, reason \\ :shutdown) when is_node_name(name) do
+    case Map.get(state.children, name) do
+      %{pid: pid} when is_pid(pid) ->
+        cast_stop(pid, state, reason)
+        # Root child: pod holds the monitor. handle_child_down will
+        # emit the natural jido.agent.child.exit when the pid actually
+        # dies. State machine advances then.
+        {:ok, state}
 
-  defp ensure_runtime_supported(%Node{kind: :pod, module: module, manager: manager}, _name)
-       when is_atom(module) do
-    with :ok <- ensure_pod_module(module),
-         :ok <- ensure_pod_manager_module(manager, module) do
+      _ ->
+        stop_offboard(state, name, reason)
+        {:ok, state}
+    end
+  end
+
+  defp stop_offboard(%State{} = state, name, reason) do
+    pid = lookup_offboard_pid(state, name)
+    if is_pid(pid), do: cast_stop(pid, state, reason)
+
+    # Owned-by-someone-else child or no-proc fallback. The pod doesn't
+    # hold a monitor on this pid, so no natural child.exit will reach
+    # MutateProgress. Synthesize one immediately so the state machine
+    # advances.
+    synthetic_reason = if is_pid(pid), do: reason, else: :no_proc
+    _ = AgentServer.cast(self(), synthetic_child_exit(state, name, synthetic_reason))
+    :ok
+  end
+
+  defp lookup_offboard_pid(%State{} = state, name) do
+    # Try the live topology first (covers owned-not-removed nodes).
+    pid_from_live = pid_via_topology(state, current_topology(state), name)
+
+    if is_pid(pid_from_live) do
+      pid_from_live
+    else
+      # Fall back to the in-flight plan's pre-removal topology so we can
+      # locate the pid for nodes the same mutation is removing.
+      pid_via_topology(state, plan_current_topology(state), name)
+    end
+  end
+
+  defp current_topology(%State{} = state) do
+    case TopologyState.fetch_topology(state) do
+      {:ok, topology} -> topology
+      _ -> nil
+    end
+  end
+
+  defp plan_current_topology(%State{agent: %{state: agent_state}}) do
+    case agent_state do
+      %{pod: %{mutation: %{plan: %Jido.Pod.Mutation.Plan{current_topology: topology}}}} ->
+        topology
+
+      _ ->
+        nil
+    end
+  end
+
+  defp pid_via_topology(_state, nil, _name), do: nil
+
+  defp pid_via_topology(%State{} = state, %Topology{} = topology, name) do
+    case fetch_node(topology, name) do
+      {:ok, node} ->
+        view = view_from_state(state, topology)
+        snapshot = build_node_snapshot(view, name, node)
+        snapshot.running_pid
+
+      _ ->
+        nil
+    end
+  end
+
+  defp cast_stop(pid, %State{} = state, reason) when is_pid(pid) do
+    stop_signal =
+      Signal.new!(
+        "jido.agent.stop",
+        %{reason: normalize_stop_reason(reason)},
+        source: "/pod/#{state.id}"
+      )
+
+    _ = AgentServer.cast(pid, stop_signal)
+    :ok
+  end
+
+  defp adopt_existing(%State{} = state, %View{} = view, name, %Node{} = node, pid)
+       when is_pid(pid) do
+    # Re-attach as parent so the child's parent_ref points back here.
+    case build_parent_ref(self(), view, name, node.meta) do
+      {:ok, parent_ref} ->
+        _ = AgentServer.adopt_parent(pid, parent_ref)
+
+      _ ->
+        :ok
+    end
+
+    # Cast a synthetic child.started so the state machine advances and
+    # `maybe_track_child_started/2` registers the pid in `state.children`.
+    synthetic =
+      ChildStarted.new!(
+        %{
+          parent_id: state.id,
+          child_id: child_id(view, name),
+          child_partition: view.partition,
+          child_module: child_module(node),
+          tag: name,
+          pid: pid,
+          meta: node.meta || %{}
+        },
+        source: "/agent/#{state.id}"
+      )
+
+    _ = AgentServer.cast(self(), synthetic)
+    {:ok, state, :adopted}
+  end
+
+  defp spawn_new(%State{} = state, %View{} = view, name, %Node{} = node, opts) do
+    initial_state = node_initial_state(name, node, opts)
+    key = node_key(view, name)
+    owner = owner_name(view.topology, name)
+
+    with {:ok, parent_pid} <- resolve_parent_pid(self(), view, owner),
+         {:ok, parent_ref} <- build_parent_ref(parent_pid, view, name, node.meta),
+         {:ok, pid} <- spawn_via_manager(name, node, key, parent_ref, view, initial_state) do
+      # For root-owned nodes, the child's natural notify_parent_of_startup
+      # arrives at the pod and triggers both maybe_track_child_started/2
+      # (state.children update) and MutateProgress (state machine).
+      #
+      # For owner-owned nodes, the natural child.started goes to the
+      # owner. The pod synthesizes a child.started with parent_id set to
+      # the owner's id — maybe_track_child_started/2 skips (parent_id
+      # mismatch) but MutateProgress still fires (it matches by tag).
+      maybe_synthesize_child_started(state, view, name, node, pid, owner)
+      maybe_kick_nested_reconcile(node, pid, opts)
+      {:ok, state, pid}
+    else
+      {:error, reason} -> {:error, state, reason}
+    end
+  end
+
+  defp maybe_synthesize_child_started(%State{} = state, %View{} = view, name, %Node{} = node, pid, owner) do
+    if owner == nil do
+      :ok
+    else
+      synthetic =
+        ChildStarted.new!(
+          %{
+            parent_id: node_id(view, owner),
+            child_id: child_id(view, name),
+            child_partition: view.partition,
+            child_module: child_module(node),
+            tag: name,
+            pid: pid,
+            meta: node.meta || %{}
+          },
+          source: "/agent/#{state.id}"
+        )
+
+      _ = AgentServer.cast(self(), synthetic)
       :ok
     end
   end
 
-  defp ensure_runtime_supported(%Node{} = node, name) do
+  defp spawn_via_manager(name, %Node{} = node, key, parent_ref, %View{} = view, initial_state) do
+    directive = %SpawnManagedAgent{
+      namespace: node.manager,
+      key: key,
+      tag: name,
+      initial_state: initial_state,
+      parent: parent_ref,
+      agent_opts: [partition: view.partition]
+    }
+
+    try do
+      SpawnManagedAgent.execute(directive, view)
+    rescue
+      error in [ArgumentError, KeyError] ->
+        {:error,
+         Jido.Error.validation_error(
+           "Failed to acquire pod node from InstanceManager.",
+           details: %{manager: node.manager, key: key, error: Exception.message(error)}
+         )}
+    end
+  end
+
+  # When a kind: :pod node spawns, fire-and-forget a reconcile mutation so
+  # its eager children come up. Without this the parent's mutation finishes
+  # the moment child.started arrives, but the nested pod is empty.
+  defp maybe_kick_nested_reconcile(%Node{kind: :pod}, nested_pid, _opts) when is_pid(nested_pid) do
+    spawn(fn ->
+      _ = AgentServer.await_ready(nested_pid)
+      _ = reconcile(nested_pid, [])
+    end)
+
+    :ok
+  end
+
+  defp maybe_kick_nested_reconcile(_node, _pid, _opts), do: :ok
+
+  defp synthetic_child_exit(%State{} = state, name, reason) do
+    ChildExit.new!(
+      %{tag: name, pid: nil, reason: reason},
+      source: "/agent/#{state.id}"
+    )
+  end
+
+  defp child_module(%Node{module: module}) when is_atom(module) and not is_nil(module), do: module
+  defp child_module(_node), do: nil
+
+  defp child_id(%View{} = view, name) do
+    view |> node_key(name) |> key_to_id()
+  end
+
+  defp normalize_stop_reason(:normal), do: :normal
+  defp normalize_stop_reason(:shutdown), do: :shutdown
+  defp normalize_stop_reason({:shutdown, _} = reason), do: reason
+  defp normalize_stop_reason(reason), do: {:shutdown, reason}
+
+  defp fetch_node(%Topology{} = topology, name) when is_node_name(name) do
+    case Topology.fetch_node(topology, name) do
+      {:ok, %Node{} = node} -> {:ok, node}
+      :error -> {:error, :unknown_node}
+    end
+  end
+
+  defp ensure_runtime_supported(%Node{kind: :agent}, _name, _ancestry), do: :ok
+
+  defp ensure_runtime_supported(%Node{kind: :pod, module: module, manager: manager}, name, ancestry)
+       when is_atom(module) do
+    with :ok <- ensure_pod_module(module),
+         :ok <- ensure_pod_manager_module(manager, module),
+         :ok <- ensure_pod_not_recursive(module, name, ancestry) do
+      :ok
+    end
+  end
+
+  defp ensure_runtime_supported(%Node{} = node, name, _ancestry) do
     {:error,
      Jido.Error.validation_error(
        "Pod runtime only supports kind: :agent and kind: :pod nodes today.",
        details: %{name: name, kind: node.kind}
+     )}
+  end
+
+  defp ensure_pod_not_recursive(module, name, ancestry) when is_list(ancestry) do
+    if module in ancestry do
+      {:error,
+       Jido.Error.validation_error(
+         "Recursive pod runtime is not supported for the current pod ancestry.",
+         details: %{module: module, ancestry: ancestry, node: name}
+       )}
+    else
+      walk_pod_topology(module, [module | ancestry], name)
+    end
+  end
+
+  defp walk_pod_topology(module, ancestry, original_name) do
+    case fetch_pod_topology(module) do
+      {:ok, topology} ->
+        Enum.reduce_while(topology.nodes, :ok, fn
+          {_name, %Node{kind: :pod, module: nested_module}}, :ok ->
+            cond do
+              nested_module == nil -> {:cont, :ok}
+              nested_module in ancestry -> {:halt, recursion_error(nested_module, ancestry, original_name)}
+              true ->
+                case walk_pod_topology(nested_module, [nested_module | ancestry], original_name) do
+                  :ok -> {:cont, :ok}
+                  err -> {:halt, err}
+                end
+            end
+
+          _other, :ok ->
+            {:cont, :ok}
+        end)
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp fetch_pod_topology(module) when is_atom(module) do
+    case Code.ensure_loaded(module) do
+      {:module, _} ->
+        if function_exported?(module, :topology, 0), do: {:ok, module.topology()}, else: :error
+
+      _ ->
+        :error
+    end
+  end
+
+  defp recursion_error(module, ancestry, name) do
+    {:error,
+     Jido.Error.validation_error(
+       "Recursive pod runtime is not supported for the current pod ancestry.",
+       details: %{module: module, ancestry: ancestry, node: name}
      )}
   end
 
@@ -331,13 +592,7 @@ defmodule Jido.Pod.Runtime do
 
   @doc """
   Builds per-node runtime snapshots (status, pid, ownership, key) keyed by
-  node name. Shared helper for `nodes/1` and action handlers that reply
-  to topology queries — see `Jido.Pod.Actions.QueryNodes`.
-
-  Public callers hold a live `%State{}` (they're invoked via
-  `Reply` directives during signal processing). Internally we project a
-  `View.t()` so the per-node snapshot helpers see only the fields they
-  actually use.
+  node name. Shared helper for `nodes/1` and `Jido.Pod.Actions.QueryNodes`.
   """
   @spec build_node_snapshots(State.t(), Topology.t()) :: map()
   def build_node_snapshots(%State{} = state, %Topology{} = topology) do
@@ -346,574 +601,6 @@ defmodule Jido.Pod.Runtime do
     Map.new(topology.nodes, fn {name, node} ->
       {name, build_node_snapshot(view, name, node)}
     end)
-  end
-
-  defp running_child_pid(manager, key, opts) do
-    try do
-      case InstanceManager.lookup(manager, key, opts) do
-        {:ok, pid} -> pid
-        :error -> nil
-      end
-    rescue
-      ArgumentError -> nil
-    end
-  end
-
-  # Build + execute a %SpawnManagedAgent{} directive. This unifies the data
-  # shape with the DirectiveExec pipeline — what an action would emit as a
-  # directive, the pod runtime constructs as a struct and hands to
-  # `SpawnManagedAgent.execute/2`. Error-wraps ArgumentError/KeyError from
-  # InstanceManager so the caller gets a structured validation error.
-  defp spawn_node(name, %Node{} = node, key, parent_ref, %View{} = view, initial_state) do
-    directive = %SpawnManagedAgent{
-      namespace: node.manager,
-      key: key,
-      tag: name,
-      initial_state: initial_state,
-      parent: parent_ref,
-      agent_opts: [partition: view.partition]
-    }
-
-    try do
-      # SpawnManagedAgent.execute/2 only needs `%{id: id}`-shaped data from
-      # the second arg (for the self-as-parent fallback) — view supplies it.
-      SpawnManagedAgent.execute(directive, view)
-    rescue
-      error in [ArgumentError, KeyError] ->
-        {:error,
-         Jido.Error.validation_error(
-           "Failed to acquire pod node from InstanceManager.",
-           details: %{manager: node.manager, key: key, error: Exception.message(error)}
-         )}
-    end
-  end
-
-  defp execute_runtime_plan(server_pid, %View{} = view, requested_names, waves, opts) do
-    max_concurrency = Keyword.get(opts, :max_concurrency, System.schedulers_online())
-    timeout = Keyword.get(opts, :timeout, :timer.seconds(30))
-
-    initial_report = %{
-      requested: Enum.uniq(requested_names),
-      waves: waves,
-      nodes: %{},
-      failures: %{},
-      completed: [],
-      failed: [],
-      pending: List.flatten(waves)
-    }
-
-    Enum.reduce_while(Enum.with_index(waves), {:ok, initial_report}, fn {wave, wave_index},
-                                                                        {:ok, report} ->
-      wave_results =
-        Task.async_stream(
-          wave,
-          fn name ->
-            ensure_planned_node(server_pid, view, requested_names, name, report, opts)
-          end,
-          ordered: true,
-          max_concurrency: max_concurrency,
-          timeout: timeout,
-          on_timeout: :kill_task
-        )
-        |> Enum.zip(wave)
-        |> Enum.map(fn
-          {{:ok, {:ok, result}}, name} -> {:ok, name, result}
-          {{:ok, {:error, reason}}, name} -> {:error, name, reason}
-          {{:exit, reason}, name} -> {:error, name, {:task_exit, reason}}
-        end)
-
-      updated_report = merge_wave_results(report, wave_results, waves, wave_index)
-
-      if updated_report.failures == %{} do
-        {:cont, {:ok, updated_report}}
-      else
-        {:halt, {:error, updated_report}}
-      end
-    end)
-  end
-
-  # In-handler counterpart to `execute_runtime_plan/5`. Takes the live
-  # `%State{}` because each wave step may register a child into
-  # `state.children`, so state has to thread through. The `%View{}` is the
-  # read-only projection of the cross-cutting fields (id, partition, jido,
-  # topology, etc.) the wave helpers need.
-  defp execute_runtime_plan_locally(%State{} = state, %View{} = view, requested_names, waves, opts) do
-    initial_report = %{
-      requested: Enum.uniq(requested_names),
-      waves: waves,
-      nodes: %{},
-      failures: %{},
-      completed: [],
-      failed: [],
-      pending: List.flatten(waves)
-    }
-
-    Enum.reduce_while(Enum.with_index(waves), {:ok, state, initial_report}, fn {wave, wave_index},
-                                                                               {:ok, state_acc,
-                                                                                report} ->
-      {state_after_wave, wave_results} =
-        Enum.reduce(wave, {state_acc, []}, fn name, {state_wave, results} ->
-          case ensure_planned_node_locally(
-                 state_wave,
-                 view,
-                 requested_names,
-                 name,
-                 report,
-                 opts
-               ) do
-            {:ok, {new_state, result}} ->
-              {new_state, [{:ok, name, result} | results]}
-
-            {:error, new_state, reason} ->
-              {new_state, [{:error, name, reason} | results]}
-
-            {:error, reason} ->
-              {state_wave, [{:error, name, reason} | results]}
-          end
-        end)
-
-      updated_report = merge_wave_results(report, Enum.reverse(wave_results), waves, wave_index)
-
-      if updated_report.failures == %{} do
-        {:cont, {:ok, state_after_wave, updated_report}}
-      else
-        {:halt, {:error, state_after_wave, updated_report}}
-      end
-    end)
-    |> case do
-      {:ok, next_state, report} -> {:ok, next_state, report}
-      {:error, next_state, report} -> {:error, next_state, report}
-    end
-  end
-
-  defp ensure_planned_node(server_pid, %View{} = view, requested_names, name, report, opts) do
-    with {:ok, node} <- fetch_node(view.topology, name) do
-      snapshot = build_node_snapshot(view, name, node)
-      source = snapshot_source(snapshot)
-
-      observe_pod_operation(
-        [:jido, :pod, :node, :ensure],
-        node_event_metadata(view, node, name, source, snapshot.owner),
-        fn ->
-          with :ok <- ensure_runtime_supported(node, name) do
-            do_ensure_planned_node(
-              server_pid,
-              view,
-              requested_names,
-              name,
-              node,
-              snapshot,
-              report,
-              opts
-            )
-          end
-        end,
-        fn
-          {:ok, result} ->
-            %{
-              source: result.source,
-              parent: result.parent
-            }
-
-          _other ->
-            %{}
-        end
-      )
-    end
-  end
-
-  defp ensure_planned_node_locally(%State{} = state, %View{} = view, requested_names, name, report, opts) do
-    with {:ok, node} <- fetch_node(view.topology, name) do
-      snapshot = build_node_snapshot(view, name, node)
-      source = snapshot_source(snapshot)
-
-      observe_pod_operation(
-        [:jido, :pod, :node, :ensure],
-        node_event_metadata(view, node, name, source, snapshot.owner),
-        fn ->
-          with :ok <- ensure_runtime_supported(node, name) do
-            do_ensure_planned_node_locally(
-              state,
-              view,
-              requested_names,
-              name,
-              node,
-              snapshot,
-              report,
-              opts
-            )
-          end
-        end,
-        fn
-          {:ok, {_state, result}} ->
-            %{
-              source: result.source,
-              parent: result.parent
-            }
-
-          _other ->
-            %{}
-        end
-      )
-    end
-  end
-
-  defp do_ensure_planned_node(
-         server_pid,
-         %View{} = view,
-         requested_names,
-         name,
-         node,
-         snapshot,
-         report,
-         opts
-       ) do
-    if node.kind == :pod do
-      ensure_planned_pod_node(
-        server_pid,
-        view,
-        requested_names,
-        name,
-        node,
-        snapshot,
-        report,
-        opts
-      )
-    else
-      ensure_planned_agent_node(
-        server_pid,
-        view,
-        requested_names,
-        name,
-        node,
-        snapshot,
-        report,
-        opts
-      )
-    end
-  end
-
-  defp do_ensure_planned_node_locally(
-         %State{} = state,
-         %View{} = view,
-         requested_names,
-         name,
-         node,
-         snapshot,
-         report,
-         opts
-       ) do
-    if node.kind == :pod do
-      ensure_planned_pod_node_locally(
-        state,
-        view,
-        requested_names,
-        name,
-        node,
-        snapshot,
-        report,
-        opts
-      )
-    else
-      ensure_planned_agent_node_locally(
-        state,
-        view,
-        requested_names,
-        name,
-        node,
-        snapshot,
-        report,
-        opts
-      )
-    end
-  end
-
-  defp ensure_planned_agent_node(
-         server_pid,
-         %View{} = view,
-         requested_names,
-         name,
-         node,
-         snapshot,
-         report,
-         opts
-       ) do
-    if is_pid(snapshot.running_pid) do
-      with {:ok, parent_pid} <- resolve_parent_pid(server_pid, view.topology, name, report) do
-        # adopt_child re-attaches the orphaned child runtime *and* tracks it
-        # in the parent's children map. Replaces the older adopt_parent + manual
-        # ChildInfo dance.
-        _ = AgentServer.adopt_child(parent_pid, snapshot.running_pid, name, node.meta || %{})
-        {:ok, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}
-      end
-    else
-      initial_state = node_initial_state(requested_names, name, node, opts)
-      key = node_key(view, name)
-
-      with {:ok, parent_pid} <- resolve_parent_pid(server_pid, view.topology, name, report),
-           {:ok, parent_ref} <-
-             build_parent_ref(parent_pid, view, name, node.meta),
-           {:ok, pid} <- spawn_node(name, node, key, parent_ref, view, initial_state) do
-        {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
-      end
-    end
-  end
-
-  # Builds a %ParentRef{}-shaped map for the child's `:parent` AgentServer opt.
-  # When the child boots with state.parent set, its `handle_continue(:post_init)`
-  # calls `notify_parent_of_startup/1` which emits `jido.agent.child.started`
-  # back to the pod — that signal both registers the child in the pod's
-  # `state.children` map (via `maybe_track_child_started/2`) and flows through
-  # the pod's own `signal_routes:` for user-defined handling (auto-wiring,
-  # observability, etc.).
-  defp build_parent_ref(parent_pid, %View{} = view, name, meta) do
-    parent_id = resolve_parent_id(parent_pid, view)
-
-    {:ok,
-     ParentRef.new!(%{
-       pid: parent_pid,
-       id: parent_id,
-       partition: view.partition,
-       tag: name,
-       meta: meta || %{}
-     })}
-  end
-
-  defp resolve_parent_id(parent_pid, %View{id: view_id}) do
-    if parent_pid == self() do
-      view_id
-    else
-      case AgentServer.state(parent_pid, &id_selector/1) do
-        {:ok, id} -> id
-        {:error, _} -> view_id
-      end
-    end
-  end
-
-  defp id_selector(%State{id: id}), do: {:ok, id}
-
-  defp ensure_planned_pod_node(
-         server_pid,
-         %View{} = view,
-         requested_names,
-         name,
-         node,
-         snapshot,
-         report,
-         opts
-       ) do
-    with :ok <- ensure_pod_recursion_safe(node, view, opts) do
-      if is_pid(snapshot.running_pid) do
-        with {:ok, parent_pid} <- resolve_parent_pid(server_pid, view.topology, name, report),
-             {:ok, _nested_report} <-
-               reconcile_nested_pod(snapshot.running_pid, node, view, opts) do
-          # Re-adopt the orphaned nested pod into this parent's children map.
-          # adopt_child handles both the live runtime parent attach and the
-          # parent's local %ChildInfo{} tracking in one shot.
-          _ = AgentServer.adopt_child(parent_pid, snapshot.running_pid, name, node.meta || %{})
-          {:ok, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}
-        end
-      else
-        initial_state = node_initial_state(requested_names, name, node, opts)
-        key = node_key(view, name)
-
-        with {:ok, parent_pid} <- resolve_parent_pid(server_pid, view.topology, name, report),
-             {:ok, parent_ref} <-
-               build_parent_ref(parent_pid, view, name, node.meta),
-             {:ok, pid} <- spawn_node(name, node, key, parent_ref, view, initial_state),
-             {:ok, _nested_report} <- reconcile_nested_pod(pid, node, view, opts) do
-          {:ok, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}
-        end
-      end
-    end
-  end
-
-  defp ensure_planned_agent_node_locally(
-         %State{} = state,
-         %View{} = view,
-         requested_names,
-         name,
-         node,
-         snapshot,
-         report,
-         opts
-       ) do
-    if is_pid(snapshot.running_pid) do
-      case register_child_locally(state, name, snapshot.running_pid, node.meta) do
-        {:ok, next_state} ->
-          {:ok, {next_state, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}}
-
-        {:error, reason} ->
-          {:error, state, reason}
-      end
-    else
-      initial_state = node_initial_state(requested_names, name, node, opts)
-      key = node_key(view, name)
-
-      with {:ok, parent_pid} <- resolve_parent_pid(self(), view.topology, name, report),
-           {:ok, parent_ref} <-
-             build_parent_ref(parent_pid, view, name, node.meta),
-           {:ok, pid} <- spawn_node(name, node, key, parent_ref, view, initial_state),
-           {:ok, next_state} <- register_child_locally(state, name, pid, node.meta) do
-        {:ok, {next_state, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}}
-      else
-        {:error, reason} -> {:error, state, reason}
-      end
-    end
-  end
-
-  defp ensure_planned_pod_node_locally(
-         %State{} = state,
-         %View{} = view,
-         requested_names,
-         name,
-         node,
-         snapshot,
-         report,
-         opts
-       ) do
-    with :ok <- ensure_pod_recursion_safe(node, view, opts) do
-      if is_pid(snapshot.running_pid) do
-        with {:ok, next_state} <-
-               register_child_locally(state, name, snapshot.running_pid, node.meta),
-             {:ok, _nested_report} <-
-               reconcile_nested_pod(snapshot.running_pid, node, view, opts) do
-          {:ok, {next_state, ensure_result(snapshot.running_pid, :adopted, snapshot.owner)}}
-        else
-          {:error, reason} -> {:error, state, reason}
-        end
-      else
-        initial_state = node_initial_state(requested_names, name, node, opts)
-        key = node_key(view, name)
-
-        with {:ok, parent_pid} <- resolve_parent_pid(self(), view.topology, name, report),
-             {:ok, parent_ref} <-
-               build_parent_ref(parent_pid, view, name, node.meta),
-             {:ok, pid} <- spawn_node(name, node, key, parent_ref, view, initial_state),
-             {:ok, next_state} <- register_child_locally(state, name, pid, node.meta),
-             {:ok, _nested_report} <- reconcile_nested_pod(pid, node, view, opts) do
-          {:ok, {next_state, ensure_result(pid, snapshot_source(snapshot), snapshot.owner)}}
-        else
-          {:error, reason} -> {:error, state, reason}
-        end
-      end
-    else
-      {:error, reason} -> {:error, state, reason}
-    end
-  end
-
-  defp resolve_parent_pid(server_pid, topology, name, report) do
-    case Topology.owner_of(topology, name) do
-      :root ->
-        {:ok, server_pid}
-
-      {:ok, owner_name} ->
-        case Map.get(report.nodes, owner_name) do
-          %{pid: pid} when is_pid(pid) ->
-            {:ok, pid}
-
-          nil ->
-            {:error,
-             Jido.Error.validation_error(
-               "Cannot ensure pod node before its logical owner is running.",
-               details: %{node: name, owner: owner_name}
-             )}
-        end
-
-      :error ->
-        {:error, :unknown_node}
-    end
-  end
-
-  # Synchronously register a freshly-spawned child into the local pod state.
-  #
-  # The child is booted with its parent ref already set (see `build_parent_ref/5`
-  # and the `agent_opts: [parent: ref]` at get_managed_node call sites), so we
-  # skip the legacy `AgentServer.adopt_parent/2` round-trip here. We only need
-  # to attach our own monitor and insert a `%ChildInfo{}` so the pod's state
-  # has the child visible on the *current* callback turn — the async
-  # `jido.agent.child.started` signal arrives shortly after and is a no-op
-  # for an already-tracked tag.
-  defp register_child_locally(%State{} = state, name, child_pid, meta)
-       when is_pid(child_pid) do
-    case State.get_child(state, name) do
-      %ChildInfo{pid: ^child_pid} ->
-        {:ok, state}
-
-      %ChildInfo{} ->
-        {:error, {:tag_in_use, name}}
-
-      nil ->
-        with {:ok, child_runtime} <- AgentServer.state(child_pid, &child_runtime_selector/1) do
-          # Re-attach the orphaned child to this pod via the adopt_parent
-          # round-trip. Without this, the child's runtime keeps `parent: nil`
-          # and `parent_matches?/2` returns false even though we hold its
-          # %ChildInfo{} on our side.
-          parent_ref =
-            ParentRef.new!(%{
-              pid: self(),
-              id: state.id,
-              partition: state.partition,
-              tag: name,
-              meta: meta || %{}
-            })
-
-          _ = AgentServer.adopt_parent(child_pid, parent_ref)
-
-          child_info =
-            ChildInfo.new!(%{
-              pid: child_pid,
-              ref: Process.monitor(child_pid),
-              module: child_runtime.agent_module,
-              id: child_runtime.id,
-              partition: child_runtime.partition,
-              tag: name,
-              meta: meta || %{}
-            })
-
-          {:ok, State.add_child(state, name, child_info)}
-        end
-    end
-  end
-
-  defp child_runtime_selector(%State{} = s) do
-    {:ok, %{agent_module: s.agent_module, id: s.id, partition: s.partition}}
-  end
-
-  defp merge_wave_results(report, wave_results, waves, wave_index) do
-    {nodes, failures, completed, failed} =
-      Enum.reduce(
-        wave_results,
-        {report.nodes, report.failures, report.completed, report.failed},
-        fn
-          {:ok, name, result}, {nodes_acc, failures_acc, completed_acc, failed_acc} ->
-            {
-              Map.put(nodes_acc, name, result),
-              failures_acc,
-              append_unique(completed_acc, name),
-              failed_acc
-            }
-
-          {:error, name, reason}, {nodes_acc, failures_acc, completed_acc, failed_acc} ->
-            {
-              nodes_acc,
-              Map.put(failures_acc, name, reason),
-              completed_acc,
-              append_unique(failed_acc, name)
-            }
-        end
-      )
-
-    pending = List.flatten(Enum.drop(waves, wave_index + 1))
-
-    %{
-      report
-      | nodes: nodes,
-        failures: failures,
-        completed: completed,
-        failed: failed,
-        pending: pending
-    }
   end
 
   defp build_node_snapshot(%View{} = view, name, node) do
@@ -951,6 +638,49 @@ defmodule Jido.Pod.Runtime do
       status: status
     }
   end
+
+  defp running_child_pid(manager, key, opts) do
+    try do
+      case InstanceManager.lookup(manager, key, opts) do
+        {:ok, pid} -> pid
+        :error -> nil
+      end
+    rescue
+      ArgumentError -> nil
+    end
+  end
+
+  defp owner_name(%Topology{} = topology, name) do
+    case Topology.owner_of(topology, name) do
+      {:ok, owner} -> owner
+      _other -> nil
+    end
+  end
+
+  defp expected_parent_ref(%View{} = view, name, nil) do
+    %{scope: :pod, name: nil, id: view.id, partition: view.partition, tag: name}
+  end
+
+  defp expected_parent_ref(%View{} = view, name, owner_name)
+       when is_node_name(owner_name) do
+    %{
+      scope: :node,
+      name: owner_name,
+      id: node_id(view, owner_name),
+      partition: view.partition,
+      tag: name
+    }
+  end
+
+  defp parent_matches?(
+         %{id: actual_id, partition: actual_partition, tag: actual_tag},
+         %{id: expected_id, partition: expected_partition, tag: expected_tag}
+       ) do
+    actual_id == expected_id and actual_partition == expected_partition and
+      actual_tag == expected_tag
+  end
+
+  defp parent_matches?(_actual_parent, _expected_parent), do: false
 
   defp actual_parent_ref(%View{} = view, name) when is_node_name(name) do
     case Jido.parent_binding(view.jido, node_id(view, name), partition: view.partition) do
@@ -991,177 +721,61 @@ defmodule Jido.Pod.Runtime do
     end
   end
 
-  defp owner_name(%Topology{} = topology, name) do
-    case Topology.owner_of(topology, name) do
-      {:ok, owner} -> owner
-      _other -> nil
-    end
+  defp build_parent_ref(parent_pid, %View{} = view, name, meta) do
+    parent_id = resolve_parent_id(parent_pid, view)
+
+    {:ok,
+     ParentRef.new!(%{
+       pid: parent_pid,
+       id: parent_id,
+       partition: view.partition,
+       tag: name,
+       meta: meta || %{}
+     })}
   end
 
-  defp expected_parent_ref(%View{} = view, name, nil) do
-    %{scope: :pod, name: nil, id: view.id, partition: view.partition, tag: name}
-  end
-
-  defp expected_parent_ref(%View{} = view, name, owner_name)
-       when is_node_name(owner_name) do
-    %{
-      scope: :node,
-      name: owner_name,
-      id: node_id(view, owner_name),
-      partition: view.partition,
-      tag: name
-    }
-  end
-
-  defp parent_matches?(
-         %{id: actual_id, partition: actual_partition, tag: actual_tag},
-         %{id: expected_id, partition: expected_partition, tag: expected_tag}
-       ) do
-    actual_id == expected_id and actual_partition == expected_partition and
-      actual_tag == expected_tag
-  end
-
-  defp parent_matches?(_actual_parent, _expected_parent), do: false
-
-  defp snapshot_source(%{status: :adopted}), do: :adopted
-  defp snapshot_source(%{status: :stopped}), do: :started
-  defp snapshot_source(%{status: :running}), do: :running
-  defp snapshot_source(%{status: :misplaced}), do: :running
-
-  defp node_initial_state(requested_names, name, node, opts) do
-    if name in requested_names do
-      Keyword.get(opts, :initial_state, node.initial_state)
+  defp resolve_parent_id(parent_pid, %View{id: view_id}) do
+    if parent_pid == self() do
+      view_id
     else
-      node.initial_state
-    end
-  end
-
-  defp ensure_result(pid, source, owner) when is_pid(pid) do
-    %{
-      pid: pid,
-      source: source,
-      owner: owner,
-      parent: owner || :pod
-    }
-  end
-
-  defp node_failure_reason_from_report(topology, name, report) do
-    case Map.get(report.failures, name) do
-      nil ->
-        Jido.Error.validation_error(
-          "Pod node could not be ensured because one or more prerequisites failed.",
-          details: %{
-            node: name,
-            prerequisites: node_prerequisites(topology, name),
-            failures: report.failures,
-            pending: report.pending
-          }
-        )
-
-      reason ->
-        reason
-    end
-  end
-
-  defp pod_event_metadata(%View{} = view, extra \\ %{}) when is_map(extra) do
-    Map.merge(
-      %{
-        pod_id: view.id,
-        pod_module: view.agent_module,
-        agent_id: view.id,
-        agent_module: view.agent_module,
-        jido_instance: view.jido,
-        jido_partition: view.partition
-      },
-      extra
-    )
-  end
-
-  defp node_event_metadata(%View{} = view, %Node{} = node, name, source, owner) do
-    pod_event_metadata(view, %{
-      node_name: name,
-      node_manager: node.manager,
-      node_kind: node.kind,
-      source: source,
-      owner: owner
-    })
-  end
-
-  defp reconcile_measurements({:ok, report}) do
-    %{
-      node_count: map_size(report.nodes),
-      requested_count: length(report.requested),
-      failure_count: 0,
-      pending_count: 0,
-      wave_count: length(report.waves)
-    }
-  end
-
-  defp reconcile_measurements({:error, report}) do
-    %{
-      node_count: map_size(report.nodes),
-      requested_count: length(report.requested),
-      failure_count: map_size(report.failures),
-      pending_count: length(report.pending),
-      wave_count: length(report.waves)
-    }
-  end
-
-  defp observe_pod_operation(event_prefix, metadata, fun, measurement_fun)
-       when is_list(event_prefix) and is_map(metadata) and is_function(fun, 0) and
-              is_function(measurement_fun, 1) do
-    span_ctx = Observe.start_span(event_prefix, metadata)
-
-    try do
-      case fun.() do
-        {:error, reason} = error ->
-          Observe.finish_span_error(span_ctx, :error, reason, [])
-          error
-
-        result ->
-          Observe.finish_span(span_ctx, measurement_fun.(result))
-          result
+      case AgentServer.state(parent_pid, &id_selector/1) do
+        {:ok, id} -> id
+        {:error, _} -> view_id
       end
-    rescue
-      error ->
-        Observe.finish_span_error(span_ctx, :error, error, __STACKTRACE__)
-        reraise error, __STACKTRACE__
-    catch
-      kind, reason ->
-        Observe.finish_span_error(span_ctx, kind, reason, __STACKTRACE__)
-        :erlang.raise(kind, reason, __STACKTRACE__)
     end
   end
 
-  defp reconcile_nested_pod(pid, %Node{module: module}, %View{} = view, opts)
-       when is_pid(pid) and is_atom(module) do
-    nested_opts =
-      opts
-      |> Keyword.take([:max_concurrency, :timeout])
-      |> Keyword.put(:__pod_ancestry__, pod_ancestry(opts, view) ++ [module])
+  defp id_selector(%State{id: id}), do: {:ok, id}
 
-    case reconcile(pid, nested_opts) do
-      {:ok, report} ->
-        {:ok, report}
+  # Picks the parent pid for a child node. `owner` is `nil` for root-owned
+  # nodes (the pod itself is the parent) or the owner topology node name
+  # otherwise — in which case the owner's running pid is looked up.
+  defp resolve_parent_pid(server_pid, _view, nil), do: {:ok, server_pid}
 
-      {:error, report} ->
-        {:error, %{stage: :nested_reconcile, pod: pid, reason: report}}
-    end
-  end
+  defp resolve_parent_pid(_server_pid, %View{} = view, owner_name)
+       when is_atom(owner_name) or is_binary(owner_name) do
+    owner_node = view.topology.nodes[owner_name]
 
-  defp ensure_pod_recursion_safe(%Node{module: module} = node, %View{} = view, opts)
-       when is_atom(module) do
-    ancestry = pod_ancestry(opts, view)
+    if owner_node do
+      owner_key = node_key(view, owner_name)
+      pid = running_child_pid(owner_node.manager, owner_key, partition: view.partition)
 
-    if module in ancestry do
-      {:error,
-       Jido.Error.validation_error(
-         "Recursive pod runtime is not supported for the current pod ancestry.",
-         details: %{module: module, ancestry: ancestry, manager: node.manager}
-       )}
+      if is_pid(pid) do
+        {:ok, pid}
+      else
+        {:error,
+         Jido.Error.validation_error(
+           "Cannot ensure pod node before its logical owner is running.",
+           details: %{owner: owner_name}
+         )}
+      end
     else
-      :ok
+      {:error, :unknown_node}
     end
+  end
+
+  defp node_initial_state(_name, %Node{} = node, opts) do
+    Keyword.get(opts, :initial_state, node.initial_state)
   end
 
   defp resolve_runtime_server(server, %View{id: id, registry: registry, partition: partition}) do
@@ -1180,9 +794,6 @@ defmodule Jido.Pod.Runtime do
   # crosses the boundary — the selector projects exactly the fields the
   # runtime helpers need (and resolves the live topology via
   # `TopologyState.fetch_topology/1` while still in-process).
-  #
-  # This is the only `AgentServer.state/2` call inside `Pod.Runtime` per
-  # ADR 0021.
   defp fetch_runtime_view(server) do
     AgentServer.state(server, fn s ->
       with {:ok, topology} <- TopologyState.fetch_topology(s) do
@@ -1200,13 +811,10 @@ defmodule Jido.Pod.Runtime do
     end)
   end
 
-  # In-handler boundary: the `%State{}` is live by definition, so a
-  # selector round-trip would be wasteful. Construct the view inline
-  # for the in-handler tree. The `topology` arg lets callers swap
-  # between `plan.current_topology` (stop wave) and `plan.final_topology`
-  # (start wave) inside a single mutation plan.
+  # In-handler boundary: the `%State{}` is live by definition, so a selector
+  # round-trip would be wasteful. Constructs the view inline.
   @spec view_from_state(State.t(), Topology.t()) :: View.t()
-  def view_from_state(%State{} = state, %Topology{} = topology) do
+  defp view_from_state(%State{} = state, %Topology{} = topology) do
     %View{
       id: state.id,
       registry: state.registry,
@@ -1223,364 +831,12 @@ defmodule Jido.Pod.Runtime do
 
   defp pod_key_from_state(%State{id: id}), do: id
 
-  defp pod_ancestry(opts, %View{agent_module: agent_module}) when is_list(opts) do
-    opts
-    |> Keyword.get(:__pod_ancestry__, [])
-    |> List.wrap()
-    |> Kernel.++([agent_module])
-    |> Enum.uniq()
-  end
-
-  defp node_prerequisites(%Topology{} = topology, name) do
-    owner =
-      case Topology.owner_of(topology, name) do
-        {:ok, owner_name} -> [owner_name]
-        _other -> []
-      end
-
-    owner ++ Topology.dependencies_of(topology, name)
-  end
-
-  defp append_unique(items, item) do
-    if item in items, do: items, else: items ++ [item]
-  end
-
-  # Cross-process stop-wave executor (used by `teardown_runtime/2`). No
-  # state to thread — the caller doesn't own the pod's state. Returns the
-  # accumulated report.
-  defp execute_stop_waves(
-         root_server_pid,
-         %View{} = view,
-         removed_nodes,
-         stop_waves,
-         mutation_id,
-         opts
-       )
-       when is_pid(root_server_pid) and is_map(removed_nodes) and is_list(stop_waves) and
-              is_list(opts) do
-    Enum.reduce(stop_waves, %{stopped: [], failures: %{}}, fn wave, report_acc ->
-      Enum.reduce(wave, report_acc, fn name, report_wave ->
-        node = Map.fetch!(removed_nodes, name)
-
-        case stop_planned_node(root_server_pid, view, name, node, mutation_id, opts) do
-          :ok ->
-            %{report_wave | stopped: append_unique(report_wave.stopped, name)}
-
-          {:error, reason} ->
-            %{report_wave | failures: Map.put(report_wave.failures, name, reason)}
-        end
-      end)
-    end)
-  end
-
-  # In-handler stop-wave executor (used by `execute_mutation_plan/3`). Threads
-  # `%State{}` because `dispatch_stop_to_local_parent/6` may run
-  # `StopChildRuntime.exec/4` against the live state.
-  defp execute_stop_waves_locally(
-         root_server_pid,
-         %State{} = state,
-         %View{} = view,
-         removed_nodes,
-         stop_waves,
-         mutation_id,
-         opts
-       )
-       when is_pid(root_server_pid) and is_map(removed_nodes) and is_list(stop_waves) and
-              is_list(opts) do
-    Enum.reduce(stop_waves, {state, %{stopped: [], failures: %{}}}, fn wave,
-                                                                       {state_acc, report_acc} ->
-      Enum.reduce(wave, {state_acc, report_acc}, fn name, {state_wave, report_wave} ->
-        node = Map.fetch!(removed_nodes, name)
-
-        case stop_planned_node_locally(
-               root_server_pid,
-               state_wave,
-               view,
-               name,
-               node,
-               mutation_id,
-               opts
-             ) do
-          {:ok, new_state} ->
-            {new_state, %{report_wave | stopped: append_unique(report_wave.stopped, name)}}
-
-          {:error, new_state, reason} ->
-            {new_state, %{report_wave | failures: Map.put(report_wave.failures, name, reason)}}
-        end
-      end)
-    end)
-  end
-
-  defp stop_planned_node(
-         root_server_pid,
-         %View{} = view,
-         name,
-         %Node{} = node,
-         mutation_id,
-         opts
-       ) do
-    snapshot = build_node_snapshot(view, name, node)
-
-    case snapshot.running_pid do
-      pid when is_pid(pid) ->
-        with :ok <- maybe_teardown_nested_runtime(node, pid, opts),
-             :ok <-
-               dispatch_stop_to_remote_parent(
-                 root_server_pid,
-                 view,
-                 name,
-                 snapshot,
-                 mutation_id
-               ),
-             :ok <-
-               await_process_exit(
-                 pid,
-                 Keyword.get(opts, :stop_timeout, Keyword.get(opts, :timeout, :timer.seconds(30)))
-               ) do
-          :ok
-        else
-          {:error, reason} -> {:error, reason}
-        end
-
-      _other ->
-        :ok
-    end
-  end
-
-  defp stop_planned_node_locally(
-         root_server_pid,
-         %State{} = state,
-         %View{} = view,
-         name,
-         %Node{} = node,
-         mutation_id,
-         opts
-       ) do
-    snapshot = build_node_snapshot(view, name, node)
-
-    case snapshot.running_pid do
-      pid when is_pid(pid) ->
-        with :ok <- maybe_teardown_nested_runtime(node, pid, opts),
-             {:ok, next_state} <-
-               dispatch_stop_to_local_parent(
-                 root_server_pid,
-                 state,
-                 view,
-                 name,
-                 snapshot,
-                 mutation_id
-               ),
-             :ok <-
-               await_process_exit(
-                 pid,
-                 Keyword.get(opts, :stop_timeout, Keyword.get(opts, :timeout, :timer.seconds(30)))
-               ) do
-          {:ok, next_state}
-        else
-          {:error, reason} -> {:error, state, reason}
-        end
-
-      _other ->
-        {:ok, state}
-    end
-  end
-
-  defp maybe_teardown_nested_runtime(%Node{kind: :pod}, pid, opts) when is_pid(pid) do
-    nested_opts =
-      opts |> Keyword.take([:timeout, :stop_timeout]) |> Keyword.delete(:initial_state)
-
-    case teardown_runtime(pid, nested_opts) do
-      {:ok, _report} -> :ok
-      {:error, report} -> {:error, {:nested_pod_teardown_failed, report}}
-    end
-  end
-
-  defp maybe_teardown_nested_runtime(%Node{}, _pid, _opts), do: :ok
-
-  # Cross-process variant: no `local_root?` branch — by definition the
-  # caller is not running inside the pod's process, so `StopChildRuntime.exec/4`
-  # never applies.
-  defp dispatch_stop_to_remote_parent(root_server_pid, %View{} = view, name, snapshot, mutation_id) do
-    parent_pid = resolve_stop_parent_pid(root_server_pid, view, name, snapshot)
-    reason = {:pod_mutation, mutation_id}
-
-    cond do
-      is_pid(parent_pid) ->
-        case AgentServer.stop_child(parent_pid, name, reason) do
-          :ok -> :ok
-          {:error, stop_reason} -> {:error, stop_reason}
-        end
-
-      is_pid(snapshot.running_pid) ->
-        direct_stop_child(view, name, snapshot.running_pid, reason)
-
-      true ->
-        {:error,
-         Jido.Error.validation_error(
-           "Could not resolve a running parent for pod node teardown.",
-           details: %{node: name, actual_parent: snapshot.actual_parent}
-         )}
-    end
-  end
-
-  # In-handler variant: when the parent IS this pod (root), execute the stop
-  # against the live state via `StopChildRuntime.exec/4`. Other branches
-  # delegate to the remote dispatcher (no state mutation needed).
-  defp dispatch_stop_to_local_parent(
-         root_server_pid,
-         %State{} = state,
-         %View{} = view,
-         name,
-         snapshot,
-         mutation_id
-       ) do
-    parent_pid = resolve_stop_parent_pid(root_server_pid, view, name, snapshot)
-    reason = {:pod_mutation, mutation_id}
-
-    cond do
-      is_pid(parent_pid) and parent_pid == root_server_pid ->
-        signal =
-          Signal.new!(
-            "jido.pod.mutation.stop",
-            %{mutation_id: mutation_id, node: name},
-            source: "/pod/#{view.id}"
-          )
-
-        StopChildRuntime.exec(name, reason, signal, state)
-
-      is_pid(parent_pid) ->
-        case AgentServer.stop_child(parent_pid, name, reason) do
-          :ok -> {:ok, state}
-          {:error, stop_reason} -> {:error, stop_reason}
-        end
-
-      is_pid(snapshot.running_pid) ->
-        case direct_stop_child(view, name, snapshot.running_pid, reason) do
-          :ok -> {:ok, state}
-          {:error, _} = err -> err
-        end
-
-      true ->
-        {:error,
-         Jido.Error.validation_error(
-           "Could not resolve a running parent for pod node teardown.",
-           details: %{node: name, actual_parent: snapshot.actual_parent}
-         )}
-    end
-  end
-
-  defp resolve_stop_parent_pid(root_server_pid, %View{} = view, name, snapshot) do
-    cond do
-      is_map(snapshot.actual_parent) and is_pid(snapshot.actual_parent.pid) ->
-        snapshot.actual_parent.pid
-
-      true ->
-        case Topology.owner_of(view.topology, name) do
-          :root ->
-            root_server_pid
-
-          {:ok, owner_name} ->
-            running_child_pid(
-              view.topology.nodes[owner_name].manager,
-              node_key(view, owner_name),
-              partition: view.partition
-            )
-
-          :error ->
-            nil
-        end
-    end
-  end
-
-  defp direct_stop_child(%View{} = view, name, pid, reason) when is_pid(pid) do
-    _ =
-      RuntimeStore.delete(
-        view.jido,
-        :relationships,
-        Jido.partition_key(node_id(view, name), view.partition)
-      )
-
-    stop_signal =
-      Signal.new!(
-        "jido.agent.stop",
-        %{reason: {:shutdown, reason}},
-        source: "/pod/#{view.id}"
-      )
-
-    case AgentServer.cast(pid, stop_signal) do
-      :ok -> :ok
-      {:error, cast_reason} -> {:error, cast_reason}
-    end
-  end
-
-  defp await_process_exit(pid, timeout) when is_pid(pid) do
-    if Process.alive?(pid) do
-      ref = Process.monitor(pid)
-
-      receive do
-        {:DOWN, ^ref, :process, ^pid, _reason} ->
-          :ok
-      after
-        timeout ->
-          Process.demonitor(ref, [:flush])
-          {:error, :stop_timeout}
-      end
-    else
-      :ok
-    end
-  end
-
-  defp complete_mutation_report(%Report{} = report, stop_result, start_result) do
-    stop_failures = Map.get(stop_result, :failures, %{})
-    stopped = Map.get(stop_result, :stopped, [])
-
-    {started, start_failures} =
-      case start_result do
-        {:ok, reconcile_report} ->
-          {started_names_from_reconcile(reconcile_report), %{}}
-
-        {:error, reconcile_report} ->
-          {started_names_from_reconcile(reconcile_report), reconcile_report.failures}
-      end
-
-    failures = Map.merge(stop_failures, start_failures)
-    status = if map_size(failures) == 0, do: :completed, else: :failed
-
-    %Report{
-      report
-      | status: status,
-        started: Enum.sort(started),
-        stopped: Enum.sort(stopped),
-        failures: failures
-    }
-  end
-
-  defp started_names_from_reconcile(report) do
-    report.nodes
-    |> Enum.filter(fn {_name, result} -> result.source == :started end)
-    |> Enum.map(&elem(&1, 0))
-  end
-
-  defp empty_reconcile_report do
-    %{
-      requested: [],
-      waves: [],
-      nodes: %{},
-      failures: %{},
-      completed: [],
-      failed: [],
-      pending: []
-    }
-  end
-
   defp node_key(%View{} = view, name) do
     {view.agent_module, view.pod_key, name}
   end
 
   defp node_id(%View{} = view, name) do
-    view
-    |> node_key(name)
-    |> key_to_id()
+    view |> node_key(name) |> key_to_id()
   end
 
   defp key_to_id(key) do

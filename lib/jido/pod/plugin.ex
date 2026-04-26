@@ -16,6 +16,7 @@ defmodule Jido.Pod.Plugin do
   """
 
   alias Jido.Pod.Actions.Mutate, as: MutateAction
+  alias Jido.Pod.Actions.MutateProgress
   alias Jido.Pod.Actions.QueryNodes
   alias Jido.Pod.Actions.QueryTopology
   alias Jido.Pod.Topology
@@ -26,11 +27,13 @@ defmodule Jido.Pod.Plugin do
   use Jido.Slice,
     name: "pod",
     path: @path,
-    actions: [MutateAction, QueryNodes, QueryTopology],
+    actions: [MutateAction, MutateProgress, QueryNodes, QueryTopology],
     signal_routes: [
       {"mutate", MutateAction},
       {"jido.pod.query.nodes", QueryNodes},
-      {"jido.pod.query.topology", QueryTopology}
+      {"jido.pod.query.topology", QueryTopology},
+      {"jido.agent.child.started", MutateProgress},
+      {"jido.agent.child.exit", MutateProgress}
     ],
     schema:
       Zoi.object(%{
@@ -41,10 +44,23 @@ defmodule Jido.Pod.Plugin do
           Zoi.object(%{
             id: Zoi.string(description: "In-flight mutation id.") |> Zoi.optional(),
             status: Zoi.atom(description: "Mutation status.") |> Zoi.default(:idle),
+            plan: Zoi.any(description: "Mutation plan struct.") |> Zoi.optional(),
+            phase:
+              Zoi.any(description: "State machine phase.") |> Zoi.default(:idle),
+            awaiting:
+              Zoi.any(description: "Awaiting kind + names set.") |> Zoi.optional(),
             report: Zoi.any(description: "Latest mutation report.") |> Zoi.optional(),
             error: Zoi.any(description: "Latest mutation error/report.") |> Zoi.optional()
           })
-          |> Zoi.default(%{id: nil, status: :idle, report: nil, error: nil}),
+          |> Zoi.default(%{
+            id: nil,
+            status: :idle,
+            plan: nil,
+            phase: :idle,
+            awaiting: nil,
+            report: nil,
+            error: nil
+          }),
         metadata:
           Zoi.map(description: "Pod-level runtime metadata owned by the slice.")
           |> Zoi.default(%{})
@@ -65,7 +81,15 @@ defmodule Jido.Pod.Plugin do
      %{
        topology: topology,
        topology_version: topology.version,
-       mutation: %{id: nil, status: :idle, report: nil, error: nil},
+       mutation: %{
+         id: nil,
+         status: :idle,
+         plan: nil,
+         phase: :idle,
+         awaiting: nil,
+         report: nil,
+         error: nil
+       },
        metadata: %{}
      }
      |> deep_merge(overrides)}

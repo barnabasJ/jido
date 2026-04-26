@@ -4,8 +4,10 @@ defmodule Jido.Pod.Mutable do
   alias Jido.Agent
   alias Jido.AgentServer
   alias Jido.Pod
-  alias Jido.Pod.Directive.ApplyMutation
+  alias Jido.Pod.Directive.StartNode
+  alias Jido.Pod.Directive.StopNode
   alias Jido.Pod.Mutation
+  alias Jido.Pod.Mutation.Plan
   alias Jido.Pod.Mutation.Planner
   alias Jido.Pod.Plugin
   alias Jido.Pod.TopologyState
@@ -46,33 +48,35 @@ defmodule Jido.Pod.Mutable do
 
     expected_signal_id = signal.id
 
-    # Subscribe FIRST. The lifecycle signal can't fire before the trigger
-    # signal's pipeline runs, and `subscribe/4` is a synchronous GenServer.call,
-    # so the subscription is registered before the call hits the mailbox.
-    with {:ok, completion_ref} <-
-           AgentServer.subscribe(
-             server,
-             "jido.pod.mutate.completed",
-             completion_selector(expected_signal_id),
-             once: true
-           ),
-         {:ok, failure_ref} <-
-           AgentServer.subscribe(
-             server,
-             "jido.pod.mutate.failed",
-             failure_selector(expected_signal_id),
-             once: true
-           ) do
-      call_result =
-        AgentServer.call(server, signal, &default_selector/1, timeout: await_timeout)
+    # Subscribe BEFORE the cast. The natural child lifecycle signals are the
+    # only mutation-progression channel (no synthetic completion signal); the
+    # selector reads the slice and matches by mutation.id, returning :skip
+    # until MutateProgress flips status to a terminal value.
+    selector = terminal_selector(expected_signal_id)
 
-      case call_result do
+    with {:ok, sub_ref} <-
+           AgentServer.subscribe(server, "jido.agent.child.*", selector, once: true) do
+      case AgentServer.call(server, signal, &default_selector/1, timeout: await_timeout) do
         {:ok, %{queued: true}} ->
-          wait_for_lifecycle(server, completion_ref, failure_ref, await_timeout)
+          # The mutation may have already finalized inside that mailbox turn
+          # (zero-wave plan), in which case no child lifecycle signal will
+          # arrive to fire the subscriber. Re-check the slice once after the
+          # call returns to close that gap.
+          case AgentServer.state(server, fn s -> {:ok, selector.(s)} end) do
+            {:ok, {:ok, report}} ->
+              _ = AgentServer.unsubscribe(server, sub_ref)
+              {:ok, report}
+
+            {:ok, {:error, error}} ->
+              _ = AgentServer.unsubscribe(server, sub_ref)
+              {:error, error}
+
+            _ ->
+              wait_for_terminal(server, sub_ref, await_timeout)
+          end
 
         {:error, _reason} = error ->
-          _ = AgentServer.unsubscribe(server, completion_ref)
-          _ = AgentServer.unsubscribe(server, failure_ref)
+          _ = AgentServer.unsubscribe(server, sub_ref)
           error
       end
     end
@@ -85,7 +89,24 @@ defmodule Jido.Pod.Mutable do
          :ok <- ensure_mutation_idle(pod_slice),
          {:ok, topology} <- TopologyState.fetch_topology(agent),
          {:ok, plan} <- Planner.plan(topology, ops, opts) do
-      mutation_state = %{id: plan.mutation_id, status: :running, report: plan.report, error: nil}
+      {phase, awaiting, wave_directives} = first_wave(plan)
+
+      {status, report} =
+        if phase == :complete do
+          {:completed, finalize_report(plan.report, :completed)}
+        else
+          {:running, plan.report}
+        end
+
+      mutation_state = %{
+        id: plan.mutation_id,
+        status: status,
+        plan: plan,
+        phase: phase,
+        awaiting: awaiting,
+        report: report,
+        error: nil
+      }
 
       new_pod_slice = %{
         pod_slice
@@ -94,8 +115,34 @@ defmodule Jido.Pod.Mutable do
           mutation: mutation_state
       }
 
-      side_effects = [ApplyMutation.new!(plan, Keyword.delete(opts, :mutation_id))]
-      {:ok, new_pod_slice, side_effects}
+      {:ok, new_pod_slice, wave_directives}
+    end
+  end
+
+  defp finalize_report(%Jido.Pod.Mutation.Report{} = report, status) do
+    %{report | status: status}
+  end
+
+  defp finalize_report(report, _status), do: report
+
+  defp first_wave(%Plan{stop_waves: [first_stop | _]}) do
+    {{:stop_wave, 0}, %{kind: :exit, names: MapSet.new(first_stop)},
+     Enum.map(first_stop, &StopNode.new!/1)}
+  end
+
+  defp first_wave(%Plan{stop_waves: [], start_waves: [first_start | _]} = plan) do
+    {{:start_wave, 0}, %{kind: :started, names: MapSet.new(first_start)},
+     Enum.map(first_start, &start_directive(&1, plan))}
+  end
+
+  defp first_wave(%Plan{stop_waves: [], start_waves: []}) do
+    {:complete, nil, []}
+  end
+
+  defp start_directive(name, %Plan{start_state_overrides: overrides}) do
+    case Map.get(overrides, name) do
+      nil -> StartNode.new!(name)
+      state when is_map(state) -> StartNode.new!(name, initial_state: state)
     end
   end
 
@@ -107,10 +154,10 @@ defmodule Jido.Pod.Mutable do
   defp ensure_mutation_idle(_pod_state), do: :ok
 
   # Default selector for mutate/3: the action's slice return has set the
-  # mutation slice (id + status: :running) before the selector fires per
-  # ADR 0016's hook point. The selector is the "queued" projection — for the
-  # error path the framework delivers the action's tagged-tuple {:error, _}
-  # directly per ADR 0018 §3.
+  # mutation slice (id + status :running) before the selector fires per
+  # ADR 0016's hook point. The selector projects the queued ack; on the
+  # error branch the framework delivers the action's tagged-tuple
+  # `{:error, _}` directly per ADR 0018 §3.
   defp default_selector(%{agent: %{state: agent_state}}) do
     case get_in(agent_state, [@pod_state_key, :mutation]) do
       %{id: id} when not is_nil(id) -> {:ok, %{mutation_id: id, queued: true}}
@@ -118,37 +165,26 @@ defmodule Jido.Pod.Mutable do
     end
   end
 
-  defp completion_selector(expected_id) do
+  defp terminal_selector(expected_id) do
     fn %{agent: %{state: agent_state}} ->
       case get_in(agent_state, [@pod_state_key, :mutation]) do
         %{id: ^expected_id, status: :completed, report: report} -> {:ok, report}
-        _other -> :skip
-      end
-    end
-  end
-
-  defp failure_selector(expected_id) do
-    fn %{agent: %{state: agent_state}} ->
-      case get_in(agent_state, [@pod_state_key, :mutation]) do
         %{id: ^expected_id, status: :failed, error: error} -> {:error, error}
         _other -> :skip
       end
     end
   end
 
-  defp wait_for_lifecycle(server, completion_ref, failure_ref, timeout) do
+  defp wait_for_terminal(server, sub_ref, timeout) do
     receive do
-      {:jido_subscription, ^completion_ref, %{result: {:ok, report}}} ->
-        _ = AgentServer.unsubscribe(server, failure_ref)
+      {:jido_subscription, ^sub_ref, %{result: {:ok, report}}} ->
         {:ok, report}
 
-      {:jido_subscription, ^failure_ref, %{result: {:error, error}}} ->
-        _ = AgentServer.unsubscribe(server, completion_ref)
+      {:jido_subscription, ^sub_ref, %{result: {:error, error}}} ->
         {:error, error}
     after
       timeout ->
-        _ = AgentServer.unsubscribe(server, completion_ref)
-        _ = AgentServer.unsubscribe(server, failure_ref)
+        _ = AgentServer.unsubscribe(server, sub_ref)
         {:error, :timeout}
     end
   end

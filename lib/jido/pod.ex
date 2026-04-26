@@ -217,14 +217,19 @@ defmodule Jido.Pod do
   defdelegate mutate(server, ops, opts \\ []), to: Mutable
 
   @doc """
-  Submits a topology mutation and waits for the lifecycle signal carrying
-  the completion report (or failure error).
+  Submits a topology mutation and waits for the mutation slice to reach a
+  terminal status, returning the completion report (or failure error).
 
-  Wraps `mutate/3` with the subscribe-then-cast-then-receive pattern from
-  [ADR 0017](../../guides/adr/0017-pod-mutations-are-signal-driven.md): subscribes
-  to `jido.pod.mutate.completed` and `jido.pod.mutate.failed` (filtered by
-  the trigger signal's id) **before** issuing the cast, so the lifecycle
-  signal can't fire in a gap.
+  Wraps `mutate/3` with the subscribe-before-cast pattern from
+  [ADR 0017](../../guides/adr/0017-pod-mutations-are-signal-driven.md):
+  subscribes to `jido.agent.child.*` with a selector that reads
+  `pod.mutation` and matches by `mutation.id` **before** issuing the cast.
+  The state machine flips `mutation.status` to `:completed`/`:failed` when
+  the last awaited child
+  lifecycle signal arrives; the subscriber's selector fires on that same
+  signal and delivers the terminal report. There is no synthetic
+  `jido.pod.mutate.completed`/`.failed` signal — the slice is the
+  contract.
 
   Returns `{:ok, mutation_report()}` on success or `{:error, term()}` on
   any failure path (action rejection, planner error, runtime materialization
