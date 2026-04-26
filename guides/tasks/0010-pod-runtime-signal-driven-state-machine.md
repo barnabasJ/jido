@@ -280,12 +280,24 @@ Three-tuple return passed straight through — `mutation_effects` already return
 
 ### `lib/jido/pod/actions/mutate_progress.ex` *(new file)*
 
-The state-machine progression action — declared with `path: :pod` (it owns the slice it mutates per [ADR 0019](../adr/0019-actions-mutate-state-directives-do-side-effects.md)). Routed from `jido.agent.child.started` and `jido.agent.child.exit`. Reads the current mutation slice, removes the named child from `awaiting.names`, and either:
+The state-machine progression action — declared with `path: :pod` (it owns the slice it mutates per [ADR 0019](../adr/0019-actions-mutate-state-directives-do-side-effects.md)). Routed from `jido.agent.child.started` and `jido.agent.child.exit`. Reads the current mutation slice and on each signal:
 
-- Awaiting still non-empty → return the slice with `awaiting` decremented.
-- Awaiting empty → advance phase: return the slice for the new phase + emit the next wave's `StartNode`/`StopNode` directives, OR finalize the mutation by returning the terminal slice + emit the lifecycle signal.
+1. **Classifies the event** relative to the current phase and updates `mutation.report` incrementally with whatever the signal payload tells it (which name started, which exited, with what reason).
+2. **Removes the name from `awaiting.names`**.
+3. **Advances if awaiting empty** — emit the next wave's directives and transition phase, OR finalize the mutation (status, terminal report) and emit the lifecycle signal.
 
-This is the canonical example of ADR 0019: the directive (`StartNode`/`StopNode`) does I/O and produces a lifecycle signal; the action (`MutateProgress`) sees the signal and produces the slice change. No state mutation in the directive body, no I/O in the action body.
+The report build-up is the load-bearing part. Signal payloads carry the per-node outcome (`tag`, `pid`, `reason` from the AgentServer's child lifecycle emissions); `MutateProgress` accumulates these into `mutation.report.started`, `report.stopped`, `report.failures` so that by the time `status` flips to `:completed`/`:failed`, the slice already shows the full report. The lifecycle signal cast at the tail of `complete/3` is post-hoc notification — subscribers and `mutate_and_wait` callers read the report from the slice, not from the signal payload.
+
+This is the canonical example of ADR 0019: the directive (`StartNode`/`StopNode`) does I/O and produces a lifecycle signal carrying the result; the action (`MutateProgress`) sees the signal, builds the report incrementally, and produces the slice change. No state mutation in the directive body, no I/O in the action body.
+
+**Event classification table** (drives `update_report/4`):
+
+| Phase | Signal | Outcome | Report update |
+|---|---|---|---|
+| `{:stop_wave, n}` | `child.exit{tag, _reason}` for `tag ∈ awaiting.names` | expected stop | `report.stopped += [tag]` |
+| `{:start_wave, n}` | `child.started{tag, pid}` for `tag ∈ awaiting.names` | expected start | `report.started += [tag]`; `report.nodes[tag] = %{pid: pid, source: :started, ...}` |
+| `{:start_wave, n}` | `child.exit{tag, reason}` for `tag ∈ awaiting.names` | startup failure (boot crashed before `:post_init` fired `child.started`) | `report.failures[tag] = reason`; abort wave |
+| any | signal for `tag ∉ awaiting.names` | unrelated | no-op |
 
 ```elixir
 defmodule Jido.Pod.Actions.MutateProgress do
@@ -304,15 +316,34 @@ defmodule Jido.Pod.Actions.MutateProgress do
     name = data.tag
 
     case slice.mutation do
-      %{status: :running, awaiting: %{kind: ^kind, names: names}} = mutation ->
-        new_names = MapSet.delete(names, name)
-        cond do
-          MapSet.size(new_names) > 0 ->
-            updated = put_in(mutation.awaiting.names, new_names)
-            {:ok, %{slice | mutation: updated}, []}
+      %{status: :running, awaiting: %{kind: awaiting_kind, names: names}} = mutation
+        when awaiting_kind == kind ->
+        if MapSet.member?(names, name) do
+          updated_report = update_report(mutation.report, mutation.phase, type, data)
+          new_names = MapSet.delete(names, name)
 
-          true ->
-            advance(slice, mutation)
+          mutation =
+            mutation
+            |> Map.put(:report, updated_report)
+            |> put_in([Access.key!(:awaiting), :names], new_names)
+
+          cond do
+            MapSet.size(new_names) > 0 ->
+              {:ok, %{slice | mutation: mutation}, []}
+
+            startup_failures?(mutation) ->
+              # Abort early: any failure in a start wave finalizes as :failed
+              # without emitting further waves. Stop-wave failures are rare
+              # (Process.exit can't fail observably) but if surfaced via
+              # signal payload, treated the same.
+              complete(slice, mutation, :failed)
+
+            true ->
+              advance(slice, mutation)
+          end
+        else
+          # Signal for a name we're not awaiting — unrelated to this mutation.
+          {:ok, slice, []}
         end
 
       _ ->
@@ -323,6 +354,27 @@ defmodule Jido.Pod.Actions.MutateProgress do
 
   defp lifecycle_kind("jido.agent.child.exit"), do: :exit
   defp lifecycle_kind("jido.agent.child.started"), do: :started
+
+  # Build up the report from each signal. The signal payload carries `tag`,
+  # `pid`, `reason` — exactly what the per-node entry needs.
+  defp update_report(report, {:stop_wave, _}, "jido.agent.child.exit", %{tag: tag}) do
+    %{report | stopped: append_unique(report.stopped, tag)}
+  end
+
+  defp update_report(report, {:start_wave, _}, "jido.agent.child.started", %{tag: tag, pid: pid} = data) do
+    %{report |
+      started: append_unique(report.started, tag),
+      nodes: Map.put(report.nodes, tag, %{pid: pid, source: :started, owner: data[:owner]})
+    }
+  end
+
+  defp update_report(report, {:start_wave, _}, "jido.agent.child.exit", %{tag: tag, reason: reason}) do
+    %{report | failures: Map.put(report.failures, tag, {:start_failed, reason})}
+  end
+
+  defp update_report(report, _phase, _type, _data), do: report
+
+  defp startup_failures?(%{report: %{failures: failures}}), do: map_size(failures) > 0
 
   defp advance(slice, %{phase: phase, plan: %Plan{} = plan} = mutation) do
     case next_phase(phase, plan) do
@@ -368,15 +420,27 @@ defmodule Jido.Pod.Actions.MutateProgress do
   end
 
   defp complete(slice, mutation, status) do
-    final_mutation = %{mutation | status: status, phase: :complete, awaiting: nil}
+    # report is already fully built from the per-signal updates above.
+    final_mutation = %{mutation |
+      status: status,
+      phase: :complete,
+      awaiting: nil,
+      error: if(status == :failed, do: mutation.report, else: nil)
+    }
 
+    # IMPORTANT: the slice update returned here commits BEFORE the Emit
+    # directive runs. Subscribers attached to jido.pod.mutate.{completed,
+    # failed} read the terminal report from the slice. Do NOT move the
+    # status flip / report finalization into a handler routed from the
+    # lifecycle signal — the signal is post-hoc notification, not the
+    # source of truth.
     lifecycle_signal =
       Jido.Signal.new!(
         "jido.pod.mutate.#{status}",
         %{
           mutation_id: mutation.id,
-          report: mutation.report,
-          error: if(status == :failed, do: mutation.error, else: nil)
+          report: final_mutation.report,
+          error: if(status == :failed, do: final_mutation.error, else: nil)
         },
         source: "/pod"
       )
@@ -480,6 +544,10 @@ end
 ## Risks
 
 - **ADR 0019 enforcement is on the implementer, not the type system.** Nothing prevents `StartNode.exec/3` from sneakily updating `state.agent.state` while it's at it. The bright line is convention + code review. Add the strict-separation test (above) to make accidental violations break loudly. If a future directive author needs to update `agent.state`, the right answer is "emit a signal, write a handler action" — not "while we're in here, also update the slice."
+
+- **`MutateProgress` is the single source of truth for the report.** The directives don't return data to the action that emitted them — `StartNode` spawns and returns; `StopNode` sends `:shutdown` and returns. The result of each operation comes back as a `child.started` / `child.exit` signal whose payload (`tag`, `pid`, `reason`) carries everything `MutateProgress` needs to build `mutation.report` incrementally. If those signal payloads ever change shape (e.g. AgentServer's `notify_parent_of_startup/1` stops including `pid`), the report build-up breaks silently — the test suite needs an explicit assertion that `report.nodes[name].pid` is set after a successful start, not just that `status: :completed`.
+
+- **State-before-emit invariant is load-bearing.** `complete/3` returns `{:ok, terminal_slice, [Emit lifecycle_signal]}`. The framework applies the slice update before running the `Emit` directive, so by the time subscribers see the lifecycle signal the slice already shows the terminal report. Comment on `complete/3` makes this explicit. If anyone refactors to move the status flip into a handler routed from the lifecycle signal, subscribers break: their selector fires while slice is still `:running` (since the routed action hasn't run yet). The lifecycle signal is intentionally unrouted — adding a route would create a second writer of `mutation.status` and introduce ordering ambiguity.
 
 - **Adoption + lifecycle signal synthesis.** When `start_node` finds an existing pid (adoption), it must emit a synthetic `jido.agent.child.started` so the state machine progresses. Use `AgentServer.cast(self(), signal)` rather than calling the handler directly — keeps the path uniform with real spawns.
 
