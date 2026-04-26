@@ -154,12 +154,14 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
     assert {:ok, nested_pid} = Pod.lookup_node(parent_pid, :editorial)
     assert {:ok, ^nested_pid} = InstanceManager.lookup(@child_pod_manager, parent_nested_key)
 
-    {:ok, parent_state} = AgentServer.state(parent_pid, fn s -> {:ok, s} end)
-    assert parent_state.children.coordinator.pid == coordinator_pid
-    refute Map.has_key?(parent_state.children, :editorial)
+    {:ok, parent_children} = AgentServer.state(parent_pid, fn s -> {:ok, s.children} end)
+    assert parent_children.coordinator.pid == coordinator_pid
+    refute Map.has_key?(parent_children, :editorial)
 
-    {:ok, coordinator_state} = AgentServer.state(coordinator_pid, fn s -> {:ok, s} end)
-    assert coordinator_state.children.editorial.pid == nested_pid
+    {:ok, coordinator_children} =
+      AgentServer.state(coordinator_pid, fn s -> {:ok, s.children} end)
+
+    assert coordinator_children.editorial.pid == nested_pid
 
     assert {:ok, editor_pid} = Pod.lookup_node(nested_pid, :editor)
     assert {:ok, ^editor_pid} = InstanceManager.lookup(@worker_manager, nested_editor_key)
@@ -187,24 +189,36 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
     assert Process.alive?(nested_pid)
     assert Process.alive?(editor_pid)
 
-    {:ok, coordinator_state} = AgentServer.state(coordinator_pid, fn s -> {:ok, s} end)
-    assert coordinator_state.parent == nil
-    assert coordinator_state.orphaned_from.id == pod_key
+    {:ok, %{parent: coord_parent, orphaned_from_id: orphaned_from_id}} =
+      AgentServer.state(coordinator_pid, fn s ->
+        {:ok, %{parent: s.parent, orphaned_from_id: s.orphaned_from.id}}
+      end)
 
-    {:ok, nested_state} = AgentServer.state(nested_pid, fn s -> {:ok, s} end)
-    assert nested_state.parent.pid == coordinator_pid
+    assert coord_parent == nil
+    assert orphaned_from_id == pod_key
 
-    {:ok, editor_state} = AgentServer.state(editor_pid, fn s -> {:ok, s} end)
-    assert editor_state.parent.pid == nested_pid
+    {:ok, nested_parent_pid} =
+      AgentServer.state(nested_pid, fn s -> {:ok, s.parent.pid} end)
+
+    assert nested_parent_pid == coordinator_pid
+
+    {:ok, editor_parent_pid} =
+      AgentServer.state(editor_pid, fn s -> {:ok, s.parent.pid} end)
+
+    assert editor_parent_pid == nested_pid
 
     assert {:ok, restored_pid} = Pod.get(@parent_pod_manager, pod_key)
     assert restored_pid != parent_pid
     assert {:ok, ^nested_pid} = Pod.lookup_node(restored_pid, :editorial)
 
-    {:ok, restored_parent_state} = AgentServer.state(restored_pid, fn s -> {:ok, s} end)
-    assert restored_parent_state.children.coordinator.pid == coordinator_pid
+    {:ok, restored_parent_children} =
+      AgentServer.state(restored_pid, fn s -> {:ok, s.children} end)
 
-    {:ok, restored_nested_state} = AgentServer.state(nested_pid, fn s -> {:ok, s} end)
-    assert restored_nested_state.children.editor.pid == editor_pid
+    assert restored_parent_children.coordinator.pid == coordinator_pid
+
+    {:ok, restored_nested_children} =
+      AgentServer.state(nested_pid, fn s -> {:ok, s.children} end)
+
+    assert restored_nested_children.editor.pid == editor_pid
   end
 end

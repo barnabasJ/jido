@@ -130,13 +130,19 @@ defmodule JidoExampleTest.PartitionedPodRuntimeTest do
 
     assert InstanceManager.lookup(@worker_manager, reviewer_key, partition: :beta) == :error
 
-    {:ok, alpha_coordinator_state} =
-      AgentServer.state(alpha_coordinator_pid, fn s -> {:ok, s} end)
+    {:ok, alpha_view} =
+      AgentServer.state(alpha_coordinator_pid, fn s ->
+        {:ok, %{partition: s.partition, parent_partition: s.parent.partition}}
+      end)
 
-    {:ok, beta_coordinator_state} = AgentServer.state(beta_coordinator_pid, fn s -> {:ok, s} end)
-    assert alpha_coordinator_state.partition == :alpha
-    assert alpha_coordinator_state.parent.partition == :alpha
-    assert beta_coordinator_state.partition == :beta
-    assert beta_coordinator_state.parent.partition == :beta
+    {:ok, beta_view} =
+      AgentServer.state(beta_coordinator_pid, fn s ->
+        {:ok, %{partition: s.partition, parent_partition: s.parent.partition}}
+      end)
+
+    assert alpha_view.partition == :alpha
+    assert alpha_view.parent_partition == :alpha
+    assert beta_view.partition == :beta
+    assert beta_view.parent_partition == :beta
   end
 end

@@ -24,7 +24,7 @@ defmodule JidoTest.AgentServer.StopChildTest do
     assert :ok = AgentServer.stop_child(parent_pid, :worker)
 
     eventually(fn -> not Process.alive?(child_pid) end)
-    eventually_state(parent_pid, fn state -> map_size(state.children) == 0 end)
+    await_state_value(parent_pid, fn s -> if map_size(s.children) == 0, do: true end)
   end
 
   test "stop_child/3 stops an adopted child with a string tag", %{jido: jido} do
@@ -38,6 +38,6 @@ defmodule JidoTest.AgentServer.StopChildTest do
     assert :ok = AgentServer.stop_child(parent_pid, "worker")
 
     eventually(fn -> not Process.alive?(child_pid) end)
-    eventually_state(parent_pid, fn state -> map_size(state.children) == 0 end)
+    await_state_value(parent_pid, fn s -> if map_size(s.children) == 0, do: true end)
   end
 end

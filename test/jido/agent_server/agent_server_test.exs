@@ -5,7 +5,6 @@ defmodule JidoTest.AgentServerTest do
 
   alias Jido.Agent.Directive
   alias Jido.AgentServer
-  alias Jido.AgentServer.State
   alias Jido.Signal
   alias JidoTest.TestActions
 
@@ -84,8 +83,8 @@ defmodule JidoTest.AgentServerTest do
 
     test "starts with custom id", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: "custom-123", jido: jido)
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.id == "custom-123"
+      {:ok, id} = AgentServer.state(pid, fn s -> {:ok, s.id} end)
+      assert id == "custom-123"
       GenServer.stop(pid)
     end
 
@@ -106,9 +105,13 @@ defmodule JidoTest.AgentServerTest do
           jido: jido
         )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.id == "prebuilt-456"
-      assert state.agent.state.domain.counter == 99
+      {:ok, %{agent_id: agent_id, counter: counter}} =
+        AgentServer.state(pid, fn s ->
+          {:ok, %{agent_id: s.agent.id, counter: s.agent.state.domain.counter}}
+        end)
+
+      assert agent_id == "prebuilt-456"
+      assert counter == 99
       GenServer.stop(pid)
     end
 
@@ -120,8 +123,10 @@ defmodule JidoTest.AgentServerTest do
           jido: jido
         )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.domain.counter == 42
+      {:ok, counter} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.domain.counter} end)
+
+      assert counter == 42
       GenServer.stop(pid)
     end
   end
@@ -176,8 +181,10 @@ defmodule JidoTest.AgentServerTest do
         {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
       end
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.domain.counter == 5
+      {:ok, counter} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.domain.counter} end)
+
+      assert counter == 5
       GenServer.stop(pid)
     end
 
@@ -249,7 +256,9 @@ defmodule JidoTest.AgentServerTest do
       assert {:ok, agent} = Task.await(task, 2_000)
       assert agent.state.domain.slow_done == true
 
-      eventually_state(pid, fn s -> s.agent.state.domain.counter == 1 end)
+      await_state_value(pid, fn s ->
+        if s.agent.state.domain.counter == 1, do: true
+      end)
 
       GenServer.stop(pid)
     end
@@ -308,13 +317,16 @@ defmodule JidoTest.AgentServerTest do
 
       assert {:ok, _agent} = Task.await(task, 2_000)
 
-      state =
-        eventually_state(pid, fn state ->
-          state.agent.state.domain.slow_done == true and state.agent.state.domain.counter == 1
+      %{counter: counter, slow_done: slow_done} =
+        await_state_value(pid, fn s ->
+          if s.agent.state.domain.slow_done == true and
+               s.agent.state.domain.counter == 1 do
+            %{counter: s.agent.state.domain.counter, slow_done: s.agent.state.domain.slow_done}
+          end
         end)
 
-      assert state.agent.state.domain.counter == 1
-      assert state.agent.state.domain.slow_done == true
+      assert counter == 1
+      assert slow_done == true
 
       GenServer.stop(pid)
     end
@@ -327,7 +339,9 @@ defmodule JidoTest.AgentServerTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       assert :ok = AgentServer.cast(pid, signal)
 
-      eventually_state(pid, fn state -> state.agent.state.domain.counter == 1 end)
+      await_state_value(pid, fn s ->
+        if s.agent.state.domain.counter == 1, do: true
+      end)
 
       GenServer.stop(pid)
     end
@@ -340,21 +354,26 @@ defmodule JidoTest.AgentServerTest do
         AgentServer.cast(pid, signal)
       end
 
-      eventually_state(pid, fn state -> state.agent.state.domain.counter == 5 end)
+      await_state_value(pid, fn s ->
+        if s.agent.state.domain.counter == 5, do: true
+      end)
 
       GenServer.stop(pid)
     end
   end
 
-  describe "state/1" do
-    test "returns full State struct", %{jido: jido} do
+  describe "state/3" do
+    test "returns projected fields from state via selector", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: "state-test", jido: jido)
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
-      assert %State{} = state
-      assert state.id == "state-test"
-      assert state.agent.state.domain.counter == 0
-      assert state.status == :idle
+      {:ok, %{id: id, counter: counter, status: status}} =
+        AgentServer.state(pid, fn s ->
+          {:ok, %{id: s.id, counter: s.agent.state.domain.counter, status: s.status}}
+        end)
+
+      assert id == "state-test"
+      assert counter == 0
+      assert status == :idle
 
       GenServer.stop(pid)
     end
@@ -363,9 +382,9 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} =
         AgentServer.start_link(agent_module: TestAgent, id: "state-id-test", jido: jido)
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, id} = AgentServer.state(pid, fn s -> {:ok, s.id} end)
 
-      assert state.id == "state-id-test"
+      assert id == "state-id-test"
       GenServer.stop(pid)
     end
   end
@@ -471,7 +490,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Drain loop completes and returns to idle
-      eventually_state(pid, fn state -> state.status == :idle end)
+      await_state_value(pid, fn s -> if s.status == :idle, do: true end)
 
       GenServer.stop(pid)
     end
@@ -483,7 +502,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Drain loop completes and returns to idle
-      eventually_state(pid, fn state -> state.status == :idle end)
+      await_state_value(pid, fn s -> if s.status == :idle, do: true end)
 
       GenServer.stop(pid)
     end
@@ -495,7 +514,7 @@ defmodule JidoTest.AgentServerTest do
       {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Wait for scheduled signal to be processed (50ms delay + processing)
-      eventually_state(pid, fn state -> state.status == :idle end, timeout: 200)
+      await_state_value(pid, fn s -> if s.status == :idle, do: true end, timeout: 200)
       assert Process.alive?(pid)
 
       GenServer.stop(pid)
@@ -548,13 +567,14 @@ defmodule JidoTest.AgentServerTest do
         AgentServer.cast(pid, signal)
       end
 
-      state =
-        eventually_state(pid, fn state ->
-          length(state.agent.state.domain.messages) == 10
+      messages =
+        await_state_value(pid, fn s ->
+          msgs = s.agent.state.domain.messages
+          if length(msgs) == 10, do: msgs
         end)
 
       # Verify order is preserved
-      indices = Enum.map(state.agent.state.domain.messages, & &1.index)
+      indices = Enum.map(messages, & &1.index)
       assert indices == Enum.to_list(1..10)
 
       GenServer.stop(pid)
@@ -564,8 +584,8 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
 
       # Initially idle
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.status == :idle
+      {:ok, status} = AgentServer.state(pid, fn s -> {:ok, s.status} end)
+      assert status == :idle
 
       GenServer.stop(pid)
     end
@@ -576,8 +596,8 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
 
       # After post_init continue, should be idle
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.status == :idle
+      {:ok, status} = AgentServer.state(pid, fn s -> {:ok, s.status} end)
+      assert status == :idle
 
       GenServer.stop(pid)
     end
@@ -592,8 +612,8 @@ defmodule JidoTest.AgentServerTest do
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.status == :idle
+      {:ok, status} = AgentServer.state(pid, fn s -> {:ok, s.status} end)
+      assert status == :idle
 
       GenServer.stop(pid)
     end
@@ -644,11 +664,17 @@ defmodule JidoTest.AgentServerTest do
       {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Before delay
-      {:ok, state1} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state1.agent.state.domain.pings == 0
+      {:ok, pings_initial} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.domain.pings} end)
+
+      assert pings_initial == 0
 
       # Wait for scheduled signal (50ms delay + processing)
-      eventually_state(pid, fn state -> state.agent.state.domain.pings == 1 end, timeout: 200)
+      await_state_value(
+        pid,
+        fn s -> if s.agent.state.domain.pings == 1, do: true end,
+        timeout: 200
+      )
 
       GenServer.stop(pid)
     end
@@ -702,12 +728,17 @@ defmodule JidoTest.AgentServerTest do
       {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Wait for all 3 scheduled signals (20ms, 40ms, 60ms delays)
-      state =
-        eventually_state(pid, fn state -> state.agent.state.domain.events == [1, 2, 3] end,
+      events =
+        await_state_value(
+          pid,
+          fn s ->
+            ev = s.agent.state.domain.events
+            if ev == [1, 2, 3], do: ev
+          end,
           timeout: 200
         )
 
-      assert state.agent.state.domain.events == [1, 2, 3]
+      assert events == [1, 2, 3]
 
       GenServer.stop(pid)
     end
@@ -754,12 +785,17 @@ defmodule JidoTest.AgentServerTest do
       {:ok, _agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
       # Wait for scheduled atom message (10ms delay + processing)
-      state =
-        eventually_state(pid, fn state -> state.agent.state.domain.received == :timeout end,
+      received =
+        await_state_value(
+          pid,
+          fn s ->
+            r = s.agent.state.domain.received
+            if r == :timeout, do: r
+          end,
           timeout: 100
         )
 
-      assert state.agent.state.domain.received == :timeout
+      assert received == :timeout
 
       GenServer.stop(pid)
     end
@@ -868,27 +904,27 @@ defmodule JidoTest.AgentServerTest do
       {:ok, pid} =
         AgentServer.start_link(agent_module: TestAgent, id: "struct-id-123", jido: jido)
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.id == "struct-id-123"
+      {:ok, id} = AgentServer.state(pid, fn s -> {:ok, s.id} end)
+      assert id == "struct-id-123"
 
       GenServer.stop(pid)
     end
 
     test "generates ID when not provided", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, jido: jido)
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, id} = AgentServer.state(pid, fn s -> {:ok, s.id} end)
 
-      assert is_binary(state.id)
-      assert String.length(state.id) > 0
+      assert is_binary(id)
+      assert String.length(id) > 0
 
       GenServer.stop(pid)
     end
 
     test "converts atom ID to string", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: TestAgent, id: :atom_id, jido: jido)
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, id} = AgentServer.state(pid, fn s -> {:ok, s.id} end)
 
-      assert state.id == "atom_id"
+      assert id == "atom_id"
 
       GenServer.stop(pid)
     end
@@ -968,8 +1004,8 @@ defmodule JidoTest.AgentServerTest do
           {:ok, s.agent}
         end)
 
-      {:ok, final_state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert final_state.status == :idle
+      {:ok, status} = AgentServer.state(pid, fn s -> {:ok, s.status} end)
+      assert status == :idle
       assert {:message_queue_len, 0} = Process.info(pid, :message_queue_len)
 
       GenServer.stop(pid)
@@ -1009,14 +1045,14 @@ defmodule JidoTest.AgentServerTest do
 
     test "registers plugin schedules on startup", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: AgentWithScheduledPlugin, jido: jido)
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, cron_jobs} = AgentServer.state(pid, fn s -> {:ok, s.cron_jobs} end)
 
-      assert map_size(state.cron_jobs) == 1
+      assert map_size(cron_jobs) == 1
 
       job_id = {:plugin_schedule, :scheduled_plugin, ScheduledAction}
-      assert Map.has_key?(state.cron_jobs, job_id)
+      assert Map.has_key?(cron_jobs, job_id)
 
-      cron_pid = Map.get(state.cron_jobs, job_id)
+      cron_pid = Map.get(cron_jobs, job_id)
       assert is_pid(cron_pid)
       assert Process.alive?(cron_pid)
 
@@ -1031,19 +1067,19 @@ defmodule JidoTest.AgentServerTest do
           skip_schedules: true
         )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, cron_jobs} = AgentServer.state(pid, fn s -> {:ok, s.cron_jobs} end)
 
-      assert map_size(state.cron_jobs) == 0
+      assert map_size(cron_jobs) == 0
 
       GenServer.stop(pid)
     end
 
     test "cleans up cron jobs on termination", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: AgentWithScheduledPlugin, jido: jido)
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, cron_jobs} = AgentServer.state(pid, fn s -> {:ok, s.cron_jobs} end)
 
       job_id = {:plugin_schedule, :scheduled_plugin, ScheduledAction}
-      cron_pid = Map.get(state.cron_jobs, job_id)
+      cron_pid = Map.get(cron_jobs, job_id)
       assert Process.alive?(cron_pid)
 
       cron_ref = Process.monitor(cron_pid)

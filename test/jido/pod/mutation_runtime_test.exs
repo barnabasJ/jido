@@ -234,8 +234,11 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     assert {:ok, topology} = Pod.fetch_topology(pod_pid)
     assert Map.has_key?(topology.nodes, "planner")
     assert {:ok, planner_pid} = Pod.lookup_node(pod_pid, "planner")
-    assert {:ok, planner_state} = AgentServer.state(planner_pid, fn s -> {:ok, s} end)
-    assert planner_state.agent.state.domain.role == "planner"
+
+    assert {:ok, planner_role} =
+             AgentServer.state(planner_pid, fn s -> {:ok, s.agent.state.domain.role} end)
+
+    assert planner_role == "planner"
   end
 
   test "external mutate persists lazy nodes without starting them", %{pod_id: pod_id, jido: jido} do
@@ -418,16 +421,17 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
                {:ok, s.agent}
              end)
 
-    state =
-      JidoTest.Eventually.eventually_state(
+    report =
+      JidoTest.AgentWait.await_state_value(
         pod_pid,
-        fn state ->
-          get_in(state.agent.state, [:pod, :mutation, :status]) == :completed
+        fn s ->
+          if get_in(s.agent.state, [:pod, :mutation, :status]) == :completed do
+            get_in(s.agent.state, [:pod, :mutation, :report])
+          end
         end,
         timeout: 5_000
       )
 
-    report = get_in(state.agent.state, [:pod, :mutation, :report])
     assert report.status == :completed
     assert report.added == ["planner"]
     assert {:ok, planner_pid} = Pod.lookup_node(pod_pid, "planner")
@@ -457,8 +461,12 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     assert byte_size(id) > 0
 
     # Slice reflects the same mutation_id once execute_mutation_plan finishes.
-    {:ok, state} = AgentServer.state(pod_pid, fn s -> {:ok, s} end)
-    assert get_in(state.agent.state, [:pod, :mutation, :id]) == id
+    {:ok, mutation_id} =
+      AgentServer.state(pod_pid, fn s ->
+        {:ok, get_in(s.agent.state, [:pod, :mutation, :id])}
+      end)
+
+    assert mutation_id == id
   end
 
   test "Pod.mutate while mutation slice is :running returns :mutation_in_progress via the framework error channel",
@@ -474,8 +482,12 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
                {:ok, s.agent}
              end)
 
-    {:ok, state} = AgentServer.state(pod_pid, fn s -> {:ok, s} end)
-    assert get_in(state.agent.state, [:pod, :mutation, :status]) == :running
+    {:ok, mutation_status} =
+      AgentServer.state(pod_pid, fn s ->
+        {:ok, get_in(s.agent.state, [:pod, :mutation, :status])}
+      end)
+
+    assert mutation_status == :running
 
     result =
       Pod.mutate(

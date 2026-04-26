@@ -82,12 +82,10 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
       Jido.AgentServer.cast(pid, signal1)
       Jido.AgentServer.cast(pid, signal2)
 
-      eventually_state(pid, fn state ->
-        state.agent.state.domain.step2_saw_cmd_ran
-      end)
-
-      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
-      agent_state = state.agent.state.domain
+      agent_state =
+        await_state_value(pid, fn s ->
+          if s.agent.state.domain.step2_saw_cmd_ran, do: s.agent.state.domain
+        end)
 
       assert agent_state.step1_cmd_ran == true
       assert agent_state.step1_directive_ran == true

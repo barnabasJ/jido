@@ -40,6 +40,7 @@ defmodule JidoTest.Case do
     quote do
       import JidoTest.Case
       import JidoTest.Eventually
+      import JidoTest.AgentWait
 
       @doc """
       Starts an agent under this test's Jido instance.

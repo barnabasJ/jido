@@ -270,9 +270,17 @@ defmodule JidoExampleTest.EmitDirectiveTest do
           fn s -> {:ok, s.agent} end
         )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.domain.last_order_id == "ORD-100"
-      assert state.agent.state.domain.last_payment.status == :success
+      {:ok, %{last_order_id: last_order_id, payment_status: payment_status}} =
+        AgentServer.state(pid, fn s ->
+          {:ok,
+           %{
+             last_order_id: s.agent.state.domain.last_order_id,
+             payment_status: s.agent.state.domain.last_payment.status
+           }}
+        end)
+
+      assert last_order_id == "ORD-100"
+      assert payment_status == :success
 
       eventually(
         fn ->

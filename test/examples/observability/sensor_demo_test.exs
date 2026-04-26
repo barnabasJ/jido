@@ -253,18 +253,16 @@ defmodule JidoExampleTest.SensorDemoTest do
       end)
 
       # Verify quotes were collected via signal routing
-      state =
-        eventually_state(
+      quotes =
+        await_state_value(
           agent_pid,
-          fn state ->
-            quotes = state.agent.state.domain.quotes
-            match?([_, _ | _], quotes)
+          fn s ->
+            quotes = s.agent.state.domain.quotes
+            if match?([_, _ | _], quotes), do: quotes
           end,
-          timeout: 5_000,
-          interval: 50
+          timeout: 5_000
         )
 
-      quotes = state.agent.state.domain.quotes
       assert length(quotes) >= 2, "Expected at least 2 quotes, got #{length(quotes)}"
 
       assert Enum.all?(quotes, fn q ->
@@ -294,18 +292,16 @@ defmodule JidoExampleTest.SensorDemoTest do
       })
 
       # Verify webhook events were recorded correctly
-      state =
-        eventually_state(
+      events =
+        await_state_value(
           agent_pid,
-          fn state ->
-            events = state.agent.state.domain.events
-            match?([_, _ | _], events)
+          fn s ->
+            events = s.agent.state.domain.events
+            if match?([_, _ | _], events), do: events
           end,
-          timeout: 5_000,
-          interval: 50
+          timeout: 5_000
         )
 
-      events = state.agent.state.domain.events
       github_event = Enum.find(events, &(&1.source == :github))
       stripe_event = Enum.find(events, &(&1.source == :stripe))
 
@@ -337,11 +333,10 @@ defmodule JidoExampleTest.SensorDemoTest do
       end)
 
       # Wait for some quotes, then inject webhooks
-      eventually_state(
+      await_state_value(
         agent_pid,
-        fn state -> state.agent.state.domain.quotes != [] end,
-        timeout: 3_000,
-        interval: 50
+        fn s -> if s.agent.state.domain.quotes != [], do: true end,
+        timeout: 3_000
       )
 
       # Inject webhooks while sensor is still running
@@ -349,23 +344,23 @@ defmodule JidoExampleTest.SensorDemoTest do
       WebhookHelper.emit_stripe_event(agent_pid, "invoice.paid", %{amount: 5000})
 
       # Verify final state has both quotes and events
-      state =
-        eventually_state(
+      %{quotes: quotes, events: events} =
+        await_state_value(
           agent_pid,
-          fn state ->
-            quotes = state.agent.state.domain.quotes
-            events = state.agent.state.domain.events
-            length(quotes) >= 2 and length(events) == 2
+          fn s ->
+            quotes = s.agent.state.domain.quotes
+            events = s.agent.state.domain.events
+
+            if length(quotes) >= 2 and length(events) == 2,
+              do: %{quotes: quotes, events: events}
           end,
-          timeout: 5_000,
-          interval: 50
+          timeout: 5_000
         )
 
       # Should have at least 2 quotes from sensor
-      assert length(state.agent.state.domain.quotes) >= 2
+      assert length(quotes) >= 2
 
       # Should have both webhook events
-      events = state.agent.state.domain.events
       assert length(events) == 2
 
       sources = Enum.map(events, & &1.source) |> Enum.sort()

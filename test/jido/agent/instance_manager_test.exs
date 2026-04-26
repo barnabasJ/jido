@@ -2,6 +2,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
   use ExUnit.Case, async: false
 
   import JidoTest.Eventually
+  import JidoTest.AgentWait
 
   # Tests with timing-based assertions (idle timeout behavior)
   @moduletag :integration
@@ -237,9 +238,11 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
     test "get/3 passes initial_state", %{manager: manager} do
       {:ok, pid} = InstanceManager.get(manager, "key-state", initial_state: %{counter: 42})
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
 
-      assert state.agent.state.domain.counter == 42
+      {:ok, counter} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.domain.counter} end)
+
+      assert counter == 42
     end
 
     test "manager-managed agents are not globally registered in Jido registry", %{
@@ -466,8 +469,11 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       # Start agent with initial state
       {:ok, pid1} = InstanceManager.get(manager, "hibernate-key", initial_state: %{counter: 99})
       ref = Process.monitor(pid1)
-      {:ok, state1} = AgentServer.state(pid1, fn s -> {:ok, s} end)
-      assert state1.agent.state.domain.counter == 99
+
+      {:ok, counter1} =
+        AgentServer.state(pid1, fn s -> {:ok, s.agent.state.domain.counter} end)
+
+      assert counter1 == 99
 
       # Wait for idle timeout to hibernate
       assert_receive {:DOWN, ^ref, :process, ^pid1, {:shutdown, :idle_timeout}}, 1000
@@ -492,9 +498,11 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       assert Process.alive?(pid2)
 
-      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
+      {:ok, counter2} =
+        AgentServer.state(pid2, fn s -> {:ok, s.agent.state.domain.counter} end)
+
       # The important assertion: state was preserved
-      assert state2.agent.state.domain.counter == 99
+      assert counter2 == 99
 
       # Cleanup
       :ok = AgentServer.detach(pid2)
@@ -505,8 +513,11 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       # Start agent with initial state
       {:ok, pid} = InstanceManager.get(manager, "stop-persist-key", initial_state: %{counter: 42})
       ref = Process.monitor(pid)
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.domain.counter == 42
+
+      {:ok, counter} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.domain.counter} end)
+
+      assert counter == 42
 
       # Stop the agent (should hibernate first)
       :ok = InstanceManager.stop(manager, "stop-persist-key")
@@ -573,14 +584,21 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       {:ok, restored_beta} = InstanceManager.get(manager, "shared-storage-key", partition: :beta)
 
-      {:ok, alpha_state} = AgentServer.state(restored_alpha, fn s -> {:ok, s} end)
-      {:ok, beta_state} = AgentServer.state(restored_beta, fn s -> {:ok, s} end)
+      {:ok, %{partition: alpha_partition, counter: alpha_counter}} =
+        AgentServer.state(restored_alpha, fn s ->
+          {:ok, %{partition: s.partition, counter: s.agent.state.domain.counter}}
+        end)
 
-      assert alpha_state.partition == :alpha
-      assert alpha_state.agent.state.domain.counter == 11
+      {:ok, %{partition: beta_partition, counter: beta_counter}} =
+        AgentServer.state(restored_beta, fn s ->
+          {:ok, %{partition: s.partition, counter: s.agent.state.domain.counter}}
+        end)
 
-      assert beta_state.partition == :beta
-      assert beta_state.agent.state.domain.counter == 22
+      assert alpha_partition == :alpha
+      assert alpha_counter == 11
+
+      assert beta_partition == :beta
+      assert beta_counter == 22
     end
   end
 
@@ -628,8 +646,10 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 2000
         )
 
-      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
-      assert state2.agent.state.domain.counter == 123
+      {:ok, counter2} =
+        AgentServer.state(pid2, fn s -> {:ok, s.agent.state.domain.counter} end)
+
+      assert counter2 == 123
 
       :ok = AgentServer.detach(pid2)
     end
@@ -677,8 +697,10 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 2000
         )
 
-      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
-      assert state2.agent.state.domain.counter == 123
+      {:ok, counter2} =
+        AgentServer.state(pid2, fn s -> {:ok, s.agent.state.domain.counter} end)
+
+      assert counter2 == 123
       assert map_size(RedisMock.data()) > 0
 
       :ok = AgentServer.detach(pid2)
@@ -721,22 +743,25 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       :ok = AgentServer.cast(pid1, register_signal)
 
-      _state1 =
-        eventually_state(
-          pid1,
-          fn state ->
-            Map.has_key?(state.cron_jobs, :durable_tick) and
-              Map.has_key?(state.cron_specs, :durable_tick)
-          end,
-          timeout: 2_000
-        )
+      await_state_value(
+        pid1,
+        fn s ->
+          if Map.has_key?(s.cron_jobs, :durable_tick) and
+               Map.has_key?(s.cron_specs, :durable_tick),
+             do: true
+        end,
+        timeout: 2_000
+      )
 
-      state1 =
-        eventually_state(pid1, fn state -> state.agent.state.domain.tick_count > 0 end,
+      pre_hibernate_ticks =
+        await_state_value(
+          pid1,
+          fn s ->
+            tc = s.agent.state.domain.tick_count
+            if tc > 0, do: tc
+          end,
           timeout: 3_000
         )
-
-      pre_hibernate_ticks = state1.agent.state.domain.tick_count
 
       :ok = AgentServer.detach(pid1)
       ref = Process.monitor(pid1)
@@ -757,14 +782,17 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       refute pid1 == pid2
 
-      eventually_state(pid2, fn state -> Map.has_key?(state.cron_jobs, :durable_tick) end,
+      await_state_value(
+        pid2,
+        fn s -> if Map.has_key?(s.cron_jobs, :durable_tick), do: true end,
         timeout: 2_000
       )
 
-      eventually_state(
+      await_state_value(
         pid2,
-        fn state ->
-          state.agent.state.domain.tick_count > pre_hibernate_ticks
+        fn s ->
+          tc = s.agent.state.domain.tick_count
+          if tc > pre_hibernate_ticks, do: tc
         end,
         timeout: 3_000
       )
@@ -787,17 +815,20 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       :ok = AgentServer.cast(pid1, register_signal)
 
-      eventually_state(pid1, fn state -> Map.has_key?(state.cron_jobs, :to_cancel) end,
+      await_state_value(
+        pid1,
+        fn s -> if Map.has_key?(s.cron_jobs, :to_cancel), do: true end,
         timeout: 2_000
       )
 
       :ok = AgentServer.cast(pid1, cancel_signal)
 
-      eventually_state(
+      await_state_value(
         pid1,
-        fn state ->
-          not Map.has_key?(state.cron_jobs, :to_cancel) and
-            not Map.has_key?(state.cron_specs, :to_cancel)
+        fn s ->
+          if not Map.has_key?(s.cron_jobs, :to_cancel) and
+               not Map.has_key?(s.cron_specs, :to_cancel),
+             do: true
         end,
         timeout: 2_000
       )
@@ -819,9 +850,13 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 3_000
         )
 
-      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
-      assert map_size(state2.cron_jobs) == 0
-      assert map_size(state2.cron_specs) == 0
+      {:ok, %{cron_jobs: cron_jobs, cron_specs: cron_specs}} =
+        AgentServer.state(pid2, fn s ->
+          {:ok, %{cron_jobs: s.cron_jobs, cron_specs: s.cron_specs}}
+        end)
+
+      assert map_size(cron_jobs) == 0
+      assert map_size(cron_specs) == 0
 
       :ok = AgentServer.detach(pid2)
     end
@@ -838,11 +873,12 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       :ok = AgentServer.cast(pid1, register_signal)
 
-      eventually_state(
+      await_state_value(
         pid1,
-        fn state ->
-          Map.has_key?(state.cron_jobs, :after_kill_register) and
-            Map.has_key?(state.cron_specs, :after_kill_register)
+        fn s ->
+          if Map.has_key?(s.cron_jobs, :after_kill_register) and
+               Map.has_key?(s.cron_specs, :after_kill_register),
+             do: true
         end,
         timeout: 2_000
       )
@@ -864,17 +900,18 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 3_000
         )
 
-      state2 =
-        eventually_state(
+      job_pid =
+        await_state_value(
           pid2,
-          fn state ->
-            Map.has_key?(state.cron_jobs, :after_kill_register) and
-              Map.has_key?(state.cron_specs, :after_kill_register)
+          fn s ->
+            if Map.has_key?(s.cron_jobs, :after_kill_register) and
+                 Map.has_key?(s.cron_specs, :after_kill_register),
+               do: s.cron_jobs[:after_kill_register]
           end,
           timeout: 3_000
         )
 
-      assert is_pid(state2.cron_jobs[:after_kill_register])
+      assert is_pid(job_pid)
       :ok = AgentServer.detach(pid2)
     end
 
@@ -893,22 +930,24 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       :ok = AgentServer.cast(pid1, register_signal)
 
-      eventually_state(
+      await_state_value(
         pid1,
-        fn state ->
-          Map.has_key?(state.cron_jobs, :after_kill_cancel) and
-            Map.has_key?(state.cron_specs, :after_kill_cancel)
+        fn s ->
+          if Map.has_key?(s.cron_jobs, :after_kill_cancel) and
+               Map.has_key?(s.cron_specs, :after_kill_cancel),
+             do: true
         end,
         timeout: 2_000
       )
 
       :ok = AgentServer.cast(pid1, cancel_signal)
 
-      eventually_state(
+      await_state_value(
         pid1,
-        fn state ->
-          not Map.has_key?(state.cron_jobs, :after_kill_cancel) and
-            not Map.has_key?(state.cron_specs, :after_kill_cancel)
+        fn s ->
+          if not Map.has_key?(s.cron_jobs, :after_kill_cancel) and
+               not Map.has_key?(s.cron_specs, :after_kill_cancel),
+             do: true
         end,
         timeout: 2_000
       )
@@ -930,9 +969,13 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 3_000
         )
 
-      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
-      refute Map.has_key?(state2.cron_jobs, :after_kill_cancel)
-      refute Map.has_key?(state2.cron_specs, :after_kill_cancel)
+      {:ok, %{cron_jobs: cron_jobs, cron_specs: cron_specs}} =
+        AgentServer.state(pid2, fn s ->
+          {:ok, %{cron_jobs: s.cron_jobs, cron_specs: s.cron_specs}}
+        end)
+
+      refute Map.has_key?(cron_jobs, :after_kill_cancel)
+      refute Map.has_key?(cron_specs, :after_kill_cancel)
 
       :ok = AgentServer.detach(pid2)
     end
@@ -977,7 +1020,9 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       {:ok, pid1} = InstanceManager.get(manager, instance_key)
       :ok = AgentServer.attach(pid1)
 
-      eventually_state(pid1, fn state -> Map.has_key?(state.cron_jobs, conflict_job_id) end,
+      await_state_value(
+        pid1,
+        fn s -> if Map.has_key?(s.cron_jobs, conflict_job_id), do: true end,
         timeout: 2_000
       )
 
@@ -986,11 +1031,12 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
       :ok = AgentServer.cast(pid1, register_signal)
 
-      eventually_state(
+      await_state_value(
         pid1,
-        fn state ->
-          Map.has_key?(state.cron_jobs, conflict_job_id) and
-            Map.has_key?(state.cron_specs, conflict_job_id)
+        fn s ->
+          if Map.has_key?(s.cron_jobs, conflict_job_id) and
+               Map.has_key?(s.cron_specs, conflict_job_id),
+             do: true
         end,
         timeout: 2_000
       )
@@ -1012,17 +1058,18 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 3_000
         )
 
-      state2 =
-        eventually_state(
+      restored_pid =
+        await_state_value(
           pid2,
-          fn state ->
-            Map.has_key?(state.cron_jobs, conflict_job_id) and
-              not Map.has_key?(state.cron_specs, conflict_job_id)
+          fn s ->
+            if Map.has_key?(s.cron_jobs, conflict_job_id) and
+                 not Map.has_key?(s.cron_specs, conflict_job_id),
+               do: s.cron_jobs[conflict_job_id]
           end,
           timeout: 3_000
         )
 
-      assert is_pid(state2.cron_jobs[conflict_job_id])
+      assert is_pid(restored_pid)
 
       store_key = {DeclarativeConflictAgent, {manager, instance_key}}
       scheduler_key = Scheduler.cron_specs_state_key()
@@ -1087,8 +1134,11 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       assert_receive {:DOWN, ^ref, :process, ^pid1, {:shutdown, :idle_timeout}}, 1000
 
       {:ok, pid2} = InstanceManager.get(manager_name, "no-storage")
-      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
-      assert state2.agent.state.domain.counter == 0
+
+      {:ok, counter2} =
+        AgentServer.state(pid2, fn s -> {:ok, s.agent.state.domain.counter} end)
+
+      assert counter2 == 0
     end
 
     test "explicit storage overrides jido default storage" do
@@ -1164,9 +1214,13 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 2000
         )
 
-      {:ok, state2} = AgentServer.state(pid2, fn s -> {:ok, s} end)
-      assert state2.agent.state.domain.counter == 55
-      assert String.starts_with?(state2.agent.id, "key_")
+      {:ok, %{counter: counter2, agent_id: agent_id2}} =
+        AgentServer.state(pid2, fn s ->
+          {:ok, %{counter: s.agent.state.domain.counter, agent_id: s.agent.id}}
+        end)
+
+      assert counter2 == 55
+      assert String.starts_with?(agent_id2, "key_")
 
       :ok = AgentServer.detach(pid2)
     end
@@ -1249,11 +1303,14 @@ defmodule JidoTest.Agent.InstanceManagerTest do
           timeout: 2000
         )
 
-      {:ok, state_a2} = AgentServer.state(pid_a2, fn s -> {:ok, s} end)
-      {:ok, state_b2} = AgentServer.state(pid_b2, fn s -> {:ok, s} end)
+      {:ok, counter_a2} =
+        AgentServer.state(pid_a2, fn s -> {:ok, s.agent.state.domain.counter} end)
 
-      assert state_a2.agent.state.domain.counter == 11
-      assert state_b2.agent.state.domain.counter == 22
+      {:ok, counter_b2} =
+        AgentServer.state(pid_b2, fn s -> {:ok, s.agent.state.domain.counter} end)
+
+      assert counter_a2 == 11
+      assert counter_b2 == 22
 
       :ok = AgentServer.detach(pid_a2)
       :ok = AgentServer.detach(pid_b2)

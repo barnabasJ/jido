@@ -320,12 +320,12 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert snapshots.planner.actual_parent.pid == pod_pid
     assert snapshots.reviewer.actual_parent.pid == planner_pid
 
-    {:ok, manager_state} = AgentServer.state(pod_pid, fn s -> {:ok, s} end)
-    assert manager_state.children.planner.pid == planner_pid
-    refute Map.has_key?(manager_state.children, :reviewer)
+    {:ok, manager_children} = AgentServer.state(pod_pid, fn s -> {:ok, s.children} end)
+    assert manager_children.planner.pid == planner_pid
+    refute Map.has_key?(manager_children, :reviewer)
 
-    {:ok, planner_state} = AgentServer.state(planner_pid, fn s -> {:ok, s} end)
-    assert planner_state.children.reviewer.pid == reviewer_pid
+    {:ok, planner_children} = AgentServer.state(planner_pid, fn s -> {:ok, s.children} end)
+    assert planner_children.reviewer.pid == reviewer_pid
   end
 
   test "ensure_node applies initial_state overrides only to the requested node", %{
@@ -349,11 +349,15 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert {:ok, ^planner_pid} = InstanceManager.lookup(@planner_manager, planner_key)
     assert {:ok, ^reviewer_pid} = InstanceManager.lookup(@reviewer_manager, reviewer_key)
 
-    assert {:ok, planner_state} = AgentServer.state(planner_pid, fn s -> {:ok, s} end)
-    assert planner_state.agent.state.domain.role == "planner"
+    assert {:ok, planner_role} =
+             AgentServer.state(planner_pid, fn s -> {:ok, s.agent.state.domain.role} end)
 
-    assert {:ok, reviewer_state} = AgentServer.state(reviewer_pid, fn s -> {:ok, s} end)
-    assert reviewer_state.agent.state.domain.role == "override"
+    assert planner_role == "planner"
+
+    assert {:ok, reviewer_role} =
+             AgentServer.state(reviewer_pid, fn s -> {:ok, s.agent.state.domain.role} end)
+
+    assert reviewer_role == "override"
   end
 
   test "restored pod managers can re-adopt surviving eager nodes", %{pod_key: pod_key} do
@@ -365,9 +369,13 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert_receive {:DOWN, ^pod_ref, :process, ^pod_pid, _reason}, 1_000
 
     assert Process.alive?(planner_pid)
-    assert {:ok, planner_state} = AgentServer.state(planner_pid, fn s -> {:ok, s} end)
-    assert planner_state.parent == nil
-    assert planner_state.orphaned_from.id == pod_key
+    assert {:ok, %{parent: parent, orphaned_from_id: orphaned_from_id}} =
+             AgentServer.state(planner_pid, fn s ->
+               {:ok, %{parent: s.parent, orphaned_from_id: s.orphaned_from.id}}
+             end)
+
+    assert parent == nil
+    assert orphaned_from_id == pod_key
 
     assert {:ok, restored_pid} = Pod.get(@pod_manager, pod_key)
     assert restored_pid != pod_pid
@@ -414,11 +422,11 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert {:ok, ^nested_planner_pid} =
              InstanceManager.lookup(@planner_manager, nested_planner_key)
 
-    {:ok, parent_state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-    assert parent_state.children.nested.pid == nested_pid
+    {:ok, parent_children} = AgentServer.state(pid, fn s -> {:ok, s.children} end)
+    assert parent_children.nested.pid == nested_pid
 
-    {:ok, nested_state} = AgentServer.state(nested_pid, fn s -> {:ok, s} end)
-    assert nested_state.children.planner.pid == nested_planner_pid
+    {:ok, nested_children} = AgentServer.state(nested_pid, fn s -> {:ok, s.children} end)
+    assert nested_children.planner.pid == nested_planner_pid
   end
 
   # NOTE: deferred to follow-up. Restored parent pod's re-adoption of surviving
@@ -594,17 +602,29 @@ defmodule JidoTest.Pod.RuntimeTest do
 
     assert InstanceManager.lookup(@reviewer_manager, reviewer_key, partition: :beta) == :error
 
-    {:ok, alpha_pod_state} = AgentServer.state(alpha_pod_pid, fn s -> {:ok, s} end)
-    {:ok, beta_pod_state} = AgentServer.state(beta_pod_pid, fn s -> {:ok, s} end)
-    assert alpha_pod_state.partition == :alpha
-    assert beta_pod_state.partition == :beta
+    {:ok, alpha_pod_partition} =
+      AgentServer.state(alpha_pod_pid, fn s -> {:ok, s.partition} end)
 
-    {:ok, alpha_planner_state} = AgentServer.state(alpha_planner_pid, fn s -> {:ok, s} end)
-    {:ok, beta_planner_state} = AgentServer.state(beta_planner_pid, fn s -> {:ok, s} end)
-    assert alpha_planner_state.partition == :alpha
-    assert alpha_planner_state.parent.partition == :alpha
-    assert beta_planner_state.partition == :beta
-    assert beta_planner_state.parent.partition == :beta
+    {:ok, beta_pod_partition} =
+      AgentServer.state(beta_pod_pid, fn s -> {:ok, s.partition} end)
+
+    assert alpha_pod_partition == :alpha
+    assert beta_pod_partition == :beta
+
+    {:ok, alpha_planner_view} =
+      AgentServer.state(alpha_planner_pid, fn s ->
+        {:ok, %{partition: s.partition, parent_partition: s.parent.partition}}
+      end)
+
+    {:ok, beta_planner_view} =
+      AgentServer.state(beta_planner_pid, fn s ->
+        {:ok, %{partition: s.partition, parent_partition: s.parent.partition}}
+      end)
+
+    assert alpha_planner_view.partition == :alpha
+    assert alpha_planner_view.parent_partition == :alpha
+    assert beta_planner_view.partition == :beta
+    assert beta_planner_view.parent_partition == :beta
 
     assert {:ok, alpha_snapshots} = Pod.nodes(alpha_pod_pid)
     assert {:ok, beta_snapshots} = Pod.nodes(beta_pod_pid)
@@ -660,12 +680,20 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert {:ok, ^beta_nested_planner_pid} =
              InstanceManager.lookup(@planner_manager, nested_planner_key, partition: :beta)
 
-    {:ok, alpha_nested_state} = AgentServer.state(alpha_nested_pid, fn s -> {:ok, s} end)
-    {:ok, beta_nested_state} = AgentServer.state(beta_nested_pid, fn s -> {:ok, s} end)
-    assert alpha_nested_state.partition == :alpha
-    assert alpha_nested_state.parent.partition == :alpha
-    assert beta_nested_state.partition == :beta
-    assert beta_nested_state.parent.partition == :beta
+    {:ok, alpha_nested_view} =
+      AgentServer.state(alpha_nested_pid, fn s ->
+        {:ok, %{partition: s.partition, parent_partition: s.parent.partition}}
+      end)
+
+    {:ok, beta_nested_view} =
+      AgentServer.state(beta_nested_pid, fn s ->
+        {:ok, %{partition: s.partition, parent_partition: s.parent.partition}}
+      end)
+
+    assert alpha_nested_view.partition == :alpha
+    assert alpha_nested_view.parent_partition == :alpha
+    assert beta_nested_view.partition == :beta
+    assert beta_nested_view.parent_partition == :beta
   end
 
   test "thaw restores only the requested pod partition when the same key exists twice", %{
@@ -684,17 +712,31 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert Process.alive?(beta_pod_pid)
     assert Process.alive?(beta_planner_pid)
 
-    {:ok, alpha_planner_state} = AgentServer.state(alpha_planner_pid, fn s -> {:ok, s} end)
-    {:ok, beta_pod_state} = AgentServer.state(beta_pod_pid, fn s -> {:ok, s} end)
-    {:ok, beta_planner_state} = AgentServer.state(beta_planner_pid, fn s -> {:ok, s} end)
+    {:ok, alpha_planner_view} =
+      AgentServer.state(alpha_planner_pid, fn s ->
+        {:ok,
+         %{
+           partition: s.partition,
+           parent: s.parent,
+           orphaned_from_partition: s.orphaned_from.partition
+         }}
+      end)
 
-    assert alpha_planner_state.partition == :alpha
-    assert alpha_planner_state.parent == nil
-    assert alpha_planner_state.orphaned_from.partition == :alpha
+    {:ok, beta_pod_partition} =
+      AgentServer.state(beta_pod_pid, fn s -> {:ok, s.partition} end)
 
-    assert beta_pod_state.partition == :beta
-    assert beta_planner_state.partition == :beta
-    assert beta_planner_state.parent.pid == beta_pod_pid
+    {:ok, beta_planner_view} =
+      AgentServer.state(beta_planner_pid, fn s ->
+        {:ok, %{partition: s.partition, parent_pid: s.parent.pid}}
+      end)
+
+    assert alpha_planner_view.partition == :alpha
+    assert alpha_planner_view.parent == nil
+    assert alpha_planner_view.orphaned_from_partition == :alpha
+
+    assert beta_pod_partition == :beta
+    assert beta_planner_view.partition == :beta
+    assert beta_planner_view.parent_pid == beta_pod_pid
 
     assert {:ok, restored_alpha_pod_pid} = Pod.get(@pod_manager, pod_key, partition: :alpha)
     refute restored_alpha_pod_pid == alpha_pod_pid

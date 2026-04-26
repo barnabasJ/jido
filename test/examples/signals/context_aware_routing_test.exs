@@ -261,11 +261,19 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
 
       {:ok, _} = AgentServer.call(pid, signal("process", %{value: 3}), fn s -> {:ok, s.agent} end)
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, %{counter: counter, mode: mode, admin_log_length: admin_log_length}} =
+        AgentServer.state(pid, fn s ->
+          {:ok,
+           %{
+             counter: s.agent.state.domain.counter,
+             mode: s.agent.state.domain.mode,
+             admin_log_length: length(s.agent.state.domain.admin_log)
+           }}
+        end)
 
-      assert state.agent.state.domain.counter == 8
-      assert state.agent.state.domain.mode == :admin
-      assert length(state.agent.state.domain.admin_log) == 1
+      assert counter == 8
+      assert mode == :admin
+      assert admin_log_length == 1
     end
   end
 end

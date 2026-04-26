@@ -15,7 +15,7 @@ Provide stable, reusable testing patterns for pure agents, AgentServer runtime b
 
 ## Support Modules
 - `JidoTest.Case`: isolated Jido instance per test (`jido`, `jido_pid` context)
-- `JidoTest.Eventually`: polling helpers/macros (`eventually`, `assert_eventually`, `eventually_state`)
+- `JidoTest.Eventually`: polling helpers/macros for non-state waits (`eventually`, `assert_eventually`, `refute_eventually`); for agent state changes use `Jido.AgentServer.subscribe/4` or one of the `await_*` helpers per ADR 0021
 - `JidoTest.Support.TestTracer`: lightweight span capture for runtime assertions
 - `JidoTest.TestAgents` and `JidoTest.TestActions`: canonical fixtures for behavior-level tests
 

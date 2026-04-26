@@ -222,15 +222,23 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
       assert agent.state.domain.status == :waiting
       assert agent.state.domain.timer_id == "T1"
 
-      eventually_state(
+      await_state_value(
         pid,
-        fn state -> state.agent.state.domain.status == :ticked end,
+        fn s -> if s.agent.state.domain.status == :ticked, do: true end,
         timeout: 3_000
       )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.tick_count == 1
-      assert state.agent.state.last_tick_timer == "T1"
+      {:ok, %{tick_count: tick_count, last_tick_timer: last_tick_timer}} =
+        AgentServer.state(pid, fn s ->
+          {:ok,
+           %{
+             tick_count: s.agent.state.tick_count,
+             last_tick_timer: s.agent.state.last_tick_timer
+           }}
+        end)
+
+      assert tick_count == 1
+      assert last_tick_timer == "T1"
     end
   end
 
@@ -248,15 +256,23 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
       {:ok, agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
       assert agent.state.domain.status == :retrying
 
-      eventually_state(
+      await_state_value(
         pid,
-        fn state -> state.agent.state.domain.status == :completed end,
+        fn s -> if s.agent.state.domain.status == :completed, do: true end,
         timeout: 5_000
       )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.domain.attempts == 3
-      assert state.agent.state.domain.result == :success
+      {:ok, %{attempts: attempts, result: result}} =
+        AgentServer.state(pid, fn s ->
+          {:ok,
+           %{
+             attempts: s.agent.state.domain.attempts,
+             result: s.agent.state.domain.result
+           }}
+        end)
+
+      assert attempts == 3
+      assert result == :success
     end
 
     test "retry count matches max_attempts", %{jido: jido} do
@@ -271,14 +287,16 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
 
       {:ok, _} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)
 
-      eventually_state(
+      await_state_value(
         pid,
-        fn state -> state.agent.state.domain.status == :completed end,
+        fn s -> if s.agent.state.domain.status == :completed, do: true end,
         timeout: 5_000
       )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.domain.attempts == 5
+      {:ok, attempts} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.domain.attempts} end)
+
+      assert attempts == 5
     end
   end
 
@@ -324,14 +342,16 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
       {:ok, agent} = AgentServer.call(pid, start_signal, fn s -> {:ok, s.agent} end)
       assert agent.state.domain.status == :waiting
 
-      eventually_state(
+      await_state_value(
         pid,
-        fn state -> state.agent.state.domain.status == :timed_out end,
+        fn s -> if s.agent.state.domain.status == :timed_out, do: true end,
         timeout: 3_000
       )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.domain.pending_request == nil
+      {:ok, pending_request} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.domain.pending_request} end)
+
+      assert pending_request == nil
     end
 
     test "late response after timeout is ignored", %{jido: jido} do
@@ -346,9 +366,9 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
 
       {:ok, _} = AgentServer.call(pid, start_signal, fn s -> {:ok, s.agent} end)
 
-      eventually_state(
+      await_state_value(
         pid,
-        fn state -> state.agent.state.domain.status == :timed_out end,
+        fn s -> if s.agent.state.domain.status == :timed_out, do: true end,
         timeout: 2_000
       )
 

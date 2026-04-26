@@ -253,11 +253,13 @@ defmodule JidoExampleTest.NestedPodScaleTest do
       assert adopted_count(root_snapshots) == RootTopologyBuilder.total_nodes()
 
       assert {:ok, coordinator_pid} = Pod.lookup_node(root_pid, :coordinator)
-      {:ok, coordinator_state} = AgentServer.state(coordinator_pid, fn s -> {:ok, s} end)
+
+      {:ok, coordinator_children} =
+        AgentServer.state(coordinator_pid, fn s -> {:ok, s.children} end)
 
       Enum.each(RootTopologyBuilder.sample_groups(), fn group_name ->
         assert {:ok, group_pid} = Pod.lookup_node(root_pid, group_name)
-        assert coordinator_state.children[group_name].pid == group_pid
+        assert coordinator_children[group_name].pid == group_pid
 
         assert {:ok, group_snapshots} = Pod.nodes(group_pid)
         assert map_size(group_snapshots) == GroupTopologyBuilder.total_nodes()
@@ -274,8 +276,8 @@ defmodule JidoExampleTest.NestedPodScaleTest do
       assert {:ok, lead_pid} = Pod.lookup_node(group_pid, :lead_1)
       assert {:ok, worker_pid} = Pod.lookup_node(group_pid, :worker_1_1)
 
-      {:ok, lead_state} = AgentServer.state(lead_pid, fn s -> {:ok, s} end)
-      assert lead_state.children.worker_1_1.pid == worker_pid
+      {:ok, lead_children} = AgentServer.state(lead_pid, fn s -> {:ok, s.children} end)
+      assert lead_children.worker_1_1.pid == worker_pid
     end
 
     test "thaw restores the root boundary while nested pod managers keep their inner ownership",
@@ -299,15 +301,23 @@ defmodule JidoExampleTest.NestedPodScaleTest do
       assert Process.alive?(lead_pid)
       assert Process.alive?(worker_pid)
 
-      {:ok, coordinator_state} = AgentServer.state(coordinator_pid, fn s -> {:ok, s} end)
-      assert coordinator_state.parent == nil
-      assert coordinator_state.orphaned_from.id == pod_key
+      {:ok, %{parent: coord_parent, orphaned_from_id: orphaned_from_id}} =
+        AgentServer.state(coordinator_pid, fn s ->
+          {:ok, %{parent: s.parent, orphaned_from_id: s.orphaned_from.id}}
+        end)
 
-      {:ok, group_state} = AgentServer.state(group_1_pid, fn s -> {:ok, s} end)
-      assert group_state.parent.pid == coordinator_pid
+      assert coord_parent == nil
+      assert orphaned_from_id == pod_key
 
-      {:ok, worker_state} = AgentServer.state(worker_pid, fn s -> {:ok, s} end)
-      assert worker_state.parent.pid == lead_pid
+      {:ok, group_parent_pid} =
+        AgentServer.state(group_1_pid, fn s -> {:ok, s.parent.pid} end)
+
+      assert group_parent_pid == coordinator_pid
+
+      {:ok, worker_parent_pid} =
+        AgentServer.state(worker_pid, fn s -> {:ok, s.parent.pid} end)
+
+      assert worker_parent_pid == lead_pid
 
       assert {:ok, restored_root_pid} = Pod.get(@root_pod_manager, pod_key)
       assert restored_root_pid != root_pid
@@ -325,8 +335,10 @@ defmodule JidoExampleTest.NestedPodScaleTest do
       assert {:ok, group_snapshots} = Pod.nodes(group_1_pid)
       assert adopted_count(group_snapshots) == GroupTopologyBuilder.total_nodes()
 
-      {:ok, restored_coordinator_state} = AgentServer.state(coordinator_pid, fn s -> {:ok, s} end)
-      assert restored_coordinator_state.children.group_1.pid == group_1_pid
+      {:ok, restored_coordinator_children} =
+        AgentServer.state(coordinator_pid, fn s -> {:ok, s.children} end)
+
+      assert restored_coordinator_children.group_1.pid == group_1_pid
     end
   end
 

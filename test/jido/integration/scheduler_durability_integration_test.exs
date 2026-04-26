@@ -161,8 +161,8 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
       assert Process.alive?(job_pid1)
       eventually(fn -> tick_count(pid1) >= 1 end, timeout: 5_000)
 
-      state1 = state(pid1)
-      assert state1.cron_specs == %{}
+      {:ok, cron_specs1} = AgentServer.state(pid1, fn s -> {:ok, s.cron_specs} end)
+      assert cron_specs1 == %{}
 
       :ok = AgentServer.detach(pid1)
       wait_for_idle_shutdown(pid1)
@@ -173,8 +173,8 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
       assert Process.alive?(job_pid2)
       refute job_pid1 == job_pid2
 
-      state2 = state(pid2)
-      assert state2.cron_specs == %{}
+      {:ok, cron_specs2} = AgentServer.state(pid2, fn s -> {:ok, s.cron_specs} end)
+      assert cron_specs2 == %{}
 
       :ok = AgentServer.detach(pid2)
     end
@@ -218,11 +218,15 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
             timeout: 5_000
           )
 
-          current_state = state(pid)
-          assert Map.has_key?(current_state.cron_jobs, :good)
-          assert Map.has_key?(current_state.cron_specs, :good)
-          refute Map.has_key?(current_state.cron_jobs, :broken)
-          refute Map.has_key?(current_state.cron_specs, :broken)
+          {:ok, %{cron_jobs: cron_jobs, cron_specs: cron_specs}} =
+            AgentServer.state(pid, fn s ->
+              {:ok, %{cron_jobs: s.cron_jobs, cron_specs: s.cron_specs}}
+            end)
+
+          assert Map.has_key?(cron_jobs, :good)
+          assert Map.has_key?(cron_specs, :good)
+          refute Map.has_key?(cron_jobs, :broken)
+          refute Map.has_key?(cron_specs, :broken)
 
           :ok = AgentServer.detach(pid)
           wait_for_idle_shutdown(pid)
@@ -270,8 +274,13 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
         capture_log(fn ->
           {:ok, pid} = get_attached(manager, instance_key)
 
-          assert state(pid).cron_specs == %{}
-          assert state(pid).cron_jobs == %{}
+          {:ok, %{cron_specs: cron_specs, cron_jobs: cron_jobs}} =
+            AgentServer.state(pid, fn s ->
+              {:ok, %{cron_specs: s.cron_specs, cron_jobs: s.cron_jobs}}
+            end)
+
+          assert cron_specs == %{}
+          assert cron_jobs == %{}
 
           :ok = AgentServer.detach(pid)
           wait_for_idle_shutdown(pid)
@@ -329,10 +338,10 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
 
           {:ok, pid} = get_attached(manager, instance_key)
 
-          eventually(
-            fn ->
-              current_state = state(pid)
-              current_state.cron_specs == %{} and current_state.cron_jobs == %{}
+          await_state_value(
+            pid,
+            fn s ->
+              if s.cron_specs == %{} and s.cron_jobs == %{}, do: true
             end,
             timeout: 5_000
           )
@@ -394,9 +403,13 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
             timeout: 5_000
           )
 
-          current_state = state(pid)
-          assert Map.has_key?(current_state.cron_jobs, plugin_job_id())
-          refute Map.has_key?(current_state.cron_specs, :bad_dynamic)
+          {:ok, %{cron_jobs: cron_jobs, cron_specs: cron_specs}} =
+            AgentServer.state(pid, fn s ->
+              {:ok, %{cron_jobs: s.cron_jobs, cron_specs: s.cron_specs}}
+            end)
+
+          assert Map.has_key?(cron_jobs, plugin_job_id())
+          refute Map.has_key?(cron_specs, :bad_dynamic)
 
           :ok = AgentServer.detach(pid)
           wait_for_idle_shutdown(pid)
@@ -430,7 +443,10 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
       assert_receive {:restore_called, "restore-once-agent"}, 2_000
       refute_receive {:restore_called, "restore-once-agent"}, 500
 
-      assert state(pid).agent.state.domain.counter == 41
+      {:ok, counter} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.domain.counter} end)
+
+      assert counter == 41
 
       :ok = AgentServer.detach(pid)
     end

@@ -152,8 +152,8 @@ defmodule JidoExampleTest.PluginBasicsTest do
           fn s -> {:ok, s.agent} end
         )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      entries = state.agent.state.notes.entries
+      {:ok, entries} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.notes.entries} end)
 
       assert length(entries) == 2
       texts = Enum.map(entries, & &1.text)

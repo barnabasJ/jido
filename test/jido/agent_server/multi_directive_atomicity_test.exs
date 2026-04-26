@@ -76,12 +76,10 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
       Jido.AgentServer.cast(pid, signal("emit_three", %{}))
       Jido.AgentServer.cast(pid, signal("observe", %{}))
 
-      eventually_state(pid, fn state ->
-        state.agent.state.domain.saw_d3
-      end)
-
-      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
-      domain = state.agent.state.domain
+      domain =
+        await_state_value(pid, fn s ->
+          if s.agent.state.domain.saw_d3, do: s.agent.state.domain
+        end)
 
       assert domain.cmd_ran
       assert domain.d1_ran

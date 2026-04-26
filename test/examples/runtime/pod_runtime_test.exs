@@ -170,14 +170,18 @@ defmodule JidoExampleTest.PodRuntimeTest do
       assert snapshots.publisher.status == :adopted
       assert snapshots.auditor.status == :stopped
 
-      {:ok, manager_state} = AgentServer.state(pod_pid, fn s -> {:ok, s} end)
-      assert Map.keys(manager_state.children) == [:planner]
+      {:ok, manager_children} = AgentServer.state(pod_pid, fn s -> {:ok, s.children} end)
+      assert Map.keys(manager_children) == [:planner]
 
-      {:ok, planner_state} = AgentServer.state(planner_pid, fn s -> {:ok, s} end)
-      assert planner_state.children.reviewer.pid == reviewer_pid
+      {:ok, planner_children} =
+        AgentServer.state(planner_pid, fn s -> {:ok, s.children} end)
 
-      {:ok, reviewer_state} = AgentServer.state(reviewer_pid, fn s -> {:ok, s} end)
-      assert reviewer_state.children.publisher.pid == publisher_pid
+      assert planner_children.reviewer.pid == reviewer_pid
+
+      {:ok, reviewer_children} =
+        AgentServer.state(reviewer_pid, fn s -> {:ok, s.children} end)
+
+      assert reviewer_children.publisher.pid == publisher_pid
 
       assert {:ok, auditor_pid} = Pod.ensure_node(pod_pid, :auditor)
       assert {:ok, ^auditor_pid} = Pod.lookup_node(pod_pid, :auditor)
@@ -185,8 +189,8 @@ defmodule JidoExampleTest.PodRuntimeTest do
       assert {:ok, snapshots} = Pod.nodes(pod_pid)
       assert snapshots.auditor.status == :adopted
 
-      {:ok, manager_state} = AgentServer.state(pod_pid, fn s -> {:ok, s} end)
-      assert manager_state.children.auditor.pid == auditor_pid
+      {:ok, manager_children} = AgentServer.state(pod_pid, fn s -> {:ok, s.children} end)
+      assert manager_children.auditor.pid == auditor_pid
 
       assert Process.alive?(planner_pid)
       assert Process.alive?(reviewer_pid)
@@ -215,19 +219,31 @@ defmodule JidoExampleTest.PodRuntimeTest do
       assert Process.alive?(publisher_pid)
       assert Process.alive?(auditor_pid)
 
-      assert {:ok, planner_state} = AgentServer.state(planner_pid, fn s -> {:ok, s} end)
-      assert planner_state.parent == nil
-      assert planner_state.orphaned_from.id == pod_key
+      assert {:ok, planner_view} =
+               AgentServer.state(planner_pid, fn s ->
+                 {:ok, %{parent: s.parent, orphaned_from_id: s.orphaned_from.id}}
+               end)
 
-      assert {:ok, reviewer_state} = AgentServer.state(reviewer_pid, fn s -> {:ok, s} end)
-      assert reviewer_state.parent.pid == planner_pid
+      assert planner_view.parent == nil
+      assert planner_view.orphaned_from_id == pod_key
 
-      assert {:ok, publisher_state} = AgentServer.state(publisher_pid, fn s -> {:ok, s} end)
-      assert publisher_state.parent.pid == reviewer_pid
+      assert {:ok, reviewer_parent_pid} =
+               AgentServer.state(reviewer_pid, fn s -> {:ok, s.parent.pid} end)
 
-      assert {:ok, auditor_state} = AgentServer.state(auditor_pid, fn s -> {:ok, s} end)
-      assert auditor_state.parent == nil
-      assert auditor_state.orphaned_from.id == pod_key
+      assert reviewer_parent_pid == planner_pid
+
+      assert {:ok, publisher_parent_pid} =
+               AgentServer.state(publisher_pid, fn s -> {:ok, s.parent.pid} end)
+
+      assert publisher_parent_pid == reviewer_pid
+
+      assert {:ok, auditor_view} =
+               AgentServer.state(auditor_pid, fn s ->
+                 {:ok, %{parent: s.parent, orphaned_from_id: s.orphaned_from.id}}
+               end)
+
+      assert auditor_view.parent == nil
+      assert auditor_view.orphaned_from_id == pod_key
 
       assert {:ok, restored_pid} = Pod.get(@pod_manager, pod_key)
       assert restored_pid != pod_pid

@@ -1,16 +1,20 @@
 defmodule JidoTest.Eventually do
   @moduledoc """
-  Polling-based assertions for async tests.
+  Polling-based assertions for non-state waits.
 
-  Replaces flaky Process.sleep-based assertions with reliable polling.
+  For agent state changes, **subscribe** via `Jido.AgentServer.subscribe/4`
+  or use one of the `await_*` helpers (`Jido.AgentServer.await_ready/2`,
+  `Jido.AgentServer.await_child/3`, `Jido.Pod.Mutable.mutate_and_wait/3`).
+  Polling agent state is forbidden by ADR 0021 — it hides race conditions
+  and masks the signal that should be driving the wait.
+
+  `eventually/2` survives for genuinely external waits: HTTP endpoints,
+  external schedulers, processes outside the Jido tree.
 
   ## Examples
 
-      # Wait for a condition
-      eventually(fn -> GenServer.call(pid, :ready?) end)
-
-      # Wait for agent state to satisfy predicate
-      eventually_state(pid, fn state -> state.counter > 0 end)
+      # Wait for a process to die
+      eventually(fn -> not Process.alive?(pid) end)
 
       # Assert with custom timeout
       assert_eventually some_async_condition?(), timeout: 1000
@@ -52,33 +56,6 @@ defmodule JidoTest.Eventually do
       result ->
         Process.sleep(interval)
         do_eventually(fun, deadline, interval, result)
-    end
-  end
-
-  @doc """
-  Polls `AgentServer.state/3` (with a `fn s -> {:ok, s} end` selector) until
-  `fun.(state)` returns true.
-
-  Uses the verbose full-state selector deliberately: the predicate is a
-  test-time inspection that may touch any field, and reproducing each
-  call site as a tailored selector buys nothing for test assertions.
-
-  ## Examples
-
-      eventually_state(pid, fn state -> state.counter == 5 end)
-      eventually_state(pid, & &1.ready?, timeout: 1000)
-  """
-  def eventually_state(pid, fun, opts \\ []) do
-    eventually(
-      fn -> check_state(pid, fun) end,
-      opts
-    )
-  end
-
-  defp check_state(pid, fun) do
-    case Jido.AgentServer.state(pid, fn s -> {:ok, s} end) do
-      {:ok, state} -> if fun.(state), do: state, else: false
-      _ -> false
     end
   end
 

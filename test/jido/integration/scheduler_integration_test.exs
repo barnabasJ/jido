@@ -88,11 +88,17 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
         timeout: 5_000
       )
 
-      {:ok, state_during_outage} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state_during_outage.cron_jobs[:heartbeat] == job_pid
-      assert Process.alive?(job_pid)
+      {:ok, %{heartbeat_pid: heartbeat_pid, baseline: baseline}} =
+        AgentServer.state(pid, fn s ->
+          {:ok,
+           %{
+             heartbeat_pid: s.cron_jobs[:heartbeat],
+             baseline: s.agent.state.domain.tick_count
+           }}
+        end)
 
-      baseline = state_during_outage.agent.state.domain.tick_count
+      assert heartbeat_pid == job_pid
+      assert Process.alive?(job_pid)
 
       # Restore working database
       Application.put_env(:jido, :time_zone_database, TimeZoneInfo.TimeZoneDatabase)
@@ -134,19 +140,30 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
           good_job_pid = wait_for_job(pid, :good_message, timeout: 5_000)
           assert Process.alive?(good_job_pid)
 
-          eventually(
-            fn ->
-              Enum.count(ticks(pid), &(&1[:kind] == :good_message)) >= 1
+          await_state_value(
+            pid,
+            fn s ->
+              ticks = s.agent.state.domain.ticks
+              count = Enum.count(ticks, &(&1[:kind] == :good_message))
+              if count >= 1, do: count
             end,
             timeout: 5_000
           )
         end)
 
-      state = state(pid)
-      refute Map.has_key?(state.cron_jobs, :bad_message)
-      refute Map.has_key?(state.cron_specs, :bad_message)
-      assert is_pid(state.cron_jobs[:good_message])
-      assert Process.alive?(state.cron_jobs[:good_message])
+      {:ok, snapshot} =
+        AgentServer.state(pid, fn s ->
+          {:ok,
+           %{
+             cron_jobs: s.cron_jobs,
+             cron_specs_keys: Map.keys(s.cron_specs)
+           }}
+        end)
+
+      refute Map.has_key?(snapshot.cron_jobs, :bad_message)
+      refute :bad_message in snapshot.cron_specs_keys
+      assert is_pid(snapshot.cron_jobs[:good_message])
+      assert Process.alive?(snapshot.cron_jobs[:good_message])
       refute_received {:DOWN, ^server_ref, :process, ^pid, _reason}
       assert log =~ "failed to register cron job :bad_message"
     end
@@ -173,10 +190,15 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
       alpha_job_pid = wait_for_job(pid, :alpha, timeout: 5_000)
       beta_job_pid = wait_for_job(pid, :beta, timeout: 5_000)
 
-      eventually(
-        fn ->
-          ticks = ticks(pid)
-          Enum.any?(ticks, &(&1[:job] == :alpha)) and Enum.any?(ticks, &(&1[:job] == :beta))
+      await_state_value(
+        pid,
+        fn s ->
+          ticks = s.agent.state.domain.ticks
+
+          if Enum.any?(ticks, &(&1[:job] == :alpha)) and
+               Enum.any?(ticks, &(&1[:job] == :beta)) do
+            true
+          end
         end,
         timeout: 5_000
       )
@@ -187,29 +209,34 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
 
       Process.exit(alpha_job_pid, :kill)
 
+      # The DOWN handler restarts the cron job synchronously; the next
+      # `cron.tick` (≤1s for "* * * * * * *") wakes our subscription so
+      # the selector sees the new pid.
       restarted_alpha_pid =
-        eventually(
-          fn ->
-            state = state(pid)
-            new_alpha_pid = state.cron_jobs[:alpha]
+        await_state_value(
+          pid,
+          fn s ->
+            new_alpha_pid = s.cron_jobs[:alpha]
 
             if is_pid(new_alpha_pid) and new_alpha_pid != alpha_job_pid and
                  Process.alive?(new_alpha_pid) do
               new_alpha_pid
-            else
-              false
             end
           end,
           timeout: 6_000
         )
 
       assert Process.alive?(beta_job_pid)
-      assert state(pid).cron_jobs[:beta] == beta_job_pid
+
+      {:ok, beta_pid} = AgentServer.state(pid, fn s -> {:ok, s.cron_jobs[:beta]} end)
+      assert beta_pid == beta_job_pid
       assert Process.alive?(restarted_alpha_pid)
 
-      eventually(
-        fn ->
-          Enum.count(ticks(pid), &(&1[:job] == :beta)) >= beta_baseline + 1
+      await_state_value(
+        pid,
+        fn s ->
+          count = Enum.count(s.agent.state.domain.ticks, &(&1[:job] == :beta))
+          if count >= beta_baseline + 1, do: count
         end,
         timeout: 5_000
       )
@@ -228,9 +255,13 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
       assert Process.alive?(job_pid)
       eventually(fn -> tick_count(pid) >= 1 end, timeout: 5_000)
 
-      state = state(pid)
-      assert state.cron_jobs[job_id] == job_pid
-      assert state.cron_specs == %{}
+      {:ok, snapshot} =
+        AgentServer.state(pid, fn s ->
+          {:ok, %{job_pid: s.cron_jobs[job_id], cron_specs: s.cron_specs}}
+        end)
+
+      assert snapshot.job_pid == job_pid
+      assert snapshot.cron_specs == %{}
     end
 
     test "agent schedules restart after abnormal scheduler death", context do
@@ -243,16 +274,14 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
       Process.exit(original_job_pid, :kill)
 
       restarted_job_pid =
-        eventually(
-          fn ->
-            state = state(pid)
-            new_job_pid = state.cron_jobs[job_id]
+        await_state_value(
+          pid,
+          fn s ->
+            new_job_pid = s.cron_jobs[job_id]
 
             if is_pid(new_job_pid) and new_job_pid != original_job_pid and
                  Process.alive?(new_job_pid) do
               new_job_pid
-            else
-              false
             end
           end,
           timeout: 6_000
@@ -279,9 +308,13 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
         timeout: 5_000
       )
 
-      state = state(pid)
-      assert state.cron_jobs[job_id] == job_pid
-      assert state.cron_specs == %{}
+      {:ok, snapshot} =
+        AgentServer.state(pid, fn s ->
+          {:ok, %{job_pid: s.cron_jobs[job_id], cron_specs: s.cron_specs}}
+        end)
+
+      assert snapshot.job_pid == job_pid
+      assert snapshot.cron_specs == %{}
     end
 
     test "plugin schedules restart after abnormal scheduler death", context do
@@ -294,16 +327,14 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
       Process.exit(original_job_pid, :kill)
 
       restarted_job_pid =
-        eventually(
-          fn ->
-            current_state = state(pid)
-            new_job_pid = current_state.cron_jobs[job_id]
+        await_state_value(
+          pid,
+          fn s ->
+            new_job_pid = s.cron_jobs[job_id]
 
             if is_pid(new_job_pid) and new_job_pid != original_job_pid and
                  Process.alive?(new_job_pid) do
               new_job_pid
-            else
-              false
             end
           end,
           timeout: 6_000

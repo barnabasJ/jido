@@ -254,9 +254,9 @@ defmodule JidoExampleTest.PodScaleTest do
       assert map_size(snapshots) == TopologyBuilder.total_nodes()
       assert adopted_count(snapshots) == TopologyBuilder.total_nodes()
 
-      {:ok, manager_state} = AgentServer.state(pod_pid, fn s -> {:ok, s} end)
+      {:ok, manager_children} = AgentServer.state(pod_pid, fn s -> {:ok, s.children} end)
 
-      assert manager_state.children
+      assert manager_children
              |> Map.keys()
              |> Enum.sort_by(&Atom.to_string/1) ==
                Enum.sort_by(TopologyBuilder.root_nodes(), &Atom.to_string/1)
@@ -271,11 +271,11 @@ defmodule JidoExampleTest.PodScaleTest do
       {:ok, squad_pid} = Pod.lookup_node(pod_pid, :squad_1_1)
       {:ok, worker_pid} = Pod.lookup_node(pod_pid, :worker_1_1_1)
 
-      {:ok, lead_state} = AgentServer.state(lead_pid, fn s -> {:ok, s} end)
-      assert lead_state.children.squad_1_1.pid == squad_pid
+      {:ok, lead_children} = AgentServer.state(lead_pid, fn s -> {:ok, s.children} end)
+      assert lead_children.squad_1_1.pid == squad_pid
 
-      {:ok, squad_state} = AgentServer.state(squad_pid, fn s -> {:ok, s} end)
-      assert squad_state.children.worker_1_1_1.pid == worker_pid
+      {:ok, squad_children} = AgentServer.state(squad_pid, fn s -> {:ok, s.children} end)
+      assert squad_children.worker_1_1_1.pid == worker_pid
     end
 
     test "re-adopts 1000 surviving nodes after manager thaw", %{pod_key: pod_key} do
@@ -301,17 +301,23 @@ defmodule JidoExampleTest.PodScaleTest do
       assert Process.alive?(sample_pids.worker_1_1_1)
       assert Process.alive?(sample_pids.worker_10_9_10)
 
-      assert {:ok, lead_state} = AgentServer.state(sample_pids.lead_1, fn s -> {:ok, s} end)
-      assert lead_state.parent == nil
-      assert lead_state.orphaned_from.id == pod_key
+      assert {:ok, lead_view} =
+               AgentServer.state(sample_pids.lead_1, fn s ->
+                 {:ok, %{parent: s.parent, orphaned_from_id: s.orphaned_from.id}}
+               end)
 
-      assert {:ok, squad_state} = AgentServer.state(sample_pids.squad_1_1, fn s -> {:ok, s} end)
-      assert squad_state.parent.pid == sample_pids.lead_1
+      assert lead_view.parent == nil
+      assert lead_view.orphaned_from_id == pod_key
 
-      assert {:ok, worker_state} =
-               AgentServer.state(sample_pids.worker_1_1_1, fn s -> {:ok, s} end)
+      assert {:ok, squad_parent_pid} =
+               AgentServer.state(sample_pids.squad_1_1, fn s -> {:ok, s.parent.pid} end)
 
-      assert worker_state.parent.pid == sample_pids.squad_1_1
+      assert squad_parent_pid == sample_pids.lead_1
+
+      assert {:ok, worker_parent_pid} =
+               AgentServer.state(sample_pids.worker_1_1_1, fn s -> {:ok, s.parent.pid} end)
+
+      assert worker_parent_pid == sample_pids.squad_1_1
 
       assert {:ok, restored_pid} = Pod.get(@pod_manager, pod_key)
       assert restored_pid != pod_pid

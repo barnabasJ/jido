@@ -125,8 +125,8 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "plugin returning nil starts no children", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: NoChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.children == %{}
+      {:ok, children} = Jido.AgentServer.state(pid, fn s -> {:ok, s.children} end)
+      assert children == %{}
 
       GenServer.stop(pid)
     end
@@ -136,13 +136,13 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "plugin starts child process on AgentServer init", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: SingleChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, children} = Jido.AgentServer.state(pid, fn s -> {:ok, s.children} end)
 
       # Should have one child
-      assert map_size(state.children) == 1
+      assert map_size(children) == 1
 
       # Get the child info
-      [{tag, child_info}] = Map.to_list(state.children)
+      [{tag, child_info}] = Map.to_list(children)
 
       # Tag should be {:plugin, PluginModule, ChildId}
       assert {:plugin, JidoTest.AgentServer.PluginChildrenTest.SingleChildPlugin, _} = tag
@@ -159,9 +159,9 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "child receives config from plugin config", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: ConfiguredChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, children} = Jido.AgentServer.state(pid, fn s -> {:ok, s.children} end)
 
-      [{_tag, child_info}] = Map.to_list(state.children)
+      [{_tag, child_info}] = Map.to_list(children)
       assert Agent.get(child_info.pid, & &1) == :custom
 
       GenServer.stop(pid)
@@ -170,8 +170,8 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "child is monitored by AgentServer", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: SingleChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
-      [{_tag, child_info}] = Map.to_list(state.children)
+      {:ok, children} = Jido.AgentServer.state(pid, fn s -> {:ok, s.children} end)
+      [{_tag, child_info}] = Map.to_list(children)
 
       # Child has a monitor ref
       assert child_info.ref != nil
@@ -180,7 +180,7 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
       Agent.stop(child_info.pid)
 
       # Child should be removed from state
-      eventually_state(pid, fn state -> map_size(state.children) == 0 end)
+      await_state_value(pid, fn s -> if map_size(s.children) == 0, do: true end)
 
       GenServer.stop(pid)
     end
@@ -190,13 +190,13 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "plugin can start multiple child processes", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: MultiChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, children} = Jido.AgentServer.state(pid, fn s -> {:ok, s.children} end)
 
       # Should have 3 children
-      assert map_size(state.children) == 3
+      assert map_size(children) == 3
 
       # All children should be alive
-      Enum.each(state.children, fn {_tag, child_info} ->
+      Enum.each(children, fn {_tag, child_info} ->
         assert Process.alive?(child_info.pid)
       end)
 
@@ -209,9 +209,9 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
       # This should start successfully but log a warning
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: InvalidChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, children} = Jido.AgentServer.state(pid, fn s -> {:ok, s.children} end)
       # No children should be started due to invalid spec
-      assert state.children == %{}
+      assert children == %{}
 
       GenServer.stop(pid)
     end
@@ -221,8 +221,8 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     test "children are cleaned up when AgentServer stops", %{jido: jido} do
       {:ok, pid} = Jido.AgentServer.start_link(agent_module: SingleChildAgent, jido: jido)
 
-      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
-      [{_tag, child_info}] = Map.to_list(state.children)
+      {:ok, children} = Jido.AgentServer.state(pid, fn s -> {:ok, s.children} end)
+      [{_tag, child_info}] = Map.to_list(children)
       child_pid = child_info.pid
 
       assert Process.alive?(child_pid)

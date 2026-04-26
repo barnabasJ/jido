@@ -133,7 +133,7 @@ defmodule JidoTest.AgentServerCoverageTest do
                AgentServer.call(nonexistent_via, signal, fn s -> {:ok, s.agent} end)
 
       assert {:error, :not_found} = AgentServer.cast(nonexistent_via, signal)
-      assert {:error, :not_found} = AgentServer.state(nonexistent_via, fn s -> {:ok, s} end)
+      assert {:error, :not_found} = AgentServer.state(nonexistent_via, fn s -> {:ok, s.id} end)
     end
 
     test "via tuple that exists works", %{jido: jido} do
@@ -170,7 +170,7 @@ defmodule JidoTest.AgentServerCoverageTest do
 
     test "string ID error on state", %{jido: _jido} do
       assert {:error, {:invalid_server, _}} =
-               AgentServer.state("some-string-id", fn s -> {:ok, s} end)
+               AgentServer.state("some-string-id", fn s -> {:ok, s.id} end)
     end
   end
 
@@ -187,8 +187,10 @@ defmodule JidoTest.AgentServerCoverageTest do
     test "agent uses default values from schema", %{jido: jido} do
       {:ok, pid} = AgentServer.start_link(agent_module: SimpleTestAgent, jido: jido)
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.domain.counter == 0
+      {:ok, counter} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.domain.counter} end)
+
+      assert counter == 0
 
       GenServer.stop(pid)
     end
@@ -202,9 +204,13 @@ defmodule JidoTest.AgentServerCoverageTest do
           jido: jido
         )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.id == "custom-id-123"
-      assert state.agent.state.domain.counter == 999
+      {:ok, %{id: id, counter: counter}} =
+        AgentServer.state(pid, fn s ->
+          {:ok, %{id: s.id, counter: s.agent.state.domain.counter}}
+        end)
+
+      assert id == "custom-id-123"
+      assert counter == 999
 
       GenServer.stop(pid)
     end
@@ -223,10 +229,19 @@ defmodule JidoTest.AgentServerCoverageTest do
           jido: jido
         )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.id == "prebuilt-struct-test"
-      assert state.agent.state.domain.counter == 50
-      assert state.agent_module == Counter
+      {:ok, %{id: id, counter: counter, agent_module: agent_module}} =
+        AgentServer.state(pid, fn s ->
+          {:ok,
+           %{
+             id: s.id,
+             counter: s.agent.state.domain.counter,
+             agent_module: s.agent_module
+           }}
+        end)
+
+      assert id == "prebuilt-struct-test"
+      assert counter == 50
+      assert agent_module == Counter
 
       signal = Signal.new!("increment", %{}, source: "/test")
       {:ok, updated_agent} = AgentServer.call(pid, signal, fn s -> {:ok, s.agent} end)

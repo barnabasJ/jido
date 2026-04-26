@@ -59,8 +59,10 @@ defmodule JidoTest.DebugIntegrationTest do
     test "agent state respects configured max events", %{jido: jido} do
       pid = start_server(%{jido: jido}, TestAgent, debug: true)
 
-      {:ok, state} = Jido.AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.debug_max_events == Defaults.debug_max_events()
+      {:ok, debug_max_events} =
+        Jido.AgentServer.state(pid, fn s -> {:ok, s.debug_max_events} end)
+
+      assert debug_max_events == Defaults.debug_max_events()
     end
   end
 

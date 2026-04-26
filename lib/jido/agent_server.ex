@@ -441,8 +441,10 @@ defmodule Jido.AgentServer do
   first non-`:skip` selector return.
 
   Patterns are compiled by `Jido.Signal.Router` and have identical
-  semantics to `signal_routes/1` declarations (`"work.*"`, `"audit.**"`,
-  literals, `"*"` for "everything").
+  semantics to `signal_routes/1` declarations: literals (`"work.start"`),
+  single-segment wildcards (`"work.*"` matches any single segment after
+  `"work."`), and the multi-segment wildcard (`"audit.**"`, or `"**"`
+  alone to match every signal regardless of segment count).
 
   Default dispatch is `{:pid, target: self()}`, which sends
   `{:jido_subscription, sub_ref, %{signal_type: type, result: result}}`
@@ -1424,6 +1426,14 @@ defmodule Jido.AgentServer do
                   cron_expression: runtime_spec.cron_expression
                 })
 
+                # Cast a lifecycle signal back to self() so `subscribe/4`
+                # subscribers can react to the restart. The DOWN handler +
+                # restart timer don't go through `process_signal/2`, so
+                # without this emit there's no `fire_subscribers/2` on the
+                # state transition (per ADR 0021 §2: state changes need a
+                # subscribable signal channel — no polling).
+                _ = cast_cron_lifecycle_signal(new_state, logical_id, :restarted)
+
                 {:noreply, new_state}
 
               {:error, reason, failed_state} ->
@@ -2320,6 +2330,21 @@ defmodule Jido.AgentServer do
       }
     else
       state
+    end
+  end
+
+  # Internal helper for cron lifecycle signals emitted from non-pipeline
+  # code paths (DOWN handler, restart timer). Cast back to self() so the
+  # signal flows through `process_signal/2` and `fire_subscribers/2`,
+  # giving `subscribe/4` consumers a way to react to state-only
+  # transitions per ADR 0021 §2.
+  defp cast_cron_lifecycle_signal(%State{} = state, logical_id, kind)
+       when kind in [:restarted] do
+    type = "jido.agent.cron.#{kind}"
+
+    case Signal.new(type, %{job_id: logical_id}, source: "/agent/#{state.id}/cron") do
+      {:ok, signal} -> Jido.AgentServer.cast(self(), signal)
+      {:error, _} -> :ok
     end
   end
 

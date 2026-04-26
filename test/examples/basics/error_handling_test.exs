@@ -275,17 +275,19 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       signal = Signal.new!("bounded_retry", %{max_attempts: 3}, source: "/test")
       :ok = AgentServer.cast(pid, signal)
 
-      eventually_state(
-        pid,
-        fn state ->
-          state.agent.state.domain.status in [:exhausted, :success] and
-            state.agent.state.domain.attempts >= 3
-        end,
-        timeout: 2_000
-      )
+      attempts =
+        await_state_value(
+          pid,
+          fn s ->
+            attempts = s.agent.state.domain.attempts
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.domain.attempts >= 3
+            if s.agent.state.domain.status in [:exhausted, :success] and attempts >= 3,
+              do: attempts
+          end,
+          timeout: 2_000
+        )
+
+      assert attempts >= 3
     end
 
     test "recovery action clears error state" do
@@ -353,18 +355,21 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       signal = Signal.new!("retry", %{max_attempts: 3, succeed_on: 100}, source: "/test")
       :ok = AgentServer.cast(pid, signal)
 
-      eventually_state(
-        pid,
-        fn state ->
-          state.agent.state.domain.status == :exhausted and
-            state.agent.state.domain.attempts >= 3
-        end,
-        timeout: 2_000
-      )
+      %{attempts: attempts, result: result} =
+        await_state_value(
+          pid,
+          fn s ->
+            attempts = s.agent.state.domain.attempts
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.domain.attempts >= 3
-      assert state.agent.state.domain.result == :max_retries_reached
+            if s.agent.state.domain.status == :exhausted and attempts >= 3 do
+              %{attempts: attempts, result: s.agent.state.domain.result}
+            end
+          end,
+          timeout: 2_000
+        )
+
+      assert attempts >= 3
+      assert result == :max_retries_reached
     end
 
     test "retry succeeds before max_attempts", %{jido: jido} do
@@ -373,15 +378,22 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       signal = Signal.new!("retry", %{max_attempts: 10, succeed_on: 3}, source: "/test")
       :ok = AgentServer.cast(pid, signal)
 
-      eventually_state(
-        pid,
-        fn state -> state.agent.state.domain.status == :success end,
-        timeout: 2_000
-      )
+      %{attempts: attempts, result: result} =
+        await_state_value(
+          pid,
+          fn s ->
+            if s.agent.state.domain.status == :success do
+              %{
+                attempts: s.agent.state.domain.attempts,
+                result: s.agent.state.domain.result
+              }
+            end
+          end,
+          timeout: 2_000
+        )
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      assert state.agent.state.domain.attempts == 3
-      assert state.agent.state.domain.result == "finally succeeded"
+      assert attempts == 3
+      assert result == "finally succeeded"
     end
 
     test "pure cmd/2 tracks attempt count correctly" do

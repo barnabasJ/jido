@@ -1,8 +1,6 @@
 defmodule JidoTest.Support.SchedulerIntegrationHarness do
   @moduledoc false
 
-  import JidoTest.Eventually
-
   alias Jido.Agent.Directive
   alias Jido.AgentServer
   alias Jido.Signal
@@ -153,44 +151,55 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
     AgentServer.cast(pid, signal)
   end
 
+  @doc """
+  Wait for `job_id` to be registered (and alive) in `state.cron_jobs`.
+
+  Subscribe-based per ADR 0021 — see `JidoTest.AgentWait.await_state_value/3`.
+  """
   def wait_for_job(pid, job_id, opts \\ []) do
-    eventually(
-      fn ->
-        case AgentServer.state(pid, fn s -> {:ok, Map.get(s.cron_jobs, job_id)} end) do
-          {:ok, job_pid} when is_pid(job_pid) ->
-            if Process.alive?(job_pid), do: job_pid, else: false
+    JidoTest.AgentWait.await_state_value(
+      pid,
+      fn s ->
+        case Map.get(s.cron_jobs, job_id) do
+          job_pid when is_pid(job_pid) ->
+            if Process.alive?(job_pid), do: job_pid, else: nil
 
           _ ->
-            false
+            nil
         end
       end,
       opts
     )
   end
 
+  @doc """
+  Wait for the agent's domain `tick_count` to reach `count`.
+
+  Subscribe-based per ADR 0021 — each `cron.tick` triggers a pipeline
+  whose post-state the subscription evaluates. No polling.
+  """
   def wait_for_tick_count(pid, count, opts \\ []) do
-    eventually_state(
+    JidoTest.AgentWait.await_state_value(
       pid,
-      fn state ->
-        tick_count = state.agent.state.domain.tick_count
-        if tick_count >= count, do: tick_count, else: false
+      fn s ->
+        tick_count = s.agent.state.domain.tick_count
+        if tick_count >= count, do: tick_count, else: nil
       end,
       opts
     )
   end
 
   def tick_count(pid) do
-    state = state(pid)
-    state.agent.state.domain.tick_count
+    {:ok, count} =
+      AgentServer.state(pid, fn s -> {:ok, s.agent.state.domain.tick_count} end)
+
+    count
   end
 
   def ticks(pid) do
-    state = state(pid)
-    state.agent.state.domain.ticks
-  end
+    {:ok, ticks} =
+      AgentServer.state(pid, fn s -> {:ok, s.agent.state.domain.ticks} end)
 
-  def state(pid) do
-    {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-    state
+    ticks
   end
 end

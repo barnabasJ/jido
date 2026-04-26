@@ -187,11 +187,19 @@ defmodule JidoExampleTest.SignalRoutingTest do
           {:ok, s.agent}
         end)
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
+      {:ok, %{counter: counter, name: name, events_length: events_length}} =
+        AgentServer.state(pid, fn s ->
+          {:ok,
+           %{
+             counter: s.agent.state.domain.counter,
+             name: s.agent.state.domain.name,
+             events_length: length(s.agent.state.domain.events)
+           }}
+        end)
 
-      assert state.agent.state.domain.counter == 8
-      assert state.agent.state.domain.name == "Counter"
-      assert length(state.agent.state.domain.events) == 1
+      assert counter == 8
+      assert name == "Counter"
+      assert events_length == 1
     end
   end
 
@@ -202,9 +210,9 @@ defmodule JidoExampleTest.SignalRoutingTest do
       signal = Signal.new!("increment", %{amount: 7}, source: "/test")
       :ok = AgentServer.cast(pid, signal)
 
-      eventually_state(
+      await_state_value(
         pid,
-        fn state -> state.agent.state.domain.counter == 7 end,
+        fn s -> if s.agent.state.domain.counter == 7, do: true end,
         timeout: 2_000
       )
     end
@@ -217,9 +225,9 @@ defmodule JidoExampleTest.SignalRoutingTest do
         :ok = AgentServer.cast(pid, signal)
       end
 
-      eventually_state(
+      await_state_value(
         pid,
-        fn state -> state.agent.state.domain.counter == 15 end,
+        fn s -> if s.agent.state.domain.counter == 15, do: true end,
         timeout: 2_000
       )
     end

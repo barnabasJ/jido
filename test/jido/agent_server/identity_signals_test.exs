@@ -40,8 +40,8 @@ defmodule JidoTest.AgentServer.IdentitySignalsTest do
 
       :ok = AgentServer.await_ready(pid)
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      events = state.agent.state.app.identity_events
+      {:ok, events} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.app.identity_events} end)
 
       assert Enum.any?(events, fn e ->
                e.type == "jido.agent.identity.partition_assigned" and
@@ -53,8 +53,8 @@ defmodule JidoTest.AgentServer.IdentitySignalsTest do
       pid = start_server(%{jido: jido}, WatcherAgent, id: "identity-2")
       :ok = AgentServer.await_ready(pid)
 
-      {:ok, state} = AgentServer.state(pid, fn s -> {:ok, s} end)
-      events = state.agent.state.app.identity_events
+      {:ok, events} =
+        AgentServer.state(pid, fn s -> {:ok, s.agent.state.app.identity_events} end)
 
       assert Enum.any?(events, fn e ->
                e.type == "jido.agent.identity.partition_assigned" and
