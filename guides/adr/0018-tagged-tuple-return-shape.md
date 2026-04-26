@@ -109,7 +109,7 @@ Today: scans `dirs` for `%Directive.Error{}`. After: pattern-matches the chain r
 ```elixir
 def on_signal(signal, ctx, opts, next) do
   case next.(signal, ctx) do
-    {:error, _} when attempts_left > 1 ->
+    {:error, _ctx, _reason} when attempts_left > 1 ->
       attempt(signal, ctx, next, attempts_left - 1)
 
     other ->
@@ -118,7 +118,7 @@ def on_signal(signal, ctx, opts, next) do
 end
 ```
 
-More honest about what Retry actually means ("retry on action failure"), not what it observed ("happened to find an Error directive in the dirs"). Won't fire spuriously when a user emits an `%Error{}` for logging on the success path.
+More honest about what Retry actually means ("retry on action failure"), not what it observed ("happened to find an Error directive in the dirs"). Won't fire spuriously when a user emits an `%Error{}` for logging on the success path. Note the 3-tuple match: `next.(signal, ctx)` returns `{:error, ctx, reason}` so middleware-staged state mutations propagate even on retry — see §1.
 
 ### 6. Persister IO errors stay scoped to lifecycle signals
 
@@ -154,7 +154,9 @@ The `DirectiveExec` impl is unchanged: `Logger.error(...)`, return `{:ok, state}
 
 **Keep `{:ok, slice}` two-arg success variant.** Smaller migration. Rejected: every action-author has to remember which arity to use, and the framework has to normalize. The cost of *always* writing `{:ok, slice, []}` is one keystroke per action; the cost of supporting both is permanent ambiguity.
 
-**Allow `{:error, reason, [directive]}`.** Lets actions report partial work alongside an error. Rejected: it's the same "report and continue" idiom this ADR is removing. If you need to emit observability on the failure path, do it in middleware that pattern-matches `{:error, _}` from the chain return.
+**Allow `{:error, reason, [directive]}`.** Lets actions report partial work alongside an error. Rejected: it's the same "report and continue" idiom this ADR is removing. If you need to emit observability on the failure path, do it in middleware that pattern-matches `{:error, _, _}` from the chain return.
+
+**Have middleware error tuple be `{:error, reason}` (no ctx).** Symmetric with action / cmd. Rejected: state-bearing middleware (`Persister` thaws and stages `ctx.agent`) needs its mutations to commit even when a downstream layer errors. With a 2-tuple error, `run_chain` cannot distinguish "I want to commit middleware mutations but report an action error" from "rollback everything," and would have to take one or the other — neither is right. The 3-tuple `{:error, ctx, reason}` lets `run_chain` commit `ctx.agent` to `state.agent` unconditionally, with action-level rollback handled inside `cmd/2` (the input agent flows through unchanged on error, so prior middleware mutations to `ctx.agent` survive).
 
 **Continue propagating errors via `%Directive.Error{}`.** Smaller-blast-radius change: only fix `cast_and_await` to detect Error directives in the result, leave action contracts alone. Rejected: the directive list is the wrong place. Any user who emits `%Error{}` for logging on the success path would accidentally short-circuit the ack. The chain's outcome is fundamentally a different question than "what did the action ask the framework to do next."
 

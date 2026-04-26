@@ -3,13 +3,24 @@
 - Implements: [ADR 0018](../adr/0018-tagged-tuple-return-shape.md) — unified return shape, all-or-nothing batches, ack reads chain outcome
 - Depends on: ADRs 0014/0015/0016 shipped (commits through `99f2cdb`) and ADR 0017 + ETS lock deletion landed (commit `fdd59cf`).
 - Blocks: [task 0009](0009-pod-mutate-cast-await-api.md) (which uses the simplified single-clause selector enabled by this task), and transitively [task 0010](0010-pod-runtime-signal-driven-state-machine.md).
+- Status: **Implemented** — landed across commits `d23589e`, `32c1b3e`, `636d6db`. The middleware error tuple ended up as `{:error, ctx, reason}` (3-tuple) rather than the originally-specced `{:error, reason}`; see Goal table and the Risks section below for why.
 - Leaves tree: **green**
 
 ## Goal
 
-Unify action / cmd / middleware return shapes to `{:ok, t, [directive]} | {:error, reason}`. Make multi-instruction `cmd` all-or-nothing. Plumb the chain's tagged outcome into `fire_post_signal_hooks` so `cast_and_await` callers receive `{:error, reason}` automatically when actions fail. Simplify Retry middleware to pattern-match the chain return.
+Unify action / cmd / middleware return shapes to a single tagged-tuple contract:
 
-One commit, no intermediate-broken states. The contract change touches a connected set of files; partial conversions would leak the old shape.
+| Layer | Return |
+|---|---|
+| `action.run/4` | `{:ok, slice, [directive]} \| {:error, reason}` |
+| `agent_module.cmd/2` | `{:ok, agent, [directive]} \| {:error, reason}` |
+| `next.(signal, ctx)` and middleware `on_signal/4` | `{:ok, ctx, [directive]} \| {:error, ctx, reason}` |
+
+Middleware's error tuple carries `ctx` (a 3-tuple) so middleware-staged state mutations (e.g. `Persister`'s thawed agent) commit to `state.agent` regardless of whether the action eventually errored. Action-level rollback lives inside `cmd/2`. See [ADR 0018 §1](../adr/0018-tagged-tuple-return-shape.md).
+
+Make multi-instruction `cmd` all-or-nothing. Plumb the chain's tagged outcome into `fire_post_signal_hooks` so `cast_and_await` callers receive `{:error, reason}` automatically when actions fail. Simplify Retry middleware to pattern-match the chain return.
+
+One commit (or, in this case, three commits — see the implementation history) with no intermediate-broken states. The contract change touches a connected set of files; partial conversions would leak the old shape.
 
 ## Files to modify
 
@@ -63,15 +74,17 @@ Two changes:
 Update `@callback on_signal` typespec to the new return shape:
 
 ```elixir
+@type result :: {:ok, map(), [Jido.Directive.t()]} | {:error, map(), term()}
+
 @callback on_signal(
             Jido.Signal.t(),
             ctx :: map(),
             opts :: keyword(),
-            next :: (Jido.Signal.t(), map() -> {:ok, map(), [Jido.Directive.t()]} | {:error, term()})
-          ) :: {:ok, map(), [Jido.Directive.t()]} | {:error, term()}
+            next :: (Jido.Signal.t(), map() -> result())
+          ) :: result()
 ```
 
-`next.(signal, ctx)` returns the tagged tuple. Middleware that wraps `next` returns the tagged tuple.
+Both branches carry `ctx`. The error tuple's `ctx` is what propagates middleware-staged state mutations (e.g. `Persister`'s thawed agent) back to the framework even when a downstream layer errored. Middleware that wraps `next` returns the tagged tuple in either branch.
 
 ### `lib/jido/middleware/retry.ex`
 
@@ -85,7 +98,7 @@ end
 
 defp do_attempt(signal, ctx, opts, next, attempts_left) do
   case next.(signal, ctx) do
-    {:error, _reason} when attempts_left > 1 ->
+    {:error, _ctx, _reason} when attempts_left > 1 ->
       :timer.sleep(backoff(opts, attempts_left))
       do_attempt(signal, ctx, opts, next, attempts_left - 1)
 
@@ -95,11 +108,20 @@ defp do_attempt(signal, ctx, opts, next, attempts_left) do
 end
 ```
 
-Spurious-fire fix: a user-emitted `%Error{}` directive on the success path no longer triggers retry. Retry only fires on actual `{:error, _}` chain returns.
+Spurious-fire fix: a user-emitted `%Error{}` directive on the success path no longer triggers retry. Retry only fires on actual `{:error, _, _}` chain returns. The 3-tuple match passes both `:ok` and `:error` branches verbatim through `other`, so middleware-staged state mutations propagate either way.
 
 ### `lib/jido/middleware/persister.ex`
 
-Update return shapes to tagged tuples. The `before_signal` / `after_signal` style hooks should now return `{:ok, ctx, []}` on success and `{:error, reason}` on failure.
+Update return shapes so success appends observability and error passes through with ctx preserved:
+
+```elixir
+case next.(sig, %{ctx | agent: thawed_agent}) do
+  {:ok, ctx, dirs}      -> {:ok, ctx, dirs ++ [observability]}
+  {:error, ctx, reason} -> {:error, ctx, reason}   # ctx carries the thawed agent
+end
+```
+
+The `{:error, ctx, _}` pass-through is what makes `Persister`'s thaw land in `state.agent` even when a downstream layer (e.g. routing miss on `lifecycle.starting`) returns an error: `run_chain` commits `ctx.agent` unconditionally.
 
 Lifecycle-signal-emit side effects (the `jido.persist.thaw.failed` / `.hibernate.failed` emits) stay verbatim — they're observability for lifecycle signals, not for the request/response path.
 
@@ -107,27 +129,41 @@ Lifecycle-signal-emit side effects (the `jido.persist.thaw.failed` / `.hibernate
 
 Multi-piece change. The chain's tagged tuple becomes the source of truth.
 
-1. **`core_next` returns the tagged tuple.** Currently it runs the cmd reducer and constructs a directive list. After: returns `{:ok, ctx, dirs} | {:error, reason}`.
+1. **`core_next` returns the tagged tuple.** Currently it runs the cmd reducer and constructs a directive list. After: returns `{:ok, ctx, dirs} | {:error, ctx, reason}`. On `cmd/2` error, the `ctx` carries the input agent (the action-rolled-back agent, which equals `ctx.agent` at this layer with prior middleware mutations applied).
 
-2. **`emit_through_chain` (or wherever the middleware chain is invoked) reads the tagged tuple.**
+2. **`run_chain` commits `ctx.agent` to `state.agent` unconditionally.**
 
    ```elixir
    case chain.(signal, ctx) do
      {:ok, new_ctx, dirs} ->
-       state = State.update_agent(state, new_ctx.agent)
-       {:ok, state} = execute_directives(dirs, signal, state)
-       state = fire_post_signal_hooks(state, signal, {:ok, new_ctx, dirs})
-       {:ok, state}
+       new_state = State.update_agent(state, new_ctx.agent)
+       {:ok, new_state, dirs}
 
-     {:error, _reason} = err ->
-       state = fire_post_signal_hooks(state, signal, err)
-       {:ok, state}    # the agent state is unchanged; only acks/subscribers fire
+     {:error, new_ctx, reason} ->
+       new_state = State.update_agent(state, new_ctx.agent)
+       {:error, new_state, reason}
    end
    ```
 
-   Note: `State.update_agent` and `execute_directives` only run on `:ok`. On `:error`, the agent's state is untouched.
+   Action-level rollback already happened inside `cmd/2`. The chain's `:error` branch reports "the action didn't succeed," but middleware-staged state mutations are committed because they don't depend on action success. This is what makes `Persister`'s thaw on `lifecycle.starting` land in `state.agent` regardless of whether anything is routed.
 
-3. **`fire_post_signal_hooks/3`** (was `/2`):
+3. **`emit_through_chain` reads the new shape.**
+
+   ```elixir
+   case run_chain(signal, state) do
+     {:ok, new_state, dirs} ->
+       executed_state = execute_directives(dirs, signal, new_state) |> ...
+       fire_post_signal_hooks(executed_state, signal, {:ok, executed_state, dirs})
+
+     {:error, new_state, reason} ->
+       # state already has middleware mutations committed
+       fire_post_signal_hooks(new_state, signal, {:error, reason})
+   end
+   ```
+
+   Note: `execute_directives` only runs on `:ok`. On `:error` the agent state still reflects middleware mutations (Persister thaw etc.) but no action-emitted directives execute.
+
+4. **`fire_post_signal_hooks/3`** (was `/2`):
 
    ```elixir
    defp fire_post_signal_hooks(state, signal, result) do
@@ -247,12 +283,12 @@ end
 
 ### `test/jido/middleware/retry_test.exs`
 
-Replace fixtures that constructed `%Directive.Error{}` with fixtures that return `{:error, _}` from `next`. Confirm Retry now triggers on the chain return. Add a test: a user-emitted `%Error{}` directive on the success path does NOT trigger Retry.
+Replace fixtures that constructed `%Directive.Error{}` with fixtures that return `{:error, ctx, _}` from `next`. Confirm Retry now triggers on the chain return. Add a test: a user-emitted `%Error{}` directive on the success path does NOT trigger Retry.
 
 ### `test/jido/middleware_test.exs`
 
 ```elixir
-test "middleware that swallows {:error, _} and returns {:ok, ctx, []} propagates as success to the ack" do
+test "middleware that swallows {:error, ctx, _} and returns {:ok, ctx, []} propagates as success to the ack" do
   # caller's cast_and_await sees the success-path selector return,
   # not the underlying action's error
 end
@@ -318,7 +354,7 @@ If you were relying on Retry firing because an action emitted `%Directive.Error{
 
 - **`AgentServer.call/2`'s shape.** Stays `{:ok, agent} | {:error, term}`. Adding error-aware behavior to `call` is a separate decision; do it later if there's a use case `cast_and_await` doesn't cover.
 
-- **A formal error policy** (stop-on-error, max-errors). Still deferred per task 0004 §S6. The new return shape just makes "write a 5-line middleware to stop on error" trivial — `case next.(signal, ctx) do {:error, _} -> {:ok, ctx, [%Stop{...}]} ; ok -> ok end`.
+- **A formal error policy** (stop-on-error, max-errors). Still deferred per task 0004 §S6. The new return shape just makes "write a 5-line middleware to stop on error" trivial — `case next.(signal, ctx) do {:error, ctx, _} -> {:ok, ctx, [%Stop{...}]} ; ok -> ok end`.
 
 - **`subscribe_with_result/4`** or any subscriber-facing error channel. Wait for demand.
 
@@ -340,4 +376,6 @@ If you were relying on Retry firing because an action emitted `%Directive.Error{
 
 - **`AgentServer.call/2` keeping `{:ok, agent}` vs `cast_and_await` returning errors.** This intentional split must be documented. Add a sentence to `AgentServer.call/2`'s moduledoc: "Returns `{:ok, agent}` regardless of action outcome. To receive action errors, use `cast_and_await/4`."
 
-- **Persister's interaction with the new chain return.** Persister's `on_signal` may swallow errors today (it's primarily a state-snapshot middleware). Audit: does it need to propagate `{:error, _}` from `next`, or convert to `{:ok, ctx, []}`? Default behavior should be propagate; non-lifecycle errors aren't Persister's concern.
+- **Persister's interaction with the new chain return.** Persister stages a state mutation (`ctx.agent = thawed_agent`) on `lifecycle.starting` and then calls `next`. If `next` returns `{:error, _, _}`, Persister must pass that error through with `ctx` preserved so the framework can commit the thaw. Default behavior: propagate the error verbatim, append observability emits only on the success branch. Non-lifecycle errors aren't Persister's concern.
+
+- **State-bearing middleware mutations vs chain errors.** If middleware mutates `ctx.agent` (or any state-bearing field) and a downstream layer errors, the mutation must NOT be lost. The chosen design carries `ctx` through both branches of the middleware return shape (`{:ok, ctx, dirs} | {:error, ctx, reason}`); `run_chain` commits `ctx.agent` to `state.agent` unconditionally. Action-level rollback lives inside `cmd/2` — the input agent flows back into ctx unchanged on error, so prior middleware mutations to `ctx.agent` survive. **A 2-tuple `{:error, reason}` middleware shape would lose middleware-staged state mutations on chain error and is a wrong design.**
