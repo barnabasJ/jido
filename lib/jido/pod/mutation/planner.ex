@@ -4,7 +4,7 @@ defmodule Jido.Pod.Mutation.Planner do
   """
 
   alias Jido.Pod.Mutation
-  alias Jido.Pod.Mutation.{AddNode, Plan, RemoveNode, Report}
+  alias Jido.Pod.Mutation.{AddNode, EnsureNode, Plan, RemoveNode, Report}
   alias Jido.Pod.Topology
   alias Jido.Pod.TopologyState
 
@@ -16,10 +16,14 @@ defmodule Jido.Pod.Mutation.Planner do
   def plan(%Topology{} = topology, ops, opts \\ []) do
     with {:ok, normalized_ops} <- Mutation.normalize_ops(ops),
          :ok <- validate_batch_targets(normalized_ops),
-         {:ok, final_topology} <- apply_ops(topology, normalized_ops),
+         {:ok, ensure_targets} <- validate_ensure_targets(normalized_ops, topology),
+         {topology_ops, ensure_ops} <- split_ops(normalized_ops),
+         {:ok, final_topology} <- apply_ops(topology, topology_ops),
          {:ok, validated_final_topology} <- validate_final_topology(final_topology),
          {:ok, added, removed} <- diff_nodes(topology, validated_final_topology),
-         {:ok, start_requested, start_waves} <- build_start_plan(validated_final_topology, added),
+         start_targets <- merge_start_targets(added, ensure_targets),
+         {:ok, start_requested, start_waves} <-
+           build_start_plan(validated_final_topology, start_targets, added),
          {:ok, stop_waves} <- stop_waves(topology, removed) do
       mutation_id = Keyword.get(opts, :mutation_id) || Uniq.UUID.uuid7()
 
@@ -27,6 +31,7 @@ defmodule Jido.Pod.Mutation.Planner do
         TopologyState.normalize_updated_topology(topology, validated_final_topology)
 
       report = seed_report(mutation_id, normalized_ops, normalized_final_topology, added, removed)
+      overrides = ensure_state_overrides(ensure_ops)
 
       {:ok,
        %Plan{
@@ -40,9 +45,19 @@ defmodule Jido.Pod.Mutation.Planner do
          start_waves: start_waves,
          stop_waves: stop_waves,
          removed_nodes: Map.take(topology.nodes, removed),
-         report: report
+         report: report,
+         start_state_overrides: overrides
        }}
     end
+  end
+
+  defp ensure_state_overrides(ensure_ops) do
+    ensure_ops
+    |> Enum.flat_map(fn
+      %EnsureNode{name: name, initial_state: state} when is_map(state) -> [{name, state}]
+      _ -> []
+    end)
+    |> Map.new()
   end
 
   @spec stop_waves(Topology.t(), [Mutation.node_name()]) ::
@@ -75,6 +90,7 @@ defmodule Jido.Pod.Mutation.Planner do
       Enum.map(ops, fn
         %AddNode{name: name} -> name
         %RemoveNode{name: name} -> name
+        %EnsureNode{name: name} -> name
       end)
 
     duplicates =
@@ -95,6 +111,41 @@ defmodule Jido.Pod.Mutation.Planner do
            details: %{names: names}
          )}
     end
+  end
+
+  defp validate_ensure_targets(ops, %Topology{} = topology) do
+    ensure_names =
+      ops
+      |> Enum.flat_map(fn
+        %EnsureNode{name: name} -> [name]
+        _other -> []
+      end)
+
+    missing = Enum.reject(ensure_names, &Map.has_key?(topology.nodes, &1))
+
+    case missing do
+      [] ->
+        {:ok, ensure_names}
+
+      names ->
+        {:error,
+         Jido.Error.validation_error(
+           "Pod mutation ensure target does not exist in topology.",
+           details: %{names: names}
+         )}
+    end
+  end
+
+  defp split_ops(ops) do
+    Enum.split_with(ops, fn
+      %AddNode{} -> true
+      %RemoveNode{} -> true
+      %EnsureNode{} -> false
+    end)
+  end
+
+  defp merge_start_targets(added, ensure_targets) do
+    Enum.uniq(added ++ ensure_targets)
   end
 
   defp apply_ops(%Topology{} = topology, ops) do
@@ -206,14 +257,25 @@ defmodule Jido.Pod.Mutation.Planner do
     {:ok, Enum.sort(final_names -- current_names), Enum.sort(current_names -- final_names)}
   end
 
-  defp build_start_plan(_topology, []), do: {:ok, [], []}
+  defp build_start_plan(_topology, [], _added), do: {:ok, [], []}
 
-  defp build_start_plan(%Topology{} = topology, added) do
+  defp build_start_plan(%Topology{} = topology, start_targets, added) do
+    added_set = MapSet.new(added)
+
     start_requested =
-      Enum.filter(added, fn name ->
+      Enum.filter(start_targets, fn name ->
         case Topology.fetch_node(topology, name) do
-          {:ok, node} -> node.activation == :eager
-          :error -> false
+          {:ok, node} ->
+            # Newly-added nodes only start if eager. Explicit ensure targets
+            # always start regardless of activation.
+            if MapSet.member?(added_set, name) do
+              node.activation == :eager
+            else
+              true
+            end
+
+          :error ->
+            false
         end
       end)
 

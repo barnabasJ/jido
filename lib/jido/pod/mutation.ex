@@ -66,6 +66,38 @@ defmodule Jido.Pod.Mutation do
     def schema, do: @schema
   end
 
+  defmodule EnsureNode do
+    @moduledoc """
+    Ensure an existing topology node is running.
+
+    Does NOT modify topology — the node must already be declared. Used by
+    `Pod.ensure_node/3` and `Pod.reconcile/2` to drive the state machine
+    via the same code path as add/remove mutations.
+    """
+
+    @schema Zoi.struct(
+              __MODULE__,
+              %{
+                name:
+                  Zoi.union([
+                    Zoi.atom(description: "Logical node name."),
+                    Zoi.string(description: "Logical node name.")
+                  ]),
+                initial_state:
+                  Zoi.map(description: "Initial state override for the node.")
+                  |> Zoi.optional()
+              },
+              coerce: true
+            )
+
+    @type t :: unquote(Zoi.type_spec(@schema))
+    @enforce_keys Zoi.Struct.enforce_keys(@schema)
+    defstruct Zoi.Struct.struct_fields(@schema)
+
+    @spec schema() :: Zoi.schema()
+    def schema, do: @schema
+  end
+
   defmodule Report do
     @moduledoc """
     Report returned from live pod mutation calls.
@@ -97,7 +129,10 @@ defmodule Jido.Pod.Mutation do
                 stopped:
                   Zoi.list(@node_name_schema, description: "Nodes stopped by the mutation.")
                   |> Zoi.default([]),
-                failures: Zoi.map(description: "Node failures keyed by name.") |> Zoi.default(%{})
+                failures: Zoi.map(description: "Node failures keyed by name.") |> Zoi.default(%{}),
+                nodes:
+                  Zoi.map(description: "Per-node start metadata keyed by name.")
+                  |> Zoi.default(%{})
               },
               coerce: true
             )
@@ -139,12 +174,13 @@ defmodule Jido.Pod.Mutation do
       :start_waves,
       :stop_waves,
       :removed_nodes,
-      :report
+      :report,
+      start_state_overrides: %{}
     ]
 
     @type t :: %__MODULE__{
             mutation_id: String.t(),
-            requested_ops: [AddNode.t() | RemoveNode.t()],
+            requested_ops: [AddNode.t() | RemoveNode.t() | EnsureNode.t()],
             current_topology: Topology.t(),
             final_topology: Topology.t(),
             added: [Jido.Pod.Mutation.node_name()],
@@ -153,11 +189,12 @@ defmodule Jido.Pod.Mutation do
             start_waves: [[Jido.Pod.Mutation.node_name()]],
             stop_waves: [[Jido.Pod.Mutation.node_name()]],
             removed_nodes: %{Jido.Pod.Mutation.node_name() => Node.t()},
-            report: Report.t()
+            report: Report.t(),
+            start_state_overrides: %{Jido.Pod.Mutation.node_name() => map()}
           }
   end
 
-  @type t :: AddNode.t() | RemoveNode.t()
+  @type t :: AddNode.t() | RemoveNode.t() | EnsureNode.t()
 
   @spec add_node(node_name(), Node.t() | keyword() | map(), keyword()) :: AddNode.t()
   def add_node(name, node, opts \\ []) when is_node_name(name) and is_list(opts) do
@@ -171,6 +208,11 @@ defmodule Jido.Pod.Mutation do
 
   @spec remove_node(node_name()) :: RemoveNode.t()
   def remove_node(name) when is_node_name(name), do: %RemoveNode{name: name}
+
+  @spec ensure_node(node_name(), keyword()) :: EnsureNode.t()
+  def ensure_node(name, opts \\ []) when is_node_name(name) and is_list(opts) do
+    %EnsureNode{name: name, initial_state: Keyword.get(opts, :initial_state)}
+  end
 
   @spec normalize_ops([term()]) :: {:ok, [t()]} | {:error, term()}
   def normalize_ops(ops) when is_list(ops) do
@@ -197,6 +239,7 @@ defmodule Jido.Pod.Mutation do
   @spec normalize_op(term()) :: {:ok, t()} | {:error, term()}
   def normalize_op(%AddNode{} = op), do: {:ok, op}
   def normalize_op(%RemoveNode{} = op), do: {:ok, op}
+  def normalize_op(%EnsureNode{} = op), do: {:ok, op}
 
   def normalize_op(attrs) when is_list(attrs) do
     normalize_op(Map.new(attrs))
