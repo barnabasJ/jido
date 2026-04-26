@@ -97,26 +97,23 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     alias Jido.Pod
     alias Jido.Pod.Mutation
 
-    use Jido.Action, name: "expand_pod", schema: []
+    use Jido.Action, name: "expand_pod", path: :pod, schema: []
 
     def run(_signal, _slice, _opts, ctx) do
-      with {:ok, effects} <-
-             Pod.mutation_effects(
-               ctx.agent,
-               [
-                 Mutation.add_node(
-                   "planner",
-                   %{
-                     agent: JidoTest.Pod.MutationRuntimeTest.PodWorker,
-                     manager: :pod_mutation_planner_members,
-                     activation: :eager,
-                     initial_state: %{role: "planner"}
-                   }
-                 )
-               ]
-             ) do
-        {:ok, %{expanded: true}, effects}
-      end
+      Pod.mutation_effects(
+        ctx.agent,
+        [
+          Mutation.add_node(
+            "planner",
+            %{
+              agent: JidoTest.Pod.MutationRuntimeTest.PodWorker,
+              manager: :pod_mutation_planner_members,
+              activation: :eager,
+              initial_state: %{role: "planner"}
+            }
+          )
+        ]
+      )
     end
   end
 
@@ -131,19 +128,15 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
   defmodule StuckMutationAction do
     @moduledoc false
 
-    alias Jido.Agent.StateOp
+    use Jido.Action, name: "stuck_mutation", path: :pod, schema: []
 
-    use Jido.Action, name: "stuck_mutation", schema: []
+    def run(_signal, slice, _opts, _ctx) do
+      new_slice = %{
+        slice
+        | mutation: %{id: "stuck-id", status: :running, report: nil, error: nil}
+      }
 
-    def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, [
-        StateOp.set_path([:pod, :mutation], %{
-          id: "stuck-id",
-          status: :running,
-          report: nil,
-          error: nil
-        })
-      ]}
+      {:ok, new_slice, []}
     end
   end
 

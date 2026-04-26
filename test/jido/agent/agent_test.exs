@@ -401,64 +401,16 @@ defmodule JidoTest.AgentTest do
       assert [%Jido.Agent.Directive.Emit{}, %Jido.Agent.Directive.Schedule{}] = directives
     end
 
-    test "StateOp.SetState modifies agent state but is not returned as directive" do
-      agent = TestAgents.Basic.new()
-      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.SetStateAction)
-
-      # Action return (:primary) goes through non-scoped deep-merge into the slice;
-      # SetState attrs (:extra) are applied to full state, so stay top-level.
-      assert updated.state.domain.primary == "result"
-      assert updated.state.extra == "state"
-      assert directives == []
-    end
-
-    test "StateOp.ReplaceState replaces state wholesale" do
-      agent = TestAgents.Basic.new(state: %{old: "data", counter: 10})
-      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.ReplaceStateAction)
-
-      # ReplaceState wholesale-replaces full agent.state — no slice survives.
-      assert updated.state == %{replaced: true, fresh: "state"}
-      refute Map.has_key?(updated.state, :domain)
-      assert directives == []
-    end
-
-    test "StateOp.DeleteKeys removes top-level keys from state" do
-      # Explicit slice layout so :to_delete/:also_delete/:keep sit at top level
-      # (state-ops operate on full state, so the test targets top-level keys).
+    test "SliceUpdate writes multiple slices in one action turn" do
       agent =
         TestAgents.Basic.new(
-          state: %{domain: %{}, to_delete: 1, also_delete: 2, keep: 3}
+          state: %{domain: %{prior: true}, audit: %{last_event: :none}}
         )
 
-      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.DeleteKeysAction)
+      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.MultiSliceAction)
 
-      refute Map.has_key?(updated.state, :to_delete)
-      refute Map.has_key?(updated.state, :also_delete)
-      assert updated.state.keep == 3
-      assert directives == []
-    end
-
-    test "StateOp.SetPath sets value at nested path" do
-      # Explicit slice layout so :existing sits at top level for the state-op to preserve.
-      agent = TestAgents.Basic.new(state: %{domain: %{}, existing: "value"})
-      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.SetPathAction)
-
-      assert updated.state.nested.deep.value == 42
-      assert updated.state.existing == "value"
-      assert directives == []
-    end
-
-    test "StateOp.DeletePath removes value at nested path" do
-      # Explicit slice layout so :nested sits at top level where DeletePath targets it.
-      agent =
-        TestAgents.Basic.new(
-          state: %{domain: %{}, nested: %{to_remove: "gone", keep: "here"}}
-        )
-
-      {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.DeletePathAction)
-
-      refute Map.has_key?(updated.state.nested, :to_remove)
-      assert updated.state.nested.keep == "here"
+      assert updated.state.domain == %{primary: "result"}
+      assert updated.state.audit == %{last_event: :touched}
       assert directives == []
     end
   end

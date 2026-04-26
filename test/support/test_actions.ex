@@ -28,7 +28,8 @@ defmodule JidoTest.TestActions do
   """
 
   alias Jido.Action
-  alias Jido.Agent.{Directive, StateOp}
+  alias Jido.Agent.Directive
+  alias Jido.Agent.SliceUpdate
 
   defmodule BasicAction do
     @moduledoc false
@@ -99,58 +100,21 @@ defmodule JidoTest.TestActions do
     end
   end
 
-  defmodule SetStateAction do
+  defmodule MultiSliceAction do
     @moduledoc false
     use Action,
-      name: "set_state_action",
-      description: "Action that uses StateOp.SetState"
+      name: "multi_slice_action",
+      description: "Action that returns a SliceUpdate writing two slices in one turn",
+      path: :domain
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{primary: "result"}, [%StateOp.SetState{attrs: %{extra: "state"}}]}
-    end
-  end
-
-  defmodule ReplaceStateAction do
-    @moduledoc false
-    use Action,
-      name: "replace_state_action",
-      description: "Action that uses StateOp.ReplaceState"
-
-    def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, [%StateOp.ReplaceState{state: %{replaced: true, fresh: "state"}}]}
-    end
-  end
-
-  defmodule DeleteKeysAction do
-    @moduledoc false
-    use Action,
-      name: "delete_keys_action",
-      description: "Action that uses StateOp.DeleteKeys"
-
-    def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, [%StateOp.DeleteKeys{keys: [:to_delete, :also_delete]}]}
-    end
-  end
-
-  defmodule SetPathAction do
-    @moduledoc false
-    use Action,
-      name: "set_path_action",
-      description: "Action that uses StateOp.SetPath"
-
-    def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, [%StateOp.SetPath{path: [:nested, :deep, :value], value: 42}]}
-    end
-  end
-
-  defmodule DeletePathAction do
-    @moduledoc false
-    use Action,
-      name: "delete_path_action",
-      description: "Action that uses StateOp.DeletePath"
-
-    def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, [%StateOp.DeletePath{path: [:nested, :to_remove]}]}
+      {:ok,
+       %SliceUpdate{
+         slices: %{
+           domain: %{primary: "result"},
+           audit: %{last_event: :touched}
+         }
+       }, []}
     end
   end
 

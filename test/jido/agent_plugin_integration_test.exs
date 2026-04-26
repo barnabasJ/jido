@@ -12,15 +12,13 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Action,
       name: "increment",
+      path: :counter_plugin,
       schema: Zoi.object(%{amount: Zoi.integer() |> Zoi.default(1)})
 
-    alias Jido.Agent.StateOp
-
-    def run(%Jido.Signal{data: %{amount: amount}}, _slice, _opts, ctx) do
-      # :counter_plugin is a plugin slice at the top of agent.state, not the
-      # user-domain slice the action receives. Read it from the full state.
-      current = get_in(ctx.agent.state, [:counter_plugin, :count]) || 0
-      {:ok, %{}, [%StateOp.SetPath{path: [:counter_plugin, :count], value: current + amount}]}
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
+      slice = slice || %{}
+      current = Map.get(slice, :count, 0)
+      {:ok, Map.put(slice, :count, current + amount), []}
     end
   end
 
@@ -28,13 +26,13 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Action,
       name: "decrement",
+      path: :counter_plugin,
       schema: Zoi.object(%{amount: Zoi.integer() |> Zoi.default(1)})
 
-    alias Jido.Agent.StateOp
-
-    def run(%Jido.Signal{data: %{amount: amount}}, _slice, _opts, ctx) do
-      current = get_in(ctx.agent.state, [:counter_plugin, :count]) || 0
-      {:ok, %{}, [%StateOp.SetPath{path: [:counter_plugin, :count], value: current - amount}]}
+    def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
+      slice = slice || %{}
+      current = Map.get(slice, :count, 0)
+      {:ok, Map.put(slice, :count, current - amount), []}
     end
   end
 
@@ -42,13 +40,12 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Action,
       name: "greet",
+      path: :greeter_plugin,
       schema: Zoi.object(%{name: Zoi.string() |> Zoi.default("World")})
 
-    alias Jido.Agent.StateOp
-
-    def run(%Jido.Signal{data: %{name: name}}, _slice, _opts, _ctx) do
-      {:ok, %{},
-       [%StateOp.SetPath{path: [:greeter_plugin, :last_greeting], value: "Hello, #{name}!"}]}
+    def run(%Jido.Signal{data: %{name: name}}, slice, _opts, _ctx) do
+      slice = slice || %{}
+      {:ok, Map.put(slice, :last_greeting, "Hello, #{name}!"), []}
     end
   end
 
@@ -56,12 +53,12 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     @moduledoc false
     use Jido.Action,
       name: "set_mode",
+      path: :mode_plugin,
       schema: Zoi.object(%{mode: Zoi.atom()})
 
-    alias Jido.Agent.StateOp
-
-    def run(%Jido.Signal{data: %{mode: mode}}, _slice, _opts, _ctx) do
-      {:ok, %{}, [%StateOp.SetPath{path: [:mode_plugin, :current_mode], value: mode}]}
+    def run(%Jido.Signal{data: %{mode: mode}}, slice, _opts, _ctx) do
+      slice = slice || %{}
+      {:ok, Map.put(slice, :current_mode, mode), []}
     end
   end
 

@@ -29,10 +29,10 @@ Provide stable, reusable testing patterns for pure agents, AgentServer runtime b
 - `cmd/2` immutability and directive emission semantics
 - AgentServer signal routing and runtime directive execution
 - Parent-child lifecycle (`SpawnAgent`, `StopChild`) and state synchronization
-- StateOp behavior (`SetState`, `ReplaceState`, `DeleteKeys`, `SetPath`, `DeletePath`)
+- Slice-return action shapes — single slice via `path:`, multi-slice via `%Jido.Agent.SliceUpdate{}`
 
 ## Release Hygiene
-- Keep test fixtures aligned with current directive/state-op/tool contracts
+- Keep test fixtures aligned with current directive/slice-return/tool contracts
 - Use Conventional Commits
 - Update examples in `test/examples/` when behavior contracts change
 

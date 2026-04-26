@@ -396,9 +396,8 @@ defmodule Jido.Agent do
 
       alias Jido.Agent
       alias Jido.Agent.Directive, as: AgentDirective
+      alias Jido.Agent.SliceUpdate
       alias Jido.Agent.State, as: AgentState
-      alias Jido.Agent.StateOp
-      alias Jido.Agent.StateOps
       alias Jido.Instruction
       alias Jido.Observe.Config, as: ObserveConfig
       alias Jido.Plugin.Requirements, as: PluginRequirements
@@ -944,9 +943,18 @@ defmodule Jido.Agent do
 
       defp __resolve_slice_path__(_action), do: path()
 
-      defp __apply_slice_result__(agent, slice_path, new_slice, effects) do
-        slice_op = %StateOp.SetPath{path: [slice_path], value: new_slice}
-        StateOps.apply_state_ops(agent, [slice_op | effects])
+      defp __apply_slice_result__(agent, _slice_path, %SliceUpdate{slices: slices}, effects) do
+        new_state =
+          Enum.reduce(slices, agent.state, fn {path, value}, acc ->
+            Map.put(acc, path, value)
+          end)
+
+        {%{agent | state: new_state}, effects}
+      end
+
+      defp __apply_slice_result__(agent, slice_path, new_slice, effects) when is_map(new_slice) do
+        new_state = Map.put(agent.state, slice_path, new_slice)
+        {%{agent | state: new_state}, effects}
       end
     end
   end

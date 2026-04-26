@@ -6,15 +6,14 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
 
   Reads the subscription ids previously stored by
   `Jido.Pod.BusPlugin.AutoSubscribeChild` for this tag, unsubscribes
-  each from the pod's bus, and removes the entry from plugin state.
-
-  Returns a state update using `DeletePath` to clear the per-tag entry
-  so subscriptions don't accumulate across spawn/exit cycles.
+  each from the pod's bus, and removes the entry from the slice so
+  subscriptions don't accumulate across spawn/exit cycles.
   """
 
   use Jido.Action,
     name: "pod_auto_unsubscribe_child",
     description: "Unsubscribe a pod child from the pod bus on child.exit.",
+    path: :pod_bus,
     schema: [
       tag: [type: :any, required: true],
       pid: [type: :any, required: false],
@@ -23,13 +22,11 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
 
   require Logger
 
-  alias Jido.Agent.StateOp.DeletePath
   alias Jido.Signal.Bus
 
-  def run(%Jido.Signal{data: %{tag: tag}}, agent_state, _opts, _ctx) do
-    with {:ok, bus} <- fetch_bus(agent_state),
-         sub_ids when is_list(sub_ids) <-
-           get_in(agent_state, [:pod_bus, :subscriptions, tag]) do
+  def run(%Jido.Signal{data: %{tag: tag}}, slice, _opts, _ctx) do
+    with {:ok, bus} <- fetch_bus(slice),
+         sub_ids when is_list(sub_ids) <- get_in(slice, [:subscriptions, tag]) do
       for sub_id <- sub_ids do
         case Bus.unsubscribe(bus, sub_id) do
           :ok ->
@@ -42,19 +39,17 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
         end
       end
 
-      # Clear the per-tag entry from plugin state.
-      {:ok, %{},
-       [%DeletePath{path: [:pod_bus, :subscriptions, tag]}]}
+      subscriptions = Map.delete(Map.get(slice, :subscriptions, %{}), tag)
+      {:ok, Map.put(slice, :subscriptions, subscriptions), []}
     else
       _ ->
-        # Nothing tracked for this tag; log and move on.
         Logger.debug("pod_bus: no subscriptions tracked for #{inspect(tag)}, skipping")
-        {:ok, %{}, []}
+        {:ok, slice, []}
     end
   end
 
-  defp fetch_bus(agent_state) do
-    case get_in(agent_state, [:pod_bus, :bus]) do
+  defp fetch_bus(slice) do
+    case Map.get(slice, :bus) do
       bus when is_atom(bus) and not is_nil(bus) -> {:ok, bus}
       _ -> {:error, :no_bus}
     end

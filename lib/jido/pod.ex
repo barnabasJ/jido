@@ -190,8 +190,8 @@ defmodule Jido.Pod do
   Submits a topology mutation to a running pod and returns immediately with
   a queued ack — does **not** wait for the mutation to complete.
 
-  Returns `{:ok, %{mutation_id: id, queued: true}}` once the action's StateOp
-  directives have set the pod's mutation slice. The action's
+  Returns `{:ok, %{mutation_id: id, queued: true}}` once the action's slice
+  return has set the pod's mutation slice. The action's
   `ensure_mutation_idle/1` rejection (`{:error, :mutation_in_progress}`) and
   any planner validation errors (`{:error, %Jido.Error{}}`) are delivered
   through the framework's tagged-tuple ack per
@@ -235,10 +235,11 @@ defmodule Jido.Pod do
   defdelegate mutate_and_wait(server, ops, opts \\ []), to: Mutable
 
   @doc """
-  Builds state ops and runtime effects for an in-turn pod mutation.
+  Builds the new pod slice value and runtime side-effect directives for an
+  in-turn pod mutation.
   """
   @spec mutation_effects(Agent.t(), [Mutation.t() | term()], keyword()) ::
-          {:ok, [struct()]} | {:error, term()}
+          {:ok, map(), [struct()]} | {:error, term()}
   defdelegate mutation_effects(agent, ops, opts \\ []), to: Mutable
 
   @doc """

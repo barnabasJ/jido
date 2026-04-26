@@ -4,11 +4,10 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
   signal the pod receives.
 
   Reads the child's module and pid out of the signal data, pulls the
-  target bus out of the slice's state (`:pod_bus`), and
-  calls `Jido.Signal.Bus.subscribe/3` once per path declared by the
-  child's `signal_routes/0`. The returned subscription ids are written
-  back to the plugin's state so `AutoUnsubscribeChild` can undo them
-  when the child exits.
+  target bus out of the `:pod_bus` slice, and calls
+  `Jido.Signal.Bus.subscribe/3` once per path declared by the child's
+  `signal_routes/0`. The returned subscription ids are written back into
+  the slice so `AutoUnsubscribeChild` can undo them when the child exits.
 
   The pod's own `maybe_track_child_started/2` still runs on the same
   signal and is responsible for putting the child in
@@ -18,6 +17,7 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
   use Jido.Action,
     name: "pod_auto_subscribe_child",
     description: "Subscribe a pod child's pid to its signal_routes paths on the pod bus.",
+    path: :pod_bus,
     schema: [
       pid: [type: :any, required: true],
       child_module: [type: :atom, required: true],
@@ -30,11 +30,10 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
 
   require Logger
 
-  alias Jido.Agent.StateOp.SetPath
   alias Jido.Signal.Bus
 
-  def run(%Jido.Signal{data: params}, agent_state, _opts, _ctx) do
-    with {:ok, bus} <- fetch_bus(agent_state),
+  def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
+    with {:ok, bus} <- fetch_bus(slice),
          {:ok, routes} <- fetch_routes(params.child_module) do
       sub_ids =
         Enum.reduce(routes, [], fn route, acc ->
@@ -57,21 +56,17 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
           end
         end)
 
-      # Record sub_ids by tag via an explicit SetPath state op so
-      # AutoUnsubscribeChild's DeletePath is the structural mirror image.
-      # This matches the agent's "state changes as directives" contract
-      # instead of relying on DeepMerge semantics on the returned result.
-      {:ok, %{},
-       [%SetPath{path: [:pod_bus, :subscriptions, params.tag], value: sub_ids}]}
+      subscriptions = Map.put(Map.get(slice, :subscriptions, %{}), params.tag, sub_ids)
+      {:ok, Map.put(slice, :subscriptions, subscriptions), []}
     else
       {:error, reason} ->
         Logger.warning("pod_bus: skipped auto-subscribe — #{reason}")
-        {:ok, %{}, []}
+        {:ok, slice, []}
     end
   end
 
-  defp fetch_bus(agent_state) do
-    case get_in(agent_state, [:pod_bus, :bus]) do
+  defp fetch_bus(slice) do
+    case Map.get(slice, :bus) do
       bus when is_atom(bus) and not is_nil(bus) -> {:ok, bus}
       _ -> {:error, "no :bus configured under :pod_bus slice"}
     end

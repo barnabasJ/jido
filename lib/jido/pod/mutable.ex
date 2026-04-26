@@ -2,7 +2,6 @@ defmodule Jido.Pod.Mutable do
   @moduledoc false
 
   alias Jido.Agent
-  alias Jido.Agent.StateOp
   alias Jido.AgentServer
   alias Jido.Pod
   alias Jido.Pod.Directive.ApplyMutation
@@ -80,21 +79,23 @@ defmodule Jido.Pod.Mutable do
   end
 
   @spec mutation_effects(Agent.t(), [Mutation.t() | term()], keyword()) ::
-          {:ok, [struct()]} | {:error, term()}
+          {:ok, map(), [struct()]} | {:error, term()}
   def mutation_effects(%Agent{} = agent, ops, opts \\ []) when is_list(opts) do
-    with {:ok, pod_state} <- TopologyState.fetch_state(agent),
-         :ok <- ensure_mutation_idle(pod_state),
+    with {:ok, pod_slice} <- TopologyState.fetch_state(agent),
+         :ok <- ensure_mutation_idle(pod_slice),
          {:ok, topology} <- TopologyState.fetch_topology(agent),
          {:ok, plan} <- Planner.plan(topology, ops, opts) do
       mutation_state = %{id: plan.mutation_id, status: :running, report: plan.report, error: nil}
 
-      {:ok,
-       [
-         StateOp.set_path([@pod_state_key, :topology], plan.final_topology),
-         StateOp.set_path([@pod_state_key, :topology_version], plan.final_topology.version),
-         StateOp.set_path([@pod_state_key, :mutation], mutation_state),
-         ApplyMutation.new!(plan, Keyword.delete(opts, :mutation_id))
-       ]}
+      new_pod_slice = %{
+        pod_slice
+        | topology: plan.final_topology,
+          topology_version: plan.final_topology.version,
+          mutation: mutation_state
+      }
+
+      side_effects = [ApplyMutation.new!(plan, Keyword.delete(opts, :mutation_id))]
+      {:ok, new_pod_slice, side_effects}
     end
   end
 
@@ -105,8 +106,8 @@ defmodule Jido.Pod.Mutable do
 
   defp ensure_mutation_idle(_pod_state), do: :ok
 
-  # Default selector for mutate/3: the action's StateOp directives have set
-  # the mutation slice (id + status: :running) before the selector fires per
+  # Default selector for mutate/3: the action's slice return has set the
+  # mutation slice (id + status: :running) before the selector fires per
   # ADR 0016's hook point. The selector is the "queued" projection — for the
   # error path the framework delivers the action's tagged-tuple {:error, _}
   # directly per ADR 0018 §3.
