@@ -62,6 +62,7 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 | [0014](0014-no-full-state-no-polling-pod-runtime-and-tests.md) | `Pod.Runtime` projects a `View` struct; delete `eventually_state/3`; replace polling with subscriptions; rewrite full-state test reads as targeted selectors | **green** | 0021 |
 | [0010](0010-pod-runtime-signal-driven-state-machine.md) | Pod runtime: signal-driven state machine; delete wave orchestration; drop synthetic `jido.pod.mutate.{completed,failed}` lifecycle signal; rewrite `Pod.mutate_and_wait/3` around natural child lifecycle signals; enforce ADR 0019 on Pod surface | **green** | 0017 (Phase 2 — runtime simplification) + 0019 (Pod surface enforcement) |
 | [0015](0015-strict-directives-no-runtime-state.md) | Tighten `DirectiveExec.exec/3` contract to `:ok \| {:stop, term()}` (no state in return — type-system enforces "directives mutate no state"); split `SpawnAgent` / `AdoptChild` / `Cron` / `CronCancel` / `RunInstruction`; add `maybe_track_cron_registered/2` + `maybe_track_cron_cancelled/2` cascade callbacks; route `RunInstruction`'s result via signal_routes | **green** | 0019 (cross-cutting tightening + type-system enforcement) |
+| [0016](0016-livebook-docs-for-features.md) | Livebook docs for post-refactor features (8 .livemd files) | **green** | Documentation companion to ADRs 0014–0021 |
 
 ## Dependencies
 
@@ -81,6 +82,7 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 0013 ← 0014              (ADR 0021 — Pod.Runtime View struct; tests subscribe instead of poll)
 0014 ← 0010              (ADR 0017 Phase 2 — uses call/4 + View, assumes StateOp gone)
 0010 ← 0015              (ADR 0019 — terminal cleanup; agent-side directives split to match Pod surface)
+0015 ← 0016              (docs companion — runnable livebooks for every major feature surface)
 ```
 
 ## Related planning artifacts

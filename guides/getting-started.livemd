@@ -223,7 +223,37 @@ You've learned the core Jido workflow:
 | `AgentServer.cast/2` | Async signal processing |
 | `Signal.new!/3` | Create signals to send to agents |
 
-## Next Steps
+## Where to go next
+
+The eight runnable livebooks below cover the major feature surfaces from
+the 0014–0021 refactor. Each is self-contained — open and evaluate
+top-to-bottom. They share a shape: setup → concept → worked example →
+variations → cleanup.
+
+- **[Slices](slices.livemd)** — declarative state, schemas, multi-slice
+  writes via `%SliceUpdate{}`.
+- **[Middleware](middleware.livemd)** — the single-tier `on_signal/4`
+  chain, the `Retry` middleware, ctx mutation.
+- **[Plugins](plugins.livemd)** — slice + middleware in one module,
+  default plugin overrides.
+- **[Actions and directives](actions-and-directives.livemd)** — the
+  `{:ok, slice, [directive]}` return shape and the cascade pattern.
+- **[Call / cast / await / subscribe](call-cast-await-subscribe.livemd)**
+  — the AgentServer client primitives with selector-based projection.
+- **[Pods](pods.livemd)** — hierarchies of agents, signal-driven
+  topology mutation, the View projection.
+- **[Cron, children, lifecycle](cron-children-lifecycle.livemd)** — the
+  `Cron`, `CronCancel`, `SpawnAgent`, `AdoptChild` cascades and the
+  parent-death orphan flow.
+- **[Observability](observability.livemd)** — telemetry events, trace
+  context, debug-events ring buffer.
+
+For prose docs (architecture, migration, testing), the `.md` guides in
+this directory remain the reference. Where they cover pre-refactor
+shapes, the livebooks are the trustworthy companion until the prose
+rewrite lands.
+
+## Older next-steps
 
 - **[Core Loop](core-loop.md)** — Understand "Signal → Action → cmd/2 → {agent, directives}"
 - **[Your First Plugin](your-first-plugin.md)** — Package actions with isolated state
