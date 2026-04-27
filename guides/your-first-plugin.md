@@ -1,7 +1,5 @@
 # Your First Plugin
 
-> **Heads up:** examples below may reference `Jido.Agent.StateOp` — that module is removed per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md). Actions mutate state via their **return value**, not state-op directives. Directives are pure I/O and mutate no state. See [The Bright Line](directives.md#the-bright-line).
-
 **After:** You can refactor "stuff your agent does" into a Plugin with isolated state and routing.
 
 ## The Result
@@ -57,21 +55,25 @@ Actions do the actual work. This action increments a counter:
 defmodule MyApp.IncrementAction do
   use Jido.Action,
     name: "increment",
+    path: :counter,
     schema: Zoi.object(%{amount: Zoi.integer() |> Zoi.default(1)})
 
-  alias Jido.Agent.StateOp
+  def run(%{amount: amount}, %{state: counter}) do
+    current = counter[:value] || 0
 
-  def run(%{amount: amount}, %{state: state}) do
-    current = get_in(state, [:counter, :value]) || 0
+    new_counter = %{
+      value: current + amount,
+      last_updated: DateTime.utc_now()
+    }
 
-    {:ok, %{},
-     [
-       %StateOp.SetPath{path: [:counter, :value], value: current + amount},
-       %StateOp.SetPath{path: [:counter, :last_updated], value: DateTime.utc_now()}
-     ]}
+    {:ok, new_counter}
   end
 end
 ```
+
+The action declares `path: :counter`, so its `state` is the counter slice
+itself (not the full agent state). It returns the new slice value — the
+framework writes that into `agent.state[:counter]` atomically.
 
 ### Step 2: Define the Plugin
 
