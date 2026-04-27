@@ -106,7 +106,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
           match?({:agent_schedule, _, _}, spec.job_id)
         end)
 
-      assert length(agent_schedules) >= 1
+      assert agent_schedules != []
     end
 
     test "agent schedules have correct job_id namespacing" do

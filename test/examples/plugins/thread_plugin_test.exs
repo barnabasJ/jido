@@ -166,7 +166,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
       assert Thread.entry_count(thread) > 3
 
       instruction_starts = Thread.filter_by_kind(thread, :instruction_start)
-      assert length(instruction_starts) > 0
+      assert instruction_starts != []
 
       {:ok, agent, []} = ChatAgent.cmd(agent, SummarizeAction)
       assert agent.state.domain.summary == "3 messages in thread"
