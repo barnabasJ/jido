@@ -73,6 +73,10 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 | [0022](0022-react-runtime-pure.md) | `Jido.AI.ReAct` synchronous loop over `ReqLLM.Generation`, no agent dep | **green** | ADR 0022 §5 (loop logic) |
 | [0023](0023-llm-agent-slice-plugin.md) | `Jido.AI.Agent` macro + slice + actions + custom directives (signal-driven envelope) | **green** | ADR 0022 §5 §6 |
 | [0024](0024-llm-agent-livebook-and-local-integration-test.md) | Livebook with configurable model input + local-LLM integration test (probe-and-skip) + docs index | **green** | ADR 0022 §7 §8 |
+| [0025](0025-pod-reconcile-lifecycle-signals.md) | Pod reconcile lifecycle signals: restore the three `jido.pod.reconcile.*` casts in `Pod.Runtime.reconcile/2`, or supersede ADR 0004 because the post-ADR-0017 mutation state machine subsumes them | **green** | [ADR 0004](../adr/0004-pod-lifecycle-signals.md) — code/ADR realignment |
+| [0026](0026-jido-agent-directive-internal-consistency.md) | `Jido.Agent.Directive` internal consistency: surface `Reply` and `SpawnManagedAgent` in the alias block + `@type core`; complete the `## Core Directives` moduledoc list (`Cron`, `CronCancel`, `Reply`, `SpawnManagedAgent`) | **green** | Documentation hygiene (lib/) |
+| [0027](0027-refresh-guides-round-2.md) | Refresh user-facing guides round 2: rewrite stale `Jido.Agent.Strategy` (ADR 0011), `{agent, directives}` `cmd/2` shape (ADR 0018), `Pod.mutate/3` `{:ok, report}` shape (ADR 0017), and `result_action:` (task 0015) examples across `agents.md`, `actions.md`, `directives.md`, `runtime.md`, `signals.md`, `pods.md`, `migration.md`; add missing `Reply` / `SpawnManagedAgent` rows to the directive table | **green** | Documentation cleanup follow-up to task 0018 |
+| [0028](0028-fire-post-signal-hooks-adr-alignment.md) | Align ADR 0018 §3 with the implemented `fire_post_signal_hooks/2` (subscribers-only) split — ack dispatch lives at the call site, not in this hook | **green** | ADR 0018 §3 spec hygiene |
 
 ## Dependencies
 
@@ -101,6 +105,8 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 0021 ← 0022              (ADR 0022 — synchronous ReAct loop uses ToolAdapter + Turn over ReqLLM.Generation)
 0022 ← 0023              (ADR 0022 — signal-driven agent envelope wraps the synchronous loop)
 0023 ← 0024              (ADR 0022 — livebook + local-LLM smoke test exercise the agent)
+
+0025, 0026, 0027, 0028   (independent housekeeping; surfaced by the post-ADR 0014–0022 review)
 ```
 
 ## Related planning artifacts
