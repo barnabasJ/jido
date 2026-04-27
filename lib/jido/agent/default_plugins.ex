@@ -130,7 +130,7 @@ defmodule Jido.Agent.DefaultPlugins do
     invalid_keys = Map.keys(overrides) -- Map.keys(default_paths)
 
     if invalid_keys != [] do
-      valid_keys = Map.keys(default_paths) |> Enum.map(&inspect/1) |> Enum.join(", ")
+      valid_keys = default_paths |> Map.keys() |> Enum.map_join(", ", &inspect/1)
 
       raise CompileError,
         description:
