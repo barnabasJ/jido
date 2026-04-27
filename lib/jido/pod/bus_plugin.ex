@@ -29,7 +29,7 @@ defmodule Jido.Pod.BusPlugin do
 
   The slice's `signal_routes:` are framework-namespaced (`jido.agent.*`) and
   are added to the agent's signal router **without** the slice's own prefix —
-  see `Jido.Plugin.Routes.expand_route/2`, which leaves `jido.*` routes
+  see `Jido.Plugin.Routes.expand_routes/1`, which leaves `jido.*` routes
   unprefixed.
   """
 

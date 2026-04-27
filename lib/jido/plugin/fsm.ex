@@ -21,7 +21,7 @@ defmodule Jido.Plugin.FSM do
   ## Configuration
 
   Per-agent configuration is a map merged into the slice at
-  `Agent.new/1`:
+  `Jido.Agent.new/1`:
 
       use Jido.Agent,
         name: "my_agent",

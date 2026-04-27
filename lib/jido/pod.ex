@@ -100,7 +100,7 @@ defmodule Jido.Pod do
 
       @doc """
       Pod-wrapped `new/1`. Seeds the `:pod` slice with the agent module's
-      canonical topology before delegating to the base `Agent.new/1`. User
+      canonical topology before delegating to the base `Jido.Agent.new/1`. User
       state at `state: %{pod: %{...}}` shallow-overrides the topology fields.
       """
       def new(opts \\ []) do

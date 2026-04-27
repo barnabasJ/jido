@@ -12,7 +12,7 @@ defmodule Jido.Action do
   list is empty. There is no `{:ok, slice}` two-arg variant and no
   `{:error, reason, [directive]}` variant; if it failed, it failed —
   emit observability via middleware on the failure path. See
-  [ADR 0018](../adr/0018-tagged-tuple-return-shape.md).
+  [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md).
 
   - `signal`: the `Jido.Signal.t()` that triggered the action. Action type
     is `signal.type`; payload is `signal.data`. Per-signal runtime ctx is

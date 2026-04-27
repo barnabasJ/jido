@@ -1,6 +1,6 @@
 defmodule Jido.Agent.SliceValidationError do
   @moduledoc """
-  Raised at `Agent.new/1` when a slice's seeded value fails schema
+  Raised at `Jido.Agent.new/1` when a slice's seeded value fails schema
   validation. The exception carries the offending path, the slice module
   (or `nil` for the agent's own slice), and the underlying Zoi errors.
   """

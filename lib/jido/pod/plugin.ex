@@ -12,7 +12,7 @@ defmodule Jido.Pod.Plugin do
   mutation: %{...}, metadata: %{}}`. The owning agent module (typically built
   via `use Jido.Pod`) is responsible for filling in `:topology` from its
   declared topology — usually by passing
-  `state: %{pod: %{topology: ..., topology_version: ...}}` to `Agent.new/1`.
+  `state: %{pod: %{topology: ..., topology_version: ...}}` to `Jido.Agent.new/1`.
   """
 
   alias Jido.Pod.Actions.Mutate, as: MutateAction

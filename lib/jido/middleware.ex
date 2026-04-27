@@ -20,7 +20,7 @@ defmodule Jido.Middleware do
   rollback lives inside `cmd/2`: the input agent flows back into ctx
   unchanged on error, and the framework commits that input agent (with
   any prior middleware mutations) to state. See
-  [ADR 0018](../adr/0018-tagged-tuple-return-shape.md) §1.
+  [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md) §1.
 
   - `signal` — the triggering `Jido.Signal.t()`.
   - `ctx` — per-signal runtime context (user, trace, agent-level identity).

@@ -1,6 +1,6 @@
 defmodule Jido.Agent.PathConflictError do
   @moduledoc """
-  Raised at `Agent.new/1` when two declared slices share the same `path:` —
+  Raised at `Jido.Agent.new/1` when two declared slices share the same `path:` —
   including the agent's own path colliding with a declared plugin's path.
   """
 

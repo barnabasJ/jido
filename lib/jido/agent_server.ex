@@ -35,7 +35,7 @@ defmodule Jido.AgentServer do
   ```
   Signal → AgentServer.call/4 (or cast/3)
         → middleware chain (`on_signal/4` wrap)
-            → routing → Agent.cmd/2 → {agent, directives}
+            → routing → Jido.Agent.cmd/2 → {agent, directives}
         → Directives executed inline via DirectiveExec protocol
         → call/4 selector runs over post-pipeline state and the result
           is returned to the caller

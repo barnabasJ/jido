@@ -18,7 +18,7 @@ defmodule Jido.Agent do
 
   Multi-instruction `cmd` is **all-or-nothing**: the first `{:error, _}` halts
   the batch, the input agent is returned unchanged, and no directives execute.
-  See [ADR 0018](../adr/0018-tagged-tuple-return-shape.md).
+  See [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md).
 
   Key invariants:
   - On success the returned `agent` is **always complete** — no "apply
@@ -821,7 +821,7 @@ defmodule Jido.Agent do
       Multi-instruction `cmd` is all-or-nothing: the first `{:error, _}` halts
       the batch and the input agent is returned through the caller's error
       branch; successful prior instructions' slice changes vanish.
-      See [ADR 0018](../adr/0018-tagged-tuple-return-shape.md).
+      See [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md).
 
       ## Action Formats
 
