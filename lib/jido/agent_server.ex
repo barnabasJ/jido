@@ -11,7 +11,7 @@ defmodule Jido.AgentServer do
 
   - Single GenServer per agent under `Jido.AgentSupervisor`
   - Signals process inline inside the triggering handler; the Erlang
-    mailbox is the only queue (see ADR 0009)
+    mailbox is the only queue
   - Registry-based naming via `Jido.Registry`
   - Logical parent-child hierarchy via state tracking + monitors
 
@@ -323,8 +323,7 @@ defmodule Jido.AgentServer do
   After the outermost middleware unwinds and the signal's directives
   execute, `selector` runs over `%AgentServer.State{}` and its tagged
   return is delivered to the caller. On chain error, the selector is
-  **not** invoked — the chain's error is delivered verbatim per
-  [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md) §3.
+  **not** invoked — the chain's error is delivered verbatim.
 
   Retry middleware that re-invokes `next` does not fire the selector
   multiple times — it fires once per outermost return.

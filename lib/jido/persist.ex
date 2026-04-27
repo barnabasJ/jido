@@ -49,12 +49,12 @@ defmodule Jido.Persist do
 
   ## Forward compatibility
 
-  Pre-ADR-0014 checkpoints — written when runtime identity (`:__partition__`,
+  Legacy checkpoints — written when runtime identity (`:__partition__`,
   `:__parent__`, `:__orphaned_from__`) was mirrored into `agent.state` — are
   **not** forward-compatible with this revision. There are no external users
-  to migrate (per ADR 0014), so no forward-compat shim is maintained. Local
-  development or test-fixture checkpoints from before this PR should be
-  deleted; fresh checkpoints get the new shape automatically.
+  to migrate, so no forward-compat shim is maintained. Local development or
+  test-fixture checkpoints from before this PR should be deleted; fresh
+  checkpoints get the new shape automatically.
   """
 
   require Logger

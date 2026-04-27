@@ -7,10 +7,10 @@ defmodule Jido.AgentServer.Signal.CronCancelled do
   `state.cron_specs`, `state.cron_jobs`, `state.cron_monitors`,
   `state.cron_monitor_refs`, and `state.cron_runtime_specs`.
 
-  Per ADR 0019 §1, directives mutate no state. The directive does the
-  I/O (cancel the scheduler job + `Process.demonitor` + persist the new
-  spec map); the cascade callback observes this synthetic signal and
-  rewrites the runtime maps.
+  Directives mutate no state. The directive does the I/O (cancel the
+  scheduler job + `Process.demonitor` + persist the new spec map); the
+  cascade callback observes this synthetic signal and rewrites the
+  runtime maps.
 
   Note: this is distinct from `jido.agent.cron.died` — `cron.cancelled`
   fires when the directive intentionally cancels a job; `cron.died` fires

@@ -194,9 +194,8 @@ defmodule Jido.Pod do
   return has set the pod's mutation slice. The action's
   `ensure_mutation_idle/1` rejection (`{:error, :mutation_in_progress}`) and
   any planner validation errors (`{:error, %Jido.Error{}}`) are delivered
-  through the framework's tagged-tuple ack per
-  [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md) §3 — callers
-  do not encode failure branches in the default selector.
+  through the framework's tagged-tuple ack — callers do not encode failure
+  branches in the default selector.
 
   For the post-completion mutation report, use `mutate_and_wait/3`.
 
@@ -220,10 +219,9 @@ defmodule Jido.Pod do
   Submits a topology mutation and waits for the mutation slice to reach a
   terminal status, returning the completion report (or failure error).
 
-  Wraps `mutate/3` with the subscribe-before-cast pattern from
-  [ADR 0017](../../guides/adr/0017-pod-mutations-are-signal-driven.md):
-  subscribes to `jido.agent.child.*` with a selector that reads
-  `pod.mutation` and matches by `mutation.id` **before** issuing the cast.
+  Wraps `mutate/3` with the subscribe-before-cast pattern: subscribes
+  to `jido.agent.child.*` with a selector that reads `pod.mutation` and
+  matches by `mutation.id` **before** issuing the cast.
   The state machine flips `mutation.status` to `:completed`/`:failed` when
   the last awaited child
   lifecycle signal arrives; the subscriber's selector fires on that same

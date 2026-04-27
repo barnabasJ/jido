@@ -11,7 +11,7 @@ defmodule Jido.AgentServer.State do
   the agent itself, hierarchy tracking, and configuration.
 
   Signal processing runs inline within the triggering handler; the Erlang
-  mailbox is the only queue. See ADR 0009 for the rationale.
+  mailbox is the only queue.
   """
 
   require Logger

@@ -20,9 +20,8 @@ defmodule Jido.Agent.SliceUpdate do
          []}
       end
 
-  See ADR 0019 (`guides/adr/0019-actions-mutate-state-directives-do-side-effects.md`)
-  for the principle: actions mutate state through their return value;
-  directives are pure side effects.
+  Actions mutate state through their return value; directives are pure
+  side effects.
   """
 
   @enforce_keys [:slices]

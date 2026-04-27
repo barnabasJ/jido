@@ -15,13 +15,12 @@ defmodule Jido.Middleware.Persister do
   `Jido.Persist.hibernate/4`. Hibernate IO runs on the terminate path —
   callers must size the supervisor's shutdown timeout accordingly.
 
-  Per [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md), both
-  the success and error branches of the middleware return shape carry
-  ctx, so the thawed agent Persister stages in `ctx.agent` flows back to
-  `state.agent` unconditionally. Lifecycle observability (thaw.completed
-  / thaw.failed / hibernate.*) is appended only to the success branch;
-  a chain `{:error, ctx, reason}` propagates verbatim — Persister is
-  not in the request/response error path.
+  Both the success and error branches of the middleware return shape
+  carry ctx, so the thawed agent Persister stages in `ctx.agent` flows
+  back to `state.agent` unconditionally. Lifecycle observability
+  (thaw.completed / thaw.failed / hibernate.*) is appended only to the
+  success branch; a chain `{:error, ctx, reason}` propagates verbatim —
+  Persister is not in the request/response error path.
 
   ## Configuration
 

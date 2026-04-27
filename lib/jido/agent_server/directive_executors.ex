@@ -64,11 +64,10 @@ end
 defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction do
   @moduledoc """
   Pure I/O directive: runs the instruction and emits a result signal of
-  type `result_signal_type`. Per ADR 0019 §1 / task 0015, the directive
-  no longer calls `cmd/2` directly — the agent's `signal_routes` binds
-  `result_signal_type` to a handler action that performs the slice
-  update via its return value. The handler runs on the next mailbox
-  turn through the normal pipeline.
+  type `result_signal_type`. The directive does not call `cmd/2`
+  directly — the agent's `signal_routes` binds `result_signal_type` to
+  a handler action that performs the slice update via its return value.
+  The handler runs on the next mailbox turn through the normal pipeline.
   """
 
   alias Jido.AgentServer
@@ -190,7 +189,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
   child's own `notify_parent_of_startup/1` then casts
   `jido.agent.child.started` back to this agent, where
   `maybe_track_child_started/2` records the `%ChildInfo{}` and creates
-  the parent-side monitor — see ADR 0019 §1 / task 0015.
+  the parent-side monitor.
 
   Async window: between the directive returning and the natural
   `child.started` arriving, `state.children[tag]` is `nil`. Tests should
@@ -310,13 +309,12 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.AdoptChild do
   via `AgentServer.adopt_parent/2`. The child's
   `notify_parent_of_startup/1` then casts `jido.agent.child.started`
   back to this agent, where `maybe_track_child_started/2` records the
-  `%ChildInfo{}` and creates the parent-side monitor — see ADR 0019 §1
-  / task 0015.
+  `%ChildInfo{}` and creates the parent-side monitor.
 
   This is the directive form. The imperative
   `Jido.AgentServer.adopt_child/4` (a `handle_call` callback) keeps
-  doing the state mutation directly per ADR 0019 §5; only the directive
-  defers to the cascade.
+  doing the state mutation directly; only the directive defers to the
+  cascade.
 
   Async window: between the directive returning and the natural
   `child.started` arriving, `state.children[tag]` is `nil`. Tests should

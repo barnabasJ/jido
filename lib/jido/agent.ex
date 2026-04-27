@@ -18,7 +18,6 @@ defmodule Jido.Agent do
 
   Multi-instruction `cmd` is **all-or-nothing**: the first `{:error, _}` halts
   the batch, the input agent is returned unchanged, and no directives execute.
-  See [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md).
 
   Key invariants:
   - On success the returned `agent` is **always complete** — no "apply
@@ -47,7 +46,7 @@ defmodule Jido.Agent do
 
   - `%Directive.Emit{}` - Dispatch a signal via `Jido.Signal.Dispatch`
   - `%Directive.Error{}` - Observability marker for log channels (no longer
-    produced by the cmd reducer; see ADR 0018)
+    produced by the cmd reducer)
   - `%Directive.Spawn{}` - Spawn a child process
   - `%Directive.Schedule{}` - Schedule a delayed message
   - `%Directive.RunInstruction{}` - Execute an instruction at runtime and route result to `cmd/2`
@@ -326,7 +325,7 @@ defmodule Jido.Agent do
                            path:
                              Zoi.atom(
                                description:
-                                 "Required atom slice key where the agent's user-domain state lives under `agent.state`. Actions that don't declare their own `path:` operate on this same slice. See ADR 0014."
+                                 "Required atom slice key where the agent's user-domain state lives under `agent.state`. Actions that don't declare their own `path:` operate on this same slice."
                              )
                          },
                          coerce: true
@@ -433,7 +432,7 @@ defmodule Jido.Agent do
       @doc """
       Returns the atom slice key where the agent's user-domain state lives.
 
-      Required at compile time (ADR 0014). Schema defaults are seeded under
+      Required at compile time. Schema defaults are seeded under
       `agent.state[path]` and actions that declare a matching `path:` receive
       just that slice as the `slice` argument of `run/4`.
       """
@@ -816,12 +815,11 @@ defmodule Jido.Agent do
       Actions modify state; directives are external effects. The reducer runs
       each instruction by handing the action its declared slice (per `path:`)
       and writing the returned slice back wholesale (no deep-merge — every
-      action returns the full new slice, see ADR 0014).
+      action returns the full new slice).
 
       Multi-instruction `cmd` is all-or-nothing: the first `{:error, _}` halts
       the batch and the input agent is returned through the caller's error
       branch; successful prior instructions' slice changes vanish.
-      See [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md).
 
       ## Action Formats
 

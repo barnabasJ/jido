@@ -113,7 +113,7 @@ defmodule Jido.Exec do
   ## Returns
 
   - `{:ok, slice, [directive]}` on success — always a 3-tuple, even when no
-    directives are emitted. See [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md).
+    directives are emitted.
   - `{:error, reason}` if an error occurs during execution.
 
   ## Examples

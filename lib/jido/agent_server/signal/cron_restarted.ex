@@ -6,8 +6,8 @@ defmodule Jido.AgentServer.Signal.CronRestarted do
   The DOWN handler + restart timer don't go through `process_signal/2`,
   so without this synthesized signal there's no `fire_subscribers/2` on
   the `state.cron_jobs[logical_id]` re-population — `subscribe/4`
-  consumers would have no way to react. Per ADR 0021 §2: state changes
-  need a subscribable channel.
+  consumers would have no way to react. State changes need a
+  subscribable channel.
 
   ## Fields
 

@@ -10,12 +10,12 @@ defprotocol Jido.AgentServer.DirectiveExec do
   - `:ok` — directive executed successfully, continue processing
   - `{:stop, reason}` — **hard stop** the agent process (see warning below)
 
-  Directives never return state. State is passed in as the third arg (for
-  reading); mutating it is impossible by the type signature, per
-  ADR 0019 §6. Bookkeeping that logically follows the I/O happens via
-  the cascade callbacks `process_signal/2` invokes
-  (`maybe_track_child_started/2`, `handle_child_down/3`,
-  `maybe_track_cron_registered/2`, `maybe_track_cron_cancelled/2`).
+  Directives never return state. State is passed in as the third arg
+  (for reading); mutating it is impossible by the type signature.
+  Bookkeeping that logically follows the I/O happens via the cascade
+  callbacks `process_signal/2` invokes (`maybe_track_child_started/2`,
+  `handle_child_down/3`, `maybe_track_cron_registered/2`,
+  `maybe_track_cron_cancelled/2`).
 
   Failure handling: directives that hit an internal error log it and
   return `:ok` — the same swallow-and-continue convention the `Error`

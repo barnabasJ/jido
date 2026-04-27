@@ -15,9 +15,9 @@ defmodule Jido.Middleware.Retry do
   middleware retries immediately. Higher-level back-pressure belongs in a
   user-defined middleware sitting upstream of this one.
 
-  Retry pattern-matches the chain return per [ADR 0018](../../guides/adr/0018-tagged-tuple-return-shape.md):
-  it fires only on `{:error, _}` returns, never on `%Directive.Error{}`
-  directives that user code emits for logging on the success path.
+  Retry pattern-matches the chain return: it fires only on `{:error, _}`
+  returns, never on `%Directive.Error{}` directives that user code emits
+  for logging on the success path.
   """
 
   use Jido.Middleware

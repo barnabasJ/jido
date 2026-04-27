@@ -20,8 +20,7 @@ defmodule Jido.Agent.Directive do
     returns `:ok | {:stop, term()}` — there is no state slot in the return
     shape, so a directive author cannot accidentally write one.
   - **All `agent.state` writes flow through the action's return value.**
-    Sole exception is middleware `ctx.agent` staging for I/O purposes
-    (see ADR 0018 §1). Canonical rule: ADR 0019.
+    Sole exception is middleware `ctx.agent` staging for I/O purposes.
 
   ## Signal Integration
 
@@ -650,10 +649,10 @@ defmodule Jido.Agent.Directive do
   defmodule RunInstruction do
     @moduledoc """
     Execute a `%Jido.Instruction{}` at runtime and route the result via
-    a signal. Per ADR 0019 §1 / task 0015, the directive does the I/O
-    only — running the instruction and emitting a result signal. The
-    state mutation that consumes the result happens in an action bound
-    to `result_signal_type` via the agent's `signal_routes/1`.
+    a signal. The directive does the I/O only — running the instruction
+    and emitting a result signal. The state mutation that consumes the
+    result happens in an action bound to `result_signal_type` via the
+    agent's `signal_routes/1`.
 
     The framework does **not** call `cmd/2` directly from the directive
     body anymore — that crossed the directive/action boundary. Wire a

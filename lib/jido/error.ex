@@ -454,7 +454,7 @@ defmodule Jido.Error do
   error.
 
   This is the canonical normalization point at the action / middleware
-  boundary — see ADR 0018.
+  boundary.
   """
   @spec from_term(term()) :: term()
   def from_term(%ValidationError{} = e), do: e

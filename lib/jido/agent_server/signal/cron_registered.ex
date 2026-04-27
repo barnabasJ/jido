@@ -6,10 +6,10 @@ defmodule Jido.AgentServer.Signal.CronRegistered do
   insert into `state.cron_specs`, `state.cron_jobs`, `state.cron_monitors`,
   `state.cron_monitor_refs`, and `state.cron_runtime_specs`.
 
-  Per ADR 0019 §1, directives mutate no state. The directive does the
-  I/O (start the scheduler job + `Process.monitor` + `persist_cron_specs`);
-  the cascade callback observes this synthetic signal and writes the
-  runtime maps. Subscribers can also observe the registration.
+  Directives mutate no state. The directive does the I/O (start the
+  scheduler job + `Process.monitor` + `persist_cron_specs`); the cascade
+  callback observes this synthetic signal and writes the runtime maps.
+  Subscribers can also observe the registration.
 
   ## Fields
 
