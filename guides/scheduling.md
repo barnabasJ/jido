@@ -1,7 +1,5 @@
 # Scheduling
 
-> **Heads up:** examples below referencing `Jido.Agent.StateOp` are stale per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md) — actions now mutate state via their **return value**, not state-op directives. Directives are pure I/O and mutate no state. See [The Bright Line](directives.md#the-bright-line).
-
 **After:** You can schedule delayed and recurring work reliably.
 
 Jido provides three scheduling mechanisms: declarative schedules in the agent definition, one-time delays via `Schedule`, and dynamic recurring jobs via `Cron`. All are timer-based and tied to the agent's process lifecycle.
@@ -264,8 +262,6 @@ Track processed work to avoid duplicates if you retry externally:
 defmodule ProcessTickAction do
   use Jido.Action, name: "process_tick", schema: []
 
-  alias Jido.Agent.StateOp
-
   def run(%{tick_id: tick_id}, context) do
     processed = Map.get(context.state, :processed_ticks, MapSet.new())
 
@@ -273,7 +269,7 @@ defmodule ProcessTickAction do
       {:ok, %{skipped: true}}
     else
       new_processed = MapSet.put(processed, tick_id)
-      {:ok, %{processed: true}, [StateOp.set_state(%{processed_ticks: new_processed})]}
+      {:ok, Map.put(context.state, :processed_ticks, new_processed)}
     end
   end
 end
@@ -287,8 +283,6 @@ Track when work last ran to detect gaps:
 defmodule DailyReportAction do
   use Jido.Action, name: "daily_report", schema: []
 
-  alias Jido.Agent.StateOp
-
   def run(_params, context) do
     last_run = Map.get(context.state, :last_report_at)
     now = DateTime.utc_now()
@@ -297,7 +291,7 @@ defmodule DailyReportAction do
       {:ok, %{skipped: true, reason: "Too soon since last run"}}
     else
       report = generate_report()
-      {:ok, %{report: report}, [StateOp.set_state(%{last_report_at: now})]}
+      {:ok, Map.merge(context.state, %{report: report, last_report_at: now})}
     end
   end
 
@@ -339,7 +333,7 @@ defmodule DailyReportAgent do
   defmodule GenerateReportAction do
     use Jido.Action, name: "generate_report", schema: []
 
-    alias Jido.Agent.{Directive, StateOp}
+    alias Jido.Agent.Directive
 
     def run(_params, context) do
       last_run = Map.get(context.state, :last_report_at)
@@ -359,13 +353,14 @@ defmodule DailyReportAgent do
             source: "/agent/#{context.agent.id}"
           )
 
-          {:ok, %{report: report}, [
-            StateOp.set_state(%{
+          new_state =
+            Map.merge(context.state, %{
+              report: report,
               last_report_at: now,
               report_count: count + 1
-            }),
-            Directive.emit(notification)
-          ]}
+            })
+
+          {:ok, new_state, [Directive.emit(notification)]}
       end
     end
 
