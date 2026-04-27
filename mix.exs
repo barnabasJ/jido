@@ -358,6 +358,10 @@ defmodule Jido.MixProject do
           Jido.Error.RoutingError,
           Jido.Error.TimeoutError,
           Jido.Error.ValidationError
+        ],
+        "Jido AI": [
+          Jido.AI.Turn,
+          Jido.AI.ToolAdapter
         ]
       ]
     ]
@@ -389,6 +393,7 @@ defmodule Jido.MixProject do
       {:nimble_options, "~> 1.1"},
       {:ok, "~> 2.3"},
       {:phoenix_pubsub, "~> 2.1"},
+      {:req_llm, "~> 1.9"},
       {:splode, "~> 0.3.0"},
       {:telemetry, "~> 1.3"},
       {:poolboy, "~> 1.5"},
