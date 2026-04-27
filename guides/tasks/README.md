@@ -65,6 +65,7 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 | [0016](0016-livebook-docs-for-features.md) | Livebook docs for post-refactor features (8 .livemd files) | **green** | Documentation companion to ADRs 0014–0021 |
 | [0017](0017-slice-owned-routes-and-terminology.md) | Move slice-owned routes onto slices; clarify `plugins:` accepts slices | **green** | Documentation correction to ADR 0014 + task 0016 livebooks |
 | [0018](0018-refresh-user-guides-for-adr-0019.md) | Refresh user-facing guides for ADR 0019 strict rule: rewrite stale `Jido.Agent.StateOp` examples in `agents.md` / `actions.md` / `orchestration.md` / `plugins.md` / `middleware.md` / `scheduling.md` / `migration.md` / `your-first-plugin.md` to use slice-return + `%SliceUpdate{}` shape; delete `guides/state-ops.md`; remove the "Heads up" banners | **green** | 0019 (per-guide documentation cleanup) |
+| [0019](0019-remove-process-sleep-from-livebooks.md) | Remove `Process.sleep` from livebooks; use `subscribe/4` instead | **green** | Documentation correction to task 0016 livebooks (ADR 0021 enforcement) |
 
 ## Dependencies
 
@@ -86,6 +87,7 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 0010 ← 0015              (ADR 0019 — terminal cleanup; agent-side directives split to match Pod surface)
 0015 ← 0016              (docs companion — runnable livebooks for every major feature surface)
 0016 ← 0017              (docs follow-up — fix slice-owned routes antipattern + ADR 0014 terminology drift)
+0017 ← 0019              (docs follow-up — remove Process.sleep from livebooks; ADR 0021 enforcement)
 0015 ← 0018              (ADR 0019 — per-guide example rewrites; independent of 0016/0017)
 ```
 
