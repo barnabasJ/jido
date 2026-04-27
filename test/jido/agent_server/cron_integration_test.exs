@@ -412,6 +412,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
           pid,
           fn s ->
             new_pid = Map.get(s.cron_jobs, :restartable)
+
             if is_pid(new_pid) and new_pid != original_job_pid and Process.alive?(new_pid),
               do: new_pid
           end,

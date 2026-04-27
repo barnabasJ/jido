@@ -129,7 +129,8 @@ defmodule Jido.Pod.Mutation do
                 stopped:
                   Zoi.list(@node_name_schema, description: "Nodes stopped by the mutation.")
                   |> Zoi.default([]),
-                failures: Zoi.map(description: "Node failures keyed by name.") |> Zoi.default(%{}),
+                failures:
+                  Zoi.map(description: "Node failures keyed by name.") |> Zoi.default(%{}),
                 nodes:
                   Zoi.map(description: "Per-node start metadata keyed by name.")
                   |> Zoi.default(%{})

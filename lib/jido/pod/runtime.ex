@@ -99,9 +99,14 @@ defmodule Jido.Pod.Runtime do
              Enum.map(eager_unrunning, &Mutation.ensure_node/1),
              opts
            ) do
-        {:ok, report} -> {:ok, reconcile_report(report, eager_unrunning)}
-        {:error, report} when is_map(report) -> {:error, reconcile_report(report, eager_unrunning)}
-        {:error, _reason} = error -> error
+        {:ok, report} ->
+          {:ok, reconcile_report(report, eager_unrunning)}
+
+        {:error, report} when is_map(report) ->
+          {:error, reconcile_report(report, eager_unrunning)}
+
+        {:error, _reason} = error ->
+          error
       end
     end
   end
@@ -379,7 +384,14 @@ defmodule Jido.Pod.Runtime do
     end
   end
 
-  defp maybe_synthesize_child_started(%State{} = state, %View{} = view, name, %Node{} = node, pid, owner) do
+  defp maybe_synthesize_child_started(
+         %State{} = state,
+         %View{} = view,
+         name,
+         %Node{} = node,
+         pid,
+         owner
+       ) do
     if owner == nil do
       :ok
     else
@@ -427,7 +439,8 @@ defmodule Jido.Pod.Runtime do
   # When a kind: :pod node spawns, fire-and-forget a reconcile mutation so
   # its eager children come up. Without this the parent's mutation finishes
   # the moment child.started arrives, but the nested pod is empty.
-  defp maybe_kick_nested_reconcile(%Node{kind: :pod}, nested_pid, _opts) when is_pid(nested_pid) do
+  defp maybe_kick_nested_reconcile(%Node{kind: :pod}, nested_pid, _opts)
+       when is_pid(nested_pid) do
     spawn(fn ->
       _ = AgentServer.await_ready(nested_pid)
       _ = reconcile(nested_pid, [])
@@ -466,7 +479,11 @@ defmodule Jido.Pod.Runtime do
 
   defp ensure_runtime_supported(%Node{kind: :agent}, _name, _ancestry), do: :ok
 
-  defp ensure_runtime_supported(%Node{kind: :pod, module: module, manager: manager}, name, ancestry)
+  defp ensure_runtime_supported(
+         %Node{kind: :pod, module: module, manager: manager},
+         name,
+         ancestry
+       )
        when is_atom(module) do
     with :ok <- ensure_pod_module(module),
          :ok <- ensure_pod_manager_module(manager, module),
@@ -501,8 +518,12 @@ defmodule Jido.Pod.Runtime do
         Enum.reduce_while(topology.nodes, :ok, fn
           {_name, %Node{kind: :pod, module: nested_module}}, :ok ->
             cond do
-              nested_module == nil -> {:cont, :ok}
-              nested_module in ancestry -> {:halt, recursion_error(nested_module, ancestry, original_name)}
+              nested_module == nil ->
+                {:cont, :ok}
+
+              nested_module in ancestry ->
+                {:halt, recursion_error(nested_module, ancestry, original_name)}
+
               true ->
                 case walk_pod_topology(nested_module, [nested_module | ancestry], original_name) do
                   :ok -> {:cont, :ok}

@@ -120,7 +120,6 @@ defmodule Jido.Agent.Directive.Cron do
       runtime_spec: runtime_spec
     }
   end
-
 end
 
 defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Cron do

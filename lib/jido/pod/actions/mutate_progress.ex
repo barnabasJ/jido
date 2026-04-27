@@ -121,7 +121,9 @@ defmodule Jido.Pod.Actions.MutateProgress do
   end
 
   defp first_start_phase(%Plan{start_waves: []}), do: :done
-  defp first_start_phase(%Plan{start_waves: [first | _]} = plan), do: start_wave_phase(0, first, plan)
+
+  defp first_start_phase(%Plan{start_waves: [first | _]} = plan),
+    do: start_wave_phase(0, first, plan)
 
   defp stop_wave_phase(index, names) do
     {{:stop_wave, index}, %{kind: :exit, names: MapSet.new(names)},

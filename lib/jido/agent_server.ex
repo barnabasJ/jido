@@ -2430,9 +2430,7 @@ defmodule Jido.AgentServer do
         cron_restart_attempts: Map.delete(state.cron_restart_attempts, job_id)
     }
 
-    Logger.debug(
-      "AgentServer #{state.id} registered cron job #{inspect(job_id)}: #{cron_expr}"
-    )
+    Logger.debug("AgentServer #{state.id} registered cron job #{inspect(job_id)}: #{cron_expr}")
 
     emit_cron_telemetry_event(committed, :register, %{
       job_id: job_id,

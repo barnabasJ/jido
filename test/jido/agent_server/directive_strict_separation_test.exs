@@ -86,9 +86,9 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
 
     def signal_routes(_ctx) do
       [
-        {"test.directive", JidoTest.AgentServer.DirectiveStrictSeparationTest.EmitDirectiveAction},
-        {"test.routed.captured",
-         JidoTest.AgentServer.DirectiveStrictSeparationTest.CaptureAction}
+        {"test.directive",
+         JidoTest.AgentServer.DirectiveStrictSeparationTest.EmitDirectiveAction},
+        {"test.routed.captured", JidoTest.AgentServer.DirectiveStrictSeparationTest.CaptureAction}
       ]
     end
   end
@@ -194,7 +194,10 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
       assert all.monitors
       assert all.runtime_specs
 
-      AgentServer.cast(pid, signal_carrying_directive(%Directive.CronCancel{job_id: :strict_cron}))
+      AgentServer.cast(
+        pid,
+        signal_carrying_directive(%Directive.CronCancel{job_id: :strict_cron})
+      )
     end
   end
 

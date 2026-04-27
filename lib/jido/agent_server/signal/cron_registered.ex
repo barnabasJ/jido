@@ -31,6 +31,10 @@ defmodule Jido.AgentServer.Signal.CronRegistered do
       pid: [type: :any, required: true, doc: "PID of the spawned cron-job process"],
       monitor_ref: [type: :any, required: true, doc: "Monitor reference for the cron-job process"],
       cron_spec: [type: :any, required: true, doc: "Validated cron spec map"],
-      runtime_spec: [type: :any, required: true, doc: "%CronRuntimeSpec{} carrying scheduler details"]
+      runtime_spec: [
+        type: :any,
+        required: true,
+        doc: "%CronRuntimeSpec{} carrying scheduler details"
+      ]
     ]
 end

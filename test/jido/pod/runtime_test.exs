@@ -369,6 +369,7 @@ defmodule JidoTest.Pod.RuntimeTest do
     assert_receive {:DOWN, ^pod_ref, :process, ^pod_pid, _reason}, 1_000
 
     assert Process.alive?(planner_pid)
+
     assert {:ok, %{parent: parent, orphaned_from_id: orphaned_from_id}} =
              AgentServer.state(planner_pid, fn s ->
                {:ok, %{parent: s.parent, orphaned_from_id: s.orphaned_from.id}}

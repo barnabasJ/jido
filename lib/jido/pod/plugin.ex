@@ -45,10 +45,8 @@ defmodule Jido.Pod.Plugin do
             id: Zoi.string(description: "In-flight mutation id.") |> Zoi.optional(),
             status: Zoi.atom(description: "Mutation status.") |> Zoi.default(:idle),
             plan: Zoi.any(description: "Mutation plan struct.") |> Zoi.optional(),
-            phase:
-              Zoi.any(description: "State machine phase.") |> Zoi.default(:idle),
-            awaiting:
-              Zoi.any(description: "Awaiting kind + names set.") |> Zoi.optional(),
+            phase: Zoi.any(description: "State machine phase.") |> Zoi.default(:idle),
+            awaiting: Zoi.any(description: "Awaiting kind + names set.") |> Zoi.optional(),
             report: Zoi.any(description: "Latest mutation report.") |> Zoi.optional(),
             error: Zoi.any(description: "Latest mutation error/report.") |> Zoi.optional()
           })
