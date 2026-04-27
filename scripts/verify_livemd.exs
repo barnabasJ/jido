@@ -16,22 +16,22 @@ defmodule LivemdVerifier do
     cells = path |> File.read!() |> extract_cells()
     IO.puts("verifying #{path} — #{length(cells)} elixir cells")
 
-    Enum.reduce(cells, [], fn {idx, code}, binding ->
+    initial_env = %{__ENV__ | module: nil, function: nil}
+
+    Enum.reduce(cells, {[], initial_env}, fn {idx, code}, {binding, env} ->
       IO.puts("\n=== cell #{idx} ===")
       IO.puts(snippet(code))
 
       cond do
         String.contains?(code, "Mix.install") ->
           IO.puts("(skipping Mix.install — runs only in fresh Livebook session)")
-          binding
+          {binding, env}
 
         true ->
           try do
-            # Strip the calling module from the eval env so `defmodule Foo` lands
-            # at top-level, not nested under LivemdVerifier.
-            env = %{__ENV__ | module: nil, function: nil}
-            {_value, new_binding} = Code.eval_string(code, binding, env)
-            new_binding
+            quoted = Code.string_to_quoted!(code)
+            {_value, new_binding, new_env} = Code.eval_quoted_with_env(quoted, binding, env)
+            {new_binding, new_env}
           rescue
             e ->
               IO.puts(:stderr, "\n!! cell #{idx} raised:")

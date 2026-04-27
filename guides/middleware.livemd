@@ -1,0 +1,372 @@
+# Middleware — wrapping the signal pipeline
+
+```elixir
+Mix.install([
+  {:jido, path: Path.expand("..", __DIR__)}
+])
+```
+
+## Setup
+
+```elixir
+defmodule Demo.Jido do
+  use Jido, otp_app: :demo
+end
+
+case Demo.Jido.start_link() do
+  {:ok, _pid} -> :started
+  {:error, {:already_started, _pid}} -> :already_started
+end
+```
+
+## Concept
+
+Middleware wraps the agent's signal pipeline. It is a single-tier construct:
+each middleware sits in a chain that wraps a `next` continuation.
+
+```
+on_signal(signal, ctx, opts, next) ::
+  {:ok, ctx, [directive]} | {:error, ctx, reason}
+```
+
+Four args — `signal`, `ctx`, per-registration `opts`, and `next`. The
+middleware decides whether to call `next.(signal, ctx)`, when, and what to do
+with the result. To gate, transform, retry, or swallow — wrap `next`. To
+reject — don't call `next` at all.
+
+See [ADR 0014](adr/0014-slice-middleware-plugin.md) §middleware for the
+single-tier rationale, and [ADR 0018](adr/0018-tagged-tuple-return-shape.md)
+§1 for the tagged-tuple return shape both branches use.
+
+## Worked example — pass-through and tagging
+
+The simplest middleware: pass `signal` and `ctx` through to `next` unchanged.
+
+```elixir
+defmodule PassThrough do
+  use Jido.Middleware
+
+  @impl true
+  def on_signal(signal, ctx, _opts, next) do
+    next.(signal, ctx)
+  end
+end
+
+next = fn _sig, ctx -> {:ok, ctx, []} end
+sig = %Jido.Signal{type: "demo.work", source: "/livebook", id: "1"}
+
+{:ok, ctx, dirs} = PassThrough.on_signal(sig, %{}, %{}, next)
+IO.inspect(ctx, label: "ctx after PassThrough — unchanged")
+IO.inspect(dirs, label: "directives — none, the base next emits none")
+```
+
+A slightly less trivial one — read per-registration `opts`, augment `ctx`,
+then call `next`. The chain builder closes over each middleware's `opts` at
+construction time, so different agent registrations can produce different
+behaviour from the same module.
+
+```elixir
+defmodule Tagging do
+  use Jido.Middleware
+
+  @impl true
+  def on_signal(signal, ctx, opts, next) do
+    next.(signal, Map.put(ctx, :tag, opts[:tag]))
+  end
+end
+
+{:ok, ctx, _} = Tagging.on_signal(sig, %{}, %{tag: :hot}, next)
+IO.inspect(ctx.tag, label: "tag set from opts (hot)")
+
+{:ok, ctx, _} = Tagging.on_signal(sig, %{}, %{tag: :cold}, next)
+IO.inspect(ctx.tag, label: "same module, different opts → different ctx (cold)")
+```
+
+## Variations
+
+### Outside-in chain composition
+
+When middleware is composed into a chain, each middleware wraps the next.
+The outermost enters first, the innermost runs last, and unwinding goes back
+out. Middleware can run code on either side of `next.()` — that's the
+hook for "act before / act after / both".
+
+```elixir
+defmodule Outer do
+  use Jido.Middleware
+
+  @impl true
+  def on_signal(signal, ctx, _opts, next) do
+    ctx = Map.update(ctx, :order, [:outer], &(&1 ++ [:outer]))
+
+    case next.(signal, ctx) do
+      {:ok, ctx, dirs} ->
+        {:ok, Map.update!(ctx, :order, &(&1 ++ [:outer_after])), dirs}
+
+      {:error, ctx, reason} ->
+        {:error, Map.update!(ctx, :order, &(&1 ++ [:outer_after])), reason}
+    end
+  end
+end
+
+defmodule Inner do
+  use Jido.Middleware
+
+  @impl true
+  def on_signal(signal, ctx, _opts, next) do
+    ctx = Map.update(ctx, :order, [:inner], &(&1 ++ [:inner]))
+    next.(signal, ctx)
+  end
+end
+
+base = fn _sig, ctx -> {:ok, ctx, []} end
+chain_inner = fn s, c -> Inner.on_signal(s, c, %{}, base) end
+chain_outer = fn s, c -> Outer.on_signal(s, c, %{}, chain_inner) end
+
+{:ok, ctx, _} = chain_outer.(sig, %{order: []})
+IO.inspect(ctx.order, label: "order — outer enters, inner runs, outer unwinds")
+```
+
+### Swallowing errors at the chain boundary
+
+A middleware that catches an inner `{:error, ctx, _reason}` and converts it
+to `{:ok, ctx, []}`. Useful for fire-and-forget fanouts where you want
+downstream code to see "no change" instead of an error result.
+
+```elixir
+defmodule Swallow do
+  use Jido.Middleware
+
+  @impl true
+  def on_signal(signal, ctx, _opts, next) do
+    case next.(signal, ctx) do
+      {:error, ctx, _reason} -> {:ok, ctx, []}
+      ok -> ok
+    end
+  end
+end
+
+failing_base = fn _sig, ctx -> {:error, ctx, :boom} end
+chain = fn s, c -> Swallow.on_signal(s, c, %{}, failing_base) end
+
+IO.inspect(chain.(sig, %{}), label: "Swallow turns chain error into success")
+```
+
+### Retry middleware — happy path
+
+`Jido.Middleware.Retry` is the bundled retry-on-error middleware. Its `opts`
+take `:max_attempts` and an optional `:pattern` to filter by signal type.
+Below: a `next` that succeeds on the first try; Retry returns the success
+verbatim without retrying.
+
+```elixir
+alias Jido.Middleware.Retry
+alias Jido.Agent.Directive
+
+next_ok = fn _sig, ctx ->
+  {:ok, ctx, [%Directive.Emit{signal: %Jido.Signal{type: "ok", source: "/x", id: "y"}}]}
+end
+
+{:ok, _ctx, dirs} = Retry.on_signal(sig, %{}, %{max_attempts: 3}, next_ok)
+IO.inspect(length(dirs), label: "Retry: success on attempt 1, returns 1 directive")
+```
+
+### Retry middleware — retry until success
+
+A `next` that fails twice then succeeds. With `max_attempts: 5`, Retry walks
+through three attempts and returns the eventual success.
+
+```elixir
+counter = :counters.new(1, [])
+
+next_flaky = fn _sig, ctx ->
+  n = :counters.get(counter, 1)
+  :counters.add(counter, 1, 1)
+
+  if n < 2 do
+    {:error, ctx, :transient}
+  else
+    {:ok, ctx, [%Directive.Emit{signal: %Jido.Signal{type: "done", source: "/x", id: "z"}}]}
+  end
+end
+
+{:ok, _ctx, dirs} = Retry.on_signal(sig, %{}, %{max_attempts: 5}, next_flaky)
+IO.inspect(length(dirs), label: "eventual success — directives from final attempt")
+IO.inspect(:counters.get(counter, 1), label: "total attempts")
+```
+
+### Retry middleware — pattern filtering
+
+When `:pattern` is set, only signals whose `type` matches are retried. Other
+signals pass through with a single attempt.
+
+```elixir
+counter2 = :counters.new(1, [])
+
+always_fail = fn _sig, ctx ->
+  :counters.add(counter2, 1, 1)
+  {:error, ctx, :nope}
+end
+
+audit_sig = %Jido.Signal{type: "audit.log", source: "/test", id: "a"}
+
+{:error, _, _} =
+  Retry.on_signal(audit_sig, %{}, %{max_attempts: 5, pattern: "work.**"}, always_fail)
+
+IO.inspect(:counters.get(counter2, 1), label: "audit.log doesn't match work.** — single attempt")
+
+counter3 = :counters.new(1, [])
+
+always_fail2 = fn _sig, ctx ->
+  :counters.add(counter3, 1, 1)
+  {:error, ctx, :transient}
+end
+
+work_sig = %Jido.Signal{type: "work.start", source: "/test", id: "b"}
+
+{:error, _, _} =
+  Retry.on_signal(work_sig, %{}, %{max_attempts: 3, pattern: "work.**"}, always_fail2)
+
+IO.inspect(:counters.get(counter3, 1), label: "work.start matches — full 3 attempts")
+```
+
+### Retry middleware — user-emitted `%Error{}` is not a chain error
+
+If an action returns success but emits a `%Directive.Error{}` for log/audit
+purposes, Retry does not fire — it pattern-matches `{:error, _, _}` from the
+chain return, not directives in the success list.
+
+```elixir
+counter4 = :counters.new(1, [])
+
+next_audit_only = fn _sig, ctx ->
+  :counters.add(counter4, 1, 1)
+  # Success path with an audit-style error directive — chain returned :ok
+  {:ok, ctx, [%Directive.Error{error: %{reason: :logged_for_audit}}]}
+end
+
+{:ok, _ctx, dirs} = Retry.on_signal(sig, %{}, %{max_attempts: 5}, next_audit_only)
+IO.inspect(:counters.get(counter4, 1), label: "single attempt — Retry sees {:ok, _, _}")
+IO.inspect([struct: hd(dirs).__struct__], label: "directive on success path")
+```
+
+### Retry attached to an agent — end-to-end
+
+When mounted on an agent via `middleware:`, the chain builder closes over
+each middleware's per-registration `opts` and assembles a chain that wraps
+core routing → cmd/2 → directive execution. Below: a `FlakyAction` that
+fails twice then succeeds, mounted under an agent that has Retry
+configured for the `"flaky"` pattern.
+
+```elixir
+defmodule FlakyAction do
+  use Jido.Action, name: "flaky", path: :app, schema: []
+
+  @counter_key {__MODULE__, :counter}
+
+  def reset(name) do
+    :persistent_term.put({@counter_key, name}, :counters.new(1, []))
+  end
+
+  def attempts(name) do
+    :counters.get(:persistent_term.get({@counter_key, name}), 1)
+  end
+
+  def run(%Jido.Signal{data: %{name: name, succeed_after: succeed_after}}, slice, _, _) do
+    counter = :persistent_term.get({@counter_key, name})
+    :counters.add(counter, 1, 1)
+    n = :counters.get(counter, 1)
+
+    if n >= succeed_after do
+      {:ok, %{slice | value: succeed_after, status: :written}, []}
+    else
+      {:error, :transient}
+    end
+  end
+end
+
+defmodule RetryingAgent do
+  use Jido.Agent,
+    name: "retrying_agent",
+    path: :app,
+    default_plugins: false,
+    schema: [
+      value: [type: :integer, default: 0],
+      status: [type: :atom, default: :idle]
+    ],
+    middleware: [
+      {Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}
+    ]
+
+  def signal_routes(_ctx), do: [{"flaky", FlakyAction}]
+end
+
+FlakyAction.reset(:demo)
+
+{:ok, pid} = Demo.Jido.start_agent(RetryingAgent, id: "middleware-demo-retry")
+:ok = Jido.AgentServer.await_ready(pid)
+
+flaky = Jido.Signal.new!("flaky", %{name: :demo, succeed_after: 3}, source: "/livebook")
+
+{:ok, projected} =
+  Jido.AgentServer.call(pid, flaky, fn s ->
+    {:ok, %{value: s.agent.state.app.value, status: s.agent.state.app.status}}
+  end)
+
+IO.inspect(projected, label: "post-retry state")
+IO.inspect(FlakyAction.attempts(:demo), label: "total attempts seen by the action")
+```
+
+### `ctx.agent` mutation — Persister-style staging
+
+Middleware is allowed to mutate `ctx.agent` (the agent struct passed through
+the chain). The framework commits whatever ends up in `ctx.agent` after the
+outermost middleware unwinds. Persister uses this to stage a thawed agent
+under `lifecycle.starting`. Both branches of the middleware return shape
+carry ctx, so a thawed agent gets committed even if the eventual action
+errors — see [ADR 0018](adr/0018-tagged-tuple-return-shape.md) §1.
+
+```elixir
+defmodule StageOnLifecycle do
+  use Jido.Middleware
+
+  @impl true
+  def on_signal(%Jido.Signal{type: "jido.agent.lifecycle.starting"} = sig, ctx, _opts, next) do
+    # Pretend we just thawed an agent from disk.
+    staged = %{ctx.agent | state: Map.put(ctx.agent.state, :app, %{value: 99, status: :thawed})}
+    next.(sig, %{ctx | agent: staged})
+  end
+
+  def on_signal(sig, ctx, _opts, next), do: next.(sig, ctx)
+end
+
+# Inspect the structure — running this end-to-end against an agent with the
+# Persister-style middleware mounted is in the call/cast/await/subscribe
+# notebook (where we have a live AgentServer to demonstrate against).
+IO.inspect(function_exported?(StageOnLifecycle, :on_signal, 4),
+  label: "callback declared at expected arity"
+)
+```
+
+### Contrast with retired callbacks
+
+The pre-refactor world had two callbacks — `handle_signal/2` and
+`transform_result/3`. Both are gone, replaced by single-tier middleware
+with a `next`-passing contract. Anything you'd have done in `handle_signal`
+goes "before `next.()`"; anything in `transform_result` goes "after". The
+migration recipes are mechanical — see [migration.md](migration.md). One
+contract instead of two.
+
+## Cleanup
+
+```elixir
+:ok = Demo.Jido.stop_agent("middleware-demo-retry")
+```
+
+## Where to next
+
+- [Plugins](plugins.livemd) — the slice + middleware combo.
+- [Actions and directives](actions-and-directives.livemd) — what comes back
+  from the chain's innermost layer.
+- [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
+  end-to-end signal lifecycle including how middleware fits in.
