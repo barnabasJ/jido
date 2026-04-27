@@ -1,7 +1,5 @@
 # Multi-Agent Orchestration
 
-> **Heads up:** examples below referencing `Jido.Agent.StateOp` are stale per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md) — actions now mutate state via their **return value**, not state-op directives. Directives are pure I/O and mutate no state. See [The Bright Line](directives.md#the-bright-line).
-
 **After:** You can spawn child agents, wait for results, and aggregate them — the Jido approach to parallel and hierarchical workflows.
 
 ```elixir
@@ -206,15 +204,13 @@ defmodule HandleFetchResultAction do
       result: [type: :any, required: true]
     ]
 
-  alias Jido.Agent.StateOp
-
   def run(%{request_id: request_id, url: url, result: result}, context) do
     pending = Map.get(context.state, :pending, %{})
     completed = Map.get(context.state, :completed, [])
 
     # Move from pending to completed
     {_, remaining_pending} = Map.pop(pending, request_id)
-    
+
     entry = %{
       request_id: request_id,
       url: url,
@@ -222,13 +218,16 @@ defmodule HandleFetchResultAction do
       completed_at: DateTime.utc_now()
     }
 
-    # Determine if all work is done
     status = if map_size(remaining_pending) == 0, do: :completed, else: :working
 
-    # Use SetPath to replace pending (deep merge doesn't remove keys)
-    set_pending_op = StateOp.set_path([:pending], remaining_pending)
+    new_state = %{
+      context.state
+      | pending: remaining_pending,
+        completed: [entry | completed],
+        status: status
+    }
 
-    {:ok, %{completed: [entry | completed], status: status}, [set_pending_op]}
+    {:ok, new_state, []}
   end
 end
 
@@ -402,7 +401,7 @@ defmodule ParallelFetcher do
   """
 
   alias Jido.{Signal, AgentServer}
-  alias Jido.Agent.{Directive, StateOp}
+  alias Jido.Agent.Directive
 
   # ============================================================================
   # Worker Agent
@@ -510,7 +509,9 @@ defmodule ParallelFetcher do
       results = [%{url: url, result: result} | context.state.results]
       status = if map_size(pending) == 0, do: :completed, else: :working
 
-      {:ok, %{results: results, status: status}, [StateOp.set_path([:pending], pending)]}
+      new_state = %{context.state | pending: pending, results: results, status: status}
+
+      {:ok, new_state, []}
     end
   end
 
