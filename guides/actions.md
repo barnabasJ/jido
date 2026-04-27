@@ -2,8 +2,6 @@
 
 <!-- covers: jido.agents_and_actions.action_execution_surface -->
 
-> **Heads up:** the `## StateOps for complex updates` section below references `Jido.Agent.StateOp`, removed per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md). Actions now mutate state via their **return value** (a slice value, or `%Jido.Agent.SliceUpdate{slices: %{...}}` for multi-slice writes) at the action's declared `path:`. Directives are pure I/O and mutate no state. See [The Bright Line](directives.md#the-bright-line).
-
 **After:** You can implement an Action module that transforms state and returns directives.
 
 ## The Complete Picture
@@ -219,28 +217,33 @@ Actions updating plugin state should target the plugin's key:
 {:ok, %{chat: %{history: updated_history}}}
 ```
 
-### StateOps for complex updates
+### Multi-slice returns
 
-For operations beyond simple merge, return StateOp structs:
+Actions own a single slice, declared via `path:`, and return the new value for that slice. When one action genuinely needs to mutate multiple slices in one transaction, return `%Jido.Agent.SliceUpdate{slices: %{...}}` in place of a slice value:
 
 ```elixir
-alias Jido.Agent.StateOp
+defmodule MyApp.Actions.RecordOrder do
+  use Jido.Action,
+    name: "record_order",
+    path: :orders,
+    schema: [order: [type: :map, required: true]]
 
-# Deep merge (default behavior)
-{:ok, %{}, %StateOp.SetState{attrs: %{metadata: %{key: "value"}}}}
+  alias Jido.Agent.SliceUpdate
 
-# Replace entire state
-{:ok, %{}, %StateOp.ReplaceState{state: %{fresh: true}}}
+  def run(%Jido.Signal{data: %{order: order}}, slice, _opts, _ctx) do
+    new_orders = %{slice | items: [order | slice.items]}
+    new_audit = %{last_order_at: DateTime.utc_now(), order_id: order.id}
 
-# Delete top-level keys
-{:ok, %{}, %StateOp.DeleteKeys{keys: [:temp, :cache]}}
-
-# Set nested path
-{:ok, %{}, %StateOp.SetPath{path: [:nested, :deep, :value], value: 42}}
-
-# Delete nested path
-{:ok, %{}, %StateOp.DeletePath{path: [:nested, :to_remove]}}
+    {:ok,
+     %SliceUpdate{slices: %{orders: new_orders, audit: new_audit}},
+     []}
+  end
+end
 ```
+
+The framework writes every slice listed in `slices:` atomically alongside the action's primary slice. The action's `path:` should still be the primary slice — secondary slices in the map are explicit, named exceptions. Use sparingly; most actions own a single slice and should just return the new slice value.
+
+See [ADR 0019 §3](adr/0019-actions-mutate-state-directives-do-side-effects.md#3-multi-slice-and-cross-slice-writes) for the full rationale and alternatives (re-pathing the action, signal-cascade between two actions).
 
 ## Schema Definition
 
