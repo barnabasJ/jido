@@ -222,9 +222,8 @@ defmodule Jido.Persist do
 
   defp flush_journal(adapter, opts, %Thread{} = thread) do
     with :ok <- validate_local_thread(thread),
-         {:ok, stored_rev} <- get_stored_thread_rev(adapter, opts, thread.id),
-         :ok <- append_missing_entries(adapter, opts, thread, stored_rev) do
-      :ok
+         {:ok, stored_rev} <- get_stored_thread_rev(adapter, opts, thread.id) do
+      append_missing_entries(adapter, opts, thread, stored_rev)
     end
   end
 

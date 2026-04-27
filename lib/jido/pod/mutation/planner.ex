@@ -165,9 +165,8 @@ defmodule Jido.Pod.Mutation.Planner do
        }) do
     with :ok <- ensure_node_absent(topology, name),
          {:ok, next_topology} <- Topology.put_node(topology, name, node),
-         {:ok, next_topology} <- maybe_put_owner(next_topology, owner, name),
-         {:ok, next_topology} <- put_dependencies(next_topology, name, depends_on) do
-      {:ok, next_topology}
+         {:ok, next_topology} <- maybe_put_owner(next_topology, owner, name) do
+      put_dependencies(next_topology, name, depends_on)
     end
   end
 

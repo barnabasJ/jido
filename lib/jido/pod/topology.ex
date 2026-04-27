@@ -399,9 +399,8 @@ defmodule Jido.Pod.Topology do
   end
 
   defp validate_link_structure(links, nodes) when is_list(links) and is_map(nodes) do
-    with :ok <- validate_single_owner(links),
-         :ok <- validate_ownership_cycles(links, nodes) do
-      :ok
+    with :ok <- validate_single_owner(links) do
+      validate_ownership_cycles(links, nodes)
     end
   end
 

@@ -257,9 +257,8 @@ defmodule Jido.Storage.Redis do
   defp set_command(redis_key, binary, ttl), do: ["SET", redis_key, binary, "PX", to_string(ttl)]
 
   defp decode_thread(binary) do
-    with {:ok, stored_thread} <- safe_binary_to_term(binary),
-         {:ok, validated_thread} <- validate_thread(stored_thread) do
-      {:ok, validated_thread}
+    with {:ok, stored_thread} <- safe_binary_to_term(binary) do
+      validate_thread(stored_thread)
     end
   end
 

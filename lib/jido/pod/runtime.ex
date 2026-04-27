@@ -484,9 +484,8 @@ defmodule Jido.Pod.Runtime do
        )
        when is_atom(module) do
     with :ok <- ensure_pod_module(module),
-         :ok <- ensure_pod_manager_module(manager, module),
-         :ok <- ensure_pod_not_recursive(module, name, ancestry) do
-      :ok
+         :ok <- ensure_pod_manager_module(manager, module) do
+      ensure_pod_not_recursive(module, name, ancestry)
     end
   end
 
