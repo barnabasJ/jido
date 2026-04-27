@@ -1,0 +1,286 @@
+# Pods — hierarchies of agents
+
+```elixir
+Mix.install([
+  {:jido, path: Path.expand("..", __DIR__)}
+])
+```
+
+## Setup
+
+Pods need an `InstanceManager` per worker pool plus a manager for the pod
+itself. The setup is heavier than the other notebooks but it mirrors what a
+real application wires up at boot.
+
+```elixir
+defmodule Demo.Jido do
+  use Jido, otp_app: :demo
+end
+
+case Demo.Jido.start_link() do
+  {:ok, _pid} -> :started
+  {:error, {:already_started, _pid}} -> :already_started
+end
+```
+
+## Concept
+
+A *pod* is a `Jido.Agent` that owns a topology of child agents. Pods exist
+because some agent shapes are best modelled as a small named hierarchy:
+manager + planner + reviewer + auditor, each agent doing its slice of the
+work, with explicit `:owns` and `:depends_on` links between them.
+
+The pod manager agent owns the pod's `:pod` slice (topology + mutation
+state). Mutations are reified — `Pod.mutate/3` takes a list of
+`%Mutation.AddNode{}` / `%Mutation.RemoveNode{}` / `%Mutation.EnsureNode{}`
+structs and the runtime drives the topology to the new shape via signals.
+
+Per [ADR 0017](adr/0017-pod-mutations-are-signal-driven.md) §1, mutation
+is **signal-driven** — `mutate/3` returns a queued ack and the
+`pod.mutation` slice flips status `:idle → :running → :completed | :failed`
+as natural child lifecycle signals (`child.started`, `child.exit`)
+propagate. Per [ADR 0021](adr/0021-no-full-state-no-polling.md), readers
+project a `Pod.Runtime.View` (via `Pod.nodes/1`, `Pod.lookup_node/2`)
+instead of polling the raw `state.children` map.
+
+## Worked example — a pod with one worker
+
+The setup defines a worker agent module and a pod module. The pod's
+topology is empty at compile time — we'll grow it with `mutate_and_wait/3`.
+
+```elixir
+defmodule WorkerAgent do
+  use Jido.Agent,
+    name: "pods_demo_worker",
+    path: :domain,
+    default_plugins: false,
+    schema: [
+      role: [type: :string, default: "worker"]
+    ]
+end
+
+defmodule ReviewPod do
+  use Jido.Pod, name: "pods_demo_pod", default_plugins: false
+end
+```
+
+We need an `InstanceManager` per pool — one for workers, one for the pod
+itself. Each manager owns startup/shutdown for its agents and persists
+their durable state (here: ETS).
+
+```elixir
+alias Jido.Agent.InstanceManager
+alias Jido.Storage.ETS
+
+storage_table = :"pods_demo_storage_#{System.unique_integer([:positive])}"
+
+worker_manager_name = :"pods_demo_workers_#{System.unique_integer([:positive])}"
+pod_manager_name = :"pods_demo_pods_#{System.unique_integer([:positive])}"
+
+worker_spec =
+  InstanceManager.child_spec(
+    name: worker_manager_name,
+    agent: WorkerAgent,
+    jido: Demo.Jido,
+    storage: {ETS, table: storage_table},
+    agent_opts: [jido: Demo.Jido, on_parent_death: :continue]
+  )
+
+pod_spec =
+  InstanceManager.child_spec(
+    name: pod_manager_name,
+    agent: ReviewPod,
+    jido: Demo.Jido,
+    storage: {ETS, table: storage_table},
+    agent_opts: [jido: Demo.Jido]
+  )
+
+{:ok, _worker_pid} = Supervisor.start_link([worker_spec], strategy: :one_for_one, name: :"pods_worker_sup_#{System.unique_integer([:positive])}")
+{:ok, _pod_sup} = Supervisor.start_link([pod_spec], strategy: :one_for_one, name: :"pods_pod_sup_#{System.unique_integer([:positive])}")
+
+IO.puts("worker manager: #{worker_manager_name}; pod manager: #{pod_manager_name}")
+```
+
+```elixir
+pod_key = "pods-demo-#{System.unique_integer([:positive])}"
+
+{:ok, pod_pid} = Jido.Pod.get(pod_manager_name, pod_key)
+{:ok, topology} = Jido.Pod.fetch_topology(pod_pid)
+
+IO.inspect(topology.nodes, label: "fresh pod — empty topology")
+```
+
+## Variations
+
+### `mutate_and_wait/3` — grow the pod
+
+Add two nodes — an eager `planner` and a lazy `reviewer` that depends on
+the planner. The pod runtime starts the planner immediately (eager) and
+leaves the reviewer dormant (lazy).
+
+```elixir
+alias Jido.Pod.Mutation
+
+{:ok, report} =
+  Jido.Pod.mutate_and_wait(
+    pod_pid,
+    [
+      Mutation.add_node("planner", %{
+        agent: WorkerAgent,
+        manager: worker_manager_name,
+        activation: :eager,
+        initial_state: %{role: "planner"}
+      }),
+      Mutation.add_node(
+        "reviewer",
+        %{
+          agent: WorkerAgent,
+          manager: worker_manager_name,
+          activation: :lazy,
+          initial_state: %{role: "reviewer"}
+        },
+        owner: "planner",
+        depends_on: ["planner"]
+      )
+    ]
+  )
+
+IO.inspect(report.status, label: "mutation status — :completed when all signals settled")
+IO.inspect(report.added, label: "nodes added by topology")
+IO.inspect(report.started, label: "nodes that were eager and got started")
+```
+
+### `Pod.lookup_node/2` and `Pod.nodes/1` — the View projection
+
+`Pod.lookup_node/2` returns `{:ok, pid}` for a running node, `:error` for
+a stopped node, or `{:error, _}` for an unknown name. `Pod.nodes/1`
+returns the full snapshot map — one node-snapshot per declared node, with
+`:status`, `:pid`, `:owner`, `:adopted?`. Both project the typed view, not
+the raw `state.children`.
+
+```elixir
+{:ok, planner_pid} = Jido.Pod.lookup_node(pod_pid, "planner")
+IO.inspect({:ok, planner_pid}, label: "planner is running and adopted")
+
+case Jido.Pod.lookup_node(pod_pid, "reviewer") do
+  {:ok, _pid} -> IO.puts("reviewer running")
+  :error -> IO.puts("reviewer is :stopped (lazy node, not yet activated)")
+end
+
+{:ok, snapshots} = Jido.Pod.nodes(pod_pid)
+
+snapshots
+|> Enum.map(fn {name, snap} -> {name, snap.status} end)
+|> IO.inspect(label: "all node statuses")
+```
+
+### `Pod.ensure_node/3` — activate a lazy node
+
+`ensure_node/3` materialises a lazy node on demand. The reviewer was lazy
+above; calling `ensure_node` starts it under the planner (its declared
+owner) and adopts it into the pod manager's children map.
+
+```elixir
+{:ok, reviewer_pid} = Jido.Pod.ensure_node(pod_pid, "reviewer")
+IO.inspect(reviewer_pid, label: "reviewer pid — now adopted")
+
+{:ok, snapshots} = Jido.Pod.nodes(pod_pid)
+IO.inspect(snapshots["reviewer"].status, label: "reviewer status after ensure_node")
+
+# The :owns link puts reviewer under planner's children map at runtime,
+# not under the pod manager's children map directly.
+{:ok, planner_children} = Jido.AgentServer.state(planner_pid, fn s -> {:ok, s.children} end)
+IO.inspect(Map.keys(planner_children), label: "planner's children — reviewer is owned by planner")
+```
+
+### `Pod.mutate/3` — async mutation
+
+`mutate/3` is the async variant. It returns `{:ok, %{mutation_id: id, queued: true}}`
+once the action's slice return has set the pod's mutation slice; it does
+**not** wait for the mutation to complete. To observe completion, read
+the slice or subscribe.
+
+```elixir
+{:ok, ack} =
+  Jido.Pod.mutate(pod_pid, [
+    Mutation.add_node("auditor", %{
+      agent: WorkerAgent,
+      manager: worker_manager_name,
+      activation: :lazy,
+      initial_state: %{role: "auditor"}
+    })
+  ])
+
+IO.inspect(ack, label: "mutate/3 returns the queued ack — fire-and-monitor pattern")
+
+# Read the pod's mutation slice via state/3 to see the mutation status
+# transitions. Lazy nodes don't have to start, so this one is short — the
+# action sets the topology and the runtime is :idle again quickly.
+Process.sleep(100)
+
+{:ok, mutation_status} =
+  Jido.AgentServer.state(pod_pid, fn s -> {:ok, s.agent.state.pod.mutation.status} end)
+
+IO.inspect(mutation_status, label: "post-mutation status")
+```
+
+### `Pod.fetch_topology/1` — current topology snapshot
+
+The pod's topology lives in the `:pod` slice. `fetch_topology/1` projects
+it. Useful for tooling that needs to render the current pod shape.
+
+```elixir
+{:ok, topology} = Jido.Pod.fetch_topology(pod_pid)
+
+topology.nodes
+|> Enum.map(fn {name, node} -> {name, node.activation} end)
+|> IO.inspect(label: "topology — node name + activation kind")
+
+IO.inspect(topology.version, label: "topology.version — bumped on structural changes")
+```
+
+### `Pod.mutate_and_wait/3` — failure path
+
+If a mutation references a non-existent node (e.g., `RemoveNode` against
+a name that's not in the topology), the action rejects with a planner
+error and the report comes back with `status: :failed`. The mutation
+slice carries the reason.
+
+```elixir
+case Jido.Pod.mutate_and_wait(pod_pid, [Mutation.remove_node("nonexistent")]) do
+  {:ok, report} ->
+    IO.inspect(report, label: "completed report")
+
+  {:error, reason} ->
+    IO.inspect(reason, label: "mutation failed — planner rejected")
+end
+```
+
+### `Pod.reconcile/2` — drive eager nodes to running
+
+`reconcile/2` is what `Pod.get/3` calls under the hood after a thaw or
+an in-place re-grab. It walks the topology and ensures every eager node
+is started + adopted. Useful when you've just adopted a pod from
+`InstanceManager` directly (without the `Pod.get/3` happy path).
+
+```elixir
+{:ok, reconcile_report} = Jido.Pod.reconcile(pod_pid)
+IO.inspect(reconcile_report, label: "reconcile report — fields: requested/waves/completed/failed")
+```
+
+## Cleanup
+
+```elixir
+:ok = InstanceManager.stop(pod_manager_name, pod_key)
+```
+
+## Where to next
+
+- [Slices](slices.livemd) — the pod's `:pod` slice is just another slice.
+- [Actions and directives](actions-and-directives.livemd) — the cascade
+  pattern that drives pod mutation status transitions.
+- [Cron and child lifecycle](cron-children-lifecycle.livemd) — the
+  natural `child.started` / `child.exit` signals that pod runtime hooks
+  into.
+- [Observability](observability.livemd) — the `[:jido, :pod, :reconcile, *]`
+  and `[:jido, :pod, :node, :ensure, *]` telemetry events you can attach to.
