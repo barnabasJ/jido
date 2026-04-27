@@ -1,7 +1,5 @@
 # Middleware
 
-> **Heads up:** examples below referencing `%StateOp.SetPath{}` are stale per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md) — directives mutate no state. Middleware staging now happens via direct `ctx.agent` mutation per [ADR 0018](adr/0018-tagged-tuple-return-shape.md) §1, the documented exception to The Bright Line. See [The Bright Line](directives.md#the-bright-line).
-
 A **Middleware** wraps the agent's signal pipeline. It is a single-tier,
 `next`-passing chain: each middleware sits between AgentServer and the
 inner pipeline (routing → action → directives), and decides whether to pass
@@ -164,9 +162,16 @@ session caches), either:
 - **Process-local**: `Process.put/get` inside the AgentServer process (simple, OTP-friendly).
 - **External store**: `:ets`, `:persistent_term`, or a downstream service.
 - **Plugin pairing**: declare a Slice next to the Middleware so the data
-  lives in `agent.state[plugin.path]`. The middleware reads/writes via
-  `ctx.agent.state[path]` and emits `%StateOp.SetPath{}` directives to
-  update it through the normal directive pipeline.
+  lives in `agent.state[plugin.path]`. The middleware reads via
+  `ctx.agent.state[path]` and stages writes by passing an updated `ctx`
+  to `next` — for example,
+  `next.(signal, %{ctx | agent: %{ctx.agent | state: new_state}})`.
+  This is the documented `ctx.agent`-staging exception to "directives
+  mutate no state" per [ADR 0018](adr/0018-tagged-tuple-return-shape.md) §1
+  and [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md) §1.
+  See [`Jido.Middleware.Persister`](../lib/jido/middleware/persister.ex)
+  for the canonical example (it stages a thawed agent on
+  `jido.agent.lifecycle.starting`).
 
 The Plugin route is the right call when the state is *part of the agent's
 identity* (must persist through hibernate, must be visible to other
