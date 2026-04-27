@@ -176,14 +176,12 @@ defmodule Jido.Scheduler.Job do
   @spec next_run_date(Crontab.CronExpression.t(), DateTime.t()) ::
           {:ok, NaiveDateTime.t()} | {:error, term()}
   defp next_run_date(cron, now) do
-    try do
-      case CronScheduler.get_next_run_date(cron, DateTime.to_naive(now)) do
-        {:ok, next_naive} -> {:ok, next_naive}
-        {:error, reason} -> {:error, {:next_run_not_found, reason}}
-      end
-    rescue
-      e -> {:error, {:next_run_exception, Exception.message(e)}}
+    case CronScheduler.get_next_run_date(cron, DateTime.to_naive(now)) do
+      {:ok, next_naive} -> {:ok, next_naive}
+      {:error, reason} -> {:error, {:next_run_not_found, reason}}
     end
+  rescue
+    e -> {:error, {:next_run_exception, Exception.message(e)}}
   end
 
   @spec now_in_timezone(String.t()) :: {:ok, DateTime.t()} | {:error, term()}
@@ -196,18 +194,16 @@ defmodule Jido.Scheduler.Job do
 
   @spec safe_execute((-> term())) :: :ok
   defp safe_execute(fun) do
-    try do
-      _ = fun.()
+    _ = fun.()
+    :ok
+  rescue
+    error ->
+      Logger.error("Scheduler callback raised: #{Exception.message(error)}")
       :ok
-    rescue
-      error ->
-        Logger.error("Scheduler callback raised: #{Exception.message(error)}")
-        :ok
-    catch
-      kind, reason ->
-        Logger.error("Scheduler callback #{kind}: #{inspect(reason)}")
-        :ok
-    end
+  catch
+    kind, reason ->
+      Logger.error("Scheduler callback #{kind}: #{inspect(reason)}")
+      :ok
   end
 
   @spec schedule_after_tick(state()) :: state()

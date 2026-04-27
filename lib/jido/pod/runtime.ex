@@ -651,14 +651,12 @@ defmodule Jido.Pod.Runtime do
   end
 
   defp running_child_pid(manager, key, opts) do
-    try do
-      case InstanceManager.lookup(manager, key, opts) do
-        {:ok, pid} -> pid
-        :error -> nil
-      end
-    rescue
-      ArgumentError -> nil
+    case InstanceManager.lookup(manager, key, opts) do
+      {:ok, pid} -> pid
+      :error -> nil
     end
+  rescue
+    ArgumentError -> nil
   end
 
   defp owner_name(%Topology{} = topology, name) do

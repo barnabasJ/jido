@@ -1635,11 +1635,9 @@ defmodule Jido.AgentServer do
   @spec invoke_call_selector(call_selector(), State.t()) ::
           {:ok, term()} | {:error, term()}
   defp invoke_call_selector(selector, %State{} = state) when is_function(selector, 1) do
-    try do
-      selector.(state)
-    rescue
-      exception -> {:error, {:selector_raised, exception, __STACKTRACE__}}
-    end
+    selector.(state)
+  rescue
+    exception -> {:error, {:selector_raised, exception, __STACKTRACE__}}
   end
 
   # Middleware chain → routing → cmd/2. The outermost middleware wraps the

@@ -582,16 +582,14 @@ defmodule Jido.Persist do
   @spec invoke_agent_callback(:checkpoint | :restore, (-> term())) ::
           {:ok, term()} | {:error, term()}
   defp invoke_agent_callback(callback, fun) do
-    try do
-      normalize_callback_result(callback, fun.())
-    rescue
-      error ->
-        {:error,
-         {callback_error_key(callback), {:raised, error.__struct__, Exception.message(error)}}}
-    catch
-      kind, reason ->
-        {:error, {callback_error_key(callback), {kind, reason}}}
-    end
+    normalize_callback_result(callback, fun.())
+  rescue
+    error ->
+      {:error,
+       {callback_error_key(callback), {:raised, error.__struct__, Exception.message(error)}}}
+  catch
+    kind, reason ->
+      {:error, {callback_error_key(callback), {kind, reason}}}
   end
 
   @spec normalize_callback_result(:checkpoint | :restore, term()) ::

@@ -430,15 +430,13 @@ defmodule Jido.Observe do
   end
 
   defp invoke_scoped_callback(%SpanCtx{} = span_ctx, key, wrapped_fun, callback_fun) do
-    try do
-      callback_fun.()
-    rescue
-      e ->
-        handle_scoped_callback_failure(span_ctx, key, {:error, e, __STACKTRACE__}, wrapped_fun)
-    catch
-      kind, reason ->
-        handle_scoped_callback_failure(span_ctx, key, {kind, reason, __STACKTRACE__}, wrapped_fun)
-    end
+    callback_fun.()
+  rescue
+    e ->
+      handle_scoped_callback_failure(span_ctx, key, {:error, e, __STACKTRACE__}, wrapped_fun)
+  catch
+    kind, reason ->
+      handle_scoped_callback_failure(span_ctx, key, {kind, reason, __STACKTRACE__}, wrapped_fun)
   end
 
   defp handle_scoped_callback_failure(%SpanCtx{} = span_ctx, key, failure, wrapped_fun) do
@@ -569,24 +567,22 @@ defmodule Jido.Observe do
   end
 
   defp execute_scoped_fun(fun, span_ctx, key) do
-    try do
-      result = fun.()
-      emit_stop_event(span_ctx)
-      Process.put(key, %{count: 1, outcome: {:ok, result}})
-      result
-    rescue
-      e ->
-        stacktrace = __STACKTRACE__
-        emit_exception_event(span_ctx, :error, e, stacktrace)
-        Process.put(key, %{count: 1, outcome: {:raised, :error, e, stacktrace}})
-        reraise e, stacktrace
-    catch
-      kind, reason ->
-        stacktrace = __STACKTRACE__
-        emit_exception_event(span_ctx, kind, reason, stacktrace)
-        Process.put(key, %{count: 1, outcome: {:raised, kind, reason, stacktrace}})
-        :erlang.raise(kind, reason, stacktrace)
-    end
+    result = fun.()
+    emit_stop_event(span_ctx)
+    Process.put(key, %{count: 1, outcome: {:ok, result}})
+    result
+  rescue
+    e ->
+      stacktrace = __STACKTRACE__
+      emit_exception_event(span_ctx, :error, e, stacktrace)
+      Process.put(key, %{count: 1, outcome: {:raised, :error, e, stacktrace}})
+      reraise e, stacktrace
+  catch
+    kind, reason ->
+      stacktrace = __STACKTRACE__
+      emit_exception_event(span_ctx, kind, reason, stacktrace)
+      Process.put(key, %{count: 1, outcome: {:raised, kind, reason, stacktrace}})
+      :erlang.raise(kind, reason, stacktrace)
   end
 
   defp replay_scoped_outcome({:ok, result}), do: result

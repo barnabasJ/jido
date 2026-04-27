@@ -124,13 +124,11 @@ defmodule JidoTest.Observe.TracerScopeContractTest do
 
     @impl true
     def with_span_scope(_event_prefix, _metadata, fun) do
-      try do
-        fun.()
-      rescue
-        _ -> :swallowed
-      catch
-        _, _ -> :swallowed
-      end
+      fun.()
+    rescue
+      _ -> :swallowed
+    catch
+      _, _ -> :swallowed
     end
   end
 
