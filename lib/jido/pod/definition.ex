@@ -123,10 +123,14 @@ defmodule Jido.Pod.Definition do
         PluginInstance.new(decl)
       rescue
         error in [ArgumentError] ->
-          raise CompileError,
-            description: "Invalid pod plugin #{inspect(mod)}: #{Exception.message(error)}",
-            file: caller_env.file,
-            line: caller_env.line
+          reraise CompileError,
+                  [
+                    description:
+                      "Invalid pod plugin #{inspect(mod)}: #{Exception.message(error)}",
+                    file: caller_env.file,
+                    line: caller_env.line
+                  ],
+                  __STACKTRACE__
       end
 
     cond do
