@@ -360,6 +360,8 @@ defmodule Jido.MixProject do
           Jido.Error.ValidationError
         ],
         "Jido AI": [
+          Jido.AI.ReAct,
+          Jido.AI.ReAct.Result,
           Jido.AI.Turn,
           Jido.AI.ToolAdapter
         ]
