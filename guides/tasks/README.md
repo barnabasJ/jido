@@ -66,6 +66,7 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 | [0017](0017-slice-owned-routes-and-terminology.md) | Move slice-owned routes onto slices; clarify `plugins:` accepts slices | **green** | Documentation correction to ADR 0014 + task 0016 livebooks |
 | [0018](0018-refresh-user-guides-for-adr-0019.md) | Refresh user-facing guides for ADR 0019 strict rule: rewrite stale `Jido.Agent.StateOp` examples in `agents.md` / `actions.md` / `orchestration.md` / `plugins.md` / `middleware.md` / `scheduling.md` / `migration.md` / `your-first-plugin.md` to use slice-return + `%SliceUpdate{}` shape; delete `guides/state-ops.md`; remove the "Heads up" banners | **green** | 0019 (per-guide documentation cleanup) |
 | [0019](0019-remove-process-sleep-from-livebooks.md) | Remove `Process.sleep` from livebooks; use `subscribe/4` instead | **green** | Documentation correction to task 0016 livebooks (ADR 0021 enforcement) |
+| [0020](0020-fix-lib-moduledoc-cross-refs.md) | Fix lib/ moduledoc cross-references caught by `mix docs`: `../adr/...` → `../../guides/adr/...` typos; unqualified `Agent.new/1` / `Agent.cmd/2` refs; wrong-arity `expand_route/2` → public `expand_routes/1` | **green** | Documentation hygiene follow-up to task 0018 (lib/ moduledoc warnings the docs-only constraint blocked) |
 
 ## Dependencies
 
