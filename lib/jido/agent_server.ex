@@ -864,10 +864,11 @@ defmodule Jido.AgentServer do
         message,
         timezone
       ) do
-    with :ok <- validate_dynamic_cron_input(cron_expr, timezone) do
-      runtime_spec = CronRuntimeSpec.dynamic(cron_expr, message, timezone)
-      register_runtime_cron_job(state, logical_id, runtime_spec)
-    else
+    case validate_dynamic_cron_input(cron_expr, timezone) do
+      :ok ->
+        runtime_spec = CronRuntimeSpec.dynamic(cron_expr, message, timezone)
+        register_runtime_cron_job(state, logical_id, runtime_spec)
+
       {:error, reason} ->
         {:error, reason, state}
     end

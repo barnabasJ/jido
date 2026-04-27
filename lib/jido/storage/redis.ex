@@ -197,9 +197,8 @@ defmodule Jido.Storage.Redis do
       binary = :erlang.term_to_binary(updated_thread)
       command = set_command(redis_key, binary, Keyword.get(opts, :ttl))
 
-      with {:ok, _} <- command_fn.(command) do
-        {:ok, reconstruct_thread(thread_id, updated_thread)}
-      else
+      case command_fn.(command) do
+        {:ok, _} -> {:ok, reconstruct_thread(thread_id, updated_thread)}
         {:error, reason} -> {:error, reason}
       end
     end

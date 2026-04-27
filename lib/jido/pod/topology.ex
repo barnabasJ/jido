@@ -179,11 +179,9 @@ defmodule Jido.Pod.Topology do
           topology.links ++ [normalized_link]
         end
 
-      with :ok <- validate_link_structure(links, topology.nodes) do
-        {:ok, %{topology | links: links}}
-      else
-        {:error, _reason} = error ->
-          error
+      case validate_link_structure(links, topology.nodes) do
+        :ok -> {:ok, %{topology | links: links}}
+        {:error, _reason} = error -> error
       end
     end
   end

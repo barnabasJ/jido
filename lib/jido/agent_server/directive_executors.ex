@@ -462,10 +462,11 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Reply do
         {:error, reason} -> {error_type, %{reason: reason}}
       end
 
-    with {:ok, reply_signal} <- Signal.new(type, data, subject: input.id) do
-      _ = Dispatch.dispatch(reply_signal, input.jido_dispatch)
-      :ok
-    else
+    case Signal.new(type, data, subject: input.id) do
+      {:ok, reply_signal} ->
+        _ = Dispatch.dispatch(reply_signal, input.jido_dispatch)
+        :ok
+
       {:error, reason} ->
         Logger.warning(
           "Reply directive: failed to build #{inspect(type)} reply signal: #{inspect(reason)}"

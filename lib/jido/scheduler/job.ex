@@ -81,20 +81,21 @@ defmodule Jido.Scheduler.Job do
     owner_pid = Map.get(init_state, :owner_pid)
     owner_ref = if is_pid(owner_pid), do: Process.monitor(owner_pid), else: nil
 
-    with {:ok, timer_ref} <- schedule_next_tick(cron, timezone) do
-      {:ok,
-       %{
-         fun: fun,
-         cron_expr: cron_expr,
-         cron: cron,
-         timezone: timezone,
-         timer_ref: timer_ref,
-         retrying?: false,
-         callback_workers: %{},
-         owner_pid: owner_pid,
-         owner_ref: owner_ref
-       }}
-    else
+    case schedule_next_tick(cron, timezone) do
+      {:ok, timer_ref} ->
+        {:ok,
+         %{
+           fun: fun,
+           cron_expr: cron_expr,
+           cron: cron,
+           timezone: timezone,
+           timer_ref: timer_ref,
+           retrying?: false,
+           callback_workers: %{},
+           owner_pid: owner_pid,
+           owner_ref: owner_ref
+         }}
+
       {:error, reason} ->
         {:stop, reason}
     end
