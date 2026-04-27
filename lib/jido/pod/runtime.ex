@@ -514,19 +514,7 @@ defmodule Jido.Pod.Runtime do
       {:ok, topology} ->
         Enum.reduce_while(topology.nodes, :ok, fn
           {_name, %Node{kind: :pod, module: nested_module}}, :ok ->
-            cond do
-              nested_module == nil ->
-                {:cont, :ok}
-
-              nested_module in ancestry ->
-                {:halt, recursion_error(nested_module, ancestry, original_name)}
-
-              true ->
-                case walk_pod_topology(nested_module, [nested_module | ancestry], original_name) do
-                  :ok -> {:cont, :ok}
-                  err -> {:halt, err}
-                end
-            end
+            walk_nested_pod(nested_module, ancestry, original_name)
 
           _other, :ok ->
             {:cont, :ok}
@@ -534,6 +522,19 @@ defmodule Jido.Pod.Runtime do
 
       _ ->
         :ok
+    end
+  end
+
+  defp walk_nested_pod(nil, _ancestry, _original_name), do: {:cont, :ok}
+
+  defp walk_nested_pod(nested_module, ancestry, original_name) do
+    if nested_module in ancestry do
+      {:halt, recursion_error(nested_module, ancestry, original_name)}
+    else
+      case walk_pod_topology(nested_module, [nested_module | ancestry], original_name) do
+        :ok -> {:cont, :ok}
+        err -> {:halt, err}
+      end
     end
   end
 

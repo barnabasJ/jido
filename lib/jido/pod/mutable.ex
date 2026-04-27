@@ -58,27 +58,31 @@ defmodule Jido.Pod.Mutable do
            AgentServer.subscribe(server, "jido.agent.child.*", selector, once: true) do
       case AgentServer.call(server, signal, &default_selector/1, timeout: await_timeout) do
         {:ok, %{queued: true}} ->
-          # The mutation may have already finalized inside that mailbox turn
-          # (zero-wave plan), in which case no child lifecycle signal will
-          # arrive to fire the subscriber. Re-check the slice once after the
-          # call returns to close that gap.
-          case AgentServer.state(server, fn s -> {:ok, selector.(s)} end) do
-            {:ok, {:ok, report}} ->
-              _ = AgentServer.unsubscribe(server, sub_ref)
-              {:ok, report}
-
-            {:ok, {:error, error}} ->
-              _ = AgentServer.unsubscribe(server, sub_ref)
-              {:error, error}
-
-            _ ->
-              wait_for_terminal(server, sub_ref, await_timeout)
-          end
+          handle_queued_mutation(server, sub_ref, selector, await_timeout)
 
         {:error, _reason} = error ->
           _ = AgentServer.unsubscribe(server, sub_ref)
           error
       end
+    end
+  end
+
+  # The mutation may have already finalized inside that mailbox turn
+  # (zero-wave plan), in which case no child lifecycle signal will
+  # arrive to fire the subscriber. Re-check the slice once after the
+  # call returns to close that gap.
+  defp handle_queued_mutation(server, sub_ref, selector, await_timeout) do
+    case AgentServer.state(server, fn s -> {:ok, selector.(s)} end) do
+      {:ok, {:ok, report}} ->
+        _ = AgentServer.unsubscribe(server, sub_ref)
+        {:ok, report}
+
+      {:ok, {:error, error}} ->
+        _ = AgentServer.unsubscribe(server, sub_ref)
+        {:error, error}
+
+      _ ->
+        wait_for_terminal(server, sub_ref, await_timeout)
     end
   end
 

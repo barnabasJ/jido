@@ -583,22 +583,26 @@ defmodule Jido.Exec do
 
         case deadline do
           deadline_ms when is_integer(deadline_ms) ->
-            remaining = deadline_ms - now
-
-            if remaining <= 0 do
-              {:error,
-               Error.timeout_error("Execution deadline exceeded before action dispatch", %{
-                 deadline_ms: deadline_ms,
-                 now_ms: now
-               })}
-            else
-              effective_timeout = if timeout == 0, do: remaining, else: min(timeout, remaining)
-              {:ok, effective_timeout, Map.put(context, @deadline_key, deadline_ms)}
-            end
+            apply_deadline_budget(deadline_ms, now, timeout, context)
 
           _ ->
             {:ok, timeout, context}
         end
+      end
+    end
+
+    defp apply_deadline_budget(deadline_ms, now, timeout, context) do
+      remaining = deadline_ms - now
+
+      if remaining <= 0 do
+        {:error,
+         Error.timeout_error("Execution deadline exceeded before action dispatch", %{
+           deadline_ms: deadline_ms,
+           now_ms: now
+         })}
+      else
+        effective_timeout = if timeout == 0, do: remaining, else: min(timeout, remaining)
+        {:ok, effective_timeout, Map.put(context, @deadline_key, deadline_ms)}
       end
     end
 

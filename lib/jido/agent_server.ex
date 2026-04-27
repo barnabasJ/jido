@@ -559,37 +559,39 @@ defmodule Jido.AgentServer do
 
     with {:ok, pid} <- resolve_server(server) do
       case GenServer.call(pid, {:get_child_pid, child_tag}) do
-        {:ok, child_pid} ->
-          {:ok, child_pid}
-
-        :not_found ->
-          selector = fn %State{} = state ->
-            case State.get_child(state, child_tag) do
-              %ChildInfo{pid: child_pid} when is_pid(child_pid) -> {:ok, child_pid}
-              _ -> :skip
-            end
-          end
-
-          case subscribe(pid, "jido.agent.child.started", selector, once: true) do
-            {:ok, ref} ->
-              # Re-check after subscribing — the natural `child.started`
-              # cast can arrive between the initial `:get_child_pid` reply
-              # and the `subscribe` call returning, in which case the
-              # cascade already populated state.children but our
-              # subscriber wasn't registered in time to observe it.
-              case GenServer.call(pid, {:get_child_pid, child_tag}) do
-                {:ok, child_pid} ->
-                  unsubscribe(pid, ref)
-                  {:ok, child_pid}
-
-                :not_found ->
-                  wait_for_child_subscription(pid, ref, timeout)
-              end
-
-            error ->
-              error
-          end
+        {:ok, child_pid} -> {:ok, child_pid}
+        :not_found -> subscribe_and_await_child(pid, child_tag, timeout)
       end
+    end
+  end
+
+  defp subscribe_and_await_child(pid, child_tag, timeout) do
+    selector = fn %State{} = state ->
+      case State.get_child(state, child_tag) do
+        %ChildInfo{pid: child_pid} when is_pid(child_pid) -> {:ok, child_pid}
+        _ -> :skip
+      end
+    end
+
+    case subscribe(pid, "jido.agent.child.started", selector, once: true) do
+      {:ok, ref} -> recheck_or_wait_for_child(pid, child_tag, ref, timeout)
+      error -> error
+    end
+  end
+
+  # Re-check after subscribing — the natural `child.started` cast can
+  # arrive between the initial `:get_child_pid` reply and the `subscribe`
+  # call returning, in which case the cascade already populated
+  # state.children but our subscriber wasn't registered in time to
+  # observe it.
+  defp recheck_or_wait_for_child(pid, child_tag, ref, timeout) do
+    case GenServer.call(pid, {:get_child_pid, child_tag}) do
+      {:ok, child_pid} ->
+        unsubscribe(pid, ref)
+        {:ok, child_pid}
+
+      :not_found ->
+        wait_for_child_subscription(pid, ref, timeout)
     end
   end
 
@@ -1939,22 +1941,29 @@ defmodule Jido.AgentServer do
   defp fire_subscribers(%State{} = state, %Signal{type: type} = signal) do
     Enum.reduce(state.signal_subscribers, state, fn {sub_ref, entry}, acc_state ->
       if JidoRouter.matches?(type, entry.pattern_compiled) do
-        case entry.selector.(acc_state) do
-          :skip ->
-            acc_state
-
-          {:ok, _value} = fire ->
-            dispatch_subscriber(entry.dispatch, sub_ref, signal, fire)
-            if entry.once, do: remove_subscriber(acc_state, sub_ref), else: acc_state
-
-          {:error, _reason} = fire ->
-            dispatch_subscriber(entry.dispatch, sub_ref, signal, fire)
-            if entry.once, do: remove_subscriber(acc_state, sub_ref), else: acc_state
-        end
+        fire_matching_subscriber(acc_state, sub_ref, entry, signal)
       else
         acc_state
       end
     end)
+  end
+
+  defp fire_matching_subscriber(acc_state, sub_ref, entry, signal) do
+    case entry.selector.(acc_state) do
+      :skip ->
+        acc_state
+
+      {:ok, _value} = fire ->
+        dispatch_and_maybe_remove(acc_state, sub_ref, entry, signal, fire)
+
+      {:error, _reason} = fire ->
+        dispatch_and_maybe_remove(acc_state, sub_ref, entry, signal, fire)
+    end
+  end
+
+  defp dispatch_and_maybe_remove(acc_state, sub_ref, entry, signal, fire) do
+    dispatch_subscriber(entry.dispatch, sub_ref, signal, fire)
+    if entry.once, do: remove_subscriber(acc_state, sub_ref), else: acc_state
   end
 
   defp dispatch_subscriber({:pid, target: target}, sub_ref, %Signal{type: type}, result)
