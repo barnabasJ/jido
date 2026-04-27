@@ -1,7 +1,5 @@
 # Plugins
 
-> **Heads up:** examples below referencing `Jido.Agent.StateOp` (`SetPath`, etc.) are stale per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md) — actions now mutate state via their **return value**, not state-op directives. Directives are pure I/O and mutate no state. Plugin actions writing to a slice should declare the right `path:` and return the new slice value directly. See [The Bright Line](directives.md#the-bright-line).
-
 A **Plugin** is `Jido.Slice` + `Jido.Middleware` in one module. Use it when
 a single capability needs both:
 
@@ -26,16 +24,15 @@ defmodule MyApp.Audit.Plugin do
         events: Zoi.list(Zoi.any()) |> Zoi.default([])
       })
 
-  alias Jido.Agent.{Directive, StateOp}
-
   @impl Jido.Middleware
   def on_signal(signal, ctx, _opts, next) do
-    {new_ctx, dirs} = next.(signal, ctx)
-
     record = %{type: signal.type, at: System.system_time(:millisecond)}
-    events = ctx.agent.state.audit.events ++ [record]
+    new_events = ctx.agent.state.audit.events ++ [record]
 
-    {new_ctx, dirs ++ [%StateOp.SetPath{path: [:audit, :events], value: events}]}
+    new_state = put_in(ctx.agent.state, [:audit, :events], new_events)
+    ctx = %{ctx | agent: %{ctx.agent | state: new_state}}
+
+    next.(signal, ctx)
   end
 end
 ```
@@ -46,9 +43,20 @@ the same module gets:
 - a `:audit` slice on `agent.state` with schema-defaulted `events: []`, and
 - a middleware callback that wraps every signal.
 
-The `agent.state.audit.events` write goes through the normal directive
-pipeline — no privileged access, just the same `%StateOp.SetPath{}` an
-action would emit.
+The middleware writes to the slice by staging `ctx.agent` and threading
+the updated context to `next`. This is the documented exception to the
+"directives mutate no state" rule per
+[ADR 0018](adr/0018-tagged-tuple-return-shape.md) §1: middleware may
+mutate `ctx.agent` for I/O-staging purposes, and the staged value
+commits to `state.agent` regardless of whether the downstream action
+errors.
+
+If the audit data needed to flow back from an action instead — for
+example, an action whose primary `path:` is `:orders` but that also
+records to `:audit` in the same turn — that's the cross-slice case
+documented in [ADR 0019 §3](adr/0019-actions-mutate-state-directives-do-side-effects.md#3-multi-slice-and-cross-slice-writes):
+return `%Jido.Agent.SliceUpdate{slices: %{orders: ..., audit: ...}}`
+from the action. See [Actions — Multi-slice returns](actions.md#multi-slice-returns).
 
 ## Configuration
 
@@ -171,10 +179,11 @@ delegating. See [`Jido.Pod`](../lib/jido/pod.ex) for the in-tree example.
 #### 4. Runtime-derived (rare)
 
 If `mount/2` needed agent-instance data not available at config time,
-declare an action routed on `jido.agent.lifecycle.starting` that computes
-the value and writes it via a `%StateOp.SetPath{}` directive. The
-lifecycle signal fires inside `AgentServer.init/1`, before any user
-signal — see [ADR 0015](adr/0015-agent-start-is-signal-driven.md).
+declare an action with `path:` set to your slice and route it on
+`jido.agent.lifecycle.starting`. The action computes the value and
+returns the new slice — that's the entire write. The lifecycle signal
+fires inside `AgentServer.init/1`, before any user signal — see
+[ADR 0015](adr/0015-agent-start-is-signal-driven.md).
 
 ### `handle_signal/2` → `on_signal/4` (Middleware)
 
