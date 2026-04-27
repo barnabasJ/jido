@@ -416,11 +416,11 @@ defmodule Jido.Observe do
     try do
       tracer_result =
         invoke_scoped_callback(span_ctx, key, wrapped_fun, fn ->
-          apply(span_ctx.tracer_module, :with_span_scope, [
+          span_ctx.tracer_module.with_span_scope(
             span_ctx.event_prefix,
             span_ctx.metadata,
             wrapped_fun
-          ])
+          )
         end)
 
       resolve_scoped_callback_result(span_ctx, key, tracer_result, wrapped_fun)
