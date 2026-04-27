@@ -2,6 +2,8 @@
 
 <!-- covers: jido.agents_and_actions.action_execution_surface -->
 
+> **Heads up:** the `## StateOps for complex updates` section below references `Jido.Agent.StateOp`, removed per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md). Actions now mutate state via their **return value** (a slice value, or `%Jido.Agent.SliceUpdate{slices: %{...}}` for multi-slice writes) at the action's declared `path:`. Directives are pure I/O and mutate no state. See [The Bright Line](directives.md#the-bright-line).
+
 **After:** You can implement an Action module that transforms state and returns directives.
 
 ## The Complete Picture

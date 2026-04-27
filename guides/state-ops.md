@@ -2,6 +2,8 @@
 
 <!-- covers: jido.signals_and_directives.state_ops_internal_mutation -->
 
+> **⚠️ DEPRECATED — module removed.** `Jido.Agent.StateOp` has been deleted per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md) §2 and task 0012. Actions now mutate state through their **return value** (a slice value, or `%Jido.Agent.SliceUpdate{slices: %{...}}` for multi-slice writes) at the action's declared `path:`. Directives are pure I/O and **never** mutate state — see [The Bright Line in directives.md](directives.md#the-bright-line). The examples below will not compile against current Jido and are kept only for historical context.
+
 **After:** You can perform non-trivial state changes safely and consistently.
 
 State operations are internal state transitions handled by the strategy layer during `cmd/2`. Unlike directives, they never reach the runtime.

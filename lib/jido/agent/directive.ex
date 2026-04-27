@@ -6,6 +6,23 @@ defmodule Jido.Agent.Directive do
   (e.g. `Jido.AgentServer`) to execute. Agents and strategies **never**
   interpret or execute directives; they only emit them.
 
+  ## The Bright Line
+
+  - **Directives mutate no state.** Not domain (`agent.state`), not runtime
+    (`%AgentServer.State{}`), nothing. They do I/O — emit signals, spawn
+    processes, schedule messages, persist to disk — and return immediately.
+  - **Results, if any, come back as signals that re-enter the pipeline.**
+    Bookkeeping that logically follows the I/O happens via the cascade
+    callbacks `process_signal/2` invokes (`maybe_track_child_started/2`,
+    `handle_child_down/3`, `maybe_track_cron_registered/2`, …), not inside
+    the directive's `exec/3` body.
+  - **The type system enforces it.** `Jido.AgentServer.DirectiveExec.exec/3`
+    returns `:ok | {:stop, term()}` — there is no state slot in the return
+    shape, so a directive author cannot accidentally write one.
+  - **All `agent.state` writes flow through the action's return value.**
+    Sole exception is middleware `ctx.agent` staging for I/O purposes
+    (see ADR 0018 §1). Canonical rule: ADR 0019.
+
   ## Signal Integration
 
   The Emit directive integrates with `Jido.Signal` and `Jido.Signal.Dispatch`:

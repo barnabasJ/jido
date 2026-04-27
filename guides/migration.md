@@ -2,6 +2,8 @@
 
 <!-- covers: jido.integrations_and_migration.migration_guidance -->
 
+> **Heads up:** advice below to use `%StateOp.SetPath{}` for cross-slice writes is stale per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md). Cross-slice writes now use the multi-slice return shape `{:ok, %Jido.Agent.SliceUpdate{slices: %{...}}, [directives]}` (see ADR 0019 §3). Directives are pure I/O and mutate no state. See [The Bright Line](directives.md#the-bright-line).
+
 **After:** You can upgrade from Jido 1.x with minimal surprises.
 
 This guide helps you migrate existing Jido applications to version 2.0. The migration can be done incrementally—start with the minimum changes to get running, then adopt new patterns as needed.

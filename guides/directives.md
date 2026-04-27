@@ -6,23 +6,30 @@
 
 Directives are **pure descriptions of external effects**. Agents emit them from `cmd/2` callbacks; the runtime (`AgentServer`) executes them.
 
-**Key principle**: Directives never mutate state directly; state changes happen through `cmd/2` return values (including `result_action` callbacks used by `RunInstruction`).
+## The Bright Line
 
-## Directives vs State Operations
+- **Directives mutate no state.** Not domain (`agent.state`), not runtime (`%AgentServer.State{}`), nothing. They do I/O — emit signals, spawn processes, schedule messages, persist to disk — and return immediately.
+- **Their results, if any, come back as signals that re-enter the pipeline.** Bookkeeping that logically follows the I/O — inserting a child into `state.children`, registering a cron spec, etc. — happens via the signal-cascade callbacks `process_signal/2` invokes (`maybe_track_child_started/2`, `handle_child_down/3`, `maybe_track_cron_registered/2`, …), **not** inside the directive's `exec/3` body.
+- **The type system enforces it.** `Jido.AgentServer.DirectiveExec.exec/3` returns `:ok | {:stop, term()}` — there is no state slot, so a directive author cannot accidentally write one.
+- **All `agent.state` writes flow through the action's return value.** That is the sole channel; sole exception is middleware `ctx.agent` staging for I/O purposes ([ADR 0018](adr/0018-tagged-tuple-return-shape.md) §1). The `RunInstruction` directive is no exception — after the strict tightening, its `result_signal_type` is dispatched through `signal_routes`, and the bound action returns the new slice the same way every other action does.
 
-Jido separates two distinct concerns:
+Canonical rule: [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md).
 
-| Concept | Module | Purpose | Handled By |
-|---------|--------|---------|------------|
-| **Directives** | `Jido.Agent.Directive` | External effects (emit signals, spawn processes) | Runtime (AgentServer) |
-| **State Operations** | `Jido.Agent.StateOp` | Internal state transitions (set, replace, delete) | Strategy layer |
+## Directives vs Action Returns
 
-State operations are applied during `cmd/2` and never leave the strategy layer. Directives are passed through to the runtime for execution. See the [State Operations guide](state-ops.md) for details on `SetState`, `SetPath`, and other state ops.
+Jido has exactly two channels for change, and they don't overlap:
+
+| Concept | Where it lives | What it does |
+|---------|----------------|--------------|
+| **Action return value** | The slice value (or `%SliceUpdate{}`) returned from an action's `run/2` | Mutates `agent.state` — sole channel |
+| **Directives** | `Jido.Agent.Directive.*` structs returned alongside the slice | Pure I/O — emit signals, spawn processes, schedule messages. Mutate nothing. |
+
+Reading the action tells you everything that changes in `agent.state`. Reading the directive list tells you everything the runtime will do as I/O. The two lists do not overlap.
 
 ```elixir
 def cmd({:notify_user, message}, agent, _context) do
   signal = Jido.Signal.new!("notification.sent", %{message: message}, source: "/agent")
-  
+
   {:ok, agent, [Directive.emit(signal)]}
 end
 ```
@@ -167,7 +174,7 @@ defmodule ProcessOrderAction do
     name: "process_order",
     schema: [order_id: [type: :string, required: true]]
 
-  alias Jido.Agent.{Directive, StateOp}
+  alias Jido.Agent.Directive
 
   def run(%{order_id: order_id}, context) do
     signal = Jido.Signal.new!(
@@ -176,21 +183,20 @@ defmodule ProcessOrderAction do
       source: "/orders"
     )
 
-    {:ok, %{order_id: order_id}, [
-      StateOp.set_state(%{last_order: order_id}),  # Applied by strategy
-      Directive.emit(signal)                        # Passed to runtime
-    ]}
+    new_slice = Map.put(context.state, :last_order, order_id)
+
+    {:ok, new_slice, [Directive.emit(signal)]}
   end
 end
 ```
 
 When the agent runs this action via `cmd/2`:
-1. The strategy applies `StateOp.set_state` — agent state is updated
-2. The `Emit` directive passes through to the runtime
-3. `AgentServer` dispatches the signal via configured adapters
+1. The framework writes the returned slice value into `agent.state` at the action's declared `path:` — this is the **sole** channel for state changes.
+2. The `Emit` directive passes through to the runtime as pure I/O.
+3. `AgentServer` dispatches the signal via configured adapters.
 
 ---
 
 See `Jido.Agent.Directive` moduledoc for the complete API reference.
 
-**Related guides:** [State Operations](state-ops.md), [Orphans & Adoption](orphans.md)
+**Related guides:** [Orphans & Adoption](orphans.md), [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md)

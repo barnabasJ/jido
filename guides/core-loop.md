@@ -16,12 +16,15 @@ Jido agents follow a pure functional architecture:
 {agent, directives} = MyAgent.cmd(agent, action)
 ```
 
-**Key principles:**
+**Key principles — The Bright Line:**
 
 1. **Agents are immutable structs** — `cmd/2` never mutates; it returns a new agent
-2. **State changes and effects are separated** — the returned agent has updated state; directives describe effects
-3. **Directives are not executed by agents** — the runtime (AgentServer) interprets them
-4. **Same inputs → same outputs** — `cmd/2` is deterministic and testable
+2. **Actions are the sole channel for `agent.state` writes** — the action's return value is the entire story for state changes
+3. **Directives are pure I/O** — they emit signals, spawn processes, schedule messages, and **mutate no state** (not domain, not runtime). Their results return as signals that re-enter the pipeline
+4. **The type system enforces it** — `Jido.AgentServer.DirectiveExec.exec/3` returns `:ok | {:stop, term()}`; there is no state slot in the return shape
+5. **Same inputs → same outputs** — `cmd/2` is deterministic and testable
+
+Sole exception: middleware may stage `ctx.agent` for I/O purposes ([ADR 0018](adr/0018-tagged-tuple-return-shape.md) §1). Canonical rule: [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md).
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -96,7 +99,7 @@ This enables:
 |------|------------|
 | **Agent** | Immutable struct with state and schema. Defines `cmd/2` for pure transformations. |
 | **Action** | Function that transforms agent state (may perform side effects). Defined in [jido_action](https://hexdocs.pm/jido_action). |
-| **Directive** | Effect description for runtime execution (Emit, Spawn, Schedule, etc.). Never modifies state. |
+| **Directive** | Pure I/O description for runtime execution (Emit, Spawn, Schedule, etc.). Mutates no state — neither domain (`agent.state`) nor runtime (`%AgentServer.State{}`). |
 | **Plugin** | Composable capability module bundling actions, state, and routing rules. |
 | **Strategy** | Execution pattern (Direct, FSM, custom) that controls how actions are processed. |
 | **Signal** | CloudEvents-compliant message. Defined in [jido_signal](https://hexdocs.pm/jido_signal). |

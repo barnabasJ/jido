@@ -1,5 +1,7 @@
 # Middleware
 
+> **Heads up:** examples below referencing `%StateOp.SetPath{}` are stale per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md) — directives mutate no state. Middleware staging now happens via direct `ctx.agent` mutation per [ADR 0018](adr/0018-tagged-tuple-return-shape.md) §1, the documented exception to The Bright Line. See [The Bright Line](directives.md#the-bright-line).
+
 A **Middleware** wraps the agent's signal pipeline. It is a single-tier,
 `next`-passing chain: each middleware sits between AgentServer and the
 inner pipeline (routing → action → directives), and decides whether to pass

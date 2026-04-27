@@ -1,5 +1,7 @@
 # Your First Plugin
 
+> **Heads up:** examples below may reference `Jido.Agent.StateOp` — that module is removed per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md). Actions mutate state via their **return value**, not state-op directives. Directives are pure I/O and mutate no state. See [The Bright Line](directives.md#the-bright-line).
+
 **After:** You can refactor "stuff your agent does" into a Plugin with isolated state and routing.
 
 ## The Result

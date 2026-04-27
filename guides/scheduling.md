@@ -1,5 +1,7 @@
 # Scheduling
 
+> **Heads up:** examples below referencing `Jido.Agent.StateOp` are stale per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md) — actions now mutate state via their **return value**, not state-op directives. Directives are pure I/O and mutate no state. See [The Bright Line](directives.md#the-bright-line).
+
 **After:** You can schedule delayed and recurring work reliably.
 
 Jido provides three scheduling mechanisms: declarative schedules in the agent definition, one-time delays via `Schedule`, and dynamic recurring jobs via `Cron`. All are timer-based and tied to the agent's process lifecycle.

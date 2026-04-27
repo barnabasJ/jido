@@ -1,5 +1,7 @@
 # Multi-Agent Orchestration
 
+> **Heads up:** examples below referencing `Jido.Agent.StateOp` are stale per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md) — actions now mutate state via their **return value**, not state-op directives. Directives are pure I/O and mutate no state. See [The Bright Line](directives.md#the-bright-line).
+
 **After:** You can spawn child agents, wait for results, and aggregate them — the Jido approach to parallel and hierarchical workflows.
 
 ```elixir

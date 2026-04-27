@@ -49,6 +49,17 @@ end
 State changes are pure data transformations; side effects are described as directives and executed by an OTP runtime. You get deterministic agent logic, testability without processes, and a clear path to running those agents in production.
 <!-- package.jido.pure_cmd package.jido.runtime_separation -->
 
+## The Bright Line
+
+> **Actions mutate state. Directives do I/O. Nothing else writes.**
+
+- **Actions are the sole channel for `agent.state` writes.** Reading the action tells you everything that changes.
+- **Directives are pure side effects.** They emit signals, spawn processes, schedule messages, persist to disk — and **mutate no state**: not domain (`agent.state`), not runtime (`%AgentServer.State{}`). Their results, if any, come back as signals that re-enter the pipeline.
+- **The type system enforces it.** `Jido.AgentServer.DirectiveExec.exec/3` returns `:ok | {:stop, term()}` — there is no state slot in the return shape, so a directive author cannot accidentally write one.
+- **Runtime bookkeeping** (`state.children`, `state.cron_*`, monitors, subscriptions) lives on `%AgentServer.State{}` and is written **only** by AgentServer GenServer callbacks and the signal-cascade callbacks invoked by `process_signal/2` (`maybe_track_child_started/2`, `handle_child_down/3`, …). Directives are never that channel.
+
+Sole exception: middleware may stage `ctx.agent` for I/O purposes (ADR 0018 §1). Canonical rule: [ADR 0019](guides/adr/0019-actions-mutate-state-directives-do-side-effects.md).
+
 ## The Jido Ecosystem
 
 Jido is the core package of the Jido ecosystem. The ecosystem is built around the core Jido Agent behavior and offer several opt-in packages to extend the core behavior.
@@ -247,29 +258,19 @@ The fundamental operation in Jido:
 ```
 
 Key invariants:
-- The returned `agent` is always complete - no "apply directives" step needed
-- `directives` describe external effects only - they never modify agent state
-- `cmd/2` is a pure function - same inputs always produce same outputs
+- The returned `agent` is always complete — no "apply directives" step needed
+- `directives` are pure I/O descriptions — they never modify state of any kind (domain or runtime); see [The Bright Line](#the-bright-line)
+- `cmd/2` is a pure function — same inputs always produce same outputs
 
-### Actions vs Directives vs State Operations
+### Actions vs Directives
 
-| Actions                                    | Directives                            | State Operations                |
-| ------------------------------------------ | ------------------------------------- | ------------------------------- |
-| Transform state, may perform side effects  | Describe external effects             | Describe internal state changes |
-| Executed by `cmd/2`, update `agent.state`  | Bare structs emitted by agents        | Applied by strategy layer       |
-| Can call APIs, read files, query databases | Runtime (AgentServer) interprets them | Never leave the strategy        |
+| Actions                                              | Directives                                                  |
+| ---------------------------------------------------- | ----------------------------------------------------------- |
+| Mutate state — sole channel for `agent.state` writes | Pure I/O — emit signals, spawn processes, schedule messages |
+| Return updated state + directives from `cmd/2`       | Bare structs emitted by agents; runtime interprets them     |
+| May call APIs, read files, query databases           | Mutate no state — domain or runtime                         |
 
-### State Operations (`Jido.Agent.StateOp`)
-
-State operations are internal state transitions handled by the strategy layer during `cmd/2`. Unlike directives, they never reach the runtime.
-
-| StateOp        | Purpose                          |
-| -------------- | -------------------------------- |
-| `SetState`     | Deep merge attributes into state |
-| `ReplaceState` | Replace state wholesale          |
-| `DeleteKeys`   | Remove top-level keys            |
-| `SetPath`      | Set value at nested path         |
-| `DeletePath`   | Delete value at nested path      |
+See [The Bright Line](#the-bright-line) for the full rule.
 
 ### Directive Types
 

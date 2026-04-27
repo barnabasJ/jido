@@ -1,5 +1,7 @@
 # Plugins
 
+> **Heads up:** examples below referencing `Jido.Agent.StateOp` (`SetPath`, etc.) are stale per [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md) — actions now mutate state via their **return value**, not state-op directives. Directives are pure I/O and mutate no state. Plugin actions writing to a slice should declare the right `path:` and return the new slice value directly. See [The Bright Line](directives.md#the-bright-line).
+
 A **Plugin** is `Jido.Slice` + `Jido.Middleware` in one module. Use it when
 a single capability needs both:
 
