@@ -58,7 +58,7 @@ State changes are pure data transformations; side effects are described as direc
 - **The type system enforces it.** `Jido.AgentServer.DirectiveExec.exec/3` returns `:ok | {:stop, term()}` — there is no state slot in the return shape, so a directive author cannot accidentally write one.
 - **Runtime bookkeeping** (`state.children`, `state.cron_*`, monitors, subscriptions) lives on `%AgentServer.State{}` and is written **only** by AgentServer GenServer callbacks and the signal-cascade callbacks invoked by `process_signal/2` (`maybe_track_child_started/2`, `handle_child_down/3`, …). Directives are never that channel.
 
-Sole exception: middleware may stage `ctx.agent` for I/O purposes (ADR 0018 §1). Canonical rule: [ADR 0019](guides/adr/0019-actions-mutate-state-directives-do-side-effects.md).
+Sole exception: middleware may stage `ctx.agent` for I/O purposes.
 
 ## The Jido Ecosystem
 
@@ -301,10 +301,8 @@ See [The Bright Line](#the-bright-line) for the full rule.
 - [Persistence & Storage](guides/storage.md) - Hibernate, thaw, and InstanceManager lifecycle
 - [Scheduling](guides/scheduling.md) - Declarative and dynamic cron scheduling
 - [Plugins](guides/plugins.md) - Composable capability bundles
-- [Strategies](guides/strategies.md) - Execution strategies (Direct, FSM)
 
 **Advanced:**
-- [FSM Strategy Deep Dive](guides/fsm-strategy.livemd) - State machine workflows
 - [Worker Pools](guides/worker-pools.md) - Pre-warmed agent pools for throughput
 - [Testing Agents](guides/testing.md) - Testing patterns and best practices
 

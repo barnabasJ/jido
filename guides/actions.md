@@ -243,7 +243,7 @@ end
 
 The framework writes every slice listed in `slices:` atomically alongside the action's primary slice. The action's `path:` should still be the primary slice — secondary slices in the map are explicit, named exceptions. Use sparingly; most actions own a single slice and should just return the new slice value.
 
-See [ADR 0019 §3](adr/0019-actions-mutate-state-directives-do-side-effects.md#3-multi-slice-and-cross-slice-writes) for the full rationale and alternatives (re-pathing the action, signal-cascade between two actions).
+Alternatives when this isn't the right tool: re-path the action so its primary slice is the one being written, or split into two actions and signal-cascade between them.
 
 ## Schema Definition
 

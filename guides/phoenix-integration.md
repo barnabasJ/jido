@@ -440,4 +440,3 @@ Visit `/counter/my-counter` in multiple browser tabs. Changes sync in real-time.
 - [Persistence & Storage](storage.md) — Hibernate/thaw and InstanceManager for session agents
 - [Worker Pools](worker-pools.md) — Pre-warmed agent pools for high-throughput APIs
 - [Runtime](runtime.md) — AgentServer lifecycle and parent-child hierarchies
-- [Await & Coordination](await.md) — Wait for agent completion

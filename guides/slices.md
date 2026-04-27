@@ -1,8 +1,8 @@
 # Slices
 
 A **Slice** is a declarative bundle of agent-state schema, actions, signal
-routes, sensor subscriptions, and schedules. It is the pure-data tier of the
-[Slice / Middleware / Plugin model](adr/0014-slice-middleware-plugin.md).
+routes, sensor subscriptions, and schedules. It is the pure-data tier of
+the Slice / Middleware / Plugin model.
 
 A Slice owns one flat atom in `agent.state` (its `path:`). Actions belonging
 to that slice receive the slice value as their second argument and return a
@@ -34,8 +34,8 @@ end
 ```
 
 That `use` block is the entire surface. There is no `mount/2`, no
-`handle_signal/2`, no `transform_result/3` — those callbacks were retired in
-[ADR 0014](adr/0014-slice-middleware-plugin.md).
+`handle_signal/2`, no `transform_result/3` — those callbacks were
+retired.
 
 ## Configuration fields
 
@@ -44,7 +44,7 @@ That `use` block is the entire surface. There is no `mount/2`, no
 | `name` | yes | Human identifier; appears in logs and Discovery. Letters, digits, underscores. |
 | `path` | yes | Atom key in `agent.state` where this slice lives. |
 | `actions` | no (default `[]`) | Action modules contributed by this slice. Each action that touches this slice should declare matching `path:`. |
-| `schema` | no | Zoi schema for the slice's state. Defaults from the schema seed `agent.state[path]` at `Agent.new/1`. |
+| `schema` | no | Zoi schema for the slice's state. Defaults from the schema seed `agent.state[path]` at `Jido.Agent.new/1`. |
 | `config_schema` | no | Zoi schema for per-agent configuration (the second tuple element in `{Plugin, %{...}}`). |
 | `signal_routes` | no | Static `signal_type → action` mappings. Compile-time only; no `signal_routes/1` callback. |
 | `subscriptions` | no | Sensor subscription tuples like `{SensorModule, config}`. |
@@ -71,7 +71,7 @@ When the agent starts, each slice's state is seeded by:
 
 1. `schema`'s defaults (Zoi `default/1` annotations);
 2. then the per-agent config map merged in (`{MyApp.ChatSlice, %{model: "gpt-5"}}`);
-3. then anything the caller passes as `state: %{chat: %{...}}` to `Agent.new/1`.
+3. then anything the caller passes as `state: %{chat: %{...}}` to `Jido.Agent.new/1`.
 
 The merge is **shallow** — there is no deep-merge. An action returns the full
 new slice value; partial-map returns are not interpreted (this changed in
@@ -125,7 +125,7 @@ collision.
 ## Schemas and validation
 
 When a Slice declares a `schema:`, slice state is parsed through Zoi at
-`Agent.new/1`. A failure raises `Jido.Agent.SliceValidationError` with the
+`Jido.Agent.new/1`. A failure raises `Jido.Agent.SliceValidationError` with the
 offending path, the schema's error report, and the slice module — which
 makes "I forgot a required field in plugin config" surface immediately at
 boot, not in the middle of a signal. Schema-level `Zoi.transform/2` runs at
@@ -160,7 +160,6 @@ in-tree example (a Slice that supplies an FSM transition action and route).
 
 ## See also
 
-- [ADR 0014 — Slice / Middleware / Plugin](adr/0014-slice-middleware-plugin.md) — design rationale
 - [Middleware guide](middleware.md) — the wrap tier
 - [Plugins guide](plugins.md) — the combo tier and migration recipes
 - [Migration guide](migration.md) — pre-refactor → new shape

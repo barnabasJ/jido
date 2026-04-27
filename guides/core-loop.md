@@ -24,7 +24,7 @@ Jido agents follow a pure functional architecture:
 4. **The type system enforces it** — `Jido.AgentServer.DirectiveExec.exec/3` returns `:ok | {:stop, term()}`; there is no state slot in the return shape
 5. **Same inputs → same outputs** — `cmd/2` is deterministic and testable
 
-Sole exception: middleware may stage `ctx.agent` for I/O purposes ([ADR 0018](adr/0018-tagged-tuple-return-shape.md) §1). Canonical rule: [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md).
+Sole exception: middleware may stage `ctx.agent` for I/O purposes.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -138,6 +138,5 @@ assert match?([%Directive.Emit{}], directives)
 - [Directives](directives.md) — Available effect descriptions
 - [Plugins](plugins.md) — Composable capability modules
 - [Runtime](runtime.md) — AgentServer and process management
-- [Strategies](strategies.md) — Execution patterns
 
 > **Ecosystem tutorials:** See [jido.run](https://jido.run) for recipes combining jido, jido_ai, and jido_memory.

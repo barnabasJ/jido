@@ -11,9 +11,7 @@ Directives are **pure descriptions of external effects**. Agents emit them from 
 - **Directives mutate no state.** Not domain (`agent.state`), not runtime (`%AgentServer.State{}`), nothing. They do I/O — emit signals, spawn processes, schedule messages, persist to disk — and return immediately.
 - **Their results, if any, come back as signals that re-enter the pipeline.** Bookkeeping that logically follows the I/O — inserting a child into `state.children`, registering a cron spec, etc. — happens via the signal-cascade callbacks `process_signal/2` invokes (`maybe_track_child_started/2`, `handle_child_down/3`, `maybe_track_cron_registered/2`, …), **not** inside the directive's `exec/3` body.
 - **The type system enforces it.** `Jido.AgentServer.DirectiveExec.exec/3` returns `:ok | {:stop, term()}` — there is no state slot, so a directive author cannot accidentally write one.
-- **All `agent.state` writes flow through the action's return value.** That is the sole channel; sole exception is middleware `ctx.agent` staging for I/O purposes ([ADR 0018](adr/0018-tagged-tuple-return-shape.md) §1). The `RunInstruction` directive is no exception — after the strict tightening, its `result_signal_type` is dispatched through `signal_routes`, and the bound action returns the new slice the same way every other action does.
-
-Canonical rule: [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md).
+- **All `agent.state` writes flow through the action's return value.** That is the sole channel; sole exception is middleware `ctx.agent` staging for I/O purposes. The `RunInstruction` directive is no exception — after the strict tightening, its `result_signal_type` is dispatched through `signal_routes`, and the bound action returns the new slice the same way every other action does.
 
 ## Directives vs Action Returns
 
@@ -199,4 +197,4 @@ When the agent runs this action via `cmd/2`:
 
 See `Jido.Agent.Directive` moduledoc for the complete API reference.
 
-**Related guides:** [Orphans & Adoption](orphans.md), [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md)
+**Related guides:** [Orphans & Adoption](orphans.md)

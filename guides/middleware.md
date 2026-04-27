@@ -5,9 +5,9 @@ A **Middleware** wraps the agent's signal pipeline. It is a single-tier,
 inner pipeline (routing → action → directives), and decides whether to pass
 through, transform, retry, swallow, or short-circuit.
 
-This is the cross-cutting tier in the [Slice / Middleware / Plugin
-model](adr/0014-slice-middleware-plugin.md). Where a Slice is "what the
-agent does," Middleware is "what happens around each signal."
+This is the cross-cutting tier in the Slice / Middleware / Plugin model.
+Where a Slice is "what the agent does," Middleware is "what happens
+around each signal."
 
 ## The contract
 
@@ -167,10 +167,9 @@ session caches), either:
   to `next` — for example,
   `next.(signal, %{ctx | agent: %{ctx.agent | state: new_state}})`.
   This is the documented `ctx.agent`-staging exception to "directives
-  mutate no state" per [ADR 0018](adr/0018-tagged-tuple-return-shape.md) §1
-  and [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md) §1.
-  See [`Jido.Middleware.Persister`](../lib/jido/middleware/persister.ex)
-  for the canonical example (it stages a thawed agent on
+  mutate no state". See
+  [`Jido.Middleware.Persister`](../lib/jido/middleware/persister.ex) for
+  the canonical example (it stages a thawed agent on
   `jido.agent.lifecycle.starting`).
 
 The Plugin route is the right call when the state is *part of the agent's
@@ -217,7 +216,6 @@ A reasonable default order, outermost first:
 
 ## See also
 
-- [ADR 0014 — Slice / Middleware / Plugin](adr/0014-slice-middleware-plugin.md) — design rationale and decision log
 - [`Jido.Middleware.Persister`](../lib/jido/middleware/persister.ex) — reference implementation (hibernate / thaw)
 - [`Jido.Middleware.Retry`](../lib/jido/middleware/retry.ex) — reference implementation (retry on `%Error{}`)
 - [Slices guide](slices.md) — the data tier

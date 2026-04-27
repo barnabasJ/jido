@@ -147,7 +147,7 @@ Adoption:
 - clears orphan markers
 - restores `emit_to_parent/3`
 
-After adoption, the child is visible through `Jido.get_children/1` on the new parent and can send results back to that parent again.
+After adoption, the child appears under `state.children` on the new parent and can send results back to that parent again.
 
 ## End-to-End Flow
 
@@ -197,7 +197,7 @@ Treat orphaning as a real lifecycle, not an implementation detail. Good tests sh
 - the parent reference is cleared on orphaning
 - the orphan signal sees detached state
 - `emit_to_parent/3` returns `nil` while orphaned
-- explicit adoption restores `Jido.get_children/1` and child-to-parent messaging
+- explicit adoption restores child visibility and child-to-parent messaging
 - adopted child restarts still bind to the adopted parent
 - a second parent death re-triggers the orphan lifecycle
 

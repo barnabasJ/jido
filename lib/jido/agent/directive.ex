@@ -404,9 +404,9 @@ defmodule Jido.Agent.Directive do
     ## Executing directly
 
     `execute/2` performs the spawn synchronously and returns the new child
-    pid, so callers outside the directive pipeline (like `Jido.Pod.Runtime`)
-    can reuse the exact same shape. The `DirectiveExec` impl is a thin
-    wrapper that discards the pid to match the protocol contract.
+    pid, so callers outside the directive pipeline can reuse the exact
+    same shape. The `DirectiveExec` impl is a thin wrapper that discards
+    the pid to match the protocol contract.
 
     ## Examples
 

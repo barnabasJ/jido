@@ -18,13 +18,13 @@ This guide helps you migrate existing Jido applications to version 2.0. The migr
 | Actions | `Jido.Actions.*` | `Jido.Tools.*` | Small |
 | Validation | NimbleOptions | Zoi schemas | Small-Medium |
 | Errors | Ad hoc tuples | Splode structured errors | Small-Medium |
-| State Layout | Flat `agent.state.counter` | Scoped `agent.state.__domain__.counter` ([ADR 0008](adr/0008-flat-layout-removed.md)) | Small |
+| State Layout | Flat `agent.state.counter` | Scoped `agent.state.__domain__.counter` | Small |
 
 ### State Layout: `:__domain__` slice
 
-As of [ADR 0008](adr/0008-flat-layout-removed.md), user-domain state lives under `agent.state.__domain__` by default. Plugin state continues to live under its own slice (`:__pod__`, `:__bus_wiring__`, etc.). Schema-backed fields declared via `use Jido.Agent, schema: [...]` are seeded under `:__domain__`.
+User-domain state lives under `agent.state.__domain__` by default. Plugin state continues to live under its own slice (`:__pod__`, `:__bus_wiring__`, etc.). Schema-backed fields declared via `use Jido.Agent, schema: [...]` are seeded under `:__domain__`.
 
-**Rewrites needed for agents declared before ADR 0008:**
+**Rewrites needed for agents declared with the legacy flat layout:**
 
 - Reading user-domain fields:
   ```elixir
@@ -583,20 +583,17 @@ If migrating from NimbleOptions, ensure required fields are marked:
 
 ## ADR 0014/0015/0016 — Slice / Middleware / Plugin and lifecycle rewrite
 
-ADR 0014 collapses the old plugin surface into three tiers (Slice /
+The refactor collapses the old plugin surface into three tiers (Slice /
 Middleware / Plugin), retires `Jido.Agent.Strategy`, and replaces the
 underscore-wrapped slice convention (`:__domain__`, `:__thread__`, …) with
-flat-atom paths declared by the agent and each plugin. ADR 0015 makes thaw
-indistinguishable from fresh start. ADR 0016 replaces `await_completion/2`
-and the bare `AgentServer.call/2 → %State{}` with selector-based
-primitives. The migration recipes are below; for the full rationale see
-[ADR 0014](adr/0014-slice-middleware-plugin.md),
-[ADR 0015](adr/0015-agent-start-is-signal-driven.md),
-[ADR 0016](adr/0016-agent-server-ack-and-subscribe.md).
+flat-atom paths declared by the agent and each plugin. Thaw is
+indistinguishable from fresh start. `await_completion/2` and the bare
+`AgentServer.call/2 → %State{}` are replaced with selector-based primitives.
+The migration recipes are below.
 
 > **No migration shims ship.** Pre-refactor checkpoints are not forward-
-> compatible (per ADR 0014's "no external users" assumption). Local-dev
-> and test-fixture checkpoints from before this PR must be regenerated.
+> compatible (no external users to migrate). Local-dev and test-fixture
+> checkpoints from before this PR must be regenerated.
 
 ### Plugin surface — the table
 
@@ -613,11 +610,11 @@ primitives. The migration recipes are below; for the full rationale see
 
 ### `mount/2` retired — four replacement patterns
 
-Per ADR 0014's S2 resolution. Pick whichever applies to your callback:
+Pick whichever applies to your callback:
 
 1. **Nothing (`{:ok, nil}`)** — delete the callback. Schema defaults seed the slice automatically.
-2. **Echo per-agent config into the slice** — declare a `schema:` matching the config, and the per-agent `{Plugin, %{...}}` map merges in at `Agent.new/1`. Zero code.
-3. **Compile-time derivation from agent module** — wrap `Agent.new/1` in a macro (see [`Jido.Pod`](../lib/jido/pod.ex)). The wrapper computes state from `__MODULE__`'s metadata before delegating.
+2. **Echo per-agent config into the slice** — declare a `schema:` matching the config, and the per-agent `{Plugin, %{...}}` map merges in at `Jido.Agent.new/1`. Zero code.
+3. **Compile-time derivation from agent module** — wrap `Jido.Agent.new/1` in a macro (see [`Jido.Pod`](../lib/jido/pod.ex)). The wrapper computes state from `__MODULE__`'s metadata before delegating.
 4. **Runtime-derived (rare)** — declare a Slice action routed on `jido.agent.lifecycle.starting`. The lifecycle signal fires inside `AgentServer.init/1` before any user signal.
 
 ### Action callback shape
@@ -652,8 +649,7 @@ If you need to update a nested field outside the action's declared
 slice, return a `%Jido.Agent.SliceUpdate{slices: %{other_slice: new_value}}`
 in place of the slice value. The action's `path:` stays single-valued
 (its primary slice); secondary slices listed in `slices:` are explicitly
-bridged. See [ADR 0019 §3](adr/0019-actions-mutate-state-directives-do-side-effects.md#3-multi-slice-and-cross-slice-writes)
-and [Actions — Multi-slice returns](actions.md#multi-slice-returns).
+bridged. See [Actions — Multi-slice returns](actions.md#multi-slice-returns).
 
 ### `Jido.Agent.ScopedAction` folded in
 

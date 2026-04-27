@@ -45,16 +45,13 @@ the same module gets:
 
 The middleware writes to the slice by staging `ctx.agent` and threading
 the updated context to `next`. This is the documented exception to the
-"directives mutate no state" rule per
-[ADR 0018](adr/0018-tagged-tuple-return-shape.md) §1: middleware may
-mutate `ctx.agent` for I/O-staging purposes, and the staged value
-commits to `state.agent` regardless of whether the downstream action
-errors.
+"directives mutate no state" rule: middleware may mutate `ctx.agent` for
+I/O-staging purposes, and the staged value commits to `state.agent`
+regardless of whether the downstream action errors.
 
 If the audit data needed to flow back from an action instead — for
 example, an action whose primary `path:` is `:orders` but that also
-records to `:audit` in the same turn — that's the cross-slice case
-documented in [ADR 0019 §3](adr/0019-actions-mutate-state-directives-do-side-effects.md#3-multi-slice-and-cross-slice-writes):
+records to `:audit` in the same turn — that's the cross-slice case:
 return `%Jido.Agent.SliceUpdate{slices: %{orders: ..., audit: ...}}`
 from the action. See [Actions — Multi-slice returns](actions.md#multi-slice-returns).
 
@@ -152,8 +149,8 @@ use Jido.Plugin, name: "x", path: :x, ...
 #### 2. Echo per-agent config into the slice
 
 If `mount/2` copied the config map into slice state, you don't need the
-callback. `Agent.new/1` automatically merges `{Plugin, %{...}}` config on
-top of schema defaults.
+callback. `Jido.Agent.new/1` automatically merges `{Plugin, %{...}}`
+config on top of schema defaults.
 
 ```elixir
 # Before
@@ -173,8 +170,9 @@ use Jido.Plugin,
 
 If `mount/2` derived state from the agent module itself (e.g. `Jido.Pod`
 seeding the topology from `agent_module.topology()`), do that derivation
-in a wrapper macro that overrides `Agent.new/1` to inject `state:` before
-delegating. See [`Jido.Pod`](../lib/jido/pod.ex) for the in-tree example.
+in a wrapper macro that overrides `Jido.Agent.new/1` to inject `state:`
+before delegating. See [`Jido.Pod`](../lib/jido/pod.ex) for the in-tree
+example.
 
 #### 4. Runtime-derived (rare)
 
@@ -182,8 +180,7 @@ If `mount/2` needed agent-instance data not available at config time,
 declare an action with `path:` set to your slice and route it on
 `jido.agent.lifecycle.starting`. The action computes the value and
 returns the new slice — that's the entire write. The lifecycle signal
-fires inside `AgentServer.init/1`, before any user signal — see
-[ADR 0015](adr/0015-agent-start-is-signal-driven.md).
+fires inside `AgentServer.init/1`, before any user signal.
 
 ### `handle_signal/2` → `on_signal/4` (Middleware)
 
@@ -240,7 +237,7 @@ defmodule MyApp.Cache.Plugin do
 end
 ```
 
-See [ADR 0015](adr/0015-agent-start-is-signal-driven.md) for the full
+See the [Persistence & Storage guide](storage.md) for the full
 hibernate/thaw model.
 
 ### `signal_routes/1` → static `signal_routes:`
@@ -263,7 +260,6 @@ router gets you to the action; the action decides what to do.
 
 ## Where to look next
 
-- [ADR 0014 — Slice / Middleware / Plugin](adr/0014-slice-middleware-plugin.md) — design rationale
 - [Slices guide](slices.md) — the pure data tier
 - [Middleware guide](middleware.md) — the wrap tier
 - [Migration guide](migration.md) — full pre-0014 → new shape recipes

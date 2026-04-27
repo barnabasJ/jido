@@ -256,6 +256,5 @@ agent.state.__domain__.counter
 
 - [Core Loop](core-loop.md) — Agent fundamentals
 - [Directives](directives.md) — The Emit directive and others
-- [Strategies](strategies.md) — Strategy signal routing
 - [Plugins](plugins.md) — Plugin signal patterns
 - [jido_signal documentation](https://hexdocs.pm/jido_signal) — Full Signal API

@@ -364,4 +364,3 @@ See [Testing](testing.md) for more patterns.
 - [Worker Pools](worker-pools.md) — Pre-warmed agent pools for throughput
 - [Runtime](runtime.md) — AgentServer and process-based execution
 - [Testing](testing.md) — Testing patterns and best practices
-- [Strategies](strategies.md) — Execution strategies configuration

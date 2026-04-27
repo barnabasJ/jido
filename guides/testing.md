@@ -223,7 +223,7 @@ end
 
 ## Await Patterns in Tests
 
-Use `Jido.await/2` and related functions for coordination:
+Use `Jido.Exec.await/2` and related functions for coordination:
 
 ### Waiting for Completion
 
@@ -526,7 +526,7 @@ Good orphan lifecycle tests should verify:
 - `state.orphaned_from` and `agent.state.__orphaned_from__` are populated
 - `Directive.emit_to_parent/3` returns `nil` while orphaned
 - `jido.agent.orphaned` handlers see detached state, not stale parent routing
-- `Directive.adopt_child/3` restores `Jido.get_children/1` and child-to-parent messaging
+- `Directive.adopt_child/3` restores child visibility and child-to-parent messaging
 - an adopted child restart still binds to the adopted parent, not stale startup metadata
 
 For a full acceptance test that reads like user documentation, see
@@ -656,7 +656,7 @@ end
 |----------|----------|
 | State transformations | Pure `cmd/2` testing, no runtime |
 | Signal processing | `JidoTest.Case` + `AgentServer.call/cast` |
-| Async coordination | `Jido.await/2`, `Jido.await_child/4` |
+| Async coordination | `Jido.Exec.await/2`, `Jido.AgentServer.await_child/3` |
 | External dependencies | Mimic `expect/stub/reject` |
 | Test isolation | `JidoTest.Case` per-test instances |
 

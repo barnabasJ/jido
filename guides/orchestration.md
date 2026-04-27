@@ -586,6 +586,5 @@ end
 
 ## Next Steps
 
-- [Await & Coordination](await.md) — Event-driven waiting patterns
 - [Directives](directives.md) — All available directive types
 - [Testing](testing.md) — Testing multi-agent systems

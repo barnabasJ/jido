@@ -59,7 +59,7 @@ Signal → AgentServer.call/cast
 Every signal runs start-to-finish inside its triggering GenServer handler; the
 Erlang mailbox is the only queue. A directive that needs to do unbounded work
 should spawn a task, write a loading marker into state, and emit a completion
-signal when it's done — see [ADR 0009](adr/0009-inline-signal-processing.md).
+signal when it's done.
 
 The AgentServer routes incoming signals using strategy, agent, and plugin route tables (`signal_routes/1` callbacks), executes the action via `cmd/2`, and processes any returned directives.
 
@@ -144,9 +144,9 @@ When orphaning happens, Jido:
 - preserves the former parent in `agent.state.__orphaned_from__`
 
 If you need to reattach the child, use `Directive.adopt_child/3` from the new
-parent. Adoption restores `emit_to_parent/3` and `Jido.get_children/1`, and
-the current binding is mirrored into `Jido.RuntimeStore` so later child
-restarts come back under the adopted parent as well. See
+parent. Adoption restores `emit_to_parent/3` and child visibility on the new
+parent, and the current binding is mirrored into `Jido.RuntimeStore` so later
+child restarts come back under the adopted parent as well. See
 [Orphans & Adoption](orphans.md) for the full lifecycle and caveats.
 
 ### Stopping Children
@@ -206,7 +206,7 @@ Jido.alive?(pid)                    # Check if agent is running
 Jido.cancel(pid)                    # Cancel a running agent
 ```
 
-For detailed await patterns, fan-out coordination, and testing without `Process.sleep`, see the [Await & Coordination](await.md) guide.
+For detailed await patterns, fan-out coordination, and testing without `Process.sleep`, see the [Testing](testing.md) guide.
 
 ### Timeout Diagnostics
 
@@ -311,5 +311,4 @@ The buffer holds up to 500 events by default (configurable via `debug_max_events
 - [Debugging](debugging.md) — Systematic debugging workflow
 - [Persistence & Storage](storage.md) — Hibernate/thaw and InstanceManager lifecycle
 - [Worker Pools](worker-pools.md) — Pre-warmed agent pools for throughput
-- [Await & Coordination](await.md) — Waiting on agent completion
 - [Orphans & Adoption](orphans.md) — Advanced orphan lifecycle and explicit adoption

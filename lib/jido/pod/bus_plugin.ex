@@ -2,7 +2,7 @@ defmodule Jido.Pod.BusPlugin do
   @moduledoc """
   Wires pod child agents to a `Jido.Signal.Bus` automatically.
 
-  When a pod child boots, `Jido.Pod.Runtime` passes the pod as the child's
+  When a pod child boots, the pod runtime passes the pod as the child's
   parent, so the child emits `jido.agent.child.started` back to the pod
   during its post-init hook. This slice routes that signal to an action that
   subscribes the child's pid to every path declared by the child agent's
