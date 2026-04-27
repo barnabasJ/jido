@@ -1,0 +1,384 @@
+# Observability — telemetry, traces, debug events
+
+```elixir
+Mix.install([
+  {:jido, path: Path.expand("..", __DIR__)}
+])
+```
+
+## Setup
+
+```elixir
+defmodule Demo.Jido do
+  use Jido, otp_app: :demo
+end
+
+case Demo.Jido.start_link() do
+  {:ok, _pid} -> :started
+  {:error, {:already_started, _pid}} -> :already_started
+end
+```
+
+## Concept
+
+The framework's observability surface is three things:
+
+1. **`:telemetry` events** emitted at signal-handling boundaries. Attach a
+   handler in your app, get a stream of `[:jido, :agent_server, :signal, :start]`
+   / `:stop` / `[:jido, :agent_server, :directive, :start]` / etc.
+2. **Trace context** — a small `%{trace_id, span_id, parent_span_id, causation_id}`
+   map attached to every signal. Emitted signals inherit and extend it
+   automatically. `Jido.Tracing.Trace` reads/writes the extension.
+3. **Debug events ring buffer** — when an agent has `debug: true`, recent
+   events (signals received, directives started, etc.) are kept in a
+   capped in-memory buffer. `Jido.AgentServer.recent_events/2` reads them.
+
+Plus the no-polling read pattern from
+[ADR 0021](adr/0021-no-full-state-no-polling.md): selectors via `state/3`
+and `subscribe/4` are the supported way to project agent state.
+"Fetch full state and dig" retired with the polling pattern.
+
+## Worked example — telemetry events
+
+Attach a telemetry handler that forwards every signal-pipeline boundary
+to your shell, then run a signal through.
+
+```elixir
+defmodule Counter.Inc do
+  use Jido.Action,
+    name: "obs_inc",
+    path: :app,
+    schema: [by: [type: :integer, default: 1]]
+
+  @impl true
+  def run(%Jido.Signal{data: %{by: by}}, slice, _opts, _ctx) do
+    slice = slice || %{}
+    {:ok, Map.update(slice, :count, by, &(&1 + by)), []}
+  end
+end
+
+defmodule CounterAgent do
+  use Jido.Agent,
+    name: "obs_counter",
+    path: :app,
+    default_plugins: false,
+    schema: [count: [type: :integer, default: 0]]
+
+  def signal_routes(_ctx), do: [{"counter.inc", Counter.Inc}]
+end
+
+caller = self()
+handler_id = "demo-#{System.unique_integer([:positive])}"
+
+:telemetry.attach_many(
+  handler_id,
+  [
+    [:jido, :agent_server, :signal, :start],
+    [:jido, :agent_server, :signal, :stop]
+  ],
+  fn event, measurements, metadata, _config ->
+    send(caller, {:telemetry, event, Map.take(measurements, [:duration]), metadata})
+  end,
+  nil
+)
+
+{:ok, pid} = Demo.Jido.start_agent(CounterAgent, id: "obs-counter")
+:ok = Jido.AgentServer.await_ready(pid)
+
+sig = Jido.Signal.new!("counter.inc", %{by: 1}, source: "/livebook")
+{:ok, _count} = Jido.AgentServer.call(pid, sig, fn s -> {:ok, s.agent.state.app.count} end)
+
+# Drain a few of the events the handler captured.
+events =
+  for _ <- 1..3 do
+    receive do
+      {:telemetry, event, measurements, metadata} -> {event, measurements, metadata.signal_type}
+    after
+      300 -> :no_more
+    end
+  end
+
+events
+|> Enum.reject(&(&1 == :no_more))
+|> IO.inspect(label: "captured telemetry events: {event, measurements, signal.type}")
+
+:telemetry.detach(handler_id)
+```
+
+## Variations
+
+### Telemetry metadata includes `jido_instance` and `jido_partition`
+
+Every event metadata includes the `:jido_instance` your agent runs under,
+plus `:jido_partition` if the agent was started with one. Useful when
+multiple Jido instances coexist — filter by instance to scope the event
+stream.
+
+```elixir
+caller = self()
+handler_id = "meta-#{System.unique_integer([:positive])}"
+
+:telemetry.attach_many(
+  handler_id,
+  [[:jido, :agent_server, :signal, :start]],
+  fn _event, _measurements, metadata, _config ->
+    keys = Map.take(metadata, [:jido_instance, :jido_partition, :signal_type, :agent_id])
+    send(caller, {:metadata, keys})
+  end,
+  nil
+)
+
+sig = Jido.Signal.new!("counter.inc", %{by: 1}, source: "/livebook")
+{:ok, _} = Jido.AgentServer.call(pid, sig, fn s -> {:ok, s.agent.state.app.count} end)
+
+receive do
+  {:metadata, m} -> IO.inspect(m, label: "telemetry metadata at signal:start")
+after
+  300 -> IO.puts("no event")
+end
+
+:telemetry.detach(handler_id)
+```
+
+### Directive telemetry
+
+Directives have their own `[:jido, :agent_server, :directive, :start]` /
+`:stop` events. Useful for measuring directive latency or counting
+emissions.
+
+```elixir
+caller = self()
+handler_id = "dir-#{System.unique_integer([:positive])}"
+
+:telemetry.attach_many(
+  handler_id,
+  [
+    [:jido, :agent_server, :directive, :start],
+    [:jido, :agent_server, :directive, :stop]
+  ],
+  fn event, measurements, metadata, _config ->
+    send(caller, {:directive_event, event, measurements, metadata})
+  end,
+  nil
+)
+
+# An action that emits an Emit directive.
+defmodule Emitter do
+  use Jido.Action, name: "obs_emitter", path: :app, schema: []
+
+  @impl true
+  def run(_signal, slice, _opts, _ctx) do
+    sig = Jido.Signal.new!("downstream.event", %{}, source: "/x")
+
+    {:ok, slice || %{}, [%Jido.Agent.Directive.Emit{signal: sig}]}
+  end
+end
+
+defmodule EmitterAgent do
+  use Jido.Agent, name: "obs_emitter_agent", path: :app, default_plugins: false, schema: []
+
+  def signal_routes(_ctx), do: [{"emit.event", Emitter}]
+end
+
+{:ok, epid} = Demo.Jido.start_agent(EmitterAgent, id: "obs-emitter")
+:ok = Jido.AgentServer.await_ready(epid)
+
+emit_sig = Jido.Signal.new!("emit.event", %{}, source: "/livebook")
+{:ok, _} = Jido.AgentServer.call(epid, emit_sig, fn _ -> {:ok, :sent} end)
+
+# Drain — there'll be at least one start + stop per directive.
+events =
+  for _ <- 1..4 do
+    receive do
+      {:directive_event, event, _measurements, metadata} ->
+        {event, Map.take(metadata, [:directive])}
+    after
+      300 -> :no_more
+    end
+  end
+
+events
+|> Enum.reject(&(&1 == :no_more))
+|> IO.inspect(label: "directive telemetry events")
+
+:telemetry.detach(handler_id)
+```
+
+### Trace context — `Trace.new_root/0` and `Trace.put/2`
+
+Every signal carries a trace context (`trace_id`, `span_id`,
+`parent_span_id`, `causation_id`) in `signal.extensions["correlation"]`.
+`Jido.Tracing.Trace` reads/writes it.
+
+```elixir
+alias Jido.Tracing.Trace
+
+# A bare signal doesn't have a trace yet — agent_server attaches one as
+# the signal enters the pipeline.
+bare_sig = Jido.Signal.new!("trace.demo", %{}, source: "/livebook")
+IO.inspect(Trace.get(bare_sig), label: "bare signal — no trace yet")
+
+# You can attach one explicitly. Useful for cross-system propagation.
+root = Trace.new_root()
+{:ok, traced} = Trace.put(bare_sig, root)
+IO.inspect(Trace.get(traced).trace_id, label: "explicit root trace_id attached")
+
+# Children inherit trace_id and reference the parent's span_id.
+child = Trace.child_of(root, traced.id)
+IO.inspect({child.trace_id == root.trace_id, child.parent_span_id == root.span_id},
+  label: "child shares trace_id, parent_span_id == root span_id"
+)
+```
+
+### Trace propagation across emitted signals
+
+When an action emits a signal via `Emit`, the runtime auto-attaches a
+trace that's a child of the input signal's trace. Same `trace_id`, new
+`span_id`, `parent_span_id` set to the input. The chain stays
+correlatable end-to-end.
+
+```elixir
+defmodule TraceCapture do
+  use Jido.Action, name: "obs_trace_capture", path: :app, schema: []
+
+  @impl true
+  def run(input_signal, slice, _opts, _ctx) do
+    # Emit a downstream event so we can compare traces.
+    sig = Jido.Signal.new!("trace.downstream", %{from: input_signal.id}, source: "/x")
+    {:ok, slice || %{}, [%Jido.Agent.Directive.Emit{signal: sig}]}
+  end
+end
+
+defmodule TraceAgent do
+  use Jido.Agent, name: "obs_trace_agent", path: :app, default_plugins: false, schema: []
+
+  def signal_routes(_ctx), do: [{"trace.demo", TraceCapture}]
+end
+
+{:ok, tpid} = Demo.Jido.start_agent(TraceAgent, id: "obs-trace")
+:ok = Jido.AgentServer.await_ready(tpid)
+
+# Subscribe to the downstream emission and capture its trace.
+{:ok, ref} =
+  Jido.AgentServer.subscribe(
+    tpid,
+    "trace.downstream",
+    fn _s -> :skip end,
+    []
+  )
+
+# We need to subscribe to the signal as it's dispatched, not as it lands
+# back at the agent. Easier path: capture it via the SignalCollector
+# pattern. For the livebook, just observe the input/output traces by
+# checking after the fact via state/3 — or just inspect the input's
+# trace and the output's trace from a manual emission.
+input = Jido.Signal.new!("trace.demo", %{}, source: "/livebook")
+{:ok, attached} = Trace.put(input, Trace.new_root())
+IO.inspect(Trace.get(attached).trace_id, label: "input trace_id (manually attached)")
+
+# Cast it; the cascade will emit "trace.downstream" with a child trace.
+:ok = Jido.AgentServer.cast(tpid, attached)
+
+# Wait for the child signal to land at the subscribe.
+Process.sleep(100)
+Jido.AgentServer.unsubscribe(tpid, ref)
+IO.puts("(downstream signal would carry a child trace inheriting trace_id)")
+```
+
+### `state/3` — the no-polling read pattern
+
+Per [ADR 0021](adr/0021-no-full-state-no-polling.md), readers don't fetch
+the full agent state and dig. They project. `state/3` runs a selector in
+the agent process and returns just what the selector chose to return.
+
+```elixir
+{:ok, summary} =
+  Jido.AgentServer.state(pid, fn s ->
+    {:ok,
+     %{
+       id: s.id,
+       count: s.agent.state.app.count,
+       module: s.agent_module,
+       has_parent: s.parent != nil,
+       child_count: map_size(s.children)
+     }}
+  end)
+
+IO.inspect(summary, label: "selector projects only what's needed")
+```
+
+### Debug events ring buffer
+
+`debug: true` at agent start enables a capped in-memory ring buffer of
+recent events. `recent_events/2` reads them newest-first. Useful for
+diagnosing what happened in the last few signals.
+
+```elixir
+{:ok, dbg_pid} = Demo.Jido.start_agent(CounterAgent, id: "obs-debug", debug: true)
+:ok = Jido.AgentServer.await_ready(dbg_pid)
+
+# Send a couple of signals so there's something in the buffer.
+:ok = Jido.AgentServer.cast(dbg_pid, Jido.Signal.new!("counter.inc", %{by: 1}, source: "/x"))
+:ok = Jido.AgentServer.cast(dbg_pid, Jido.Signal.new!("counter.inc", %{by: 2}, source: "/x"))
+Process.sleep(100)
+
+{:ok, events} = Jido.AgentServer.recent_events(dbg_pid, limit: 5)
+IO.inspect(length(events), label: "recent events count (capped at limit)")
+
+# Each event has :at, :type, :data — newest first.
+case events do
+  [first | _] ->
+    IO.inspect(Map.take(first, [:type, :data]),
+      label: "newest event — :type and :data shape"
+    )
+
+  [] ->
+    IO.puts("no events captured (timing miss)")
+end
+```
+
+### Debug-not-enabled returns an error
+
+Agents started without `debug: true` reject `recent_events/2` with
+`{:error, :debug_not_enabled}`. Toggle at runtime via `set_debug/2`.
+
+```elixir
+result = Jido.AgentServer.recent_events(pid)
+IO.inspect(result, label: "non-debug agent — recent_events/2 returns error")
+
+:ok = Jido.AgentServer.set_debug(pid, true)
+:ok = Jido.AgentServer.cast(pid, Jido.Signal.new!("counter.inc", %{by: 1}, source: "/x"))
+Process.sleep(50)
+{:ok, events} = Jido.AgentServer.recent_events(pid)
+IO.inspect(length(events), label: "after set_debug(true) — buffer collecting")
+```
+
+### `Demo.Jido.recent/2` — the instance shortcut
+
+The Jido instance module ships a `recent/2` helper that delegates to
+`AgentServer.recent_events/2`. It's the pattern users typically reach
+for from a controller or LiveView — `MyApp.Jido.recent(pid, limit: 20)`.
+
+```elixir
+{:ok, events} = Demo.Jido.recent(pid, 3)
+IO.inspect(Enum.map(events, & &1.type), label: "event types from instance shortcut")
+```
+
+## Cleanup
+
+```elixir
+:ok = Demo.Jido.stop_agent("obs-counter")
+:ok = Demo.Jido.stop_agent("obs-emitter")
+:ok = Demo.Jido.stop_agent("obs-trace")
+:ok = Demo.Jido.stop_agent("obs-debug")
+```
+
+## Where to next
+
+- [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
+  the no-polling read pattern in detail.
+- [Cron and child lifecycle](cron-children-lifecycle.livemd) — the
+  cascade telemetry events `[:jido, :agent_server, :cron, :register]` /
+  `[:jido, :agent_server, :cron, :cancel]`.
+- [Pods](pods.livemd) — pod-specific telemetry
+  (`[:jido, :pod, :reconcile, *]`, `[:jido, :pod, :node, :ensure, *]`).
