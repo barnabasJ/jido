@@ -2107,7 +2107,7 @@ defmodule Jido.AgentServer do
 
       {:error, reason} ->
         routing_error =
-          Jido.Error.routing_error("No route for signal", %{
+          Jido.Error.routing_error("No route for signal #{inspect(signal.type)}", %{
             signal_type: signal.type,
             reason: reason
           })
