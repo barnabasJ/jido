@@ -1,0 +1,447 @@
+# Cron, children, lifecycle — the resource-tracking cascade
+
+```elixir
+Mix.install([
+  {:jido, path: Path.expand("..", __DIR__)}
+])
+```
+
+## Setup
+
+```elixir
+defmodule Demo.Jido do
+  use Jido, otp_app: :demo
+end
+
+case Demo.Jido.start_link() do
+  {:ok, _pid} -> :started
+  {:error, {:already_started, _pid}} -> :already_started
+end
+```
+
+## Concept
+
+Three directive families track resources that the agent owns: cron jobs,
+spawned children, and adopted children. Per
+[task 0015](tasks/0015-strict-directives-no-runtime-state.md), each one
+follows the same pattern:
+
+1. **The directive** does the I/O — registers a cron, spawns an agent,
+   adopts a child. It returns `:ok` and writes nothing.
+2. **A natural lifecycle signal** fires (`jido.agent.cron.registered`,
+   `jido.agent.child.started`).
+3. **A framework cascade callback** observes the signal and updates
+   runtime state — `maybe_track_cron_registered/2`,
+   `maybe_track_child_started/2`.
+
+The same pattern in reverse for cancellation:
+`Cron` directive cancels → `cron.cancelled` fires →
+`maybe_track_cron_cancelled/2` prunes the runtime maps.
+
+This notebook walks each cascade and shows the orphan flow when a parent
+dies — see [ADR 0015](adr/0015-agent-start-is-signal-driven.md) for the
+lifecycle signal contract and
+[ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md)
+§2 for the directive split.
+
+## Worked example — Cron registration cascade
+
+A bare agent that emits a `Cron` directive when it receives a signal.
+After the directive runs, the cron job is registered with `Jido.Scheduler`
+but the runtime maps (`state.cron_specs`, `state.cron_jobs`,
+`state.cron_monitors`) are still empty. The cascade callback fills them
+when `jido.agent.cron.registered` arrives.
+
+```elixir
+defmodule EmitDirective do
+  use Jido.Action,
+    name: "ccl_emit_directive",
+    schema: [directive: [type: :any, required: true]]
+
+  @impl true
+  def run(%Jido.Signal{data: %{directive: directive}}, slice, _opts, _ctx) do
+    {:ok, slice || %{}, [directive]}
+  end
+end
+
+defmodule HarnessAgent do
+  use Jido.Agent,
+    name: "ccl_harness",
+    path: :app,
+    default_plugins: false,
+    schema: []
+
+  def signal_routes(_ctx), do: [{"emit", EmitDirective}]
+end
+
+{:ok, pid} = Demo.Jido.start_agent(HarnessAgent, id: "ccl-cron-demo")
+:ok = Jido.AgentServer.await_ready(pid)
+```
+
+```elixir
+# Snapshot before — the cron maps are empty.
+{:ok, before} =
+  Jido.AgentServer.state(pid, fn s ->
+    {:ok,
+     %{
+       specs: Map.has_key?(s.cron_specs, :hourly_demo),
+       jobs: Map.has_key?(s.cron_jobs, :hourly_demo),
+       monitors: Map.has_key?(s.cron_monitors, :hourly_demo)
+     }}
+  end)
+
+IO.inspect(before, label: "cron maps before directive")
+
+# Subscribe to the cron.registered signal BEFORE casting (the cascade is
+# fast — subscribing after would race).
+caller = self()
+
+{:ok, ref} =
+  Jido.AgentServer.subscribe(
+    pid,
+    "jido.agent.cron.registered",
+    fn s ->
+      case Map.get(s.cron_jobs, :hourly_demo) do
+        nil -> :skip
+        cron_pid -> {:ok, cron_pid}
+      end
+    end,
+    once: true
+  )
+
+# Cast a signal carrying a Cron directive.
+cron_directive = %Jido.Agent.Directive.Cron{
+  cron: "@hourly",
+  message: :tick,
+  job_id: :hourly_demo,
+  timezone: nil
+}
+
+emit_sig = Jido.Signal.new!("emit", %{directive: cron_directive}, source: "/livebook")
+:ok = Jido.AgentServer.cast(pid, emit_sig)
+
+receive do
+  {:jido_subscription, ^ref, %{result: {:ok, cron_pid}}} ->
+    IO.inspect(is_pid(cron_pid),
+      label: "after cron.registered — :hourly_demo tracked in state.cron_jobs"
+    )
+after
+  2000 -> raise "cron.registered didn't fire in time"
+end
+
+{:ok, after_state} =
+  Jido.AgentServer.state(pid, fn s ->
+    {:ok,
+     %{
+       specs: Map.has_key?(s.cron_specs, :hourly_demo),
+       jobs: Map.has_key?(s.cron_jobs, :hourly_demo),
+       monitors: Map.has_key?(s.cron_monitors, :hourly_demo),
+       runtime_specs: Map.has_key?(s.cron_runtime_specs, :hourly_demo)
+     }}
+  end)
+
+IO.inspect(after_state, label: "cron maps after cascade — all five filled in one shot")
+```
+
+### Cron cancellation cascade
+
+`CronCancel` mirrors the same pattern in reverse. The directive cancels
+the underlying job and emits `jido.agent.cron.cancelled`; the cascade
+callback prunes the runtime maps.
+
+```elixir
+{:ok, ref} =
+  Jido.AgentServer.subscribe(
+    pid,
+    "jido.agent.cron.cancelled",
+    fn s ->
+      case Map.has_key?(s.cron_jobs, :hourly_demo) do
+        false -> {:ok, :pruned}
+        true -> :skip
+      end
+    end,
+    once: true
+  )
+
+cancel_directive = %Jido.Agent.Directive.CronCancel{job_id: :hourly_demo}
+cancel_sig = Jido.Signal.new!("emit", %{directive: cancel_directive}, source: "/livebook")
+:ok = Jido.AgentServer.cast(pid, cancel_sig)
+
+receive do
+  {:jido_subscription, ^ref, %{result: {:ok, :pruned}}} ->
+    IO.puts(":hourly_demo pruned from cron_jobs after cron.cancelled cascade")
+after
+  2000 -> raise "cron.cancelled didn't fire in time"
+end
+
+{:ok, final_state} =
+  Jido.AgentServer.state(pid, fn s ->
+    {:ok,
+     %{
+       specs: Map.has_key?(s.cron_specs, :hourly_demo),
+       jobs: Map.has_key?(s.cron_jobs, :hourly_demo),
+       monitors: Map.has_key?(s.cron_monitors, :hourly_demo)
+     }}
+  end)
+
+IO.inspect(final_state, label: "all cron maps clean after cancel cascade")
+```
+
+## Variations
+
+### `Directive.cron/3` helper
+
+The struct has the canonical shape but you usually build it via the
+helper. Equivalent:
+
+```elixir
+sig = Jido.Signal.new!("cron.tick", %{}, source: "/livebook")
+
+direct_struct = %Jido.Agent.Directive.Cron{
+  cron: "@daily",
+  message: sig,
+  job_id: :daily_thing,
+  timezone: nil
+}
+
+via_helper =
+  Jido.Agent.Directive.cron("@daily", sig, job_id: :daily_thing)
+
+IO.inspect(direct_struct == via_helper, label: "struct equals helper output")
+```
+
+### Cron expression formats
+
+The framework accepts standard cron strings and the special `@hourly` /
+`@daily` / `@weekly` / `@monthly` shorthands. Step values like `*/5` are
+supported.
+
+```elixir
+expressions = [
+  "* * * * *",
+  "@hourly",
+  "@daily",
+  "@weekly",
+  "@monthly",
+  "*/15 * * * *",
+  "0 9 * * MON",
+  "0 0 1 * *"
+]
+
+for expr <- expressions do
+  d = %Jido.Agent.Directive.Cron{cron: expr, message: :test, job_id: nil, timezone: nil}
+  IO.inspect({d.cron, d.timezone}, label: "valid cron expression")
+end
+```
+
+### `Cron` with timezone
+
+Cron jobs default to UTC. Pass `:timezone` to schedule against a named
+zone instead.
+
+```elixir
+ny =
+  Jido.Agent.Directive.cron(
+    "0 9 * * MON",
+    :weekly_kickoff,
+    job_id: :monday_9am_ny,
+    timezone: "America/New_York"
+  )
+
+IO.inspect({ny.cron, ny.timezone, ny.job_id}, label: "scheduled against America/New_York")
+```
+
+### `SpawnAgent` cascade
+
+`SpawnAgent` works the same way as `Cron`. The directive spawns a child
+under the parent's supervisor + monitors it. The child boots and emits
+`jido.agent.child.started`. The parent's `maybe_track_child_started/2`
+cascade callback inserts the child into `state.children`. The window
+between "directive runs" and "child is tracked" is the async gap.
+
+```elixir
+spawn_directive = %Jido.Agent.Directive.SpawnAgent{
+  agent: HarnessAgent,
+  tag: :child_a,
+  opts: %{},
+  meta: %{}
+}
+
+{:ok, ref} =
+  Jido.AgentServer.subscribe(
+    pid,
+    "jido.agent.child.started",
+    fn s ->
+      case Map.get(s.children, :child_a) do
+        nil -> :skip
+        info -> {:ok, info.pid}
+      end
+    end,
+    once: true
+  )
+
+spawn_sig = Jido.Signal.new!("emit", %{directive: spawn_directive}, source: "/livebook")
+:ok = Jido.AgentServer.cast(pid, spawn_sig)
+
+child_pid =
+  receive do
+    {:jido_subscription, ^ref, %{result: {:ok, child_pid}}} -> child_pid
+  after
+    2000 -> raise "child.started didn't fire"
+  end
+
+IO.inspect(is_pid(child_pid), label: "child tracked after cascade")
+```
+
+### `AdoptChild` cascade
+
+`AdoptChild` reuses an already-running agent and reattaches it as a
+logical child. The same `child.started` cascade fires — the runtime
+doesn't distinguish "newly spawned" from "freshly adopted" once the
+child is running and emits the signal.
+
+```elixir
+{:ok, orphan_pid} = Demo.Jido.start_agent(HarnessAgent, id: "ccl-orphan-target")
+:ok = Jido.AgentServer.await_ready(orphan_pid)
+
+adopt_directive = %Jido.Agent.Directive.AdoptChild{
+  child: orphan_pid,
+  tag: :adopted_one,
+  meta: %{}
+}
+
+{:ok, ref} =
+  Jido.AgentServer.subscribe(
+    pid,
+    "jido.agent.child.started",
+    fn s ->
+      case Map.get(s.children, :adopted_one) do
+        nil -> :skip
+        info -> {:ok, info.pid}
+      end
+    end,
+    once: true
+  )
+
+adopt_sig = Jido.Signal.new!("emit", %{directive: adopt_directive}, source: "/livebook")
+:ok = Jido.AgentServer.cast(pid, adopt_sig)
+
+adopted_pid =
+  receive do
+    {:jido_subscription, ^ref, %{result: {:ok, p}}} -> p
+  after
+    2000 -> raise "adopt's child.started didn't fire"
+  end
+
+IO.inspect(adopted_pid == orphan_pid, label: "adopted pid equals the original orphan")
+```
+
+### Parent death — `:stop`, `:continue`, `:emit_orphan`
+
+Children configure how they react to their parent's death via
+`on_parent_death:`. Three modes:
+
+- `:stop` (default) — the child's logical parent dies and the child
+  follows.
+- `:continue` — the child becomes orphaned, `state.parent` clears, the
+  former parent is preserved in `state.orphaned_from`.
+- `:emit_orphan` — same as `:continue` plus the child receives a
+  `jido.agent.orphaned` signal.
+
+```elixir
+defmodule OrphanReadyAgent do
+  use Jido.Agent,
+    name: "ccl_orphan_ready",
+    path: :app,
+    default_plugins: false,
+    schema: []
+end
+
+# Start a parent and a child configured to continue on parent death.
+{:ok, parent_pid} = Demo.Jido.start_agent(OrphanReadyAgent, id: "ccl-parent")
+:ok = Jido.AgentServer.await_ready(parent_pid)
+
+child_id = "ccl-child-#{System.unique_integer([:positive])}"
+
+{:ok, child_pid} =
+  Demo.Jido.start_agent(OrphanReadyAgent,
+    id: child_id,
+    parent: %Jido.AgentServer.ParentRef{
+      pid: parent_pid,
+      id: "ccl-parent",
+      tag: :worker,
+      meta: %{}
+    },
+    on_parent_death: :continue
+  )
+
+:ok = Jido.AgentServer.await_ready(child_pid)
+
+# Verify the child knows about its parent.
+{:ok, parent_info} =
+  Jido.AgentServer.state(child_pid, fn s -> {:ok, s.parent && s.parent.pid} end)
+
+IO.inspect(parent_info, label: "child's parent.pid before parent dies"  )
+
+# Subscribe BEFORE killing the parent — the orphan transition is fast,
+# subscribing after would race with the cascade.
+{:ok, sref} =
+  Jido.AgentServer.subscribe(
+    child_pid,
+    "**",
+    fn s ->
+      cond do
+        s.parent == nil and s.orphaned_from != nil -> {:ok, :orphaned}
+        true -> :skip
+      end
+    end,
+    once: true,
+    dispatch: {:pid, target: self()}
+  )
+
+# Now kill the parent.
+parent_ref = Process.monitor(parent_pid)
+:ok = Demo.Jido.stop_agent("ccl-parent")
+
+receive do
+  {:DOWN, ^parent_ref, :process, _, _} -> :ok
+after
+  2000 -> raise "parent didn't die in time"
+end
+
+receive do
+  {:jido_subscription, ^sref, %{result: {:ok, :orphaned}}} ->
+    {:ok, view} =
+      Jido.AgentServer.state(child_pid, fn s ->
+        {:ok, %{parent: s.parent, orphaned_from_id: s.orphaned_from && s.orphaned_from.id}}
+      end)
+
+    IO.inspect(view, label: "child after parent died — parent: nil, orphaned_from preserved")
+after
+  2000 -> raise "child didn't observe orphan transition"
+end
+```
+
+## Cleanup
+
+```elixir
+# Parent already stopped above. Clean the rest.
+:ok = Demo.Jido.stop_agent("ccl-cron-demo")
+:ok = Demo.Jido.stop_agent("ccl-orphan-target")
+case Demo.Jido.stop_agent("ccl-orphan-target") do
+  :ok -> :ok
+  {:error, :not_found} -> :ok
+end
+```
+
+## Where to next
+
+- [Actions and directives](actions-and-directives.livemd) — the
+  directive surface in detail.
+- [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
+  the `subscribe/4` pattern these cascades depend on.
+- [Pods](pods.livemd) — pods reuse the same `child.started` /
+  `child.exit` cascades to track topology nodes.
+- [Observability](observability.livemd) — the
+  `[:jido, :agent_server, :cron, *]` telemetry that fires alongside
+  these cascades.
