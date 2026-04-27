@@ -123,8 +123,6 @@ defmodule Jido.Pod.Mutable do
     %{report | status: status}
   end
 
-  defp finalize_report(report, _status), do: report
-
   defp first_wave(%Plan{stop_waves: [first_stop | _]}) do
     {{:stop_wave, 0}, %{kind: :exit, names: MapSet.new(first_stop)},
      Enum.map(first_stop, &StopNode.new!/1)}

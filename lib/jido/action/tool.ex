@@ -73,7 +73,7 @@ defmodule Jido.Action.Tool do
     safe_context = context || %{}
 
     case Jido.Exec.run(action, converted_params, safe_context) do
-      {:ok, result} ->
+      {:ok, result, _directives} ->
         {:ok, Jason.encode!(result)}
 
       {:error, %_{} = error} when is_exception(error) ->

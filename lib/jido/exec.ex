@@ -684,7 +684,6 @@ defmodule Jido.Exec do
     end
 
     defp ensure_map(map) when is_map(map), do: map
-    defp ensure_map(_), do: %{}
 
     defp maybe_put(map, _key, nil), do: map
     defp maybe_put(map, key, value), do: Map.put(map, key, value)

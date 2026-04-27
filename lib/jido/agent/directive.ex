@@ -459,7 +459,7 @@ defmodule Jido.Agent.Directive do
     attaches it to `state.parent` at init, which in turn causes
     `handle_continue(:post_init, ...)` to emit `jido.agent.child.started`.
     """
-    @spec execute(t(), Jido.AgentServer.State.t() | nil) ::
+    @spec execute(t(), %{required(:id) => String.t(), optional(any()) => any()} | nil) ::
             {:ok, pid()} | {:error, term()}
     def execute(%__MODULE__{} = directive, state \\ nil) do
       parent_ref = resolve_parent(directive, state)

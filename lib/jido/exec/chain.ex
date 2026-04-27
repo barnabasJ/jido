@@ -136,17 +136,10 @@ defmodule Jido.Exec.Chain do
           {:cont, ok_t()} | {:halt, chain_result()}
   defp run_action(action, params, context, opts) do
     case Exec.run(action, params, context, opts) do
-      {:ok, result} when is_map(result) ->
-        {:cont, {:ok, Map.merge(params, result)}}
-
-      {:ok, result, _directive} when is_map(result) ->
+      {:ok, result, _directives} when is_map(result) ->
         {:cont, {:ok, Map.merge(params, result)}}
 
       {:error, error} ->
-        Logger.warning("Exec in chain failed: #{inspect(action)} #{inspect(error)}")
-        {:halt, {:error, error}}
-
-      {:error, error, _directive} ->
         Logger.warning("Exec in chain failed: #{inspect(action)} #{inspect(error)}")
         {:halt, {:error, error}}
     end

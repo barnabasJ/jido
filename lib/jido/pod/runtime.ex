@@ -332,13 +332,8 @@ defmodule Jido.Pod.Runtime do
   defp adopt_existing(%State{} = state, %View{} = view, name, %Node{} = node, pid)
        when is_pid(pid) do
     # Re-attach as parent so the child's parent_ref points back here.
-    case build_parent_ref(self(), view, name, node.meta) do
-      {:ok, parent_ref} ->
-        _ = AgentServer.adopt_parent(pid, parent_ref)
-
-      _ ->
-        :ok
-    end
+    {:ok, parent_ref} = build_parent_ref(self(), view, name, node.meta)
+    _ = AgentServer.adopt_parent(pid, parent_ref)
 
     # Cast a synthetic child.started so the state machine advances and
     # `maybe_track_child_started/2` registers the pid in `state.children`.
@@ -351,7 +346,7 @@ defmodule Jido.Pod.Runtime do
           child_module: child_module(node),
           tag: name,
           pid: pid,
-          meta: node.meta || %{}
+          meta: node.meta
         },
         source: "/agent/#{state.id}"
       )
@@ -397,7 +392,7 @@ defmodule Jido.Pod.Runtime do
             child_module: child_module(node),
             tag: name,
             pid: pid,
-            meta: node.meta || %{}
+            meta: node.meta
           },
           source: "/agent/#{state.id}"
         )
@@ -730,7 +725,7 @@ defmodule Jido.Pod.Runtime do
        id: parent_id,
        partition: view.partition,
        tag: name,
-       meta: meta || %{}
+       meta: meta
      })}
   end
 

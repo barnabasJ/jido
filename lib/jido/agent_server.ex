@@ -1970,7 +1970,7 @@ defmodule Jido.AgentServer do
 
     case Jido.Signal.new(%{
            type: "jido.subscription.fire",
-           source: signal.source || "/agent/subscription",
+           source: signal.source,
            data: payload
          }) do
       {:ok, fire_signal} ->
@@ -2091,7 +2091,6 @@ defmodule Jido.AgentServer do
           case actions do
             [single] -> single
             list when is_list(list) -> list
-            other -> other
           end
 
         case agent_module.cmd(agent, action_arg, ctx: ctx, input_signal: signal) do
@@ -2778,8 +2777,6 @@ defmodule Jido.AgentServer do
 
     dispatch_synthetic_signal(signal, state)
   end
-
-  defp emit_identity_orphaned(%State{} = state, _former_parent, _reason), do: state
 
   # Synthesize a signal locally and run it through the agent's own
   # `process_signal/2` pipeline so subscribers see it. Used by handlers
