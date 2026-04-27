@@ -670,9 +670,10 @@ defmodule Jido.Exec do
 
     defp synthesize_signal(action, params) do
       type =
-        cond do
-          function_exported?(action, :name, 0) -> action.name()
-          true -> Atom.to_string(action)
+        if function_exported?(action, :name, 0) do
+          action.name()
+        else
+          Atom.to_string(action)
         end
 
       data = ensure_map(params)

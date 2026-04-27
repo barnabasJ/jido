@@ -225,12 +225,10 @@ defmodule Jido.Pod.Runtime do
       view = view_from_state(state, topology)
       snapshot = build_node_snapshot(view, name, node)
 
-      cond do
-        is_pid(snapshot.running_pid) ->
-          adopt_existing(state, view, name, node, snapshot.running_pid)
-
-        true ->
-          spawn_new(state, view, name, node, opts)
+      if is_pid(snapshot.running_pid) do
+        adopt_existing(state, view, name, node, snapshot.running_pid)
+      else
+        spawn_new(state, view, name, node, opts)
       end
     end
     |> case do
@@ -561,19 +559,17 @@ defmodule Jido.Pod.Runtime do
   defp ensure_pod_module(module) when is_atom(module) do
     case Code.ensure_loaded(module) do
       {:module, _loaded} ->
-        cond do
-          function_exported?(module, :pod?, 0) and module.pod?() ->
-            case TopologyState.pod_plugin_instance(module) do
-              {:ok, _instance} -> :ok
-              {:error, reason} -> {:error, reason}
-            end
-
-          true ->
-            {:error,
-             Jido.Error.validation_error(
-               "Pod runtime requires kind: :pod nodes to reference a pod module.",
-               details: %{module: module}
-             )}
+        if function_exported?(module, :pod?, 0) and module.pod?() do
+          case TopologyState.pod_plugin_instance(module) do
+            {:ok, _instance} -> :ok
+            {:error, reason} -> {:error, reason}
+          end
+        else
+          {:error,
+           Jido.Error.validation_error(
+             "Pod runtime requires kind: :pod nodes to reference a pod module.",
+             details: %{module: module}
+           )}
         end
 
       {:error, reason} ->

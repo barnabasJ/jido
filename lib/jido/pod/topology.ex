@@ -240,15 +240,13 @@ defmodule Jido.Pod.Topology do
   """
   @spec owner_of(t(), node_name()) :: {:ok, node_name()} | :root | :error
   def owner_of(%__MODULE__{} = topology, name) when is_node_name(name) do
-    cond do
-      not Map.has_key?(topology.nodes, name) ->
-        :error
-
-      true ->
-        case Enum.find(topology.links, &match?(%Link{type: :owns, to: ^name}, &1)) do
-          %Link{from: owner} -> {:ok, owner}
-          nil -> :root
-        end
+    if Map.has_key?(topology.nodes, name) do
+      case Enum.find(topology.links, &match?(%Link{type: :owns, to: ^name}, &1)) do
+        %Link{from: owner} -> {:ok, owner}
+        nil -> :root
+      end
+    else
+      :error
     end
   end
 

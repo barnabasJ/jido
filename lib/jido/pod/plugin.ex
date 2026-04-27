@@ -94,15 +94,13 @@ defmodule Jido.Pod.Plugin do
   end
 
   def build_state(agent_module, overrides) when is_atom(agent_module) and is_map(overrides) do
-    cond do
-      function_exported?(agent_module, :topology, 0) ->
-        build_state(agent_module.topology(), overrides)
-
-      true ->
-        {:error,
-         Jido.Error.validation_error(
-           "#{inspect(agent_module)} does not export topology/0 required by pod slices."
-         )}
+    if function_exported?(agent_module, :topology, 0) do
+      build_state(agent_module.topology(), overrides)
+    else
+      {:error,
+       Jido.Error.validation_error(
+         "#{inspect(agent_module)} does not export topology/0 required by pod slices."
+       )}
     end
   end
 
