@@ -1,0 +1,432 @@
+# Call, cast, await, subscribe — the AgentServer primitives
+
+```elixir
+Mix.install([
+  {:jido, path: Path.expand("..", __DIR__)}
+])
+```
+
+## Setup
+
+```elixir
+defmodule Demo.Jido do
+  use Jido, otp_app: :demo
+end
+
+case Demo.Jido.start_link() do
+  {:ok, _pid} -> :started
+  {:error, {:already_started, _pid}} -> :already_started
+end
+```
+
+## Concept
+
+`Jido.AgentServer` is the runtime side. Four primitives let callers
+interact with a running agent:
+
+- **`call/4`** — synchronous request. Send a signal, wait for the pipeline
+  to finish, project the post-pipeline state through a selector, return
+  the selector's result.
+- **`cast/3`** — fire-and-forget. Send a signal; return `:ok` immediately.
+- **`subscribe/4`** — ambient subscription. Register a selector that
+  fires on every signal matching a pattern; selector return decides
+  whether the subscriber sees a result (`{:ok, _}` / `{:error, _}`) or
+  the subscription stays silent (`:skip`).
+- **`await_ready/2`** — block until the agent has emitted
+  `jido.agent.lifecycle.ready` (post-thaw, post-init).
+
+Plus **`state/3`** — read-only projection of the current agent state,
+no signal pipeline.
+
+See [ADR 0015](adr/0015-agent-start-is-signal-driven.md) (lifecycle),
+[ADR 0016](adr/0016-agent-server-ack-and-subscribe.md) (ack/subscribe),
+[ADR 0020](adr/0020-synchronous-call-takes-a-selector.md) (selector-based
+call), and [ADR 0021](adr/0021-no-full-state-no-polling.md) (no full state,
+no polling).
+
+## Worked example — start an agent and call
+
+A minimal agent with one action and one route. Start it, send a signal
+synchronously, project a single field through the selector.
+
+```elixir
+defmodule Counter.Inc do
+  use Jido.Action,
+    name: "counter_inc",
+    path: :app,
+    schema: [by: [type: :integer, default: 1]]
+
+  @impl true
+  def run(%Jido.Signal{data: %{by: by}}, slice, _opts, _ctx) do
+    slice = slice || %{}
+    {:ok, Map.update(slice, :count, by, &(&1 + by)), []}
+  end
+end
+
+defmodule CounterAgent do
+  use Jido.Agent,
+    name: "ccas_counter",
+    path: :app,
+    default_plugins: false,
+    schema: [
+      count: [type: :integer, default: 0],
+      status: [type: :atom, default: :idle]
+    ]
+
+  def signal_routes(_ctx), do: [{"counter.inc", Counter.Inc}]
+end
+
+{:ok, pid} = Demo.Jido.start_agent(CounterAgent, id: "ccas-counter")
+:ok = Jido.AgentServer.await_ready(pid)
+IO.inspect(:ok, label: "agent ready — past lifecycle.ready")
+```
+
+```elixir
+sig = Jido.Signal.new!("counter.inc", %{by: 5}, source: "/livebook")
+
+{:ok, projected} =
+  Jido.AgentServer.call(pid, sig, fn s -> {:ok, s.agent.state.app.count} end)
+
+IO.inspect(projected, label: "selector returned just the count, not the full state")
+```
+
+## Variations
+
+### `call/4` — selector returns derived value
+
+The selector runs in the agent process after the outermost middleware
+unwinds. It can do arbitrary computation against the post-pipeline state,
+not just a field read.
+
+```elixir
+sig = Jido.Signal.new!("counter.inc", %{by: 7}, source: "/livebook")
+
+{:ok, doubled} =
+  Jido.AgentServer.call(pid, sig, fn s -> {:ok, s.agent.state.app.count * 2} end)
+
+IO.inspect(doubled, label: "selector returns count * 2")
+```
+
+### `call/4` — selector returns `{:error, _}`
+
+The selector decides what counts as success. An `{:error, _}` return
+delivers the error to the caller verbatim — no pipeline error, just the
+selector's choice.
+
+```elixir
+sig = Jido.Signal.new!("counter.inc", %{by: 1}, source: "/livebook")
+
+result =
+  Jido.AgentServer.call(pid, sig, fn _state -> {:error, :selector_says_no} end)
+
+IO.inspect(result, label: "selector returned {:error, _} verbatim")
+```
+
+### `call/4` — chain error skips the selector
+
+If the action errors, the chain returns `{:error, _}` and the selector is
+**not** invoked. The caller sees the chain error, not a selector return.
+This is the [ADR 0018](adr/0018-tagged-tuple-return-shape.md) §3 contract.
+
+```elixir
+defmodule Failing do
+  use Jido.Action, name: "ccas_failing", path: :app, schema: []
+
+  @impl true
+  def run(_signal, _slice, _opts, _ctx), do: {:error, :intentional}
+end
+
+defmodule FailingAgent do
+  use Jido.Agent,
+    name: "ccas_failing_agent",
+    path: :app,
+    default_plugins: false,
+    schema: []
+
+  def signal_routes(_ctx), do: [{"fail", Failing}]
+end
+
+{:ok, fpid} = Demo.Jido.start_agent(FailingAgent, id: "ccas-failing")
+:ok = Jido.AgentServer.await_ready(fpid)
+
+result =
+  Jido.AgentServer.call(
+    fpid,
+    Jido.Signal.new!("fail", %{}, source: "/livebook"),
+    fn _ -> {:ok, :selector_should_be_skipped} end
+  )
+
+IO.inspect(result, label: "chain error reaches caller; selector skipped")
+```
+
+### `call/4` — raising selector becomes a tagged error
+
+A selector that raises doesn't crash the agent. The exception is caught
+and surfaced to the caller as `{:error, {:selector_raised, exception, stacktrace}}`.
+
+```elixir
+sig = Jido.Signal.new!("counter.inc", %{by: 1}, source: "/livebook")
+
+result =
+  Jido.AgentServer.call(pid, sig, fn _ -> raise "selector boom" end)
+
+case result do
+  {:error, {:selector_raised, %RuntimeError{message: msg}, _stack}} ->
+    IO.inspect(msg, label: "raising selector caught and tagged")
+end
+
+IO.inspect(Process.alive?(pid), label: "agent stayed alive")
+```
+
+### `cast/3` — fire-and-forget
+
+`cast/3` returns `:ok` as soon as the message is queued. The signal goes
+through the pipeline asynchronously. To observe the resulting state
+change, use `state/3` afterwards.
+
+```elixir
+sig = Jido.Signal.new!("counter.inc", %{by: 100}, source: "/livebook")
+:ok = Jido.AgentServer.cast(pid, sig)
+IO.puts("cast returned :ok immediately")
+
+# Wait briefly for the cast to land. In production code you'd subscribe
+# (see below) instead of sleeping; this is a one-off demo.
+Process.sleep(50)
+
+{:ok, count} = Jido.AgentServer.state(pid, fn s -> {:ok, s.agent.state.app.count} end)
+IO.inspect(count, label: "count after cast — observed via state/3")
+```
+
+### `state/3` — pure read, no pipeline
+
+`state/3` doesn't run a signal — it just runs a selector against the
+current state. Use it for liveness checks, bootstrap reads, or
+inspection.
+
+```elixir
+{:ok, snapshot} =
+  Jido.AgentServer.state(pid, fn s ->
+    {:ok, %{id: s.id, agent_module: s.agent_module, count: s.agent.state.app.count}}
+  end)
+
+IO.inspect(snapshot, label: "state/3 — no signal pipeline, just a projection")
+```
+
+### `subscribe/4` — once-mode
+
+A `once: true` subscription unregisters after the first non-`:skip`
+selector return. The subscriber receives `{:jido_subscription, ref, %{result: {:ok, _}}}`.
+
+```elixir
+{:ok, ref} =
+  Jido.AgentServer.subscribe(
+    pid,
+    "counter.inc",
+    fn s -> {:ok, s.agent.state.app.count} end,
+    once: true
+  )
+
+:ok = Jido.AgentServer.cast(pid, Jido.Signal.new!("counter.inc", %{by: 1}, source: "/livebook"))
+
+receive do
+  {:jido_subscription, ^ref, %{result: {:ok, count}}} ->
+    IO.inspect(count, label: "subscription fired once — count delivered")
+after
+  1_000 -> IO.puts("(no fire — unexpected)")
+end
+```
+
+### `subscribe/4` — `:skip` keeps subscription alive
+
+Returning `:skip` from the selector keeps the subscriber registered
+without dispatching. Useful when you want to fan out side effects from
+selector code without acknowledging back.
+
+```elixir
+caller = self()
+
+{:ok, ref} =
+  Jido.AgentServer.subscribe(
+    pid,
+    "counter.inc",
+    fn s ->
+      send(caller, {:saw, s.agent.state.app.count})
+      :skip
+    end,
+    []
+  )
+
+:ok = Jido.AgentServer.cast(pid, Jido.Signal.new!("counter.inc", %{by: 1}, source: "/livebook"))
+:ok = Jido.AgentServer.cast(pid, Jido.Signal.new!("counter.inc", %{by: 1}, source: "/livebook"))
+
+receive do
+  {:saw, c} -> IO.inspect(c, label: "first hit")
+after
+  1_000 -> IO.puts("missed first hit")
+end
+
+receive do
+  {:saw, c} -> IO.inspect(c, label: "second hit — same subscription, still alive")
+after
+  1_000 -> IO.puts("missed second hit")
+end
+
+:ok = Jido.AgentServer.unsubscribe(pid, ref)
+```
+
+### `subscribe/4` — pattern filtering
+
+Patterns use the same router syntax as `signal_routes`. `"counter.*"`
+matches one segment after `"counter."`; `"counter.**"` matches any number;
+`"**"` matches everything.
+
+```elixir
+{:ok, ref} =
+  Jido.AgentServer.subscribe(
+    pid,
+    "specific.path",
+    fn _ -> {:ok, :hit} end,
+    once: true
+  )
+
+:ok = Jido.AgentServer.cast(pid, Jido.Signal.new!("counter.inc", %{by: 1}, source: "/livebook"))
+
+receive do
+  {:jido_subscription, ^ref, _} -> IO.puts("(unexpected — should not match)")
+after
+  300 -> IO.puts("counter.inc didn't match \"specific.path\" — correct")
+end
+
+:ok = Jido.AgentServer.unsubscribe(pid, ref)
+```
+
+### `subscribe/4` — selector runs even on chain error
+
+If the chain returns `{:error, _}`, `call/4` callers skip the selector.
+But subscribers still see the signal — their selector runs against the
+post-pipeline state regardless. Useful for observability that wants to
+record both successes and failures.
+
+```elixir
+caller = self()
+
+{:ok, ref} =
+  Jido.AgentServer.subscribe(
+    fpid,
+    "fail",
+    fn _ ->
+      send(caller, :subscriber_saw_fail)
+      :skip
+    end,
+    []
+  )
+
+:ok = Jido.AgentServer.cast(fpid, Jido.Signal.new!("fail", %{}, source: "/livebook"))
+
+receive do
+  :subscriber_saw_fail -> IO.puts("subscriber's selector ran even though the action errored")
+after
+  1_000 -> IO.puts("(no fire — unexpected)")
+end
+
+:ok = Jido.AgentServer.unsubscribe(fpid, ref)
+```
+
+### `await_ready/2` — pre-thaw vs post-thaw
+
+`await_ready/2` blocks until the agent emits `jido.agent.lifecycle.ready`.
+After ready fires once, subsequent calls return `:ok` immediately. If the
+agent dies before ready, the call returns `{:error, {:down, reason}}`.
+
+```elixir
+# Already past ready — replies immediately.
+:ok = Jido.AgentServer.await_ready(pid)
+IO.puts("await_ready returned :ok (already ready)")
+
+# A timeout against a non-existent agent surfaces as {:error, :not_found}
+# (or :timeout, depending on registry resolution path).
+err = Jido.AgentServer.await_ready("definitely-not-running", timeout: 100)
+IO.inspect(err, label: "await_ready against unknown agent")
+```
+
+### Retry middleware retries beneath `call/4`'s selector
+
+When Retry middleware re-invokes `next` on `{:error, _}`, the agent runs
+the action multiple times — but the caller's selector fires **once** per
+outermost return. The selector sees the eventual success (or final
+failure) just like a single-attempt call.
+
+```elixir
+defmodule FlakyAction do
+  use Jido.Action, name: "ccas_flaky", path: :app, schema: []
+
+  @counter_key {__MODULE__, :counter}
+
+  def reset(name) do
+    :persistent_term.put({@counter_key, name}, :counters.new(1, []))
+  end
+
+  def attempts(name) do
+    :counters.get(:persistent_term.get({@counter_key, name}), 1)
+  end
+
+  def run(%Jido.Signal{data: %{name: name, succeed_after: s}}, slice, _opts, _ctx) do
+    counter = :persistent_term.get({@counter_key, name})
+    :counters.add(counter, 1, 1)
+    n = :counters.get(counter, 1)
+
+    if n >= s do
+      slice = slice || %{}
+      {:ok, Map.put(slice, :status, :written), []}
+    else
+      {:error, :transient}
+    end
+  end
+end
+
+defmodule RetryingAgent do
+  use Jido.Agent,
+    name: "ccas_retrying",
+    path: :app,
+    default_plugins: false,
+    schema: [status: [type: :atom, default: :idle]],
+    middleware: [{Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}]
+
+  def signal_routes(_ctx), do: [{"flaky", FlakyAction}]
+end
+
+FlakyAction.reset(:demo)
+
+{:ok, rpid} = Demo.Jido.start_agent(RetryingAgent, id: "ccas-retrying")
+:ok = Jido.AgentServer.await_ready(rpid)
+
+flaky_sig = Jido.Signal.new!("flaky", %{name: :demo, succeed_after: 3}, source: "/livebook")
+
+result =
+  Jido.AgentServer.call(rpid, flaky_sig, fn s ->
+    case s.agent.state.app.status do
+      :written -> {:ok, :wrote_after_retries}
+      _ -> {:error, :not_yet}
+    end
+  end)
+
+IO.inspect(result, label: "single selector return for an N-attempt retry chain")
+IO.inspect(FlakyAction.attempts(:demo), label: "total action invocations")
+```
+
+## Cleanup
+
+```elixir
+:ok = Demo.Jido.stop_agent("ccas-counter")
+:ok = Demo.Jido.stop_agent("ccas-failing")
+:ok = Demo.Jido.stop_agent("ccas-retrying")
+```
+
+## Where to next
+
+- [Slices](slices.livemd) — what the selector projects against.
+- [Middleware](middleware.livemd) — how Retry sits in the chain.
+- [Actions and directives](actions-and-directives.livemd) — the cascade
+  pattern that uses subscribe under the hood.
+- [Observability](observability.livemd) — telemetry, traces, and
+  selector-based reads as the no-polling pattern.
