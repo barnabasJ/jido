@@ -1,0 +1,553 @@
+# Actions and directives — return shape and the side-effect surface
+
+```elixir
+Mix.install([
+  {:jido, path: Path.expand("..", __DIR__)}
+])
+```
+
+## Setup
+
+```elixir
+defmodule Demo.Jido do
+  use Jido, otp_app: :demo
+end
+
+case Demo.Jido.start_link() do
+  {:ok, _pid} -> :started
+  {:error, {:already_started, _pid}} -> :already_started
+end
+```
+
+## Concept
+
+An action's job is to mutate state. Its return shape is the contract:
+
+```
+run(signal, slice, opts, ctx) ::
+  {:ok, new_slice, [directive]} | {:error, reason}
+```
+
+Always a 3-tuple on success — `[directive]` is empty when the action has no
+side effects to emit. There's no `{:ok, slice}` two-arg variant; the empty
+list is explicit. See [ADR 0018](adr/0018-tagged-tuple-return-shape.md).
+
+A *directive* is a pure description of an external effect — emit a signal,
+spawn a child, schedule a delayed message. After
+[ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effects.md),
+directives mutate **no** state. The `DirectiveExec.exec/3` contract returns
+`:ok | {:stop, term()}` — there is no return slot for mutated state, so a
+directive author cannot accidentally write one. State changes happen only
+through action returns, plus the documented `ctx.agent` middleware exception.
+
+The actions-and-directives split is the core invariant: **reading an action
+tells you every domain-state change. Reading the directive list tells you
+every I/O. The two lists never overlap.**
+
+## Worked example — three return shapes
+
+We use a tiny counter slice as the demo target throughout this notebook.
+
+```elixir
+defmodule SimpleSlice do
+  use Jido.Slice,
+    name: "counter_slice",
+    path: :counter,
+    schema: Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
+end
+```
+
+The success-with-no-directives shape:
+
+```elixir
+defmodule Counter.Inc do
+  use Jido.Action,
+    name: "inc",
+    path: :counter,
+    schema: [by: [type: :integer, default: 1]]
+
+  @impl true
+  def run(%Jido.Signal{data: %{by: by}}, slice, _opts, _ctx) do
+    {:ok, %{slice | count: slice.count + by}, []}
+  end
+end
+
+defmodule CounterAgent do
+  use Jido.Agent,
+    name: "counter",
+    path: :app,
+    default_plugins: false,
+    plugins: [SimpleSlice]
+end
+
+agent = CounterAgent.new()
+{:ok, agent2, dirs} = CounterAgent.cmd(agent, {Counter.Inc, %{by: 5}})
+IO.inspect({agent2.state.counter, dirs}, label: "{:ok, slice, []} — slice changed, no directives")
+```
+
+Success-with-directives shape — emit a signal alongside the slice update:
+
+```elixir
+defmodule Counter.IncAndEmit do
+  use Jido.Action,
+    name: "inc_and_emit",
+    path: :counter,
+    schema: [by: [type: :integer, default: 1]]
+
+  @impl true
+  def run(%Jido.Signal{data: %{by: by}}, slice, _opts, _ctx) do
+    new_slice = %{slice | count: slice.count + by}
+
+    emission =
+      Jido.Signal.new!(
+        "counter.changed",
+        %{previous: slice.count, current: new_slice.count},
+        source: "/counter"
+      )
+
+    {:ok, new_slice, [%Jido.Agent.Directive.Emit{signal: emission}]}
+  end
+end
+
+{:ok, agent3, dirs} = CounterAgent.cmd(agent, {Counter.IncAndEmit, %{by: 3}})
+IO.inspect(agent3.state.counter, label: "slice updated")
+IO.inspect(dirs, label: "directives — one Emit")
+```
+
+The error shape — bare reason gets wrapped into a `%Jido.Error{}` at the
+cmd boundary:
+
+```elixir
+defmodule Counter.Reject do
+  use Jido.Action, name: "reject", path: :counter, schema: []
+
+  @impl true
+  def run(_signal, _slice, _opts, _ctx), do: {:error, :nope}
+end
+
+case CounterAgent.cmd(agent, Counter.Reject) do
+  {:error, reason} -> IO.inspect(reason, label: "{:error, _} — bare reason wrapped to %Jido.Error{}")
+  ok -> ok
+end
+```
+
+## Variations
+
+### Multi-emit — list more than one directive
+
+The directive list is just a list. An action that wants to emit several
+signals at once returns them all at once.
+
+```elixir
+defmodule Counter.MultiEmit do
+  use Jido.Action,
+    name: "multi_emit",
+    path: :counter,
+    schema: [event_count: [type: :integer, default: 3]]
+
+  @impl true
+  def run(%Jido.Signal{data: %{event_count: count}}, slice, _opts, _ctx) do
+    emissions =
+      for i <- 1..count do
+        sig = Jido.Signal.new!("batch.event", %{index: i}, source: "/batch")
+        %Jido.Agent.Directive.Emit{signal: sig}
+      end
+
+    {:ok, %{slice | count: slice.count + count}, emissions}
+  end
+end
+
+{:ok, _, dirs} = CounterAgent.cmd(agent, {Counter.MultiEmit, %{event_count: 3}})
+IO.inspect(length(dirs), label: "directive count — one per event")
+```
+
+### Schedule directive — delayed signal
+
+Schedule a message to come back after a delay. The runtime delivers it as
+a re-entrant signal that goes through the full pipeline (middleware,
+routing, action, directives) on arrival.
+
+```elixir
+defmodule Timer.Start do
+  use Jido.Action,
+    name: "timer_start",
+    path: :counter,
+    schema: [delay_ms: [type: :integer, default: 100]]
+
+  @impl true
+  def run(%Jido.Signal{data: %{delay_ms: delay}}, slice, _opts, _ctx) do
+    tick = Jido.Signal.new!("timer.tick", %{}, source: "/timer")
+    schedule = %Jido.Agent.Directive.Schedule{delay_ms: delay, message: tick}
+
+    {:ok, %{slice | count: slice.count}, [schedule]}
+  end
+end
+
+# Pure cmd-level: shape the directive, don't actually fire the timer in
+# isolation (no GenServer to deliver the message back to).
+{:ok, _, dirs} = CounterAgent.cmd(agent, {Timer.Start, %{delay_ms: 50}})
+IO.inspect(hd(dirs), label: "Schedule directive shape")
+```
+
+### `Stop` directive — terminate the agent
+
+`Stop` causes `execute_directives/3` to return `{:stop, reason, state}` to
+the GenServer, terminating the agent. No state mutation, just process
+termination.
+
+```elixir
+%Jido.Agent.Directive.Stop{reason: :normal}
+|> IO.inspect(label: "Stop directive — terminates the agent process on the next pipeline turn")
+```
+
+### Cmd batches halt on first error
+
+When you pass a list of actions to `cmd/2`, the framework runs them
+sequentially against the same agent. The first error halts — successful
+prior writes vanish, the input agent comes back through the error branch.
+This is the all-or-nothing batch contract from
+[ADR 0018](adr/0018-tagged-tuple-return-shape.md).
+
+```elixir
+batch = [
+  {Counter.Inc, %{by: 100}},
+  Counter.Reject,
+  {Counter.Inc, %{by: 1}}
+]
+
+case CounterAgent.cmd(agent, batch) do
+  {:ok, _, _} -> IO.puts("unreachable")
+  {:error, err} ->
+    IO.inspect(err, label: "batch halted on Counter.Reject")
+    IO.inspect(agent.state.counter.count, label: "input agent unchanged")
+end
+```
+
+### Multi-slice via `%SliceUpdate{}`
+
+Most actions own one slice. When an action genuinely needs to mutate
+multiple slices in one transaction, return a
+`%Jido.Agent.SliceUpdate{slices: %{path => slice, ...}}` instead of a
+single slice value. The framework writes each entry into the named slice
+in one step.
+
+```elixir
+defmodule Audit.Slice do
+  use Jido.Slice,
+    name: "audit",
+    path: :audit,
+    schema: Zoi.object(%{events: Zoi.list(Zoi.any()) |> Zoi.default([])})
+end
+
+defmodule Counter.IncAndAudit do
+  use Jido.Action, name: "inc_and_audit", schema: [by: [type: :integer, default: 1]]
+
+  @impl true
+  def run(%Jido.Signal{data: %{by: by}}, _slice, _opts, _ctx) do
+    {:ok,
+     %Jido.Agent.SliceUpdate{
+       slices: %{
+         counter: %{count: by},
+         audit: %{events: [{:incremented, by}]}
+       }
+     },
+     []}
+  end
+end
+
+defmodule MultiSliceAgent do
+  use Jido.Agent,
+    name: "multi_slice",
+    path: :app,
+    default_plugins: false,
+    plugins: [SimpleSlice, Audit.Slice]
+end
+
+agent = MultiSliceAgent.new()
+{:ok, agent2, _} = MultiSliceAgent.cmd(agent, {Counter.IncAndAudit, %{by: 7}})
+IO.inspect({agent2.state.counter, agent2.state.audit}, label: "two slices written from one action")
+```
+
+## The cascade pattern — directives + signal-driven state
+
+Per [task 0015](tasks/0015-strict-directives-no-runtime-state.md), every
+"compound" directive (one that used to combine I/O with state mutation)
+splits into two pieces:
+
+1. **The directive itself** does the I/O — spawns a process, registers a
+   cron, runs an instruction. It returns `:ok` and writes nothing.
+2. **A cascade** observes the resulting signal (`child.started`,
+   `cron.registered`, the `result_signal_type`, etc.) and updates state
+   via either an action handler or a framework cascade callback.
+
+Below: `SpawnAgent` is the canonical case. The directive spawns a child
+agent under the parent's supervisor; the parent's `state.children` is
+**still empty** immediately after the directive runs. The child boots,
+emits `jido.agent.child.started`, and the framework's
+`maybe_track_child_started/2` cascade callback inserts the child into
+`state.children`. The window between "directive runs" and "child is
+tracked" is the async gap.
+
+```elixir
+defmodule ObservedSlice do
+  use Jido.Slice,
+    name: "observed",
+    path: :observed,
+    schema: Zoi.object(%{tags: Zoi.any() |> Zoi.optional()})
+end
+
+defmodule HarnessAgent do
+  use Jido.Agent,
+    name: "directive_harness",
+    path: :app,
+    default_plugins: false,
+    schema: [],
+    plugins: [ObservedSlice]
+end
+
+# Action that emits a SpawnAgent directive. The action's slice update is
+# trivial — the interesting bit is the directive list.
+defmodule Spawn.Worker do
+  use Jido.Action, name: "spawn_worker", path: :observed, schema: []
+
+  @impl true
+  def run(_signal, slice, _opts, _ctx) do
+    directive = %Jido.Agent.Directive.SpawnAgent{
+      agent: HarnessAgent,
+      tag: :worker,
+      opts: %{},
+      meta: %{}
+    }
+
+    {:ok, slice || %{}, [directive]}
+  end
+end
+
+defmodule SpawnAgent.Demo do
+  use Jido.Agent,
+    name: "spawn_agent_demo",
+    path: :app,
+    default_plugins: false,
+    plugins: [ObservedSlice]
+
+  def signal_routes(_ctx), do: [{"spawn.worker", Spawn.Worker}]
+end
+
+{:ok, parent_pid} = Demo.Jido.start_agent(SpawnAgent.Demo, id: "actions-demo-spawn")
+:ok = Jido.AgentServer.await_ready(parent_pid)
+
+# Snapshot state.children BEFORE issuing the spawn signal.
+{:ok, before} =
+  Jido.AgentServer.state(parent_pid, fn s -> {:ok, map_size(s.children)} end)
+
+IO.inspect(before, label: "state.children size BEFORE spawn signal")
+```
+
+```elixir
+# Cast the spawn signal — fire-and-forget. The directive runs inside the
+# pipeline, but spawning is asynchronous. The parent's children map stays
+# empty until the child boots and emits `jido.agent.child.started`.
+spawn_sig = Jido.Signal.new!("spawn.worker", %{}, source: "/livebook")
+:ok = Jido.AgentServer.cast(parent_pid, spawn_sig)
+
+# Without waiting, state.children is likely still empty — the child is
+# booting on another scheduler.
+{:ok, immediately_after} =
+  Jido.AgentServer.state(parent_pid, fn s -> {:ok, map_size(s.children)} end)
+
+IO.inspect(immediately_after,
+  label: "state.children size IMMEDIATELY AFTER cast (likely 0 — race window)"
+)
+```
+
+```elixir
+# Subscribe-based wait — the cascade callback runs as part of the agent's
+# handling of `jido.agent.child.started`, after the child finishes booting.
+# `await_state_value/3` from JidoTest.AgentWait does the right thing
+# (subscribe + state-recheck + receive). Inline equivalent for the
+# notebook:
+
+defmodule LivebookWait do
+  alias Jido.AgentServer
+
+  def await(pid, predicate, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, 1000)
+
+    state_selector = fn s -> {:ok, predicate.(s)} end
+
+    sub_selector = fn s ->
+      case predicate.(s) do
+        nil -> :skip
+        v -> {:ok, v}
+      end
+    end
+
+    with {:ok, value} when not is_nil(value) <- AgentServer.state(pid, state_selector) do
+      value
+    else
+      _ ->
+        {:ok, ref} =
+          AgentServer.subscribe(pid, "jido.agent.child.started", sub_selector, once: true)
+
+        case AgentServer.state(pid, state_selector) do
+          {:ok, value} when not is_nil(value) ->
+            AgentServer.unsubscribe(pid, ref)
+            value
+
+          _ ->
+            receive do
+              {:jido_subscription, ^ref, %{result: {:ok, value}}} -> value
+            after
+              timeout ->
+                AgentServer.unsubscribe(pid, ref)
+                raise "child not tracked within #{timeout}ms"
+            end
+        end
+    end
+  end
+end
+
+worker_info =
+  LivebookWait.await(parent_pid, fn s -> Map.get(s.children, :worker) end)
+
+IO.inspect(is_pid(worker_info.pid),
+  label: "child tracked in state.children after cascade — pid is now visible"
+)
+
+# The cascade ran. Now state.children has the worker.
+{:ok, after_count} =
+  Jido.AgentServer.state(parent_pid, fn s -> {:ok, map_size(s.children)} end)
+
+IO.inspect(after_count, label: "state.children size after cascade")
+```
+
+> The async window is the directive contract showing through. Production
+> code that needs to reach the post-cascade state subscribes (per ADR 0021,
+> [call-cast-await-subscribe.livemd](call-cast-await-subscribe.livemd))
+> rather than `Process.sleep`. The sleep is fine for a one-off demo; in a
+> long-running system it'll race on slow machines.
+
+### `RunInstruction` — the routed-result cascade
+
+`RunInstruction` is the most general cascade pattern: run an instruction
+asynchronously, emit the result as a signal, route the signal to a handler
+action that updates the slice. The directive does the I/O, the routed
+action mutates state.
+
+```elixir
+defmodule Capture.Result do
+  use Jido.Action,
+    name: "capture_result",
+    path: :observed,
+    schema: [
+      status: [type: :atom, required: true],
+      result: [type: :map, default: %{}],
+      reason: [type: :any, default: nil],
+      effects: [type: :any, default: []],
+      instruction: [type: :any, default: nil],
+      meta: [type: :map, default: %{}]
+    ]
+
+  @impl true
+  def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
+    slice = slice || %{}
+    {:ok, Map.put(slice, :captured, params.status), []}
+  end
+end
+
+defmodule Inner.Action do
+  use Jido.Action, name: "inner_action", schema: []
+  @impl true
+  def run(_signal, _slice, _opts, _ctx), do: {:ok, %{ran: true}, []}
+end
+
+defmodule RunInstruction.Issue do
+  use Jido.Action, name: "issue_run_instruction", path: :observed, schema: []
+
+  @impl true
+  def run(_signal, slice, _opts, _ctx) do
+    instruction = Jido.Instruction.new!(%{action: Inner.Action})
+
+    directive =
+      Jido.Agent.Directive.run_instruction(instruction,
+        result_signal_type: "demo.captured",
+        meta: %{}
+      )
+
+    {:ok, slice || %{}, [directive]}
+  end
+end
+
+defmodule RunInstrAgent do
+  use Jido.Agent,
+    name: "run_instr_agent",
+    path: :app,
+    default_plugins: false,
+    plugins: [ObservedSlice]
+
+  def signal_routes(_ctx) do
+    [
+      {"demo.issue", RunInstruction.Issue},
+      {"demo.captured", Capture.Result}
+    ]
+  end
+end
+
+{:ok, ri_pid} = Demo.Jido.start_agent(RunInstrAgent, id: "actions-demo-run-instr")
+:ok = Jido.AgentServer.await_ready(ri_pid)
+```
+
+```elixir
+# Snapshot before — the slice has no :captured key.
+{:ok, before} =
+  Jido.AgentServer.state(ri_pid, fn s -> {:ok, Map.get(s.agent.state.observed, :captured)} end)
+
+IO.inspect(before, label: ":captured before run_instruction signal")
+
+# Subscribe BEFORE casting — the cascade flow is fast and we'd miss the
+# fire if we subscribed after.
+#
+# Cascade flow:
+#   1. RunInstruction.Issue runs, emits a RunInstruction directive
+#   2. directive runs Inner.Action, emits "demo.captured" with status: :ok
+#   3. "demo.captured" routes to Capture.Result
+#   4. Capture.Result writes `:captured` into the slice
+selector = fn s ->
+  case Map.get(s.agent.state.observed, :captured) do
+    nil -> :skip
+    v -> {:ok, v}
+  end
+end
+
+{:ok, ref} = Jido.AgentServer.subscribe(ri_pid, "demo.captured", selector, once: true)
+
+# Now cast the trigger signal.
+issue_sig = Jido.Signal.new!("demo.issue", %{}, source: "/livebook")
+:ok = Jido.AgentServer.cast(ri_pid, issue_sig)
+
+captured =
+  receive do
+    {:jido_subscription, ^ref, %{result: {:ok, captured}}} -> captured
+  after
+    2000 ->
+      Jido.AgentServer.unsubscribe(ri_pid, ref)
+      raise "no capture within 2000ms"
+  end
+
+IO.inspect(captured, label: ":captured slice value after cascade — set by routed handler")
+```
+
+## Cleanup
+
+```elixir
+:ok = Demo.Jido.stop_agent("actions-demo-spawn")
+:ok = Demo.Jido.stop_agent("actions-demo-run-instr")
+```
+
+## Where to next
+
+- [Slices](slices.livemd) — `path:`, schema defaults, multi-slice writes.
+- [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
+  the AgentServer primitives the cascade pattern leans on.
+- [Cron and child lifecycle](cron-children-lifecycle.livemd) — the
+  `Cron`, `CronCancel`, `SpawnAgent`, and `AdoptChild` cascades.
