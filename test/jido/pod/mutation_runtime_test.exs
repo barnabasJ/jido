@@ -7,8 +7,8 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
   alias Jido.Pod.Directive.StartNode
   alias Jido.Pod.Mutation
   alias Jido.Pod.Topology
-  alias Jido.Storage.ETS
   alias Jido.Signal
+  alias Jido.Storage.ETS
 
   @planner_manager :pod_mutation_planner_members
   @reviewer_manager :pod_mutation_reviewer_members

@@ -16,9 +16,9 @@ defmodule JidoExampleTest.ThreadPluginTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
+  alias Jido.AgentServer
   alias Jido.Thread
   alias Jido.Thread.Agent, as: ThreadAgent
-  alias Jido.AgentServer
 
   # ===========================================================================
   # ACTIONS: Conversation history via Thread

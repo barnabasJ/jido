@@ -17,11 +17,11 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
+  alias Jido.Identity.Agent, as: IdentityAgent
+  alias Jido.Memory.Agent, as: MemoryAgent
   alias Jido.Persist
   alias Jido.Storage.ETS
   alias Jido.Thread
-  alias Jido.Identity.Agent, as: IdentityAgent
-  alias Jido.Memory.Agent, as: MemoryAgent
   alias Jido.Thread.Agent, as: ThreadAgent
 
   # ===========================================================================

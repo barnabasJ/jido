@@ -1,8 +1,8 @@
 defmodule JidoTest.Middleware.RetryTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Middleware.Retry
   alias Jido.Agent.Directive
+  alias Jido.Middleware.Retry
 
   defp signal(type \\ "work.start") do
     {:ok, sig} = Jido.Signal.new(%{type: type, source: "/test", data: %{}})

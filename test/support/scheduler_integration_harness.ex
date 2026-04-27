@@ -3,8 +3,8 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
 
   alias Jido.Agent.Directive
   alias Jido.AgentServer
-  alias Jido.Signal
   alias Jido.Scheduler
+  alias Jido.Signal
 
   defmodule TickAction do
     @moduledoc false
