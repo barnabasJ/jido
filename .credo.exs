@@ -122,7 +122,11 @@
           #
           {Credo.Check.Refactor.Apply, []},
           {Credo.Check.Refactor.CondStatements, []},
-          {Credo.Check.Refactor.CyclomaticComplexity, []},
+          # Framework macro `__quoted_*` functions inflate the metric because
+          # the whole quote block counts as one function. Default 9 is too
+          # tight; 25 catches genuinely-too-complex bodies while letting
+          # macro-driven dispatch trees through.
+          {Credo.Check.Refactor.CyclomaticComplexity, [max_complexity: 25]},
           {Credo.Check.Refactor.FilterCount, []},
           {Credo.Check.Refactor.FilterFilter, []},
           {Credo.Check.Refactor.FunctionArity, []},
