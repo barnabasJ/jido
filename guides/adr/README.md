@@ -52,3 +52,4 @@ SHAs that implemented the decision (or `—` if none yet).
 | [0014](0014-slice-middleware-plugin.md) | Slices, Middleware, Plugins — Slice is pure, Middleware is single-tier | Proposed | Pending |
 | [0015](0015-agent-start-is-signal-driven.md) | Agent start is signal-driven; no thaw distinction | Proposed | Pending |
 | [0016](0016-agent-server-ack-and-subscribe.md) | Waiting on agents: ack + subscribe on AgentServer | Proposed | Pending |
+| [0022](0022-llm-agents-inlined-jido-ai-namespace.md) | LLM agents inlined under `Jido.AI.*` on top of `req_llm`; signal-driven ReAct | Proposed | Pending |

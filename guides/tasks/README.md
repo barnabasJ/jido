@@ -1,6 +1,8 @@
-# Implementation tasks — ADRs 0014–0020
+# Implementation tasks — ADRs 0014–0022
 
-This directory holds the per-commit task breakdown for implementing [ADR 0014](../adr/0014-slice-middleware-plugin.md), [ADR 0015](../adr/0015-agent-start-is-signal-driven.md), [ADR 0016](../adr/0016-agent-server-ack-and-subscribe.md), [ADR 0017](../adr/0017-pod-mutations-are-signal-driven.md), [ADR 0018](../adr/0018-tagged-tuple-return-shape.md), [ADR 0019](../adr/0019-actions-mutate-state-directives-do-side-effects.md), [ADR 0020](../adr/0020-synchronous-call-takes-a-selector.md), and [ADR 0021](../adr/0021-no-full-state-no-polling.md).
+This directory holds the per-commit task breakdown for implementing [ADR 0014](../adr/0014-slice-middleware-plugin.md), [ADR 0015](../adr/0015-agent-start-is-signal-driven.md), [ADR 0016](../adr/0016-agent-server-ack-and-subscribe.md), [ADR 0017](../adr/0017-pod-mutations-are-signal-driven.md), [ADR 0018](../adr/0018-tagged-tuple-return-shape.md), [ADR 0019](../adr/0019-actions-mutate-state-directives-do-side-effects.md), [ADR 0020](../adr/0020-synchronous-call-takes-a-selector.md), [ADR 0021](../adr/0021-no-full-state-no-polling.md), and [ADR 0022](../adr/0022-llm-agents-inlined-jido-ai-namespace.md).
+
+Tasks 0021–0024 form the additive chain that implements ADR 0022 (inlined LLM-agent subsystem under `Jido.AI.*` on top of `req_llm`). Each commit leaves the tree green — the namespace is new, no existing code is touched. 0021 (`req_llm` dep + `Jido.AI.ToolAdapter` + `Jido.AI.Turn` ported from `jido_ai`) → 0022 (synchronous ReAct loop calling `ReqLLM.Generation.generate_text/3`, Mimic-stubbed in tests) → 0023 (signal-driven agent envelope: slice + actions + custom directives + `use Jido.AI.Agent` macro) → 0024 (livebook with configurable model spec + local-LLM integration test). 0023 is the keystone: it wraps the synchronous loop in a slice / actions / custom-directive shape that conforms to ADR 0019 (no side effects in actions) and ADR 0021 (waits subscribe, never poll). The two test/demo rules are kept distinct: the **integration test targets a local LLM** with probe-and-skip (no API keys), and the **livebook exposes the model spec as a configurable input** so the reader picks the provider.
 
 The 0014–0016 work shipped as one PR (commits C0–C8). The 0017–0020 follow-on work lands in five sequential commits, each its own session: **task 0011 first** (the tagged-tuple return shape; ADR 0018), then **task 0009** (the Pod.mutate API refactor on top of 0011; ADR 0017 Phase 1), then **task 0012** (delete StateOp directives + multi-slice via return shape; ADR 0019), then **task 0013** (`call/4` takes a selector; `cast_and_await/4` retires; ADR 0020), then **task 0010** (Pod runtime signal-driven state machine; ADR 0017 Phase 2 under ADR 0019's strict separation rule, using `call/4` from 0013). 0011 ships first because it simplifies every selector and Retry-style middleware downstream. 0012 / 0013 are independent cleanup tasks that both land before 0010 — 0012 to clean up state-mutation channels, 0013 to unify the synchronous primitive — so 0010's diff stays focused on the runtime state machine without dragging in primitive renames.
 
@@ -67,6 +69,10 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 | [0018](0018-refresh-user-guides-for-adr-0019.md) | Refresh user-facing guides for ADR 0019 strict rule: rewrite stale `Jido.Agent.StateOp` examples in `agents.md` / `actions.md` / `orchestration.md` / `plugins.md` / `middleware.md` / `scheduling.md` / `migration.md` / `your-first-plugin.md` to use slice-return + `%SliceUpdate{}` shape; delete `guides/state-ops.md`; remove the "Heads up" banners | **green** | 0019 (per-guide documentation cleanup) |
 | [0019](0019-remove-process-sleep-from-livebooks.md) | Remove `Process.sleep` from livebooks; use `subscribe/4` instead | **green** | Documentation correction to task 0016 livebooks (ADR 0021 enforcement) |
 | [0020](0020-fix-lib-moduledoc-cross-refs.md) | Fix lib/ moduledoc cross-references caught by `mix docs`: `../adr/...` → `../../guides/adr/...` typos; unqualified `Agent.new/1` / `Agent.cmd/2` refs; wrong-arity `expand_route/2` → public `expand_routes/1` | **green** | Documentation hygiene follow-up to task 0018 (lib/ moduledoc warnings the docs-only constraint blocked) |
+| [0021](0021-reqllm-dep-and-tool-adapter.md) | Add `req_llm` dep + port `Jido.AI.ToolAdapter` + port `Jido.AI.Turn` | **green** | [ADR 0022](../adr/0022-llm-agents-inlined-jido-ai-namespace.md) §2 §4 |
+| [0022](0022-react-runtime-pure.md) | `Jido.AI.ReAct` synchronous loop over `ReqLLM.Generation`, no agent dep | **green** | ADR 0022 §5 (loop logic) |
+| [0023](0023-llm-agent-slice-plugin.md) | `Jido.AI.Agent` macro + slice + actions + custom directives (signal-driven envelope) | **green** | ADR 0022 §5 §6 |
+| [0024](0024-llm-agent-livebook-and-local-integration-test.md) | Livebook with configurable model input + local-LLM integration test (probe-and-skip) + docs index | **green** | ADR 0022 §7 §8 |
 
 ## Dependencies
 
@@ -90,6 +96,11 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 0016 ← 0017              (docs follow-up — fix slice-owned routes antipattern + ADR 0014 terminology drift)
 0017 ← 0019              (docs follow-up — remove Process.sleep from livebooks; ADR 0021 enforcement)
 0015 ← 0018              (ADR 0019 — per-guide example rewrites; independent of 0016/0017)
+
+0019 ← 0021              (additive — req_llm dep + Jido.AI.* leaf modules)
+0021 ← 0022              (ADR 0022 — synchronous ReAct loop uses ToolAdapter + Turn over ReqLLM.Generation)
+0022 ← 0023              (ADR 0022 — signal-driven agent envelope wraps the synchronous loop)
+0023 ← 0024              (ADR 0022 — livebook + local-LLM smoke test exercise the agent)
 ```
 
 ## Related planning artifacts
