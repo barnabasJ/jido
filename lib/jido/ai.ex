@@ -5,8 +5,24 @@ defmodule Jido.AI do
   Works against any `pid` whose agent attached `Jido.AI.ReAct` via
   `slices:`. The slice is the source of truth for run config (model,
   tools, system_prompt, max_iterations, llm_opts) seeded from the
-  agent's `slices:` declaration; `Jido.AI.ask/3` accepts per-call
-  overrides for any of those keys.
+  agent's `slices:` declaration; per-call opts override.
+
+  ## API shape
+
+  - `ask/3` — fire-and-forget launch. Synchronously sends the
+    `"ai.react.ask"` signal via `Jido.AgentServer.call/4`; returns
+    `{:ok, request_id}` once the run is launched, or `{:error, reason}`
+    if the action rejected (e.g. `:busy`, `:no_model`). Does *not*
+    subscribe to anything — observers are out-of-band.
+  - `ask_sync/3` — convenience that subscribes for the terminal
+    `:completed` / `:failed` transition (pre-cast, ADR 0021), launches,
+    blocks on the subscription, and returns the final text.
+
+  Anything richer than "the final answer" — streaming tokens, tool-call
+  notifications, reasoning steps, intermediate slice transitions — is
+  the caller's job. Set up the subscription you want via
+  `Jido.AgentServer.subscribe/4` before calling `ask/3`, then receive
+  the events as they arrive.
 
   ## Example
 
@@ -22,11 +38,7 @@ defmodule Jido.AI do
           ]
       end
 
-      {:ok, pid}     = Jido.AgentServer.start_link(agent_module: MyApp.SupportAgent)
-      {:ok, request} = Jido.AI.ask(pid, "Where is order 42?")
-      {:ok, text}    = Jido.AI.await(request, timeout: 30_000)
-
-      # or, piping ask into await:
+      {:ok, pid}  = Jido.AgentServer.start_link(agent_module: MyApp.SupportAgent)
       {:ok, text} = Jido.AI.ask_sync(pid, "Refund order 42, the customer asked.")
 
   Per-call overrides:
@@ -37,17 +49,25 @@ defmodule Jido.AI do
           tools: [MyApp.Actions.OneOff]
         )
 
+  Custom observation:
+
+      {:ok, ref} =
+        Jido.AgentServer.subscribe(pid, "ai.react.**", fn state ->
+          {:ok, state.agent.state.ai}
+        end)
+
+      {:ok, request_id} = Jido.AI.ask(pid, "What's the status?")
+      # receive {:jido_subscription, ^ref, ...} for every step
+
   ## ADR conformance
 
-    * ADR 0021 — `await/2` `receive`s the subscription fire instead of
-      polling state; `ask/3` subscribes pre-cast to close the
-      registration race.
+    * ADR 0021 — `ask_sync/2` `receive`s the subscription fire instead
+      of polling state; subscribes pre-cast to close the registration
+      race.
     * ADR 0022 §5 — single active run per agent; concurrent `ask/3`
-      while `:running` returns the action's `{:error, :busy}` error
-      verbatim through `Jido.AgentServer.call/4`.
+      while `:running` returns the action's `{:error, :busy}` chain
+      error verbatim through `Jido.AgentServer.call/4`.
   """
-
-  alias Jido.AI.Request
 
   @default_await_timeout 30_000
 
@@ -61,71 +81,55 @@ defmodule Jido.AI do
         ]
 
   @doc """
-  Open a ReAct run on `pid`, returning a `%Jido.AI.Request{}` handle.
+  Launch a ReAct run on `pid`. Pure fire-and-forget — does not
+  subscribe. Returns `{:ok, request_id}` once the run is in flight.
 
-  Mints a `request_id`, registers a one-shot subscription to the slice's
-  terminal transition (pre-cast, ADR 0021), then synchronously sends
-  the `"ai.react.ask"` signal via `Jido.AgentServer.call/4`. The
-  `Jido.AI.Actions.Ask` action is the single source of truth: it
-  resolves per-call → slice fallback for run config, rejects with
-  `{:error, :busy}` when a run is in flight, and rejects with
-  `{:error, :no_model}` when no model is configured.
-
-  Action errors are returned verbatim through `call/4`'s chain-error
-  path, wrapped per the framework's standard error pipeline.
-
-  Per-call overrides: `:model`, `:tools`, `:system_prompt`,
-  `:max_iterations`, `:llm_opts`. Each is passed through the signal
-  verbatim; the action keyword-merges per-call `:llm_opts` on top of
-  the slice's stored `:llm_opts`.
+  Action-level rejections (`:busy`, `:no_model`) come back through
+  `call/4`'s chain-error path wrapped in the framework's standard
+  error pipeline.
   """
   @spec ask(GenServer.server(), String.t(), opts()) ::
-          {:ok, Request.t()} | {:error, term()}
+          {:ok, String.t()} | {:error, term()}
   def ask(pid, query, opts \\ []) when is_binary(query) and is_list(opts) do
-    request_id = "req_" <> Jido.Util.generate_id()
+    request_id = mint_request_id()
     signal = build_ask_signal(query, request_id, opts)
-
-    with {:ok, sub_ref} <- subscribe_for_terminal(pid, request_id),
-         {:ok, :launched} <- launch(pid, signal, sub_ref) do
-      {:ok, %Request{id: request_id, sub_ref: sub_ref, agent_pid: pid}}
-    end
+    launch(pid, signal, request_id)
   end
 
   @doc """
-  Block on the terminal subscription registered by `ask/3`.
+  Launch a ReAct run and block on the terminal transition.
 
-  Returns `{:ok, text}` on completion, `{:error, reason}` on LLM
-  failure, `{:error, :timeout}` if no terminal signal arrives within
-  `timeout` ms (default `#{@default_await_timeout}`).
-  """
-  @spec await(Request.t(), keyword()) ::
-          {:ok, String.t() | nil} | {:error, term()}
-  def await(%Request{sub_ref: sub_ref, agent_pid: pid}, opts \\ []) when is_list(opts) do
-    timeout = Keyword.get(opts, :timeout, @default_await_timeout)
+  Subscribes to the slice's terminal `:completed` / `:failed` for the
+  minted `request_id` *before* casting (ADR 0021), launches via
+  `call/4`, then `receive`s the subscription fire. Returns
+  `{:ok, text}` on completion, `{:error, reason}` on LLM failure or
+  action rejection, `{:error, :timeout}` if no terminal signal arrives
+  within the timeout.
 
-    receive do
-      {:jido_subscription, ^sub_ref, %{result: {:ok, %{status: :completed, text: text}}}} ->
-        {:ok, text}
-
-      {:jido_subscription, ^sub_ref, %{result: {:ok, %{status: :failed, error: error}}}} ->
-        {:error, error}
-    after
-      timeout ->
-        _ = Jido.AgentServer.unsubscribe(pid, sub_ref)
-        {:error, :timeout}
-    end
-  end
-
-  @doc """
-  Pipe `ask/3` into `await/2`.
+  This is the convenience path for "give me the answer." For anything
+  richer — streaming, tool-call notifications, intermediate state —
+  subscribe yourself and call `ask/3`.
   """
   @spec ask_sync(GenServer.server(), String.t(), opts()) ::
           {:ok, String.t() | nil} | {:error, term()}
-  def ask_sync(pid, query, opts \\ []) do
-    with {:ok, request} <- ask(pid, query, opts) do
-      await(request, opts)
+  def ask_sync(pid, query, opts \\ []) when is_binary(query) and is_list(opts) do
+    timeout = Keyword.get(opts, :timeout, @default_await_timeout)
+    request_id = mint_request_id()
+    signal = build_ask_signal(query, request_id, opts)
+
+    with {:ok, sub_ref} <- subscribe_for_terminal(pid, request_id) do
+      case launch(pid, signal, request_id) do
+        {:ok, ^request_id} ->
+          await_terminal(sub_ref, pid, timeout)
+
+        {:error, _} = err ->
+          _ = Jido.AgentServer.unsubscribe(pid, sub_ref)
+          err
+      end
     end
   end
+
+  defp mint_request_id, do: "req_" <> Jido.Util.generate_id()
 
   defp build_ask_signal(query, request_id, opts) do
     data = %{
@@ -141,14 +145,24 @@ defmodule Jido.AI do
     Jido.Signal.new!("ai.react.ask", data)
   end
 
-  defp launch(pid, signal, sub_ref) do
-    case Jido.AgentServer.call(pid, signal, fn _state -> {:ok, :launched} end) do
-      {:ok, :launched} = ok ->
-        ok
+  defp launch(pid, signal, request_id) do
+    case Jido.AgentServer.call(pid, signal, fn _state -> {:ok, request_id} end) do
+      {:ok, ^request_id} = ok -> ok
+      {:error, _} = err -> err
+    end
+  end
 
-      {:error, reason} ->
+  defp await_terminal(sub_ref, pid, timeout) do
+    receive do
+      {:jido_subscription, ^sub_ref, %{result: {:ok, %{status: :completed, text: text}}}} ->
+        {:ok, text}
+
+      {:jido_subscription, ^sub_ref, %{result: {:ok, %{status: :failed, error: error}}}} ->
+        {:error, error}
+    after
+      timeout ->
         _ = Jido.AgentServer.unsubscribe(pid, sub_ref)
-        {:error, reason}
+        {:error, :timeout}
     end
   end
 

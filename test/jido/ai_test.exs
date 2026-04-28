@@ -9,7 +9,6 @@ defmodule Jido.AITest do
   import Jido.AI.Test.ResponseFixtures
 
   alias Jido.AI.ReAct
-  alias Jido.AI.Request
   alias Jido.AI.TestActions.TestAdd
 
   @model "anthropic:claude-haiku-4-5-20251001"
@@ -97,7 +96,7 @@ defmodule Jido.AITest do
     end
   end
 
-  describe "ask/3 + await/2 happy path" do
+  describe "ask_sync/3 happy path" do
     test "single-turn: final answer on the first LLM call", ctx do
       expect(ReqLLM.Generation, :generate_text, fn _model, messages, _opts ->
         assert length(messages) == 2
@@ -105,30 +104,74 @@ defmodule Jido.AITest do
       end)
 
       pid = start_test_server(ctx, MathAgent)
-
-      assert {:ok, %Request{id: id, sub_ref: ref, agent_pid: ^pid} = request} =
-               Jido.AI.ask(pid, "What is 5 + 7 * 2?")
-
-      assert is_binary(id)
-      assert is_reference(ref)
-
-      assert {:ok, "19"} = Jido.AI.await(request, timeout: 1_000)
+      assert {:ok, "19"} = Jido.AI.ask_sync(pid, "What is 5 + 7 * 2?", timeout: 1_000)
 
       ai = read_ai(pid)
       assert ai.status == :completed
       assert ai.result == "19"
       assert ai.error == nil
       assert ai.iteration == 1
-      assert ai.request_id == id
     end
+  end
 
-    test "ask_sync/3 pipes ask into await and returns the text", ctx do
+  describe "ask/3 fire-and-forget" do
+    test "returns {:ok, request_id} once the run is launched", ctx do
       expect(ReqLLM.Generation, :generate_text, fn _model, _messages, _opts ->
         {:ok, final_answer_response("ok")}
       end)
 
       pid = start_test_server(ctx, MathAgent)
-      assert {:ok, "ok"} = Jido.AI.ask_sync(pid, "say ok", timeout: 1_000)
+
+      assert {:ok, request_id} = Jido.AI.ask(pid, "What is 5 + 7 * 2?")
+      assert is_binary(request_id)
+      assert String.starts_with?(request_id, "req_")
+    end
+
+    test "caller can subscribe out-of-band and observe every intermediate signal", ctx do
+      test_pid = self()
+
+      expect(ReqLLM.Generation, :generate_text, fn _model, _messages, _opts ->
+        {:ok, tool_call_response([{"test_add", %{"a" => 1, "b" => 2}}])}
+      end)
+
+      expect(ReqLLM.Generation, :generate_text, fn _model, _messages, _opts ->
+        {:ok, final_answer_response("3")}
+      end)
+
+      pid = start_test_server(ctx, MathAgent)
+
+      # Subscribe to every transition of the slice (request-id-scoped),
+      # capturing status + iteration. The selector returns `:skip` while
+      # the request_id is unset (pre-launch) so we don't see the :idle
+      # state. Once the run starts, every signal that lands fires the
+      # selector against the post-pipeline state.
+      ref_owner = self()
+
+      {:ok, sub_ref} =
+        Jido.AgentServer.subscribe(pid, "ai.react.**", fn state ->
+          ai = state.agent.state.ai
+
+          if is_nil(ai.request_id) do
+            :skip
+          else
+            send(ref_owner, {:tick, ai.status, ai.iteration})
+            {:ok, ai.status}
+          end
+        end)
+
+      assert {:ok, request_id} = Jido.AI.ask(pid, "Add 1 and 2")
+      assert is_binary(request_id)
+
+      # We expect ticks for: ask (running, 0) → llm.completed for the
+      # tool turn (running, 1) → tool.completed (running, 1) →
+      # llm.completed final (completed, 2). Order and exact counts
+      # depend on signal interleaving; the important thing is we
+      # observe both :running and :completed without await/2.
+      assert_receive {:tick, :running, _}, 1_000
+      assert_receive {:tick, :completed, 2}, 1_000
+
+      :ok = Jido.AgentServer.unsubscribe(pid, sub_ref)
+      _ = test_pid
     end
   end
 
@@ -145,8 +188,7 @@ defmodule Jido.AITest do
       end)
 
       pid = start_test_server(ctx, MathAgent)
-      assert {:ok, request} = Jido.AI.ask(pid, "Add 1 and 2")
-      assert {:ok, "3"} = Jido.AI.await(request, timeout: 1_000)
+      assert {:ok, "3"} = Jido.AI.ask_sync(pid, "Add 1 and 2", timeout: 1_000)
 
       ai = read_ai(pid)
       assert ai.status == :completed
@@ -172,8 +214,7 @@ defmodule Jido.AITest do
       end)
 
       pid = start_test_server(ctx, MathAgent)
-      assert {:ok, request} = Jido.AI.ask(pid, "loop")
-      assert {:ok, "done"} = Jido.AI.await(request, timeout: 1_000)
+      assert {:ok, "done"} = Jido.AI.ask_sync(pid, "loop", timeout: 1_000)
 
       assert_receive {:third_call_messages, messages}, 1_000
 
@@ -199,8 +240,7 @@ defmodule Jido.AITest do
       end)
 
       pid = start_test_server(ctx, FailingAgent)
-      assert {:ok, request} = Jido.AI.ask(pid, "use a broken tool")
-      assert {:ok, "recovered"} = Jido.AI.await(request, timeout: 1_000)
+      assert {:ok, "recovered"} = Jido.AI.ask_sync(pid, "use a broken tool", timeout: 1_000)
     end
   end
 
@@ -211,8 +251,7 @@ defmodule Jido.AITest do
       end)
 
       pid = start_test_server(ctx, TightAgent)
-      assert {:ok, request} = Jido.AI.ask(pid, "loop")
-      assert {:ok, nil} = Jido.AI.await(request, timeout: 1_000)
+      assert {:ok, nil} = Jido.AI.ask_sync(pid, "loop", timeout: 1_000)
 
       ai = read_ai(pid)
       assert ai.status == :completed
@@ -228,15 +267,14 @@ defmodule Jido.AITest do
       end)
 
       pid = start_test_server(ctx, MathAgent)
-      assert {:ok, request} = Jido.AI.ask(pid, "boom")
-      assert {:error, :rate_limited} = Jido.AI.await(request, timeout: 1_000)
+      assert {:error, :rate_limited} = Jido.AI.ask_sync(pid, "boom", timeout: 1_000)
 
       ai = read_ai(pid)
       assert ai.status == :failed
       assert ai.error == :rate_limited
     end
 
-    test "second ask while running returns {:error, :busy}", ctx do
+    test "second ask while running returns the action's :busy chain error", ctx do
       test_pid = self()
 
       expect(ReqLLM.Generation, :generate_text, fn _model, _messages, _opts ->
@@ -253,24 +291,23 @@ defmodule Jido.AITest do
 
       pid = start_test_server(ctx, MathAgent)
 
-      assert {:ok, first} = Jido.AI.ask(pid, "first")
-      assert_receive {:running, task_pid}, 1_000
+      task = Task.async(fn -> Jido.AI.ask_sync(pid, "first", timeout: 5_000) end)
+      assert_receive {:running, llm_pid}, 1_000
 
       assert {:error, %{details: %{reason: %{message: "busy"}}}} =
                Jido.AI.ask(pid, "second")
 
-      send(task_pid, :release)
-      assert {:ok, "done"} = Jido.AI.await(first, timeout: 1_000)
+      send(llm_pid, :release)
+      assert {:ok, "done"} = Task.await(task, 1_000)
 
       expect(ReqLLM.Generation, :generate_text, fn _model, _messages, _opts ->
         {:ok, final_answer_response("third")}
       end)
 
-      assert {:ok, third} = Jido.AI.ask(pid, "third")
-      assert {:ok, "third"} = Jido.AI.await(third, timeout: 1_000)
+      assert {:ok, "third"} = Jido.AI.ask_sync(pid, "third", timeout: 1_000)
     end
 
-    test "await/2 returns {:error, :timeout} when no terminal signal arrives", ctx do
+    test "ask_sync/3 returns {:error, :timeout} when no terminal signal arrives", ctx do
       test_pid = self()
 
       expect(ReqLLM.Generation, :generate_text, fn _model, _messages, _opts ->
@@ -286,12 +323,12 @@ defmodule Jido.AITest do
       end)
 
       pid = start_test_server(ctx, MathAgent)
-      assert {:ok, request} = Jido.AI.ask(pid, "stall")
-      assert_receive {:running, task_pid}, 1_000
 
-      assert {:error, :timeout} = Jido.AI.await(request, timeout: 50)
+      task = Task.async(fn -> Jido.AI.ask_sync(pid, "stall", timeout: 50) end)
+      assert_receive {:running, llm_pid}, 1_000
+      assert {:error, :timeout} = Task.await(task, 1_000)
 
-      send(task_pid, :release)
+      send(llm_pid, :release)
     end
 
     test "stale tool.completed signals are ignored", ctx do
@@ -300,8 +337,7 @@ defmodule Jido.AITest do
       end)
 
       pid = start_test_server(ctx, MathAgent)
-      assert {:ok, request} = Jido.AI.ask(pid, "ok")
-      assert {:ok, "ok"} = Jido.AI.await(request, timeout: 1_000)
+      assert {:ok, "ok"} = Jido.AI.ask_sync(pid, "ok", timeout: 1_000)
 
       ai_before = read_ai(pid)
 
@@ -322,7 +358,8 @@ defmodule Jido.AITest do
       assert read_ai(pid) == ai_before
     end
 
-    test "{:error, :no_model} when neither slice config nor opts supply a model", ctx do
+    test "ask returns :no_model chain error when neither slice config nor opts supply a model",
+         ctx do
       pid = start_test_server(ctx, NoModelAgent)
 
       assert {:error, %{details: %{reason: %{message: "no_model"}}}} =
@@ -342,10 +379,11 @@ defmodule Jido.AITest do
 
       pid = start_test_server(ctx, MathAgent)
 
-      assert {:ok, _req} =
-               Jido.AI.ask(pid, "anything",
+      assert {:ok, "ok"} =
+               Jido.AI.ask_sync(pid, "anything",
                  model: override_model,
-                 system_prompt: "Override prompt."
+                 system_prompt: "Override prompt.",
+                 timeout: 1_000
                )
 
       assert_receive {:called_with, ^override_model, messages}, 1_000
@@ -362,7 +400,7 @@ defmodule Jido.AITest do
       end)
 
       pid = start_test_server(ctx, NoModelAgent)
-      assert {:ok, "ok"} = Jido.AI.ask_sync(pid, "anything", model: "openai:gpt-5")
+      assert {:ok, "ok"} = Jido.AI.ask_sync(pid, "anything", model: "openai:gpt-5", timeout: 1_000)
     end
 
     test ":tools override replaces slice defaults", ctx do
@@ -380,6 +418,64 @@ defmodule Jido.AITest do
                Jido.AI.ask_sync(pid, "anything", tools: [], timeout: 1_000)
 
       assert_receive {:tools, []}, 1_000
+    end
+
+    test ":api_key in slice config llm_opts is propagated to ReqLLM", ctx do
+      defmodule SliceKeyAgent do
+        @moduledoc false
+        use Jido.Agent,
+          name: "slice_key",
+          path: :state,
+          slices: [
+            {Jido.AI.ReAct,
+             model: "anthropic:claude-haiku-4-5-20251001",
+             tools: [],
+             llm_opts: [api_key: "key-from-slice"]}
+          ]
+      end
+
+      test_pid = self()
+
+      expect(ReqLLM.Generation, :generate_text, fn _model, _messages, opts ->
+        send(test_pid, {:api_key, Keyword.get(opts, :api_key)})
+        {:ok, final_answer_response("ok")}
+      end)
+
+      pid = start_test_server(ctx, SliceKeyAgent)
+      assert {:ok, "ok"} = Jido.AI.ask_sync(pid, "anything", timeout: 1_000)
+      assert_receive {:api_key, "key-from-slice"}, 1_000
+    end
+
+    test ":api_key per-call llm_opts overrides the slice default", ctx do
+      defmodule SliceKeyOverrideAgent do
+        @moduledoc false
+        use Jido.Agent,
+          name: "slice_key_override",
+          path: :state,
+          slices: [
+            {Jido.AI.ReAct,
+             model: "anthropic:claude-haiku-4-5-20251001",
+             tools: [],
+             llm_opts: [api_key: "slice-default"]}
+          ]
+      end
+
+      test_pid = self()
+
+      expect(ReqLLM.Generation, :generate_text, fn _model, _messages, opts ->
+        send(test_pid, {:api_key, Keyword.get(opts, :api_key)})
+        {:ok, final_answer_response("ok")}
+      end)
+
+      pid = start_test_server(ctx, SliceKeyOverrideAgent)
+
+      assert {:ok, "ok"} =
+               Jido.AI.ask_sync(pid, "anything",
+                 llm_opts: [api_key: "per-call-key"],
+                 timeout: 1_000
+               )
+
+      assert_receive {:api_key, "per-call-key"}, 1_000
     end
   end
 

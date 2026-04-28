@@ -362,7 +362,6 @@ defmodule Jido.MixProject do
         "Jido AI": [
           Jido.AI,
           Jido.AI.ReAct,
-          Jido.AI.Request,
           Jido.AI.ToolAdapter,
           Jido.AI.Turn,
           ~r/Jido\.AI\.Actions\..*/,

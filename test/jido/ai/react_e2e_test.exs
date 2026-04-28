@@ -9,6 +9,10 @@ defmodule Jido.AI.ReActE2ETest do
   under `Jido.AgentServer`, queried via `Jido.AI.ask_sync/3`. Requires a
   model running at the configured base URL.
 
+  The api key lives in the slice's `llm_opts: [api_key: ...]` (per-slice
+  config); per-call overrides are also possible via the `:llm_opts` opt
+  on `Jido.AI.ask/3`.
+
   Tagged `:e2e` and excluded from the default test run. To enable:
 
       mix test --include e2e
@@ -27,13 +31,6 @@ defmodule Jido.AI.ReActE2ETest do
   @moduletag :e2e
   @moduletag timeout: 120_000
 
-  @api_key System.get_env("LMSTUDIO_API_KEY", "lm-studio")
-
-  setup_all do
-    ReqLLM.put_key(:openai_api_key, @api_key)
-    :ok
-  end
-
   defmodule NoToolsAgent do
     @moduledoc false
     use Jido.Agent,
@@ -48,7 +45,8 @@ defmodule Jido.AI.ReActE2ETest do
          },
          tools: [],
          max_iterations: 3,
-         max_tokens: 64}
+         max_tokens: 64,
+         llm_opts: [api_key: System.get_env("LMSTUDIO_API_KEY", "lm-studio")]}
       ]
   end
 
@@ -66,7 +64,8 @@ defmodule Jido.AI.ReActE2ETest do
          },
          tools: [TestEcho],
          max_iterations: 5,
-         max_tokens: 256}
+         max_tokens: 256,
+         llm_opts: [api_key: System.get_env("LMSTUDIO_API_KEY", "lm-studio")]}
       ]
   end
 
@@ -84,76 +83,59 @@ defmodule Jido.AI.ReActE2ETest do
          },
          tools: [TestAdd],
          max_iterations: 5,
-         max_tokens: 256}
+         max_tokens: 256,
+         llm_opts: [api_key: System.get_env("LMSTUDIO_API_KEY", "lm-studio")]}
       ]
   end
 
   test "produces a final answer for a simple question without tools", ctx do
     pid = start_server(ctx, NoToolsAgent)
 
-    _ =
-      Jido.AI.ask_sync(pid, "Reply with the single word 'pong' and nothing else.",
-        timeout: 60_000
-      )
+    assert {:ok, text} =
+             Jido.AI.ask_sync(pid, "Reply with the single word 'pong' and nothing else.",
+               timeout: 60_000
+             )
 
-    ai = read_ai(pid)
-    assert ai.status in [:completed, :failed]
-    assert ai.iteration >= 1
+    assert is_binary(text)
+    assert text =~ ~r/pong/i
   end
 
   test "drives a tool-calling round trip when the model picks a tool", ctx do
     pid = start_server(ctx, EchoAgent)
 
-    _ =
-      Jido.AI.ask_sync(
-        pid,
-        "You have a tool named test_echo that echoes a message. " <>
-          "Call it once with the message 'hello-from-jido', then reply 'done'.",
-        timeout: 90_000
-      )
+    assert {:ok, text} =
+             Jido.AI.ask_sync(
+               pid,
+               "You have a tool named test_echo that echoes a message. " <>
+                 "Call it once with the message 'hello-from-jido', then reply 'done'.",
+               timeout: 90_000
+             )
 
-    ai = read_ai(pid)
-    assert ai.status in [:completed, :failed]
-    assert ai.iteration >= 1
+    assert is_binary(text)
 
-    if ai.status == :completed and ai.context do
-      tool_messages =
-        ai.context
-        |> ReqLLM.Context.to_list()
-        |> Enum.filter(&(&1.role == :tool))
+    {:ok, ai} = Jido.AgentServer.state(pid, fn s -> {:ok, s.agent.state.ai} end)
 
-      if tool_messages != [] do
-        assert hd(tool_messages).name == "test_echo"
-      end
-    end
+    tool_messages =
+      ai.context
+      |> ReqLLM.Context.to_list()
+      |> Enum.filter(&(&1.role == :tool))
+
+    assert tool_messages != [], "expected the model to call test_echo at least once"
+    assert hd(tool_messages).name == "test_echo"
   end
 
   test "handles a numeric tool call without crashing", ctx do
     pid = start_server(ctx, AddAgent)
 
-    _ =
-      Jido.AI.ask_sync(
-        pid,
-        "You have a tool named test_add that adds two integers. " <>
-          "Use it to compute 4 + 7, then state the result.",
-        timeout: 90_000
-      )
+    assert {:ok, text} =
+             Jido.AI.ask_sync(
+               pid,
+               "You have a tool named test_add that adds two integers. " <>
+                 "Use it to compute 4 + 7, then state the result.",
+               timeout: 90_000
+             )
 
-    ai = read_ai(pid)
-    assert ai.status in [:completed, :failed]
-
-    if ai.context do
-      msg_count =
-        ai.context
-        |> ReqLLM.Context.to_list()
-        |> length()
-
-      assert msg_count >= 2
-    end
-  end
-
-  defp read_ai(pid) do
-    {:ok, ai} = Jido.AgentServer.state(pid, fn s -> {:ok, s.agent.state.ai} end)
-    ai
+    assert is_binary(text)
+    assert text =~ "11"
   end
 end
