@@ -3,9 +3,10 @@ defmodule Jido.AI do
   Public API for ReAct agents built on `Jido.AI.ReAct`.
 
   Works against any `pid` whose agent attached `Jido.AI.ReAct` via
-  `slices:`. The functions read the slice state for run-config defaults
-  (model / tools / system_prompt / max_iterations / llm_opts) and accept
-  per-call overrides.
+  `slices:`. The slice is the source of truth for run config (model,
+  tools, system_prompt, max_iterations, llm_opts) seeded from the
+  agent's `slices:` declaration; `Jido.AI.ask/3` accepts per-call
+  overrides for any of those keys.
 
   ## Example
 
@@ -63,26 +64,31 @@ defmodule Jido.AI do
 
   Mints a `request_id`, registers a one-shot subscription to the slice's
   terminal transition (pre-cast, ADR 0021), then casts the
-  `"ai.react.ask"` signal. Returns `{:error, :busy}` if a run is already
-  in progress, `{:error, :no_model}` if neither the slice's seeded
-  config nor the per-call opts supply a model.
+  `"ai.react.ask"` signal carrying the per-call opts verbatim. The
+  `Jido.AI.Actions.Ask` action does the per-call → slice fallback for
+  every run-config field; `ask/3` only reads the slice for the two
+  synchronous early-outs:
+
+    * `{:error, :busy}` — a run is already in flight. Returned without
+      casting because the slice's `request_id` belongs to that run; a
+      new subscription would never match.
+    * `{:error, :no_model}` — neither the per-call opts nor the slice
+      config supplied a model. Returned without casting because the
+      action's `{:error, :no_model}` from `run/4` doesn't transition
+      the slice, so the await subscription would only ever time out.
 
   Per-call overrides: `:model`, `:tools`, `:system_prompt`,
-  `:max_iterations`, `:llm_opts`. Per-call `:llm_opts` is keyword-merged
-  on top of the slice's stored `:llm_opts`.
+  `:max_iterations`, `:llm_opts`. Each is passed through the signal
+  verbatim; the action keyword-merges per-call `:llm_opts` on top of
+  the slice's stored `:llm_opts`.
   """
   @spec ask(GenServer.server(), String.t(), opts()) ::
           {:ok, Request.t()} | {:error, term()}
   def ask(pid, query, opts \\ []) when is_binary(query) and is_list(opts) do
-    case read_slice(pid) do
-      {:error, _} = err ->
-        err
-
-      {:ok, %{status: :running}} ->
-        {:error, :busy}
-
-      {:ok, defaults} ->
-        do_ask(pid, query, opts, defaults)
+    with {:ok, gate} <- read_gate(pid),
+         :ok <- check_not_running(gate),
+         :ok <- check_model(gate, opts) do
+      cast_ask(pid, query, opts)
     end
   end
 
@@ -122,27 +128,28 @@ defmodule Jido.AI do
     end
   end
 
-  defp do_ask(pid, query, opts, defaults) do
-    model = Keyword.get(opts, :model) || defaults[:model]
+  defp check_not_running(%{status: :running}), do: {:error, :busy}
+  defp check_not_running(_), do: :ok
 
-    if is_nil(model) do
+  defp check_model(%{model: slice_model}, opts) do
+    if is_nil(Keyword.get(opts, :model) || slice_model) do
       {:error, :no_model}
     else
-      cast_ask(pid, query, opts, defaults, model)
+      :ok
     end
   end
 
-  defp cast_ask(pid, query, opts, defaults, model) do
+  defp cast_ask(pid, query, opts) do
     request_id = "req_" <> Jido.Util.generate_id()
 
     signal_data = %{
       query: query,
       request_id: request_id,
-      model: model,
-      tools: Keyword.get(opts, :tools, defaults[:tools]),
-      system_prompt: Keyword.get(opts, :system_prompt, defaults[:system_prompt]),
-      max_iterations: Keyword.get(opts, :max_iterations, defaults[:max_iterations]),
-      llm_opts: Keyword.merge(defaults[:llm_opts] || [], Keyword.get(opts, :llm_opts, []))
+      model: Keyword.get(opts, :model),
+      tools: Keyword.get(opts, :tools),
+      system_prompt: Keyword.get(opts, :system_prompt),
+      max_iterations: Keyword.get(opts, :max_iterations),
+      llm_opts: Keyword.get(opts, :llm_opts)
     }
 
     signal = Jido.Signal.new!("ai.react.ask", signal_data)
@@ -159,22 +166,14 @@ defmodule Jido.AI do
     end
   end
 
-  # Pure-projection read of the slice. Returns the run-config defaults
-  # plus the current status (so `ask/3` can short-circuit `:busy`
-  # without a separate round-trip).
-  defp read_slice(pid) do
+  # Minimal projection: just the two fields the synchronous early-outs
+  # need. Run-config fallback (tools, system_prompt, max_iterations,
+  # llm_opts) lives in `Jido.AI.Actions.Ask`, which already has the
+  # slice in hand via the cmd path.
+  defp read_gate(pid) do
     Jido.AgentServer.state(pid, fn s ->
       ai = s.agent.state.ai
-
-      {:ok,
-       %{
-         status: ai.status,
-         model: ai.model,
-         tools: ai.tools,
-         system_prompt: ai.system_prompt,
-         max_iterations: ai.max_iterations,
-         llm_opts: ai.llm_opts
-       }}
+      {:ok, %{status: ai.status, model: ai.model}}
     end)
   end
 

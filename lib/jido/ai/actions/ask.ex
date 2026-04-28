@@ -49,7 +49,7 @@ defmodule Jido.AI.Actions.Ask do
     tools = if is_nil(data.tools), do: slice_field(slice, :tools) || [], else: data.tools
     system_prompt = data.system_prompt || slice_field(slice, :system_prompt)
     max_iter = data.max_iterations || slice_field(slice, :max_iterations) || 10
-    llm_opts = data.llm_opts || slice_field(slice, :llm_opts) || []
+    llm_opts = Keyword.merge(slice_field(slice, :llm_opts) || [], data.llm_opts || [])
 
     if is_nil(model) do
       {:error, :no_model}
