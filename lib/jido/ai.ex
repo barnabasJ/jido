@@ -43,7 +43,8 @@ defmodule Jido.AI do
       polling state; `ask/3` subscribes pre-cast to close the
       registration race.
     * ADR 0022 §5 — single active run per agent; concurrent `ask/3`
-      while `:running` returns `{:error, :busy}`.
+      while `:running` returns the action's `{:error, :busy}` error
+      verbatim through `Jido.AgentServer.call/4`.
   """
 
   alias Jido.AI.Request
@@ -63,19 +64,15 @@ defmodule Jido.AI do
   Open a ReAct run on `pid`, returning a `%Jido.AI.Request{}` handle.
 
   Mints a `request_id`, registers a one-shot subscription to the slice's
-  terminal transition (pre-cast, ADR 0021), then casts the
-  `"ai.react.ask"` signal carrying the per-call opts verbatim. The
-  `Jido.AI.Actions.Ask` action does the per-call → slice fallback for
-  every run-config field; `ask/3` only reads the slice for the two
-  synchronous early-outs:
+  terminal transition (pre-cast, ADR 0021), then synchronously sends
+  the `"ai.react.ask"` signal via `Jido.AgentServer.call/4`. The
+  `Jido.AI.Actions.Ask` action is the single source of truth: it
+  resolves per-call → slice fallback for run config, rejects with
+  `{:error, :busy}` when a run is in flight, and rejects with
+  `{:error, :no_model}` when no model is configured.
 
-    * `{:error, :busy}` — a run is already in flight. Returned without
-      casting because the slice's `request_id` belongs to that run; a
-      new subscription would never match.
-    * `{:error, :no_model}` — neither the per-call opts nor the slice
-      config supplied a model. Returned without casting because the
-      action's `{:error, :no_model}` from `run/4` doesn't transition
-      the slice, so the await subscription would only ever time out.
+  Action errors are returned verbatim through `call/4`'s chain-error
+  path, wrapped per the framework's standard error pipeline.
 
   Per-call overrides: `:model`, `:tools`, `:system_prompt`,
   `:max_iterations`, `:llm_opts`. Each is passed through the signal
@@ -85,10 +82,12 @@ defmodule Jido.AI do
   @spec ask(GenServer.server(), String.t(), opts()) ::
           {:ok, Request.t()} | {:error, term()}
   def ask(pid, query, opts \\ []) when is_binary(query) and is_list(opts) do
-    with {:ok, gate} <- read_gate(pid),
-         :ok <- check_not_running(gate),
-         :ok <- check_model(gate, opts) do
-      cast_ask(pid, query, opts)
+    request_id = "req_" <> Jido.Util.generate_id()
+    signal = build_ask_signal(query, request_id, opts)
+
+    with {:ok, sub_ref} <- subscribe_for_terminal(pid, request_id),
+         {:ok, :launched} <- launch(pid, signal, sub_ref) do
+      {:ok, %Request{id: request_id, sub_ref: sub_ref, agent_pid: pid}}
     end
   end
 
@@ -128,21 +127,8 @@ defmodule Jido.AI do
     end
   end
 
-  defp check_not_running(%{status: :running}), do: {:error, :busy}
-  defp check_not_running(_), do: :ok
-
-  defp check_model(%{model: slice_model}, opts) do
-    if is_nil(Keyword.get(opts, :model) || slice_model) do
-      {:error, :no_model}
-    else
-      :ok
-    end
-  end
-
-  defp cast_ask(pid, query, opts) do
-    request_id = "req_" <> Jido.Util.generate_id()
-
-    signal_data = %{
+  defp build_ask_signal(query, request_id, opts) do
+    data = %{
       query: query,
       request_id: request_id,
       model: Keyword.get(opts, :model),
@@ -152,29 +138,18 @@ defmodule Jido.AI do
       llm_opts: Keyword.get(opts, :llm_opts)
     }
 
-    signal = Jido.Signal.new!("ai.react.ask", signal_data)
-
-    with {:ok, sub_ref} <- subscribe_for_terminal(pid, request_id) do
-      case Jido.AgentServer.cast(pid, signal) do
-        :ok ->
-          {:ok, %Request{id: request_id, sub_ref: sub_ref, agent_pid: pid}}
-
-        {:error, _} = err ->
-          _ = Jido.AgentServer.unsubscribe(pid, sub_ref)
-          err
-      end
-    end
+    Jido.Signal.new!("ai.react.ask", data)
   end
 
-  # Minimal projection: just the two fields the synchronous early-outs
-  # need. Run-config fallback (tools, system_prompt, max_iterations,
-  # llm_opts) lives in `Jido.AI.Actions.Ask`, which already has the
-  # slice in hand via the cmd path.
-  defp read_gate(pid) do
-    Jido.AgentServer.state(pid, fn s ->
-      ai = s.agent.state.ai
-      {:ok, %{status: ai.status, model: ai.model}}
-    end)
+  defp launch(pid, signal, sub_ref) do
+    case Jido.AgentServer.call(pid, signal, fn _state -> {:ok, :launched} end) do
+      {:ok, :launched} = ok ->
+        ok
+
+      {:error, reason} ->
+        _ = Jido.AgentServer.unsubscribe(pid, sub_ref)
+        {:error, reason}
+    end
   end
 
   defp subscribe_for_terminal(pid, request_id) do

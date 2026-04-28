@@ -256,7 +256,8 @@ defmodule Jido.AITest do
       assert {:ok, first} = Jido.AI.ask(pid, "first")
       assert_receive {:running, task_pid}, 1_000
 
-      assert {:error, :busy} = Jido.AI.ask(pid, "second")
+      assert {:error, %{details: %{reason: %{message: "busy"}}}} =
+               Jido.AI.ask(pid, "second")
 
       send(task_pid, :release)
       assert {:ok, "done"} = Jido.AI.await(first, timeout: 1_000)
@@ -323,7 +324,9 @@ defmodule Jido.AITest do
 
     test "{:error, :no_model} when neither slice config nor opts supply a model", ctx do
       pid = start_test_server(ctx, NoModelAgent)
-      assert {:error, :no_model} = Jido.AI.ask(pid, "anything")
+
+      assert {:error, %{details: %{reason: %{message: "no_model"}}}} =
+               Jido.AI.ask(pid, "anything")
     end
   end
 
