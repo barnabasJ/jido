@@ -33,7 +33,6 @@ defmodule JidoExampleTest.IdentityPluginTest do
       actions: [],
       description: "Custom identity plugin that auto-initializes with config."
 
-    @impl Jido.Plugin
     def mount(_agent, config) do
       profile = Map.get(config, :profile, %{age: 0, origin: :configured})
       identity = Identity.new(profile: profile)

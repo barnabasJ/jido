@@ -5,7 +5,7 @@ defmodule JidoTest.Actions.SchedulingTest do
   alias Jido.Agent.Directive
   alias Jido.Signal
 
-  defp sig(type, data \\ %{}) do
+  defp sig(type, data) do
     Signal.new!(%{type: type, source: "/test", data: data})
   end
 

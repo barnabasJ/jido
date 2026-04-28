@@ -81,7 +81,6 @@ defmodule JidoExampleTest.ReactPluginTest do
             ReAct.ToolCompleted
           ]
 
-        @impl Jido.Plugin
         def signal_routes(_config) do
           [
             {"react.user_query", ReAct.StartQuery},

@@ -28,7 +28,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
       path: :single_child,
       actions: [JidoTest.AgentServer.PluginChildrenTest.SimpleAction]
 
-    @impl Jido.Plugin
     def child_spec(config) do
       initial_value = config[:initial_value] || :default
 
@@ -47,7 +46,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
       path: :multi_child,
       actions: [JidoTest.AgentServer.PluginChildrenTest.SimpleAction]
 
-    @impl Jido.Plugin
     def child_spec(config) do
       count = config[:count] || 2
 
@@ -68,7 +66,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
       path: :invalid_child,
       actions: [JidoTest.AgentServer.PluginChildrenTest.SimpleAction]
 
-    @impl Jido.Plugin
     def child_spec(_config) do
       :not_a_valid_child_spec
     end

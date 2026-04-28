@@ -28,7 +28,6 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
       actions: [],
       description: "Custom replacement for the default thread plugin."
 
-    @impl Jido.Plugin
     def mount(_agent, config) do
       {:ok, %{custom_initialized: true, max_entries: Map.get(config, :max_entries, 500)}}
     end

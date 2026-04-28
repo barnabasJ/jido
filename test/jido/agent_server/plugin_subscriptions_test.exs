@@ -132,7 +132,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
       path: :with_sensor,
       actions: [JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction]
 
-    @impl Jido.Plugin
     def subscriptions(_config, context) do
       [
         {JidoTest.AgentServer.PluginSubscriptionsTest.TestSensor,
@@ -148,7 +147,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
       path: :multi_sensors,
       actions: [JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction]
 
-    @impl Jido.Plugin
     def subscriptions(_config, context) do
       [
         {JidoTest.AgentServer.PluginSubscriptionsTest.TestSensor,
@@ -166,7 +164,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
       path: :no_subs,
       actions: [JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction]
 
-    @impl Jido.Plugin
     def subscriptions(_config, _context) do
       []
     end
@@ -187,7 +184,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
       path: :routed_sensor,
       actions: [JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction]
 
-    @impl Jido.Plugin
     def subscriptions(_config, context) do
       [
         {JidoTest.AgentServer.PluginSubscriptionsTest.TestSensor,

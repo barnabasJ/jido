@@ -276,11 +276,11 @@ IO.inspect(reconcile_report, label: "reconcile report — fields: requested/wave
 
 ## Where to next
 
-- [Slices](slices.livemd) — the pod's `:pod` slice is just another slice.
-- [Actions and directives](actions-and-directives.livemd) — the cascade
+* [Slices](slices.livemd) — the pod's `:pod` slice is just another slice.
+* [Actions and directives](actions-and-directives.livemd) — the cascade
   pattern that drives pod mutation status transitions.
-- [Cron and child lifecycle](cron-children-lifecycle.livemd) — the
+* [Cron and child lifecycle](cron-children-lifecycle.livemd) — the
   natural `child.started` / `child.exit` signals that pod runtime hooks
   into.
-- [Observability](observability.livemd) — the `[:jido, :pod, :reconcile, *]`
+* [Observability](observability.livemd) — the `[:jido, :pod, :reconcile, *]`
   and `[:jido, :pod, :node, :ensure, *]` telemetry events you can attach to.

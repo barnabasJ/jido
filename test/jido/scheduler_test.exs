@@ -150,11 +150,8 @@ defmodule JidoTest.SchedulerTest do
         Scheduler.run_every(
           fn ->
             send(test_pid, {:worker_started, self()})
-
-            receive do
-            after
-              :infinity -> :ok
-            end
+            # Block until the worker is killed by Scheduler.cancel/1.
+            Process.sleep(:infinity)
           end,
           "* * * * * * *"
         )

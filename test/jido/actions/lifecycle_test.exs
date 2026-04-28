@@ -6,7 +6,7 @@ defmodule JidoTest.Actions.LifecycleTest do
   alias Jido.AgentServer.ParentRef
   alias Jido.Signal
 
-  defp sig(type, data \\ %{}) do
+  defp sig(type, data) do
     Signal.new!(%{type: type, source: "/test", data: data})
   end
 

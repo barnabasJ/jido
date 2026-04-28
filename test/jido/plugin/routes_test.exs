@@ -114,7 +114,6 @@ defmodule JidoTest.Plugin.RoutesTest do
           actions: [TestAction1],
           signal_patterns: ["ignored.*"]
 
-        @impl Jido.Plugin
         def signal_routes(_config) do
           [{"custom.route", TestAction1}]
         end

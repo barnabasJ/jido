@@ -12,7 +12,7 @@ defmodule Jido.AI.ReActE2ETest do
   Configurable via env vars:
 
     * `LMSTUDIO_BASE_URL` (default `http://localhost:1234/v1`)
-    * `LMSTUDIO_MODEL`    (default `google/gemma-3-12b`)
+    * `LMSTUDIO_MODEL`    (default `google/gemma-4-26b-a4b`)
     * `LMSTUDIO_API_KEY`  (default `lm-studio` — LM Studio ignores it)
   """
 
@@ -25,7 +25,7 @@ defmodule Jido.AI.ReActE2ETest do
   @moduletag timeout: 120_000
 
   @base_url System.get_env("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
-  @model_id System.get_env("LMSTUDIO_MODEL", "google/gemma-3-12b")
+  @model_id System.get_env("LMSTUDIO_MODEL", "google/gemma-4-26b-a4b")
   @api_key System.get_env("LMSTUDIO_API_KEY", "lm-studio")
 
   setup_all do

@@ -70,13 +70,11 @@ defmodule JidoExampleTest.PluginBasicsTest do
         }),
       signal_patterns: ["notes.*"]
 
-    @impl Jido.Plugin
     def mount(_agent, config) do
       label = Map.get(config, :label, "default")
       {:ok, %{label: label}}
     end
 
-    @impl Jido.Plugin
     def signal_routes(_config) do
       [
         {"notes.add", JidoExampleTest.PluginBasicsTest.AddNoteAction},

@@ -102,8 +102,13 @@ defmodule Jido.Pod do
       Pod-wrapped `new/1`. Seeds the `:pod` slice with the agent module's
       canonical topology before delegating to the base `Jido.Agent.new/1`. User
       state at `state: %{pod: %{...}}` shallow-overrides the topology fields.
+
+      No `\\\\ []` default — the parent `Jido.Agent`'s macro already declares
+      `def new(opts \\\\ [])`, so a `new/0` already exists and calls `new/1`.
+      Adding `\\\\ []` here would generate a *second* `new/0` clause behind
+      the parent's, which the compiler rightly flags as unreachable.
       """
-      def new(opts \\ []) do
+      def new(opts) do
         opts_map = if is_list(opts), do: Map.new(opts), else: opts
         user_state = Map.get(opts_map, :state, %{})
 
