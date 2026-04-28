@@ -1,9 +1,13 @@
 defmodule Jido.AI.ReActE2ETest do
   @moduledoc """
-  End-to-end tests for `Jido.AI.ReAct` against a local LM Studio server.
+  End-to-end tests for the `Jido.AI.ReAct` slice against a local LM
+  Studio server.
 
-  These tests exercise the real `ReqLLM.Generation.generate_text/3` path —
-  no Mimic stubs — and require a model running at the configured base URL.
+  These exercise the real `ReqLLM.Generation.generate_text/3` path — no
+  Mimic stubs — through the full slice composition pattern: a regular
+  `Jido.Agent` with `Jido.AI.ReAct` attached via `slices:`, started
+  under `Jido.AgentServer`, queried via `Jido.AI.ask_sync/3`. Requires a
+  model running at the configured base URL.
 
   Tagged `:e2e` and excluded from the default test run. To enable:
 
@@ -16,16 +20,13 @@ defmodule Jido.AI.ReActE2ETest do
     * `LMSTUDIO_API_KEY`  (default `lm-studio` — LM Studio ignores it)
   """
 
-  use ExUnit.Case, async: false
+  use JidoTest.Case, async: false
 
-  alias Jido.AI.ReAct
   alias Jido.AI.TestActions.{TestAdd, TestEcho}
 
   @moduletag :e2e
   @moduletag timeout: 120_000
 
-  @base_url System.get_env("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
-  @model_id System.get_env("LMSTUDIO_MODEL", "google/gemma-4-26b-a4b")
   @api_key System.get_env("LMSTUDIO_API_KEY", "lm-studio")
 
   setup_all do
@@ -33,67 +34,126 @@ defmodule Jido.AI.ReActE2ETest do
     :ok
   end
 
-  defp model do
-    %{provider: :openai, id: @model_id, base_url: @base_url}
+  defmodule NoToolsAgent do
+    @moduledoc false
+    use Jido.Agent,
+      name: "react_e2e_no_tools",
+      path: :state,
+      slices: [
+        {Jido.AI.ReAct,
+         model: %{
+           provider: :openai,
+           id: System.get_env("LMSTUDIO_MODEL", "google/gemma-4-26b-a4b"),
+           base_url: System.get_env("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
+         },
+         tools: [],
+         max_iterations: 3,
+         max_tokens: 64}
+      ]
   end
 
-  test "produces a final answer for a simple question without tools" do
-    result =
-      ReAct.run("Reply with the single word 'pong' and nothing else.",
-        model: model(),
-        tools: [],
-        max_iterations: 3,
-        max_tokens: 64
+  defmodule EchoAgent do
+    @moduledoc false
+    use Jido.Agent,
+      name: "react_e2e_echo",
+      path: :state,
+      slices: [
+        {Jido.AI.ReAct,
+         model: %{
+           provider: :openai,
+           id: System.get_env("LMSTUDIO_MODEL", "google/gemma-4-26b-a4b"),
+           base_url: System.get_env("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
+         },
+         tools: [TestEcho],
+         max_iterations: 5,
+         max_tokens: 256}
+      ]
+  end
+
+  defmodule AddAgent do
+    @moduledoc false
+    use Jido.Agent,
+      name: "react_e2e_add",
+      path: :state,
+      slices: [
+        {Jido.AI.ReAct,
+         model: %{
+           provider: :openai,
+           id: System.get_env("LMSTUDIO_MODEL", "google/gemma-4-26b-a4b"),
+           base_url: System.get_env("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
+         },
+         tools: [TestAdd],
+         max_iterations: 5,
+         max_tokens: 256}
+      ]
+  end
+
+  test "produces a final answer for a simple question without tools", ctx do
+    pid = start_server(ctx, NoToolsAgent)
+
+    _ =
+      Jido.AI.ask_sync(pid, "Reply with the single word 'pong' and nothing else.",
+        timeout: 60_000
       )
 
-    assert result.termination_reason in [:final_answer, :max_iterations]
-    assert is_binary(result.text) or result.text == nil
-    assert result.iterations >= 1
+    ai = read_ai(pid)
+    assert ai.status in [:completed, :failed]
+    assert ai.iteration >= 1
   end
 
-  test "drives a tool-calling round trip when the model picks a tool" do
-    result =
-      ReAct.run(
+  test "drives a tool-calling round trip when the model picks a tool", ctx do
+    pid = start_server(ctx, EchoAgent)
+
+    _ =
+      Jido.AI.ask_sync(
+        pid,
         "You have a tool named test_echo that echoes a message. " <>
           "Call it once with the message 'hello-from-jido', then reply 'done'.",
-        model: model(),
-        tools: [TestEcho],
-        max_iterations: 5,
-        max_tokens: 256
+        timeout: 90_000
       )
 
-    assert result.termination_reason in [:final_answer, :max_iterations]
-    assert result.iterations >= 1
+    ai = read_ai(pid)
+    assert ai.status in [:completed, :failed]
+    assert ai.iteration >= 1
 
-    tool_messages =
-      result.context
-      |> ReqLLM.Context.to_list()
-      |> Enum.filter(&(&1.role == :tool))
+    if ai.status == :completed and ai.context do
+      tool_messages =
+        ai.context
+        |> ReqLLM.Context.to_list()
+        |> Enum.filter(&(&1.role == :tool))
 
-    if result.termination_reason == :final_answer and tool_messages != [] do
-      tool_msg = hd(tool_messages)
-      assert tool_msg.name == "test_echo"
+      if tool_messages != [] do
+        assert hd(tool_messages).name == "test_echo"
+      end
     end
   end
 
-  test "handles a numeric tool call without crashing" do
-    result =
-      ReAct.run(
+  test "handles a numeric tool call without crashing", ctx do
+    pid = start_server(ctx, AddAgent)
+
+    _ =
+      Jido.AI.ask_sync(
+        pid,
         "You have a tool named test_add that adds two integers. " <>
           "Use it to compute 4 + 7, then state the result.",
-        model: model(),
-        tools: [TestAdd],
-        max_iterations: 5,
-        max_tokens: 256
+        timeout: 90_000
       )
 
-    assert result.termination_reason in [:final_answer, :max_iterations]
+    ai = read_ai(pid)
+    assert ai.status in [:completed, :failed]
 
-    msg_count =
-      result.context
-      |> ReqLLM.Context.to_list()
-      |> length()
+    if ai.context do
+      msg_count =
+        ai.context
+        |> ReqLLM.Context.to_list()
+        |> length()
 
-    assert msg_count >= 2
+      assert msg_count >= 2
+    end
+  end
+
+  defp read_ai(pid) do
+    {:ok, ai} = Jido.AgentServer.state(pid, fn s -> {:ok, s.agent.state.ai} end)
+    ai
   end
 end

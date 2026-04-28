@@ -4,11 +4,12 @@ defmodule Jido.AI.Turn do
 
   Classifies the response as either a tool-calling turn (the model wants
   the host to run one or more tools and call back) or a final-answer turn
-  (the model is done). Used by the ReAct loop in `Jido.AI.ReAct`.
+  (the model is done). Consumed by `Jido.AI.Actions.LLMTurn` after
+  `Jido.AI.Directive.LLMCall`'s executor packages a `ReqLLM.Response`.
 
   `ReqLLM.Response.classify/1` does the heavy lifting — finish-reason
   normalization, tool-call extraction, and text/thinking split. This
-  module is the thin Jido-side projection that the ReAct loop consumes.
+  module is the thin Jido-side projection that the LLMTurn action consumes.
   """
 
   alias ReqLLM.Message.ReasoningDetails

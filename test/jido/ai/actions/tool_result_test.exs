@@ -3,7 +3,7 @@ defmodule Jido.AI.Actions.ToolResultTest do
 
   alias Jido.AI.Actions.ToolResult
   alias Jido.AI.Directive.LLMCall
-  alias Jido.AI.Slice
+  alias Jido.AI.ReAct
   alias Jido.AI.TestActions.TestAdd
   alias ReqLLM.Context
 
@@ -62,7 +62,7 @@ defmodule Jido.AI.Actions.ToolResultTest do
 
     assert new_slice.pending_tool_calls == []
     assert new_slice.tool_results_received == []
-    assert new_slice.previous_tool_signature == Slice.tool_call_signature(calls)
+    assert new_slice.previous_tool_signature == ReAct.tool_call_signature(calls)
 
     assert directive.context == new_slice.context
     assert directive.model == slice.model
@@ -73,7 +73,7 @@ defmodule Jido.AI.Actions.ToolResultTest do
 
   test "appends the cycle warning when the batch repeats the previous signature" do
     calls = [%{id: "call_1", name: "test_add", arguments: %{"a" => 1, "b" => 2}}]
-    previous_signature = Slice.tool_call_signature(calls)
+    previous_signature = ReAct.tool_call_signature(calls)
 
     slice = slice_with_pending(calls, previous_tool_signature: previous_signature)
 
@@ -85,7 +85,7 @@ defmodule Jido.AI.Actions.ToolResultTest do
     assert last.role == :user
 
     text = last.content |> hd() |> Map.get(:text)
-    assert text == Slice.cycle_warning()
+    assert text == ReAct.cycle_warning()
     assert directive.context == new_slice.context
   end
 

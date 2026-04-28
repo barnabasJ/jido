@@ -81,7 +81,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.AI.Directive.LLMCall do
     # Anything raised in the Task body — bad tool definition, transport
     # exception, decoder bug — must still surface as a terminal signal.
     # If we let the Task die quietly the slice stays :running forever
-    # and `Jido.AI.Agent.await/2` only ever returns `{:error, :timeout}`.
+    # and `Jido.AI.await/2` only ever returns `{:error, :timeout}`.
     exception -> cast_failure(agent_pid, source, d.request_id, exception)
   end
 

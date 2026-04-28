@@ -1,11 +1,11 @@
 defmodule Jido.AI.Request do
   @moduledoc """
-  Handle returned by `Jido.AI.Agent.ask/3`.
+  Handle returned by `Jido.AI.ask/3`.
 
-  Carries everything `await/2` needs to receive the terminal subscription
-  fire and identify it: the `id` (correlation), the `sub_ref` (Erlang
-  reference returned by `Jido.AgentServer.subscribe/4`), and the
-  `agent_pid` (so a caller could `unsubscribe/2` on early exit).
+  Carries everything `Jido.AI.await/2` needs to receive the terminal
+  subscription fire and identify it: the `id` (correlation), the
+  `sub_ref` (Erlang reference returned by `Jido.AgentServer.subscribe/4`),
+  and the `agent_pid` (so a caller could `unsubscribe/2` on early exit).
   """
 
   @type t :: %__MODULE__{

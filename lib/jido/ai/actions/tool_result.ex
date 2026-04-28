@@ -29,7 +29,7 @@ defmodule Jido.AI.Actions.ToolResult do
     ]
 
   alias Jido.AI.Directive.LLMCall
-  alias Jido.AI.Slice
+  alias Jido.AI.ReAct
   alias ReqLLM.Context
 
   @impl true
@@ -59,7 +59,7 @@ defmodule Jido.AI.Actions.ToolResult do
   end
 
   defp finalize_batch(slice, new_context) do
-    current_signature = Slice.tool_call_signature(slice.pending_tool_calls)
+    current_signature = ReAct.tool_call_signature(slice.pending_tool_calls)
 
     {warned_context, _} =
       maybe_append_cycle_warning(new_context, slice.previous_tool_signature, current_signature)
@@ -85,7 +85,7 @@ defmodule Jido.AI.Actions.ToolResult do
 
   defp maybe_append_cycle_warning(context, previous_signature, current_signature)
        when is_binary(previous_signature) and previous_signature == current_signature do
-    {Context.append(context, Context.user(Slice.cycle_warning())), :warned}
+    {Context.append(context, Context.user(ReAct.cycle_warning())), :warned}
   end
 
   defp maybe_append_cycle_warning(context, _previous, _current), do: {context, :no_warning}
