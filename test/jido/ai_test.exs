@@ -119,8 +119,6 @@ defmodule Jido.AITest do
     end
 
     test "caller can subscribe out-of-band and observe every intermediate signal", ctx do
-      test_pid = self()
-
       expect(ReqLLM.Generation, :generate_text, fn _model, _messages, _opts ->
         {:ok, tool_call_response([{"test_add", %{"a" => 1, "b" => 2}}])}
       end)
@@ -131,13 +129,10 @@ defmodule Jido.AITest do
 
       pid = start_test_server(ctx, MathAgent)
 
-      # Subscribe to every transition of the slice (request-id-scoped),
-      # capturing status + iteration. The selector returns `:skip` while
-      # the request_id is unset (pre-launch) so we don't see the :idle
-      # state. Once the run starts, every signal that lands fires the
-      # selector against the post-pipeline state.
-      ref_owner = self()
-
+      # Pure selector: project status + iteration. The default dispatch
+      # `{:pid, target: self()}` sends `{:jido_subscription, sub_ref,
+      # %{result: {:ok, projection}}}` to this process for every
+      # non-:skip return.
       {:ok, sub_ref} =
         Jido.AgentServer.subscribe(pid, "ai.react.**", fn state ->
           ai = state.agent.state.ai
@@ -145,24 +140,27 @@ defmodule Jido.AITest do
           if is_nil(ai.request_id) do
             :skip
           else
-            send(ref_owner, {:tick, ai.status, ai.iteration})
-            {:ok, ai.status}
+            {:ok, %{status: ai.status, iteration: ai.iteration}}
           end
         end)
 
       assert {:ok, request_id} = Jido.AI.ask(pid, "Add 1 and 2")
       assert is_binary(request_id)
 
-      # We expect ticks for: ask (running, 0) → llm.completed for the
-      # tool turn (running, 1) → tool.completed (running, 1) →
+      # We expect dispatches for: ask (running, 0) → llm.completed for
+      # the tool turn (running, 1) → tool.completed (running, 1) →
       # llm.completed final (completed, 2). Order and exact counts
       # depend on signal interleaving; the important thing is we
       # observe both :running and :completed without await/2.
-      assert_receive {:tick, :running, _}, 1_000
-      assert_receive {:tick, :completed, 2}, 1_000
+      assert_receive {:jido_subscription, ^sub_ref,
+                      %{result: {:ok, %{status: :running}}}},
+                     1_000
+
+      assert_receive {:jido_subscription, ^sub_ref,
+                      %{result: {:ok, %{status: :completed, iteration: 2}}}},
+                     1_000
 
       :ok = Jido.AgentServer.unsubscribe(pid, sub_ref)
-      _ = test_pid
     end
   end
 

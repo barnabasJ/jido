@@ -218,19 +218,20 @@ module's compile time.
 ### 7. User-facing API — `Jido.AI` namespace functions
 
 There are no agent-module-level functions. The user-facing API lives at the
-namespace level:
+namespace level, and is exactly two functions: `ask/3` (fire-and-forget
+launch) and `ask_sync/3` (launch + wait for the final answer).
 
 ```elixir
-{:ok, pid}     = Jido.AgentServer.start_link(agent_module: MyApp.SupportAgent)
+{:ok, pid}        = Jido.AgentServer.start_link(agent_module: MyApp.SupportAgent)
 
-{:ok, request} = Jido.AI.ask(pid, "What's the status of order 42?")
-{:ok, text}    = Jido.AI.await(request, timeout: 30_000)
+# Convenience: launch and block on the terminal transition.
+{:ok, text}       = Jido.AI.ask_sync(pid, "Refund order 42, the customer asked.")
 
-# or:
-{:ok, text}    = Jido.AI.ask_sync(pid, "Refund order 42, the customer asked.")
+# Or fire-and-forget. Returns immediately once the run is in flight.
+{:ok, request_id} = Jido.AI.ask(pid, "What's the status of order 42?")
 ```
 
-Per-call overrides:
+Per-call overrides apply to either function:
 
 ```elixir
 {:ok, text} =
@@ -240,14 +241,66 @@ Per-call overrides:
   )
 ```
 
-`ask/3` works against any `pid` whose agent has the `Jido.AI.ReAct` slice mounted
-at `:ai`. It mints a `request_id`, registers a subscription for the slice's
-terminal transition (ADR 0021 pre-cast), then casts the `ai.react.ask` signal.
-`await/2` `receive`s the subscription fire and returns `{:ok, text}` or
-`{:error, reason}`. `ask_sync/3` pipes the two together. None of these poll.
+#### Internal mechanics
 
-`Jido.AI.ask` reads the slice state for `model` / `tools` / etc. defaults; per-call
-opts override per call. The slice is the source of truth for run config.
+`ask/3` synchronously sends `"ai.react.ask"` via `Jido.AgentServer.call/4`.
+The `Jido.AI.Actions.Ask` action is the **single source of truth** for
+run-config resolution and validation:
+
+- It resolves per-call → slice fallback for `model`, `tools`,
+  `system_prompt`, `max_iterations`, and keyword-merges per-call
+  `:llm_opts` over the slice's stored `:llm_opts`.
+- It rejects with `{:error, :busy}` when a run is in flight.
+- It rejects with `{:error, :no_model}` when no model is available
+  anywhere.
+
+`call/4`'s chain-error path delivers those rejections to `ask/3`'s caller
+verbatim (wrapped in the framework's standard `%Jido.Error.ExecutionError{}`
+envelope, with the rejection reason exposed via `details.reason`). On
+success, `ask/3` returns the minted `request_id` so the caller can correlate
+it with subsequent signals.
+
+`ask_sync/3` is a convenience that subscribes for the slice's terminal
+transition (pre-cast, ADR 0021), launches via `ask/3`, `receive`s the
+subscription fire, and returns `{:ok, text}` / `{:error, reason}` /
+`{:error, :timeout}`.
+
+#### Subscriptions are out of band
+
+`ask/3` itself sets up no subscriptions — that's a deliberate API shape.
+Real consumers want different things from the signal stream: tool-call
+notifications for UI updates, streaming tokens, intermediate reasoning
+steps, audit trails. The `:completed`/`:failed` filter `ask_sync/3`
+applies internally is one specific consumer's needs; the framework
+shouldn't bake it in.
+
+Callers who want richer observation subscribe themselves before calling
+`ask/3`:
+
+```elixir
+{:ok, ref} =
+  Jido.AgentServer.subscribe(pid, "ai.react.**", fn state ->
+    {:ok, state.agent.state.ai}
+  end)
+
+{:ok, request_id} = Jido.AI.ask(pid, "What's the status?")
+# receive {:jido_subscription, ^ref, ...} for every signal in the loop
+```
+
+#### API keys
+
+Per-tenant keys flow through `:llm_opts`. ReqLLM treats per-request
+`:api_key` as the highest-precedence source (above app config and
+environment variables). The slice's `Keyword.merge(slice.llm_opts,
+data.llm_opts)` plumbs it from either place:
+
+```elixir
+# Slice-level default (applies to every run on this agent):
+slices: [{Jido.AI.ReAct, model: "...", llm_opts: [api_key: System.fetch_env!("OPENAI_API_KEY")]}]
+
+# Per-call override (multi-tenant):
+Jido.AI.ask_sync(pid, "...", llm_opts: [api_key: user.api_key])
+```
 
 ### 8. Tests — Mimic for unit, tagged-and-excluded for integration
 
@@ -416,6 +469,21 @@ explicit.
 The rule is configurable; a sensible default is a UX nicety on top.
 
 ## Revision history
+
+- **v3.1 (2026-04-28, §7 amended during task 0030 implementation)** —
+  collapsed the §7 surface from `ask/3` + `await/2` + `ask_sync/3` +
+  `%Jido.AI.Request{}` to `ask/3` + `ask_sync/3`. The `await/2` /
+  `Request{}` pair was an artifact of bundling subscribe + cast into
+  `ask/3` and handing the caller a handle. That design opinionated the
+  subscription's filter (`:completed` / `:failed` only); real consumers
+  want intermediate signals — tool-call notifications, streaming
+  tokens, reasoning steps. Subscriptions are now out of band: `ask/3`
+  fire-and-forgets via `Jido.AgentServer.call/4` and returns the minted
+  `request_id`; `ask_sync/3` is the convenience that subscribes
+  internally for the terminal transition. Run-config resolution (the
+  per-call → slice fallback) lives entirely in `Jido.AI.Actions.Ask`;
+  `ask/3` reads no slice state. Action-level rejections (`:busy`,
+  `:no_model`) come back through `call/4`'s chain-error path.
 
 - **v3 (2026-04-28, second revision)** — replaced the §6 v2 design (slice
   metadata pulled into `use Jido.Agent` via `path:` / `schema:` /

@@ -43,40 +43,39 @@ defmodule MyApp.SupportAgent do
     ]
 end
 
-{:ok, pid}     = Jido.AgentServer.start_link(agent_module: MyApp.SupportAgent)
-{:ok, request} = Jido.AI.ask(pid, "Where is order 42?")
-{:ok, text}    = Jido.AI.await(request, timeout: 30_000)
+{:ok, pid}        = Jido.AgentServer.start_link(agent_module: MyApp.SupportAgent)
+{:ok, text}       = Jido.AI.ask_sync(pid, "Refund order 42, the customer asked.")
+{:ok, request_id} = Jido.AI.ask(pid, "Where is order 42?")  # fire-and-forget
 ```
 
-No `Jido.AI.Agent` macro. No `Jido.AI.ReAct.run/2`. No `path:`/`schema:`/
-`signal_routes:` mentioning AI on the agent module. No placeholder `model:`.
+No `Jido.AI.Agent` macro. No `Jido.AI.ReAct.run/2`. No `Jido.AI.Request{}`
+struct. No `Jido.AI.await/2`. No `path:`/`schema:`/`signal_routes:`
+mentioning AI on the agent module. No placeholder `model:`.
 
 ## Files to delete
 
 - `lib/jido/ai/agent.ex` — the `Jido.AI.Agent` macro.
 - `lib/jido/ai/react.ex` — the standalone synchronous runner (and its
   `Result` struct).
+- `lib/jido/ai/request.ex` — the `Request{}` handle existed solely to
+  carry a `sub_ref` between `ask/3` and `await/2`. With subscriptions
+  pushed out of band, neither survives.
 - `test/jido/ai/agent_test.exs` — tests covered the deleted macro.
 - `test/jido/ai/react_test.exs` — Mimic-stubbed tests for the deleted runner.
-- `test/jido/ai/react_e2e_test.exs` — integration tests for the deleted
-  runner. Agent-level e2e coverage is task 0031.
 
 ## Files to create
 
 ### `lib/jido/ai.ex`
 
-Namespace module. None of these are tied to a specific agent module — they
-work against any `pid` whose agent has the `Jido.AI.ReAct` slice attached.
+Namespace module. Two functions, no `Request{}` struct, no `await/2`. None
+are tied to a specific agent module — they work against any `pid` whose
+agent has the `Jido.AI.ReAct` slice attached.
 
 ```elixir
 defmodule Jido.AI do
   @spec ask(GenServer.server(), String.t(), keyword()) ::
-          {:ok, Jido.AI.Request.t()} | {:error, term()}
+          {:ok, String.t()} | {:error, term()}
   def ask(pid, query, opts \\ [])
-
-  @spec await(Jido.AI.Request.t(), keyword()) ::
-          {:ok, String.t() | nil} | {:error, term()}
-  def await(request, opts \\ [])
 
   @spec ask_sync(GenServer.server(), String.t(), keyword()) ::
           {:ok, String.t() | nil} | {:error, term()}
@@ -86,33 +85,54 @@ end
 
 Implementation notes:
 
-- One `state/3` projection reads the slice at `:ai` once, returning both the
-  busy guard and the run-config defaults: `{status, %{model:, tools:,
-  system_prompt:, max_iterations:, llm_opts:}}`. If `status == :running`,
-  return `{:error, :busy}`. Otherwise resolve per-call opts on top of the
-  slice defaults; if `:model` is still nil, return `{:error, :no_model}`.
-- `ask/3` mints `request_id`, registers `subscribe/4` for the slice's
-  terminal transition (pre-cast, ADR 0021), then casts `ai.react.ask`.
-- `await/2` `receive`s the subscription fire. Pure receive; no polling.
-- `ask_sync/3` pipes the two together.
+- `ask/3` reads no slice state. It mints a `request_id`, builds the
+  `"ai.react.ask"` signal carrying per-call opts verbatim (nil where
+  absent), and synchronously delivers it via `Jido.AgentServer.call/4`
+  with a stub selector that returns the `request_id` on success.
+- The `Jido.AI.Actions.Ask` action is the single source of truth for
+  run-config resolution: per-call → slice fallback for `model`,
+  `tools`, `system_prompt`, `max_iterations`; `Keyword.merge`
+  per-call `:llm_opts` over the slice's stored `:llm_opts`.
+- The action returns `{:error, :busy}` when the slice is `:running`,
+  `{:error, :no_model}` when no model is available anywhere. `call/4`'s
+  chain-error path delivers those rejections back to `ask/3` wrapped in
+  `%Jido.Error.ExecutionError{}`; the rejection reason is surfaced via
+  `details.reason`.
+- `ask_sync/3` is the convenience for "give me the answer." It
+  subscribes for the slice's terminal `:completed` / `:failed`
+  transition pre-cast (ADR 0021), launches via `ask/3`, `receive`s the
+  subscription fire, and returns `{:ok, text}` / `{:error, reason}` /
+  `{:error, :timeout}`.
+- Subscriptions are out of band by design. Callers who want richer
+  observation — tool-call notifications, intermediate state, streaming
+  tokens — set up their own subscription via `Jido.AgentServer.subscribe/4`
+  with whatever filter they need before calling `ask/3`.
 
 ### `test/jido/ai_test.exs`
 
-Unit tests for the namespace functions, mirroring the cases the deleted
-`agent_test.exs` covered:
+Unit tests for the namespace functions:
 
-1. `ask/3` happy path against a Mimic-stubbed `ReqLLM.Generation.generate_text/3`.
-2. `ask_sync/3` returns the text.
-3. Per-call `:model` / `:tools` / `:system_prompt` overrides on top of slice
-   defaults.
-4. `:busy` short-circuit while a run is `:running`.
-5. `:timeout` from `await/2` when no terminal signal arrives.
-6. Stale `tool.completed` (different `request_id`) ignored.
-7. LLM error settles `:failed`; `await/2` returns `{:error, reason}`.
-8. Cycle warning prepended when two consecutive tool batches match.
-9. `{:error, :no_model}` when neither slice defaults nor per-call opts supply a model.
+1. Slice config flows through to ReqLLM (model, system prompt, folded
+   `max_tokens` / `temperature` in `:llm_opts`).
+2. `ask_sync/3` returns the text on a single-turn happy path.
+3. `ask/3` fire-and-forget returns `{:ok, request_id}`.
+4. Out-of-band subscription (Mimic-stubbed) observes every intermediate
+   signal in a tool-using run.
+5. Per-call `:model` / `:tools` / `:system_prompt` overrides on top of
+   slice defaults.
+6. Per-slice and per-call `:api_key` propagation through `:llm_opts`
+   (multi-tenant pattern).
+7. `:busy` chain error when a run is in flight (second `Jido.AI.ask/3`
+   while the first is `:running`).
+8. `ask_sync/3` returns `{:error, :timeout}` when no terminal signal
+   arrives.
+9. Stale `tool.completed` (different `request_id`) ignored.
+10. LLM error settles `:failed`; `ask_sync/3` returns `{:error, reason}`.
+11. Cycle warning prepended when two consecutive tool batches match.
+12. `:no_model` chain error when neither slice config nor opts supply
+    a model.
 
-These run against a generic `use Jido.Agent, slices: [...]` test agent
+These run against generic `use Jido.Agent, slices: [...]` test agents
 defined inside the test module — no AI-specific macro.
 
 ## Files to modify
@@ -202,8 +222,14 @@ model = data.model || slice.model
 tools = if is_nil(data.tools), do: slice.tools || [], else: data.tools
 system_prompt = data.system_prompt || slice.system_prompt
 max_iter = data.max_iterations || slice.max_iterations
-llm_opts = data.llm_opts || slice.llm_opts || []
+llm_opts = Keyword.merge(slice.llm_opts || [], data.llm_opts || [])
 ```
+
+`:llm_opts` is keyword-merged (per-call over slice defaults), not
+replaced — so per-call `[max_tokens: 999]` preserves the slice's
+`temperature` instead of dropping it. This is also the channel for
+per-call `:api_key` (multi-tenant pattern; ReqLLM treats per-request
+`:api_key` as the highest-precedence source).
 
 Reject runs with `model == nil` (`{:error, :no_model}`).
 
@@ -216,9 +242,10 @@ helpers move to `Jido.AI.ReAct` along with the rename.
 ### `mix.exs`
 
 Update the "Jido AI" group: drop `Jido.AI.Agent`, `Jido.AI.ReAct.Result`,
-`Jido.AI.Slice`. Add `Jido.AI` and `Jido.AI.ReAct`. Keep `Jido.AI.Request`,
-`Jido.AI.ToolAdapter`, `Jido.AI.Turn`, plus the `~r/Jido\.AI\.Actions\..*/`
-and `~r/Jido\.AI\.Directive\..*/` regexes.
+`Jido.AI.Slice`, `Jido.AI.Request` (no longer exists — `ask/3` returns
+just the request_id string). Add `Jido.AI` and `Jido.AI.ReAct`. Keep
+`Jido.AI.ToolAdapter`, `Jido.AI.Turn`, plus the
+`~r/Jido\.AI\.Actions\..*/` and `~r/Jido\.AI\.Directive\..*/` regexes.
 
 ### `lib/jido/ai/turn.ex` moduledoc
 
@@ -243,7 +270,10 @@ synchronous runner) with "Consumed by `Jido.AI.Actions.LLMTurn` after
   / `signal_routes:` mentioning anything AI-related.
 - ADR 0019 conformance: every action returns `{:ok, slice, [directive]}` or
   `{:error, reason}`. Directive executors emit signals; never return state.
-- ADR 0021 conformance: `Jido.AI.await/2` `receive`s; no polling.
+- ADR 0021 conformance: `Jido.AI.ask_sync/3`'s internal subscription
+  `receive`s; no polling. `ask/3` does not poll either — it makes a
+  single synchronous `Jido.AgentServer.call/4` and returns. Out-of-band
+  consumers subscribe via `Jido.AgentServer.subscribe/4`.
 
 ## Out of scope
 

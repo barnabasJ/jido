@@ -135,4 +135,72 @@ defmodule Jido.AI.ReActE2ETest do
     assert is_binary(text)
     assert text =~ "11"
   end
+
+  test "out-of-band subscription observes every intermediate signal", ctx do
+    pid = start_server(ctx, AddAgent)
+
+    # Subscribe to every ai.react.* signal *before* casting (ADR 0021).
+    # The selector projects slice status + iteration; subscribe/4's
+    # default dispatch sends `{:jido_subscription, sub_ref, %{result:
+    # {:ok, projection}}}` to the calling process for every non-:skip
+    # selector return.
+    {:ok, sub_ref} =
+      Jido.AgentServer.subscribe(pid, "ai.react.**", fn state ->
+        ai = state.agent.state.ai
+
+        if is_nil(ai.request_id) do
+          :skip
+        else
+          {:ok, %{status: ai.status, iteration: ai.iteration}}
+        end
+      end)
+
+    assert {:ok, request_id} =
+             Jido.AI.ask(
+               pid,
+               "You have a tool named test_add that adds two integers. " <>
+                 "Use it to compute 4 + 7, then state the result."
+             )
+
+    assert is_binary(request_id)
+
+    # Drain dispatches up to 90s, looking for the terminal :completed.
+    # Along the way we expect at least one :running dispatch (Ask) and
+    # at least one with iteration ≥ 1 (a tool turn landed). A :failed
+    # dispatch surfaces as a flunk with the projection — it's the
+    # canonical "model errored mid-run" signal and the test must fail
+    # loudly when it happens.
+    {max_iter, count} = drain_until_completed(sub_ref, 90_000)
+
+    assert max_iter >= 1,
+           "expected the model to drive at least one tool turn (iteration >= 1); got #{max_iter}"
+
+    assert count >= 2,
+           "expected multiple intermediate signals; received #{count}"
+
+    :ok = Jido.AgentServer.unsubscribe(pid, sub_ref)
+  end
+
+  defp drain_until_completed(sub_ref, deadline_ms, acc \\ {0, 0})
+
+  defp drain_until_completed(sub_ref, deadline_ms, {max_iter, count}) do
+    receive do
+      {:jido_subscription, ^sub_ref,
+       %{result: {:ok, %{status: :completed, iteration: iter}}}} ->
+        {max(max_iter, iter), count + 1}
+
+      {:jido_subscription, ^sub_ref,
+       %{result: {:ok, %{status: :failed} = projection}}} ->
+        flunk("slice transitioned to :failed mid-run: #{inspect(projection)}")
+
+      {:jido_subscription, ^sub_ref,
+       %{result: {:ok, %{status: :running, iteration: iter}}}} ->
+        drain_until_completed(sub_ref, deadline_ms, {max(max_iter, iter), count + 1})
+    after
+      deadline_ms ->
+        flunk(
+          "no :completed dispatch within #{deadline_ms}ms; saw #{count} non-terminal dispatches"
+        )
+    end
+  end
 end
