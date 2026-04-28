@@ -174,16 +174,16 @@ end
 
 A small helper module the run cell will use:
 
-  * `selector/1` — projects the slice's status, iteration, the
-    in-flight tool calls, and the most recent tool message from the
-    `ReqLLM.Context`. Returns `:skip` until a run is in flight so we
-    don't see lifecycle signals from agent startup.
-  * `render/3` — pattern-matches on signal type + projection and
-    appends one Markdown line to a `Kino.Frame` per ReAct step.
-  * `drain/3` — receives subscription dispatches in a loop until the
-    slice settles `:completed` or `:failed`. No polling; no
-    `Process.sleep`. A timeout renders a clear "timed out" line rather
-    than hanging silently.
+* `selector/1` — projects the slice's status, iteration, the
+  in-flight tool calls, and the most recent tool message from the
+  `ReqLLM.Context`. Returns `:skip` until a run is in flight so we
+  don't see lifecycle signals from agent startup.
+* `render/3` — pattern-matches on signal type + projection and
+  appends one Markdown line to a `Kino.Frame` per ReAct step.
+* `drain/3` — receives subscription dispatches in a loop until the
+  slice settles `:completed` or `:failed`. No polling; no
+  `Process.sleep`. A timeout renders a clear "timed out" line rather
+  than hanging silently.
 
 The dispatches arrive as `{:jido_subscription, sub_ref, %{signal_type:
 type, result: {:ok, projection}}}` — the default `subscribe/4` shape.
@@ -371,14 +371,22 @@ section, which subscribes for the terminal transition only.
 A good prompt for two-tool agents: `"What is (4 + 7) * 5?"` — the model
 typically calls `add(4, 7)`, then `multiply(11, 5)`, then states 55.
 
+The input + submit pair is wrapped in `Kino.Control.form/2`. Form
+events carry the input values in `event.data`, so the listen
+callback gets them directly — `Kino.Input.read/1` would fail here
+because it can only run in the cell's main evaluation process, not
+in a `Kino.listen` callback (which runs in its own task).
+
 ```elixir
-question_input = Kino.Input.text("Question", default: "What is (4 + 7) * 5?")
-submit_button = Kino.Control.button("Ask")
 output_frame = Kino.Frame.new()
 
-Kino.listen(submit_button, fn _event ->
-  question = Kino.Input.read(question_input)
+ask_form =
+  Kino.Control.form(
+    [question: Kino.Input.text("Question", default: "What is (4 + 7) * 5?")],
+    submit: "Ask"
+  )
 
+Kino.listen(ask_form, fn %{data: %{question: question}} ->
   Kino.Frame.render(output_frame, Kino.Markdown.new("_Asking:_ #{inspect(question)}"))
 
   {:ok, sub_ref} =
@@ -402,10 +410,7 @@ Kino.listen(submit_button, fn _event ->
   :ok = Jido.AgentServer.unsubscribe(agent_pid, sub_ref)
 end)
 
-Kino.Layout.grid([
-  Kino.Layout.grid([question_input, submit_button], columns: 2),
-  output_frame
-])
+Kino.Layout.grid([ask_form, output_frame])
 ```
 
 ## Same agent, sync — `ask_sync/3`
@@ -418,14 +423,15 @@ answer" — it subscribes internally for the terminal `:completed` /
 text. Pick the shape that fits.
 
 ```elixir
-sync_input =
-  Kino.Input.text("Question (sync)", default: "What is 12 multiplied by 7?")
-
-sync_button = Kino.Control.button("Ask (sync)")
 sync_frame = Kino.Frame.new()
 
-Kino.listen(sync_button, fn _event ->
-  question = Kino.Input.read(sync_input)
+sync_form =
+  Kino.Control.form(
+    [question: Kino.Input.text("Question (sync)", default: "What is 12 multiplied by 7?")],
+    submit: "Ask (sync)"
+  )
+
+Kino.listen(sync_form, fn %{data: %{question: question}} ->
   Kino.Frame.render(sync_frame, Kino.Markdown.new("_Working…_"))
 
   case Jido.AI.ask_sync(agent_pid, question, timeout: 60_000) do
@@ -443,19 +449,16 @@ Kino.listen(sync_button, fn _event ->
   end
 end)
 
-Kino.Layout.grid([
-  Kino.Layout.grid([sync_input, sync_button], columns: 2),
-  sync_frame
-])
+Kino.Layout.grid([sync_form, sync_frame])
 ```
 
 ## Where to next
 
-- [Slices](slices.md) — what `slices: [{Jido.AI.ReAct, ...}]` actually
+* [Slices](slices.md) — what `slices: [{Jido.AI.ReAct, ...}]` actually
   attaches: declarative state, action set, and signal-route table.
-- [Observability](observability.md) — telemetry, traces, and
+* [Observability](observability.md) — telemetry, traces, and
   selector-based reads as the no-polling pattern that powers the
   streaming demo above.
-- ADR 0022 (`guides/adr/0022-llm-agents-inlined-jido-ai-namespace.md`)
+* ADR 0022 (`guides/adr/0022-llm-agents-inlined-jido-ai-namespace.md`)
   — the full design rationale for inlining `Jido.AI.*` and the
   slice-driven ReAct loop.
