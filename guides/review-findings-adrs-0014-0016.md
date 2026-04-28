@@ -116,7 +116,7 @@ middleware: [
 ]
 ```
 
-`Jido.Thread.Plugin` becomes `Jido.Thread.Slice` (no middleware half needed). `Jido.Thread.Persister` is a new module holding `externalize/1` and `reinstate/2`. Task 0005 updated accordingly.
+`Jido.Thread.Slice` becomes `Jido.Thread.Slice` (no middleware half needed). `Jido.Thread.Persister` is a new module holding `externalize/1` and `reinstate/2`. Task 0005 updated accordingly.
 
 ### W6 — `child_waiters` migration; `Jido.Await` fate; selector contract refinement — ✅ resolved
 

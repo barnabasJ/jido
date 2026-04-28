@@ -1,14 +1,14 @@
-defmodule JidoExampleTest.IdentityPluginTest do
+defmodule JidoExampleTest.IdentitySliceTest do
   @moduledoc """
-  Example test demonstrating Identity as a default plugin.
+  Example test demonstrating Identity as a default slice.
 
   This test shows:
-  - Every agent gets `Jido.Identity.Plugin` automatically (default singleton plugin)
+  - Every agent gets `Jido.Identity.Slice` automatically (default singleton slice)
   - Using `Jido.Identity.Agent` and related helpers: `ensure/2`, profile management
   - Snapshot for sharing identity with other agents
   - Evolving identity over simulated time via `Jido.Identity.evolve/2` and the Evolve action
-  - Replacing the default Identity.Plugin with a custom implementation
-  - Disabling the identity plugin with `default_plugins: %{identity: false}`
+  - Replacing the default Identity.Slice with a custom implementation
+  - Disabling the identity slice with `default_slices: %{identity: false}`
 
   Run with: mix test --include example
   """
@@ -22,22 +22,17 @@ defmodule JidoExampleTest.IdentityPluginTest do
   alias Jido.Identity.Profile
 
   # ===========================================================================
-  # CUSTOM IDENTITY PLUGIN
+  # CUSTOM IDENTITY SLICE
   # ===========================================================================
 
-  defmodule CustomIdentityPlugin do
+  defmodule CustomIdentitySlice do
     @moduledoc false
-    use Jido.Plugin,
+    use Jido.Slice,
       name: "custom_identity",
       path: :identity,
       actions: [],
-      description: "Custom identity plugin that auto-initializes with config."
-
-    def mount(_agent, config) do
-      profile = Map.get(config, :profile, %{age: 0, origin: :configured})
-      identity = Identity.new(profile: profile)
-      {:ok, identity}
-    end
+      singleton: true,
+      description: "Custom identity slice override."
   end
 
   # ===========================================================================
@@ -64,9 +59,9 @@ defmodule JidoExampleTest.IdentityPluginTest do
     use Jido.Agent,
       name: "pre_configured",
       path: :domain,
-      description: "Agent with custom identity plugin that auto-initializes",
-      default_plugins: %{
-        identity: {CustomIdentityPlugin, %{profile: %{age: 5, origin: :spawned}}}
+      description: "Agent with custom identity slice that overrides the default",
+      default_slices: %{
+        identity: CustomIdentitySlice
       },
       schema: [
         status: [type: :atom, default: :idle]
@@ -78,18 +73,18 @@ defmodule JidoExampleTest.IdentityPluginTest do
     use Jido.Agent,
       name: "no_identity",
       path: :domain,
-      description: "Agent with identity plugin disabled",
-      default_plugins: %{identity: false},
+      description: "Agent with identity slice disabled",
+      default_slices: %{identity: false},
       schema: [
         value: [type: :integer, default: 0]
       ]
   end
 
   # ===========================================================================
-  # TESTS: Default identity plugin
+  # TESTS: Default identity slice
   # ===========================================================================
 
-  describe "identity plugin is a default singleton" do
+  describe "identity slice is a default singleton" do
     test "new agent has no identity until initialized on demand" do
       agent = WebCrawlerAgent.new()
 
@@ -147,7 +142,7 @@ defmodule JidoExampleTest.IdentityPluginTest do
         WebCrawlerAgent.new()
         |> IdentityAgent.ensure(profile: %{age: 0})
 
-      {agent, []} = WebCrawlerAgent.cmd(agent, {Jido.Identity.Actions.Evolve, %{years: 3}})
+      {:ok, agent, []} = WebCrawlerAgent.cmd(agent, {Jido.Identity.Actions.Evolve, %{years: 3}})
 
       assert Profile.age(agent) == 3
     end
@@ -157,41 +152,31 @@ defmodule JidoExampleTest.IdentityPluginTest do
         WebCrawlerAgent.new()
         |> IdentityAgent.ensure(profile: %{age: 0, origin: :test})
 
-      {agent, []} = WebCrawlerAgent.cmd(agent, {Jido.Identity.Actions.Evolve, %{years: 5}})
+      {:ok, agent, []} = WebCrawlerAgent.cmd(agent, {Jido.Identity.Actions.Evolve, %{years: 5}})
 
       assert Profile.age(agent) == 5
       assert Profile.get(agent, :origin) == :test
     end
   end
 
-  describe "replacing identity plugin with custom implementation" do
-    test "custom plugin auto-initializes identity on agent creation" do
-      agent = PreConfiguredAgent.new()
+  describe "replacing identity slice with custom implementation" do
+    test "custom slice replaces default Identity.Slice" do
+      modules = PreConfiguredAgent.slices()
 
-      assert IdentityAgent.has_identity?(agent)
-      assert Profile.age(agent) == 5
-      assert Profile.get(agent, :origin) == :spawned
-    end
-
-    test "custom plugin replaces default Identity.Plugin" do
-      specs = PreConfiguredAgent.plugin_specs()
-      modules = Enum.map(specs, & &1.module)
-
-      assert CustomIdentityPlugin in modules
-      refute Jido.Identity.Plugin in modules
+      assert CustomIdentitySlice in modules
+      refute Jido.Identity.Slice in modules
     end
   end
 
-  describe "disabling identity plugin" do
-    test "agent with __identity__ disabled has no identity capability" do
+  describe "disabling identity slice" do
+    test "agent with identity disabled has no identity capability" do
       agent = NoIdentityAgent.new()
 
       refute IdentityAgent.has_identity?(agent)
       refute Map.has_key?(agent.state, :identity)
 
-      specs = NoIdentityAgent.plugin_specs()
-      modules = Enum.map(specs, & &1.module)
-      refute Jido.Identity.Plugin in modules
+      modules = NoIdentityAgent.slices()
+      refute Jido.Identity.Slice in modules
     end
   end
 end

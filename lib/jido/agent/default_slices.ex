@@ -1,68 +1,68 @@
-defmodule Jido.Agent.DefaultPlugins do
+defmodule Jido.Agent.DefaultSlices do
   @moduledoc """
-  Resolves default plugin lists for agents.
+  Resolves default slice lists for agents.
 
-  Default plugins are framework-provided singleton plugins that are automatically
-  included in agents. They can be customized at three levels:
+  Default slices are framework-provided singleton slices that are automatically
+  attached to agents. They can be customized at three levels:
 
   1. **Package level** — Jido ships sensible defaults
-  2. **Jido instance level** — `use Jido, default_plugins: [...]` or app config
-  3. **Agent level** — `default_plugins: %{path => false | Module | {Module, config}}`
+  2. **Jido instance level** — `use Jido, default_slices: [...]` or app config
+  3. **Agent level** — `default_slices: %{path => false | Module | {Module, config}}`
 
   ## Framework Defaults
 
-  The framework provides these default plugins:
+  The framework provides these default slices:
 
-      [Jido.Thread.Plugin, Jido.Identity.Plugin, Jido.Memory.Plugin]
+      [Jido.Thread.Slice, Jido.Identity.Slice, Jido.Memory.Slice]
 
   ## Instance-Level Override
 
       # In use Jido macro
-      use Jido, otp_app: :my_app, default_plugins: [MyApp.CustomThreadPlugin]
+      use Jido, otp_app: :my_app, default_slices: [MyApp.CustomThreadSlice]
 
       # Or via app config
-      config :my_app, MyApp.Jido, default_plugins: [MyApp.CustomThreadPlugin]
+      config :my_app, MyApp.Jido, default_slices: [MyApp.CustomThreadSlice]
 
   ## Agent-Level Override
 
-  Agents use a map keyed by the default plugin's `path` atom:
+  Agents use a map keyed by the default slice's `path` atom:
 
       use Jido.Agent,
         name: "my_agent",
-        default_plugins: %{thread: false}
+        default_slices: %{thread: false}
 
   To replace a default with a custom implementation:
 
       use Jido.Agent,
         name: "my_agent",
-        default_plugins: %{thread: MyApp.CustomThreadPlugin}
+        default_slices: %{thread: MyApp.CustomThreadSlice}
 
   Or with configuration:
 
       use Jido.Agent,
         name: "my_agent",
-        default_plugins: %{thread: {MyApp.CustomThreadPlugin, %{max_entries: 100}}}
+        default_slices: %{thread: {MyApp.CustomThreadSlice, %{max_entries: 100}}}
 
   Or disable all defaults:
 
-      use Jido.Agent, name: "bare", default_plugins: false
+      use Jido.Agent, name: "bare", default_slices: false
   """
 
-  @package_defaults [Jido.Thread.Plugin, Jido.Identity.Plugin, Jido.Memory.Plugin]
+  @package_defaults [Jido.Thread.Slice, Jido.Identity.Slice, Jido.Memory.Slice]
 
-  @doc "Returns the framework's default plugin list."
+  @doc "Returns the framework's default slice list."
   @spec package_defaults() :: [module()]
   def package_defaults, do: @package_defaults
 
   @doc """
-  Resolves default plugins for a Jido instance.
+  Resolves default slices for a Jido instance.
 
   This is a macro because `Application.compile_env/3` must be called in the
   module body of the caller, not inside a function.
 
   Priority (highest wins):
-  1. Explicit `default_plugins` option passed to `use Jido`
-  2. App config: `config :otp_app, JidoModule, default_plugins: [...]`
+  1. Explicit `default_slices` option passed to `use Jido`
+  2. App config: `config :otp_app, JidoModule, default_slices: [...]`
   3. Framework defaults
   """
   defmacro resolve_instance_defaults(otp_app, jido_module, explicit_defaults) do
@@ -73,24 +73,24 @@ defmodule Jido.Agent.DefaultPlugins do
         unquote(explicit_defaults)
       else
         app_config = Application.compile_env(unquote(otp_app), unquote(jido_module), [])
-        Keyword.get(app_config, :default_plugins, unquote(Macro.escape(package_defaults)))
+        Keyword.get(app_config, :default_slices, unquote(Macro.escape(package_defaults)))
       end
     end
   end
 
   @doc """
-  Applies agent-level overrides to a list of default plugins.
+  Applies agent-level overrides to a list of default slices.
 
   ## Parameters
 
-  - `defaults` - The resolved default plugin list (from instance or framework)
+  - `defaults` - The resolved default slice list (from instance or framework)
   - `overrides` - Agent-level override specification
 
   ## Override Shapes
 
   - `nil` — no overrides, use all defaults as-is
   - `false` — disable all defaults
-  - `%{path => false}` — exclude the default plugin with that path
+  - `%{path => false}` — exclude the default slice with that path
   - `%{path => Module}` — replace with a different module
   - `%{path => {Module, config}}` — replace with module and config
   """
@@ -103,12 +103,12 @@ defmodule Jido.Agent.DefaultPlugins do
     default_paths = build_path_index(defaults)
     validate_override_keys!(overrides, default_paths)
 
-    Enum.flat_map(defaults, fn plugin_decl ->
-      mod = extract_module(plugin_decl)
+    Enum.flat_map(defaults, fn slice_decl ->
+      mod = extract_module(slice_decl)
       path = mod.path()
 
       case Map.get(overrides, path) do
-        nil -> [plugin_decl]
+        nil -> [slice_decl]
         false -> []
         replacement when is_atom(replacement) -> [replacement]
         {replacement, config} when is_atom(replacement) -> [{replacement, config}]
@@ -132,9 +132,9 @@ defmodule Jido.Agent.DefaultPlugins do
 
       raise CompileError,
         description:
-          "Invalid default_plugins override keys: #{inspect(invalid_keys)}. " <>
+          "Invalid default_slices override keys: #{inspect(invalid_keys)}. " <>
             "Valid keys are: #{valid_keys}. " <>
-            "To add new plugins, use the `plugins:` option instead."
+            "To add new slices, use the `slices:` option instead."
     end
   end
 

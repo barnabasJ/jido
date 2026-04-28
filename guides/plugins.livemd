@@ -87,7 +87,7 @@ defmodule SinglePluginAgent do
   use Jido.Agent,
     name: "single_plugin_agent",
     path: :domain,
-    default_plugins: false,
+    default_slices: false,
     plugins: [CounterPlugin]
 end
 
@@ -147,7 +147,7 @@ defmodule MultiPluginAgent do
   use Jido.Agent,
     name: "multi_plugin_agent",
     path: :domain,
-    default_plugins: false,
+    default_slices: false,
     plugins: [CounterPlugin, GreeterPlugin]
 end
 
@@ -184,7 +184,7 @@ defmodule ConfiguredAgent do
   use Jido.Agent,
     name: "configured_agent",
     path: :domain,
-    default_plugins: false,
+    default_slices: false,
     plugins: [{ConfigurablePlugin, %{enabled: false, max_retries: 5}}]
 end
 
@@ -209,7 +209,7 @@ defmodule MixedSchemaAgent do
   use Jido.Agent,
     name: "mixed_schema_agent",
     path: :domain,
-    default_plugins: false,
+    default_slices: false,
     schema: [
       base_counter: [type: :integer, default: 100],
       base_mode: [type: :atom, default: :initial]
@@ -230,10 +230,10 @@ Memory) that auto-mount on every agent. Three knobs to adjust:
 ```elixir
 # Disable all defaults — used in every example so far:
 defmodule BareAgent do
-  use Jido.Agent, name: "bare", path: :domain, default_plugins: false
+  use Jido.Agent, name: "bare", path: :domain, default_slices: false
 end
 
-IO.inspect(BareAgent.plugins(), label: "default_plugins: false → no plugins")
+IO.inspect(BareAgent.plugins(), label: "default_slices: false → no plugins")
 
 # Keep the defaults (no override):
 defmodule WithDefaultsAgent do
@@ -249,11 +249,11 @@ defmodule OverriddenAgent do
   use Jido.Agent,
     name: "overridden",
     path: :domain,
-    default_plugins: %{thread: false}
+    default_slices: %{thread: false}
 end
 
 IO.inspect(OverriddenAgent.plugins(),
-  label: "default_plugins: %{thread: false} → identity + memory only"
+  label: "default_slices: %{thread: false} → identity + memory only"
 )
 ```
 
@@ -270,7 +270,7 @@ try do
     use Jido.Agent,
       name: "collide",
       path: :counter_plugin,
-      default_plugins: false,
+      default_slices: false,
       plugins: [CounterPlugin]
   end
   """)
@@ -291,7 +291,7 @@ defmodule RoutedCounterAgent do
   use Jido.Agent,
     name: "routed_counter_agent",
     path: :domain,
-    default_plugins: false,
+    default_slices: false,
     plugins: [CounterPlugin]
 
   def signal_routes(_ctx) do
@@ -358,7 +358,7 @@ defmodule MetricsAgent do
   use Jido.Agent,
     name: "metrics_agent",
     path: :domain,
-    default_plugins: false,
+    default_slices: false,
     plugins: [MetricsPlugin],
     middleware: [MetricsPlugin]
 

@@ -1,12 +1,12 @@
-defmodule JidoExampleTest.ThreadPluginTest do
+defmodule JidoExampleTest.ThreadSliceTest do
   @moduledoc """
-  Example test demonstrating Thread as a default plugin and conversation history patterns.
+  Example test demonstrating Thread as a default slice and conversation history patterns.
 
   This test shows:
-  - Every agent gets `Jido.Thread.Plugin` automatically (default singleton plugin)
+  - Every agent gets `Jido.Thread.Slice` automatically (default singleton slice)
   - Using `Jido.Thread.Agent` helpers: `ensure/2`, `append/3`, `get/1`, `has_thread?/1`
   - Actions that build conversation history using Thread
-  - Disabling the thread plugin with `default_plugins: %{thread: false}`
+  - Disabling the thread slice with `default_slices: %{thread: false}`
   - The strategy layer auto-tracks instruction_start/instruction_end when thread exists
 
   Run with: mix test --include example
@@ -75,7 +75,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
     use Jido.Agent,
       name: "chat_agent",
       path: :domain,
-      description: "Agent with default thread plugin for conversation history",
+      description: "Agent with default thread slice for conversation history",
       schema: [
         last_role: [type: :string, default: nil],
         summary: [type: :string, default: nil]
@@ -94,8 +94,8 @@ defmodule JidoExampleTest.ThreadPluginTest do
     use Jido.Agent,
       name: "stateless_agent",
       path: :domain,
-      description: "Agent with thread plugin explicitly disabled",
-      default_plugins: %{thread: false},
+      description: "Agent with thread slice explicitly disabled",
+      default_slices: %{thread: false},
       schema: [
         value: [type: :integer, default: 0]
       ]
@@ -105,7 +105,7 @@ defmodule JidoExampleTest.ThreadPluginTest do
   # TESTS
   # ===========================================================================
 
-  describe "thread plugin is a default singleton" do
+  describe "thread slice is a default singleton" do
     test "new agent has no thread until initialized on demand" do
       agent = ChatAgent.new()
 
@@ -173,8 +173,8 @@ defmodule JidoExampleTest.ThreadPluginTest do
     end
   end
 
-  describe "disabling thread plugin" do
-    test "agent with default_plugins: %{thread: false} has no thread capability" do
+  describe "disabling thread slice" do
+    test "agent with default_slices: %{thread: false} has no thread capability" do
       agent = StatelessAgent.new()
 
       refute ThreadAgent.has_thread?(agent)

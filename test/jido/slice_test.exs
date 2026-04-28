@@ -109,7 +109,7 @@ defmodule JidoTest.SliceTest do
       use Jido.Agent,
         name: "schema_agent",
         path: :app,
-        default_plugins: false,
+        default_slices: false,
         plugins: [JidoTest.SliceTest.SchemaSlice]
     end
 
@@ -124,7 +124,7 @@ defmodule JidoTest.SliceTest do
         use Jido.Agent,
           name: "schema_agent_configured",
           path: :app,
-          default_plugins: false,
+          default_slices: false,
           plugins: [{JidoTest.SliceTest.SchemaSlice, %{counter: 42}}]
       end
 

@@ -1,4 +1,4 @@
-defmodule Jido.Thread.Plugin do
+defmodule Jido.Thread.Slice do
   @moduledoc """
   Default singleton slice for thread state management.
 
@@ -9,12 +9,12 @@ defmodule Jido.Thread.Plugin do
   ## Singleton
 
   This slice is a singleton — it cannot be aliased or duplicated. It is
-  automatically included as a default plugin for all agents unless explicitly
+  automatically included as a default slice for all agents unless explicitly
   disabled:
 
       use Jido.Agent,
         name: "minimal",
-        default_plugins: %{thread: false}
+        default_slices: %{thread: false}
 
   ## State Key
 

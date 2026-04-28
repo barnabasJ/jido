@@ -68,7 +68,7 @@ defmodule HarnessAgent do
   use Jido.Agent,
     name: "ccl_harness",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     schema: []
 
   def signal_routes(_ctx), do: [{"emit", EmitDirective}]
@@ -353,7 +353,7 @@ defmodule OrphanReadyAgent do
   use Jido.Agent,
     name: "ccl_orphan_ready",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     schema: []
 end
 

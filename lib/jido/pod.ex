@@ -61,11 +61,11 @@ defmodule Jido.Pod do
     raw_topology = Keyword.get(opts, :topology, %{})
     topology = Definition.resolve_topology!(name, raw_topology, __CALLER__)
 
-    default_plugins =
-      Definition.expand_and_eval_literal_option(Keyword.get(opts, :default_plugins), __CALLER__)
+    default_slices =
+      Definition.expand_and_eval_literal_option(Keyword.get(opts, :default_slices), __CALLER__)
 
-    {pod_plugins, remaining_default_plugins} =
-      Definition.split_pod_plugins!(default_plugins, __CALLER__)
+    {pod_plugins, remaining_default_slices} =
+      Definition.split_pod_plugins!(default_slices, __CALLER__)
 
     user_plugins =
       Definition.expand_and_eval_literal_option(Keyword.get(opts, :plugins, []), __CALLER__)
@@ -76,10 +76,10 @@ defmodule Jido.Pod do
       |> Keyword.put(:plugins, pod_plugins ++ (user_plugins || []))
       |> Keyword.put_new(:path, :app)
       |> then(fn resolved_opts ->
-        if is_nil(remaining_default_plugins) do
-          Keyword.delete(resolved_opts, :default_plugins)
+        if is_nil(remaining_default_slices) do
+          Keyword.delete(resolved_opts, :default_slices)
         else
-          Keyword.put(resolved_opts, :default_plugins, remaining_default_plugins)
+          Keyword.put(resolved_opts, :default_slices, remaining_default_slices)
         end
       end)
 

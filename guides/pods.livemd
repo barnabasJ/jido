@@ -53,14 +53,14 @@ defmodule WorkerAgent do
   use Jido.Agent,
     name: "pods_demo_worker",
     path: :domain,
-    default_plugins: false,
+    default_slices: false,
     schema: [
       role: [type: :string, default: "worker"]
     ]
 end
 
 defmodule ReviewPod do
-  use Jido.Pod, name: "pods_demo_pod", default_plugins: false
+  use Jido.Pod, name: "pods_demo_pod", default_slices: false
 end
 ```
 

@@ -76,7 +76,7 @@ defmodule CounterAgent do
   use Jido.Agent,
     name: "counter",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     plugins: [SimpleSlice]
 end
 
@@ -259,7 +259,7 @@ defmodule MultiSliceAgent do
   use Jido.Agent,
     name: "multi_slice",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     plugins: [SimpleSlice, Audit.Slice]
 end
 
@@ -300,7 +300,7 @@ defmodule HarnessAgent do
   use Jido.Agent,
     name: "directive_harness",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     schema: [],
     plugins: [ObservedSlice]
 end
@@ -327,7 +327,7 @@ defmodule SpawnAgent.Demo do
   use Jido.Agent,
     name: "spawn_agent_demo",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     plugins: [ObservedSlice]
 
   def signal_routes(_ctx), do: [{"spawn.worker", Spawn.Worker}]
@@ -482,7 +482,7 @@ defmodule RunInstrAgent do
   use Jido.Agent,
     name: "run_instr_agent",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     plugins: [ObservedSlice]
 
   def signal_routes(_ctx) do

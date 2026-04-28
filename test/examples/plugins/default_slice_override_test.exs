@@ -1,13 +1,13 @@
-defmodule JidoExampleTest.DefaultPluginOverrideTest do
+defmodule JidoExampleTest.DefaultSliceOverrideTest do
   @moduledoc """
-  Example test demonstrating how to override, replace, or disable default plugins.
+  Example test demonstrating how to override, replace, or disable default slices.
 
   This test shows:
-  - Default plugins (like Jido.Thread.Plugin) are auto-included in all agents
-  - Replacing a default plugin with a custom implementation via `default_plugins: %{}`
-  - Passing config to a replacement plugin
-  - Disabling a specific default plugin
-  - Disabling all default plugins entirely
+  - Default slices (like Jido.Thread.Slice) are auto-included in all agents
+  - Replacing a default slice with a custom implementation via `default_slices: %{}`
+  - Passing config to a replacement slice
+  - Disabling a specific default slice
+  - Disabling all default slices entirely
 
   Run with: mix test --include example
   """
@@ -17,24 +17,26 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
   @moduletag timeout: 15_000
 
   # ===========================================================================
-  # PLUGINS: Custom replacement for Jido.Thread.Plugin
+  # SLICES: Custom replacement for Jido.Thread.Slice
   # ===========================================================================
 
-  defmodule CustomThreadPlugin do
+  defmodule CustomThreadSlice do
     @moduledoc false
-    use Jido.Plugin,
+    use Jido.Slice,
       name: "custom_thread",
       path: :thread,
       actions: [],
-      description: "Custom replacement for the default thread plugin."
-
-    def mount(_agent, config) do
-      {:ok, %{custom_initialized: true, max_entries: Map.get(config, :max_entries, 500)}}
-    end
+      singleton: true,
+      schema:
+        Zoi.object(%{
+          custom_initialized: Zoi.boolean() |> Zoi.default(true),
+          max_entries: Zoi.integer() |> Zoi.default(500)
+        }),
+      description: "Custom replacement for the default thread slice."
   end
 
   # ===========================================================================
-  # AGENTS: Various default_plugins configurations
+  # AGENTS: Various default_slices configurations
   # ===========================================================================
 
   defmodule DefaultAgent do
@@ -42,7 +44,7 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
     use Jido.Agent,
       name: "default_agent",
       path: :domain,
-      description: "Plain agent — gets Thread.Plugin automatically",
+      description: "Plain agent — gets Thread.Slice automatically",
       schema: [
         status: [type: :atom, default: :idle]
       ]
@@ -53,11 +55,11 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
     use Jido.Agent,
       name: "overridden_agent",
       path: :domain,
-      description: "Replaces Thread.Plugin with CustomThreadPlugin",
+      description: "Replaces Thread.Slice with CustomThreadSlice",
       schema: [
         status: [type: :atom, default: :idle]
       ],
-      default_plugins: %{thread: CustomThreadPlugin}
+      default_slices: %{thread: CustomThreadSlice}
   end
 
   defmodule ConfiguredAgent do
@@ -65,11 +67,11 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
     use Jido.Agent,
       name: "configured_agent",
       path: :domain,
-      description: "Replaces Thread.Plugin with CustomThreadPlugin + config",
+      description: "Replaces Thread.Slice with CustomThreadSlice + config",
       schema: [
         status: [type: :atom, default: :idle]
       ],
-      default_plugins: %{thread: {CustomThreadPlugin, %{max_entries: 50}}}
+      default_slices: %{thread: {CustomThreadSlice, %{max_entries: 50}}}
   end
 
   defmodule DisabledAgent do
@@ -77,11 +79,11 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
     use Jido.Agent,
       name: "disabled_agent",
       path: :domain,
-      description: "Disables only the __thread__ default plugin",
+      description: "Disables only the thread default slice",
       schema: [
         status: [type: :atom, default: :idle]
       ],
-      default_plugins: %{thread: false}
+      default_slices: %{thread: false}
   end
 
   defmodule BareAgent do
@@ -89,38 +91,38 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
     use Jido.Agent,
       name: "bare_agent",
       path: :domain,
-      description: "Disables all default plugins entirely",
+      description: "Disables all default slices entirely",
       schema: [
         status: [type: :atom, default: :idle]
       ],
-      default_plugins: false
+      default_slices: false
   end
 
   # ===========================================================================
   # TESTS
   # ===========================================================================
 
-  describe "default plugins are auto-included" do
-    test "default agent includes Thread.Plugin and Identity.Plugin in plugin_specs" do
-      specs = DefaultAgent.plugin_specs()
-      modules = Enum.map(specs, & &1.module)
+  describe "default slices are auto-included" do
+    test "default agent includes Thread.Slice and Identity.Slice in slices" do
+      modules = DefaultAgent.slices()
 
-      assert Jido.Thread.Plugin in modules
-      assert Jido.Identity.Plugin in modules
+      assert Jido.Thread.Slice in modules
+      assert Jido.Identity.Slice in modules
     end
   end
 
-  describe "replacing a default plugin" do
-    test "overridden agent uses CustomThreadPlugin instead of Thread.Plugin" do
+  describe "replacing a default slice" do
+    test "overridden agent uses CustomThreadSlice instead of Thread.Slice" do
       agent = OverriddenAgent.new()
-      specs = OverriddenAgent.plugin_specs()
+      modules = OverriddenAgent.slices()
 
-      assert hd(specs).module == CustomThreadPlugin
+      assert CustomThreadSlice in modules
+      refute Jido.Thread.Slice in modules
       assert agent.state.thread.custom_initialized == true
       assert agent.state.thread.max_entries == 500
     end
 
-    test "configured agent receives config in mount/2" do
+    test "configured agent receives config when seeding initial slice state" do
       agent = ConfiguredAgent.new()
 
       assert agent.state.thread.custom_initialized == true
@@ -128,20 +130,19 @@ defmodule JidoExampleTest.DefaultPluginOverrideTest do
     end
   end
 
-  describe "disabling default plugins" do
+  describe "disabling default slices" do
     test "disabled agent does not have :thread in state" do
       agent = DisabledAgent.new()
-      specs = DisabledAgent.plugin_specs()
-      modules = Enum.map(specs, & &1.module)
+      modules = DisabledAgent.slices()
 
-      refute Jido.Thread.Plugin in modules
+      refute Jido.Thread.Slice in modules
       refute Map.has_key?(agent.state, :thread)
     end
 
     test "bare agent with all defaults disabled does not have :thread" do
       agent = BareAgent.new()
 
-      assert BareAgent.plugin_specs() == []
+      assert BareAgent.slice_instances() == []
       refute Map.has_key?(agent.state, :thread)
     end
   end

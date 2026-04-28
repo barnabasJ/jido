@@ -62,7 +62,7 @@ defmodule CounterAgent do
   use Jido.Agent,
     name: "counter_agent",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     plugins: [{CounterSlice, %{}}],
     signal_routes: [
       {"counter.increment", Counter.Increment}
@@ -161,7 +161,7 @@ defmodule SchemaAgent do
   use Jido.Agent,
     name: "schema_agent",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     plugins: [SchemaSlice]
 end
 
@@ -179,7 +179,7 @@ defmodule SchemaAgentConfigured do
   use Jido.Agent,
     name: "schema_agent_configured",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     plugins: [{SchemaSlice, %{counter: 42}}]
 end
 
@@ -262,7 +262,7 @@ defmodule MultiSliceAgent do
   use Jido.Agent,
     name: "multi_slice_agent",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     plugins: [CounterSlice, AuditSlice]
 end
 
@@ -290,7 +290,7 @@ defmodule RoutedMultiSliceAgent do
   use Jido.Agent,
     name: "routed_multi_slice_agent",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     plugins: [CounterSlice, AuditSlice]
 
   def signal_routes(_ctx) do

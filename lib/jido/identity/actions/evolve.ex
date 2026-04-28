@@ -4,7 +4,7 @@ defmodule Jido.Identity.Actions.Evolve do
 
   Advances the identity slice through simulated time, accumulating
   experiences and changes over days or years. Operates on the `:identity`
-  slice — see `Jido.Identity.Plugin`.
+  slice — see `Jido.Identity.Slice`.
   """
 
   use Jido.Action,

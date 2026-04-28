@@ -141,7 +141,7 @@ The default pod plugin is `Jido.Pod.Plugin`.
 - It persists the resolved topology snapshot as ordinary agent state.
 - It advertises the `:pod` capability.
 
-You can replace it through the normal `default_plugins` override path:
+You can replace it through the normal `default_slices` override path:
 
 ```elixir
 defmodule MyApp.CustomPod do
@@ -150,7 +150,7 @@ defmodule MyApp.CustomPod do
     topology: %{
       worker: %{agent: MyApp.WorkerAgent, manager: :workers}
     },
-    default_plugins: %{__pod__: MyApp.CustomPodPlugin}
+    default_slices: %{__pod__: MyApp.CustomPodPlugin}
 end
 ```
 

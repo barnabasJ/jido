@@ -67,7 +67,7 @@ defmodule CounterAgent do
   use Jido.Agent,
     name: "ccas_counter",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     schema: [
       count: [type: :integer, default: 0],
       status: [type: :atom, default: :idle]
@@ -140,7 +140,7 @@ defmodule FailingAgent do
   use Jido.Agent,
     name: "ccas_failing_agent",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     schema: []
 
   def signal_routes(_ctx), do: [{"fail", Failing}]
@@ -388,7 +388,7 @@ defmodule RetryingAgent do
   use Jido.Agent,
     name: "ccas_retrying",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     schema: [status: [type: :atom, default: :idle]],
     middleware: [{Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}]
 

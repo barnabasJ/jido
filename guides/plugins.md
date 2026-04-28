@@ -95,10 +95,10 @@ the Middleware as the `opts` callback arg.
 
 Concrete examples:
 
-- `Jido.Thread.Plugin` — chat history. Slice (state). The Plugin macro is
-  used because the persistence transform `to_persistable/1` /
-  `from_persistable/1` lives in the same module; it has no `on_signal`
-  hook, so it's effectively Slice-only.
+- `Jido.Thread.Slice` — chat history. Slice (state) plus the
+  `Jido.Persist.Transform` behaviour (`externalize/1` / `reinstate/1`)
+  for compact on-disk shape. No middleware half, so it's a bare slice
+  attached via `slices:` (default).
 - `Jido.Middleware.Persister` — hibernate/thaw. Middleware (no slice).
 - `Jido.Plugin.FSM` — finite-state machine. Slice. (Despite the
   "Plugin" name, this one is `use Jido.Slice` because there's no
@@ -263,6 +263,6 @@ router gets you to the action; the action decides what to do.
 - [Slices guide](slices.md) — the pure data tier
 - [Middleware guide](middleware.md) — the wrap tier
 - [Migration guide](migration.md) — full pre-0014 → new shape recipes
-- [`Jido.Thread.Plugin`](../lib/jido/thread/plugin.ex) — in-tree slice example
+- [`Jido.Thread.Slice`](../lib/jido/thread/slice.ex) — in-tree slice example
 - [`Jido.Middleware.Persister`](../lib/jido/middleware/persister.ex) — in-tree middleware example
 - [`Jido.Plugin.FSM`](../lib/jido/plugin/fsm.ex) — in-tree slice that's named "Plugin" for legacy reasons

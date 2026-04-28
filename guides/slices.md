@@ -62,8 +62,8 @@ The agent struct's `state` is flat: each slice owns one key.
 agent.state == %{
   domain: %{...},      # the agent's own slice (declared on use Jido.Agent)
   chat: %{...},        # MyApp.ChatSlice
-  thread: %{...},      # Jido.Thread.Plugin
-  identity: %{...}     # Jido.Identity.Plugin
+  thread: %{...},      # Jido.Thread.Slice
+  identity: %{...}     # Jido.Identity.Slice
 }
 ```
 
@@ -79,9 +79,10 @@ ADR 0014; see [the migration guide](migration.md) for the recipe).
 
 ## Composing slices on an agent
 
-Declare slices on an agent via the `plugins:` keyword. (`Jido.Plugin` is just
-`use Jido.Slice` + `use Jido.Middleware`; for a Slice-only module, declare
-the same way — slices and plugins share the keyword.)
+Declare bare slices on an agent via the `slices:` keyword. Bare slices
+register their `signal_routes/0` with absolute paths — no plugin-style
+prefixing. Plugins (`use Jido.Plugin` = Slice + Middleware) go in
+`plugins:` instead.
 
 ```elixir
 defmodule MyApp.Agent do
@@ -89,17 +90,18 @@ defmodule MyApp.Agent do
     name: "my_agent",
     path: :app,
     schema: [counter: [type: :integer, default: 0]],
-    plugins: [
+    slices: [
       MyApp.ChatSlice,
-      {MyApp.ChatSlice, as: :support, model: "gpt-4o"},
-      Jido.Thread.Plugin
+      {MyApp.ChatSlice, model: "gpt-4o"},
+      Jido.Thread.Slice
     ]
 end
 ```
 
-`as: :support` produces a derived path `:chat_support` and route prefix
-`"support.chat"`. Two instances of the same Slice can run side-by-side as
-long as the slice is not declared `singleton: true`.
+Bare slices are unaliased (single-instance) in v1; the `as:` field is
+reserved on `Jido.Slice.Instance` for a future multi-instance design but
+not wired today. For multi-instance support, use a `use Jido.Plugin`
+module under `plugins:` (the plugin machinery has full `as:` support).
 
 Path collisions raise at compile time:
 

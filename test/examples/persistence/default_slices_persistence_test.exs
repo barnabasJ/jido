@@ -1,14 +1,14 @@
-defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
+defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
   @moduledoc """
-  Example test verifying that all three default plugins (Thread, Identity, Memory)
+  Example test verifying that all three default slices (Thread, Identity, Memory)
   properly survive a hibernate/thaw cycle.
 
   This test shows:
-  - Identity plugin state (:keep) is preserved through checkpoint round-trip
-  - Memory plugin state (:keep) is preserved through checkpoint round-trip
-  - Thread plugin state (:externalize) is stored separately and rehydrated
-  - All three plugins together survive a full hibernate/thaw cycle
-  - Agents with no plugin state initialized still round-trip correctly
+  - Identity slice state (:keep) is preserved through checkpoint round-trip
+  - Memory slice state (:keep) is preserved through checkpoint round-trip
+  - Thread slice state (:externalize) is stored separately and rehydrated
+  - All three slices together survive a full hibernate/thaw cycle
+  - Agents with no slice state initialized still round-trip correctly
 
   Run with: mix test --include example
   """
@@ -33,7 +33,7 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
     use Jido.Agent,
       name: "full_agent",
       path: :domain,
-      description: "Agent with all three default plugins for persistence testing",
+      description: "Agent with all three default slices for persistence testing",
       schema: [
         counter: [type: :integer, default: 0],
         status: [type: :atom, default: :idle]
@@ -44,7 +44,7 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
   # HELPERS
   # ===========================================================================
 
-  defp unique_table, do: :"default_plugins_persist_#{System.unique_integer([:positive])}"
+  defp unique_table, do: :"default_slices_persist_#{System.unique_integer([:positive])}"
 
   defp storage(table), do: {ETS, table: table}
 
@@ -100,12 +100,12 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
     end
   end
 
-  describe "all three plugins together survive hibernate/thaw" do
+  describe "all three slices together survive hibernate/thaw" do
     test "comprehensive round-trip with identity, memory, and thread" do
       table = unique_table()
 
       agent =
-        FullAgent.new(id: "all-plugins-1")
+        FullAgent.new(id: "all-slices-1")
         |> IdentityAgent.ensure(profile: %{age: 3, origin: :spawned})
         |> MemoryAgent.ensure()
         |> MemoryAgent.put_in_space(:world, :temperature, 18)
@@ -117,7 +117,7 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
       agent = %{agent | state: %{agent.state | counter: 42, status: :processing}}
 
       :ok = Persist.hibernate(storage(table), agent)
-      {:ok, restored} = Persist.thaw(storage(table), FullAgent, "all-plugins-1")
+      {:ok, restored} = Persist.thaw(storage(table), FullAgent, "all-slices-1")
 
       # Identity preserved
       assert IdentityAgent.has_identity?(restored)
@@ -142,15 +142,15 @@ defmodule JidoExampleTest.DefaultPluginsPersistenceTest do
     end
   end
 
-  describe "plugins without state survive hibernate/thaw" do
-    test "agent with no plugin state initialized round-trips correctly" do
+  describe "slices without state survive hibernate/thaw" do
+    test "agent with no slice state initialized round-trips correctly" do
       table = unique_table()
 
-      agent = FullAgent.new(id: "no-plugins-1")
+      agent = FullAgent.new(id: "no-slices-1")
       agent = %{agent | state: %{agent.state | counter: 7}}
 
       :ok = Persist.hibernate(storage(table), agent)
-      {:ok, restored} = Persist.thaw(storage(table), FullAgent, "no-plugins-1")
+      {:ok, restored} = Persist.thaw(storage(table), FullAgent, "no-slices-1")
 
       assert restored.state.domain.counter == 7
       refute IdentityAgent.has_identity?(restored)

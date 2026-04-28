@@ -289,7 +289,7 @@ defmodule RetryingAgent do
   use Jido.Agent,
     name: "retrying_agent",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     schema: [
       value: [type: :integer, default: 0],
       status: [type: :atom, default: :idle]

@@ -138,6 +138,7 @@ defmodule Jido.Agent do
   alias Jido.Instruction
   alias Jido.Plugin.Instance, as: PluginInstance
   alias Jido.Plugin.Requirements, as: PluginRequirements
+  alias Jido.Slice.Instance, as: SliceInstance
 
   @doc false
   def expand_aliases_in_ast(ast, caller_env) do
@@ -292,6 +293,12 @@ defmodule Jido.Agent do
                                description: "Plugin modules or {module, config} tuples"
                              )
                              |> Zoi.default([]),
+                           slices:
+                             Zoi.list(Zoi.any(),
+                               description:
+                                 "Bare slice modules or {Module, config} tuples — each must `use Jido.Slice` and not `use Jido.Plugin`"
+                             )
+                             |> Zoi.default([]),
                            middleware:
                              Zoi.list(Zoi.any(),
                                description:
@@ -304,10 +311,10 @@ defmodule Jido.Agent do
                                  "Compile-time signal route table. Each route maps signal type/pattern to an action target."
                              )
                              |> Zoi.default([]),
-                           default_plugins:
+                           default_slices:
                              Zoi.any(
                                description:
-                                 "Override default plugins. false to disable all, or map of %{path => false | Module | {Module, config}}"
+                                 "Override default slices. false to disable all, or map of %{path => false | Module | {Module, config}}"
                              )
                              |> Zoi.optional(),
                            schedules:
@@ -510,7 +517,22 @@ defmodule Jido.Agent do
       @spec plugin_instances() :: [Jido.Plugin.Instance.t()]
       def plugin_instances, do: @plugin_instances
 
-      @doc "Returns the list of actions from all attached plugins."
+      @doc """
+      Returns the list of bare-slice modules attached to this agent
+      (deduplicated). Includes framework default slices.
+      """
+      @spec slices() :: [module()]
+      def slices do
+        @slice_instances
+        |> Enum.map(& &1.module)
+        |> Enum.uniq()
+      end
+
+      @doc "Returns the list of slice instances attached to this agent."
+      @spec slice_instances() :: [Jido.Slice.Instance.t()]
+      def slice_instances, do: @slice_instances
+
+      @doc "Returns the list of actions from all attached plugins and slices."
       @spec actions() :: [module()]
       def actions, do: @plugin_actions
     end
@@ -519,10 +541,11 @@ defmodule Jido.Agent do
   defp __quoted_computed_plugin_accessors__ do
     quote location: :keep do
       @doc """
-      Returns the union of all capabilities from all mounted plugin instances.
+      Returns the union of all capabilities from all mounted plugin and
+      slice instances.
 
       Capabilities are atoms describing what the agent can do based on its
-      mounted plugins.
+      mounted plugins and slices.
 
       ## Example
 
@@ -531,7 +554,7 @@ defmodule Jido.Agent do
       """
       @spec capabilities() :: [atom()]
       def capabilities do
-        @plugin_instances
+        (@plugin_instances ++ @slice_instances)
         |> Enum.flat_map(fn instance -> instance.manifest.capabilities || [] end)
         |> Enum.uniq()
       end
@@ -712,9 +735,12 @@ defmodule Jido.Agent do
 
       # Seeds the initial agent state from declared slices. The agent's own
       # slice (under `path()`) gets schema defaults plus user-supplied state.
-      # Each declared plugin/slice gets `(plugin_config + user-supplied
-      # state_for_path)` shallow-merged, then validated through the slice's
-      # Zoi schema if present. See ADR 0014 (no deep-merge, no mount/2).
+      # Each declared plugin and bare slice gets `(config + user-supplied
+      # state_for_path)` shallow-merged, then validated through the
+      # slice's Zoi schema if present. See ADR 0014 (no deep-merge, no
+      # mount/2). Bare slices (from `slices:`) and plugins (from `plugins:`)
+      # seed identically — the difference is that bare slices register their
+      # signal_routes with absolute paths, no plugin-style prefixing.
       defp __build_initial_state__(opts) do
         user_state = __wrap_user_state__(opts[:state] || %{})
 
@@ -722,26 +748,31 @@ defmodule Jido.Agent do
         own_user = Map.get(user_state, own_path, %{})
         own_slice = Jido.Agent.__seed_own_slice__(@validated_opts[:schema], own_user)
 
-        plugin_slices =
-          Enum.reduce(@plugin_instances, %{}, fn instance, acc ->
-            user_for_slice = Map.get(user_state, instance.path) || %{}
-            merged_input = Map.merge(instance.config || %{}, user_for_slice)
-            slice = Jido.Agent.__seed_plugin_slice__(instance.module, merged_input)
-            Map.put(acc, instance.path, slice)
-          end)
+        plugin_slices = __seed_slice_states__(@plugin_instances, user_state)
+        bare_slice_states = __seed_slice_states__(@slice_instances, user_state)
 
         # Drop slice-owned keys from user_state, preserve everything else as
         # top-level scratch state (state-ops can target it via SetPath/DeletePath/...).
-        known_slice_paths = [own_path | @plugin_paths]
+        known_slice_paths = [own_path | @plugin_paths ++ @slice_paths]
         leftover = Map.drop(user_state, known_slice_paths)
 
         leftover
         |> Map.merge(plugin_slices)
+        |> Map.merge(bare_slice_states)
         |> Map.put(own_path, own_slice)
       end
 
+      defp __seed_slice_states__(instances, user_state) do
+        Enum.reduce(instances, %{}, fn instance, acc ->
+          user_for_slice = Map.get(user_state, instance.path) || %{}
+          merged_input = Map.merge(instance.config || %{}, user_for_slice)
+          slice = Jido.Agent.__seed_plugin_slice__(instance.module, merged_input)
+          Map.put(acc, instance.path, slice)
+        end)
+      end
+
       defp __wrap_user_state__(%{} = user_state) do
-        known_slices = [path() | @plugin_paths]
+        known_slices = [path() | @plugin_paths ++ @slice_paths]
 
         cond do
           map_size(user_state) == 0 ->
@@ -1046,6 +1077,8 @@ defmodule Jido.Agent do
                      plugins: 0,
                      plugin_specs: 0,
                      plugin_instances: 0,
+                     slices: 0,
+                     slice_instances: 0,
                      actions: 0,
                      capabilities: 0,
                      signal_types: 0,
@@ -1067,160 +1100,16 @@ defmodule Jido.Agent do
     utility_functions = Agent.__quoted_utility_functions__()
     callbacks = Agent.__quoted_callbacks__()
 
-    # Build compile-time validation and module attributes as a separate smaller block
-    compile_time_setup =
-      quote location: :keep do
-        # Validate config at compile time
-        @validated_opts (case Zoi.parse(Agent.config_schema(), Map.new(unquote(opts))) do
-                           {:ok, validated} ->
-                             validated
-
-                           {:error, errors} ->
-                             message =
-                               "Invalid Agent configuration for #{inspect(__MODULE__)}: #{inspect(errors)}"
-
-                             raise CompileError,
-                               description: message,
-                               file: __ENV__.file,
-                               line: __ENV__.line
-                         end)
-
-        @expanded_signal_routes Jido.Agent.expand_and_eval_literal_option(
-                                  @validated_opts[:signal_routes] || [],
-                                  __ENV__
-                                )
-
-        @default_plugin_list Jido.Agent.__resolve_default_plugins__(@validated_opts)
-        @all_plugin_decls @default_plugin_list ++ (@validated_opts[:plugins] || [])
-        @plugin_instances Jido.Agent.__normalize_plugin_instances__(@all_plugin_decls)
-
-        @singleton_alias_violations @plugin_instances
-                                    |> Enum.filter(fn inst ->
-                                      inst.module.singleton?() and inst.as != nil
-                                    end)
-        if @singleton_alias_violations != [] do
-          modules =
-            Enum.map(@singleton_alias_violations, & &1.module) |> Enum.map(&inspect/1)
-
-          raise CompileError,
-            description: "Cannot alias singleton plugins: #{Enum.join(modules, ", ")}",
-            file: __ENV__.file,
-            line: __ENV__.line
-        end
-
-        @singleton_modules @plugin_instances
-                           |> Enum.filter(fn inst -> inst.module.singleton?() end)
-                           |> Enum.map(& &1.module)
-        @duplicate_singletons @singleton_modules -- Enum.uniq(@singleton_modules)
-        if @duplicate_singletons != [] do
-          raise CompileError,
-            description:
-              "Duplicate singleton plugins: #{inspect(Enum.uniq(@duplicate_singletons))}",
-            file: __ENV__.file,
-            line: __ENV__.line
-        end
-
-        # Build plugin specs from instances (with the instance path).
-        @plugin_specs Enum.map(@plugin_instances, fn instance ->
-                        spec = instance.module.plugin_spec(instance.config)
-                        %{spec | path: instance.path}
-                      end)
-
-        # Validate unique slice paths across the agent and every declared
-        # plugin. Path = agent.path() ++ each plugin.path(). A duplicate
-        # raises Jido.Agent.PathConflictError at Agent.new/1 today, but we
-        # fail fast at compile time when the conflict is statically known.
-        @plugin_paths Enum.map(@plugin_instances, & &1.path)
-        @all_slice_paths [@validated_opts.path | @plugin_paths]
-        @duplicate_paths @all_slice_paths -- Enum.uniq(@all_slice_paths)
-        if @duplicate_paths != [] do
-          raise CompileError,
-            description: "Duplicate slice paths: #{inspect(Enum.uniq(@duplicate_paths))}",
-            file: __ENV__.file,
-            line: __ENV__.line
-        end
-
-        # Merge schemas: base schema + nested plugin schemas
-        @merged_schema Jido.Agent.Schema.merge_with_plugins(
-                         @validated_opts[:schema],
-                         @plugin_specs
-                       )
-
-        # Aggregate actions from plugins
-        @plugin_actions @plugin_specs |> Enum.flat_map(& &1.actions) |> Enum.uniq()
-
-        # Expand routes from all plugin instances
-        @expanded_plugin_routes Enum.flat_map(
-                                  @plugin_instances,
-                                  &Jido.Plugin.Routes.expand_routes/1
-                                )
-
-        # Expand schedules from all plugin instances
-        @expanded_plugin_schedules Enum.flat_map(
-                                     @plugin_instances,
-                                     &Jido.Plugin.Schedules.expand_schedules/1
-                                   )
-
-        # Generate routes for schedule signal types (low priority)
-        @schedule_routes Enum.flat_map(
-                           @plugin_instances,
-                           &Jido.Plugin.Schedules.schedule_routes/1
-                         )
-
-        # Expand agent-level schedules from the `schedules:` option
-        @expanded_agent_schedules Jido.Agent.Schedules.expand_schedules(
-                                    @validated_opts[:schedules] || [],
-                                    @validated_opts[:name]
-                                  )
-
-        # Generate routes for agent schedule signal types
-        @agent_schedule_routes Jido.Agent.Schedules.schedule_routes(@expanded_agent_schedules)
-
-        # Combine routes and schedule routes for conflict detection
-        @all_plugin_routes @expanded_plugin_routes ++ @schedule_routes ++ @agent_schedule_routes
-
-        @plugin_routes_result Jido.Plugin.Routes.detect_conflicts(@all_plugin_routes)
-        case @plugin_routes_result do
-          {:error, conflicts} ->
-            conflict_list = Enum.join(conflicts, "\n  - ")
-
-            raise CompileError,
-              description: "Route conflicts detected:\n  - #{conflict_list}",
-              file: __ENV__.file,
-              line: __ENV__.line
-
-          {:ok, _routes} ->
-            :ok
-        end
-
-        @validated_plugin_routes elem(@plugin_routes_result, 1)
-
-        # Validate plugin requirements at compile time
-        @plugin_config_map Enum.reduce(@plugin_instances, %{}, fn instance, acc ->
-                             Map.put(acc, instance.path, instance.config)
-                           end)
-        @requirements_result Jido.Plugin.Requirements.validate_all_requirements(
-                               @plugin_instances,
-                               @plugin_config_map
-                             )
-        case @requirements_result do
-          {:error, missing_by_plugin} ->
-            error_msg = PluginRequirements.format_error(missing_by_plugin)
-
-            raise CompileError,
-              description: error_msg,
-              file: __ENV__.file,
-              line: __ENV__.line
-
-          {:ok, :valid} ->
-            :ok
-        end
-      end
+    compile_time_options = Agent.__quoted_compile_options__(opts)
+    compile_time_instances = Agent.__quoted_compile_instances__()
+    compile_time_aggregates = Agent.__quoted_compile_aggregates__()
 
     # Combine all blocks using unquote
     quote location: :keep do
       unquote(module_setup)
-      unquote(compile_time_setup)
+      unquote(compile_time_options)
+      unquote(compile_time_instances)
+      unquote(compile_time_aggregates)
       unquote(basic_accessors)
       unquote(plugin_accessors)
       unquote(plugin_config_accessors)
@@ -1232,24 +1121,215 @@ defmodule Jido.Agent do
   end
 
   @doc false
+  @spec __quoted_compile_options__(keyword() | Macro.t()) :: Macro.t()
+  def __quoted_compile_options__(opts) do
+    quote location: :keep do
+      # Validate config at compile time
+      @validated_opts (case Zoi.parse(Agent.config_schema(), Map.new(unquote(opts))) do
+                         {:ok, validated} ->
+                           validated
+
+                         {:error, errors} ->
+                           message =
+                             "Invalid Agent configuration for #{inspect(__MODULE__)}: #{inspect(errors)}"
+
+                           raise CompileError,
+                             description: message,
+                             file: __ENV__.file,
+                             line: __ENV__.line
+                       end)
+
+      @expanded_signal_routes Jido.Agent.expand_and_eval_literal_option(
+                                @validated_opts[:signal_routes] || [],
+                                __ENV__
+                              )
+    end
+  end
+
+  @doc false
+  @spec __quoted_compile_instances__() :: Macro.t()
+  def __quoted_compile_instances__ do
+    quote location: :keep do
+      @default_slice_list Jido.Agent.__resolve_default_slices__(@validated_opts)
+      @plugin_decls @validated_opts[:plugins] || []
+      @plugin_instances Jido.Agent.__normalize_plugin_instances__(@plugin_decls)
+
+      # Bare-slice attachments. Default slices and any user-supplied
+      # `slices:` entries flow through the same machinery (no route
+      # prefixing, no middleware half).
+      @slice_decls @default_slice_list ++ (@validated_opts[:slices] || [])
+      @slice_instances Jido.Agent.__normalize_slice_instances__(@slice_decls)
+
+      @singleton_alias_violations (@plugin_instances ++ @slice_instances)
+                                  |> Enum.filter(fn inst ->
+                                    inst.module.singleton?() and inst.as != nil
+                                  end)
+      if @singleton_alias_violations != [] do
+        modules =
+          Enum.map(@singleton_alias_violations, & &1.module) |> Enum.map(&inspect/1)
+
+        raise CompileError,
+          description: "Cannot alias singleton plugins: #{Enum.join(modules, ", ")}",
+          file: __ENV__.file,
+          line: __ENV__.line
+      end
+
+      @singleton_modules (@plugin_instances ++ @slice_instances)
+                         |> Enum.filter(fn inst -> inst.module.singleton?() end)
+                         |> Enum.map(& &1.module)
+      @duplicate_singletons @singleton_modules -- Enum.uniq(@singleton_modules)
+      if @duplicate_singletons != [] do
+        raise CompileError,
+          description:
+            "Duplicate singleton plugins: #{inspect(Enum.uniq(@duplicate_singletons))}",
+          file: __ENV__.file,
+          line: __ENV__.line
+      end
+
+      # Build plugin specs from instances (with the instance path).
+      @plugin_specs Enum.map(@plugin_instances, fn instance ->
+                      spec = instance.module.plugin_spec(instance.config)
+                      %{spec | path: instance.path}
+                    end)
+
+      # Pseudo-spec records for bare slices so the schema-merge logic can
+      # treat plugins and slices uniformly. Slices have no `route_prefix`,
+      # so they only carry path + schema here.
+      @slice_pseudo_specs Enum.map(@slice_instances, fn instance ->
+                            %{path: instance.path, schema: instance.manifest.schema}
+                          end)
+
+      # Validate unique slice paths across the agent's own slice, every
+      # declared plugin, and every declared bare slice. A duplicate raises
+      # Jido.Agent.PathConflictError at Agent.new/1 today, but we fail fast
+      # at compile time when the conflict is statically known.
+      @plugin_paths Enum.map(@plugin_instances, & &1.path)
+      @slice_paths Enum.map(@slice_instances, & &1.path)
+      @all_slice_paths [@validated_opts.path | @plugin_paths ++ @slice_paths]
+      @duplicate_paths @all_slice_paths -- Enum.uniq(@all_slice_paths)
+      if @duplicate_paths != [] do
+        raise CompileError,
+          description: "Duplicate slice paths: #{inspect(Enum.uniq(@duplicate_paths))}",
+          file: __ENV__.file,
+          line: __ENV__.line
+      end
+    end
+  end
+
+  @doc false
+  @spec __quoted_compile_aggregates__() :: Macro.t()
+  def __quoted_compile_aggregates__ do
+    quote location: :keep do
+      # Merge schemas: base schema + nested plugin and bare-slice schemas
+      @merged_schema Jido.Agent.Schema.merge_with_plugins(
+                       @validated_opts[:schema],
+                       @plugin_specs ++ @slice_pseudo_specs
+                     )
+
+      # Aggregate actions from plugins and bare slices
+      @plugin_actions ((@plugin_specs |> Enum.flat_map(& &1.actions)) ++
+                         (@slice_instances
+                          |> Enum.flat_map(fn inst -> inst.manifest.actions || [] end)))
+                      |> Enum.uniq()
+
+      # Expand routes from all plugin instances (with route_prefix) and bare
+      # slice instances (absolute paths, no prefix).
+      @expanded_plugin_routes Enum.flat_map(
+                                @plugin_instances,
+                                &Jido.Plugin.Routes.expand_routes/1
+                              )
+      @expanded_slice_routes Enum.flat_map(
+                               @slice_instances,
+                               &Jido.Slice.Instance.expand_routes/1
+                             )
+
+      # Expand schedules from all plugin instances
+      @expanded_plugin_schedules Enum.flat_map(
+                                   @plugin_instances,
+                                   &Jido.Plugin.Schedules.expand_schedules/1
+                                 )
+      @schedule_routes Enum.flat_map(
+                         @plugin_instances,
+                         &Jido.Plugin.Schedules.schedule_routes/1
+                       )
+
+      # Expand agent-level schedules from the `schedules:` option
+      @expanded_agent_schedules Jido.Agent.Schedules.expand_schedules(
+                                  @validated_opts[:schedules] || [],
+                                  @validated_opts[:name]
+                                )
+      @agent_schedule_routes Jido.Agent.Schedules.schedule_routes(@expanded_agent_schedules)
+
+      # Combine routes and schedule routes for conflict detection
+      @all_plugin_routes @expanded_plugin_routes ++
+                           @expanded_slice_routes ++
+                           @schedule_routes ++ @agent_schedule_routes
+
+      @plugin_routes_result Jido.Plugin.Routes.detect_conflicts(@all_plugin_routes)
+      case @plugin_routes_result do
+        {:error, conflicts} ->
+          conflict_list = Enum.join(conflicts, "\n  - ")
+
+          raise CompileError,
+            description: "Route conflicts detected:\n  - #{conflict_list}",
+            file: __ENV__.file,
+            line: __ENV__.line
+
+        {:ok, _routes} ->
+          :ok
+      end
+
+      @validated_plugin_routes elem(@plugin_routes_result, 1)
+
+      # Validate plugin requirements at compile time
+      @plugin_config_map Enum.reduce(@plugin_instances, %{}, fn instance, acc ->
+                           Map.put(acc, instance.path, instance.config)
+                         end)
+      @requirements_result Jido.Plugin.Requirements.validate_all_requirements(
+                             @plugin_instances,
+                             @plugin_config_map
+                           )
+      case @requirements_result do
+        {:error, missing_by_plugin} ->
+          error_msg = PluginRequirements.format_error(missing_by_plugin)
+
+          raise CompileError,
+            description: error_msg,
+            file: __ENV__.file,
+            line: __ENV__.line
+
+        {:ok, :valid} ->
+          :ok
+      end
+    end
+  end
+
+  @doc false
   @spec __normalize_plugin_instances__([module() | {module(), map()}]) :: [PluginInstance.t()]
   def __normalize_plugin_instances__(plugins) do
     Enum.map(plugins, &__validate_and_create_plugin_instance__/1)
   end
 
   @doc false
-  @spec __resolve_default_plugins__(map()) :: [module() | {module(), map()}]
-  def __resolve_default_plugins__(agent_opts) do
+  @spec __normalize_slice_instances__([module() | {module(), map() | keyword()}]) ::
+          [SliceInstance.t()]
+  def __normalize_slice_instances__(slices) do
+    Enum.map(slices, &__validate_and_create_slice_instance__/1)
+  end
+
+  @doc false
+  @spec __resolve_default_slices__(map()) :: [module() | {module(), map()}]
+  def __resolve_default_slices__(agent_opts) do
     jido_module = agent_opts[:jido]
 
     base_defaults =
-      if jido_module != nil and function_exported?(jido_module, :__default_plugins__, 0) do
-        jido_module.__default_plugins__()
+      if jido_module != nil and function_exported?(jido_module, :__default_slices__, 0) do
+        jido_module.__default_slices__()
       else
-        Jido.Agent.DefaultPlugins.package_defaults()
+        Jido.Agent.DefaultSlices.package_defaults()
       end
 
-    Jido.Agent.DefaultPlugins.apply_agent_overrides(base_defaults, agent_opts[:default_plugins])
+    Jido.Agent.DefaultSlices.apply_agent_overrides(base_defaults, agent_opts[:default_slices])
   end
 
   defp __validate_and_create_plugin_instance__(plugin_decl) do
@@ -1278,6 +1358,47 @@ defmodule Jido.Agent do
   defp __raise_plugin_compile_error__(mod, reason) do
     raise CompileError,
       description: "Plugin #{inspect(mod)} could not be compiled: #{inspect(reason)}"
+  end
+
+  defp __validate_and_create_slice_instance__(slice_decl) do
+    mod = __extract_slice_module__(slice_decl)
+    __validate_slice_module__(mod)
+    SliceInstance.new(slice_decl)
+  end
+
+  defp __extract_slice_module__(m) when is_atom(m), do: m
+  defp __extract_slice_module__({m, _}), do: m
+
+  defp __validate_slice_module__(mod) do
+    case Code.ensure_compiled(mod) do
+      {:module, _} -> __validate_slice_kind__(mod)
+      {:error, reason} -> __raise_slice_compile_error__(mod, reason)
+    end
+  end
+
+  defp __validate_slice_kind__(mod) do
+    cond do
+      function_exported?(mod, :__jido_plugin__, 0) ->
+        raise CompileError,
+          description:
+            "#{inspect(mod)} is a Plugin (`use Jido.Plugin`). Plugins go in `plugins:`; " <>
+              "`slices:` is for bare `use Jido.Slice` modules. Move it to `plugins:` " <>
+              "or change the module to `use Jido.Slice`."
+
+      function_exported?(mod, :__jido_slice__, 0) ->
+        :ok
+
+      true ->
+        raise CompileError,
+          description:
+            "#{inspect(mod)} is not a Jido.Slice; do `use Jido.Slice` to make one " <>
+              "(or move it to `plugins:` if it should be a `use Jido.Plugin` module)."
+    end
+  end
+
+  defp __raise_slice_compile_error__(mod, reason) do
+    raise CompileError,
+      description: "Slice #{inspect(mod)} could not be compiled: #{inspect(reason)}"
   end
 
   # Base module functions (for direct use without `use`)

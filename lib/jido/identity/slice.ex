@@ -1,4 +1,4 @@
-defmodule Jido.Identity.Plugin do
+defmodule Jido.Identity.Slice do
   @moduledoc """
   Default singleton slice for identity state management.
 
@@ -9,12 +9,12 @@ defmodule Jido.Identity.Plugin do
   ## Singleton
 
   This slice is a singleton — it cannot be aliased or duplicated. It is
-  automatically included as a default plugin for all agents unless explicitly
+  automatically included as a default slice for all agents unless explicitly
   disabled:
 
       use Jido.Agent,
         name: "minimal",
-        default_plugins: %{identity: false}
+        default_slices: %{identity: false}
 
   ## State Key
 

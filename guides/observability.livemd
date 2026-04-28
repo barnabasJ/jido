@@ -61,7 +61,7 @@ defmodule CounterAgent do
   use Jido.Agent,
     name: "obs_counter",
     path: :app,
-    default_plugins: false,
+    default_slices: false,
     schema: [count: [type: :integer, default: 0]]
 
   def signal_routes(_ctx), do: [{"counter.inc", Counter.Inc}]
@@ -175,7 +175,7 @@ defmodule Emitter do
 end
 
 defmodule EmitterAgent do
-  use Jido.Agent, name: "obs_emitter_agent", path: :app, default_plugins: false, schema: []
+  use Jido.Agent, name: "obs_emitter_agent", path: :app, default_slices: false, schema: []
 
   def signal_routes(_ctx), do: [{"emit.event", Emitter}]
 end
@@ -250,7 +250,7 @@ defmodule TraceCapture do
 end
 
 defmodule TraceAgent do
-  use Jido.Agent, name: "obs_trace_agent", path: :app, default_plugins: false, schema: []
+  use Jido.Agent, name: "obs_trace_agent", path: :app, default_slices: false, schema: []
 
   def signal_routes(_ctx), do: [{"trace.demo", TraceCapture}]
 end

@@ -63,7 +63,7 @@ defmodule JidoTest.PodTest do
       topology: %{
         worker: %{agent: WorkerAgent, manager: :worker_nodes}
       },
-      default_plugins: %{pod: CustomPodPlugin}
+      default_slices: %{pod: CustomPodPlugin}
   end
 
   test "use Jido.Pod wraps an agent module with a canonical topology" do
@@ -85,7 +85,7 @@ defmodule JidoTest.PodTest do
     assert {:ok, %Topology{name: "empty_pod", nodes: %{}}} = Pod.fetch_topology(agent)
   end
 
-  test "default_plugins can replace the reserved pod plugin" do
+  test "default_slices can replace the reserved pod plugin" do
     assert Enum.any?(CustomPluginPod.plugin_instances(), fn instance ->
              instance.module == CustomPodPlugin and instance.path == :pod
            end)
@@ -126,7 +126,7 @@ defmodule JidoTest.PodTest do
         use Jido.Pod,
           name: "disabled_pod",
           topology: %{worker: %{agent: #{inspect(WorkerAgent)}, manager: :workers}},
-          default_plugins: %{pod: false}
+          default_slices: %{pod: false}
       end
       """)
     end

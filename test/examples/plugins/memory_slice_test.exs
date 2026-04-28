@@ -1,14 +1,14 @@
-defmodule JidoExampleTest.MemoryPluginTest do
+defmodule JidoExampleTest.MemorySliceTest do
   @moduledoc """
-  Example test demonstrating Memory as a default plugin.
+  Example test demonstrating Memory as a default slice.
 
   This test shows:
-  - Every agent gets `Jido.Memory.Plugin` automatically (default singleton plugin)
+  - Every agent gets `Jido.Memory.Slice` automatically (default singleton slice)
   - Using `Jido.Memory.Agent` helpers: `ensure/2`, `has_memory?/1`, `get/1`, `put/2`,
     `put_in_space/4`, `get_in_space/4`, `append_to_space/3`, `ensure_space/3`,
     `space/2`, `spaces/1`, `has_space?/2`, `delete_space/2`, `update_space/4`
   - Actions that manipulate memory spaces via cmd/2
-  - Disabling the memory plugin with `default_plugins: %{memory: false}`
+  - Disabling the memory slice with `default_slices: %{memory: false}`
 
   Run with: mix test --include example
   """
@@ -61,7 +61,7 @@ defmodule JidoExampleTest.MemoryPluginTest do
     use Jido.Agent,
       name: "memory_agent",
       path: :domain,
-      description: "Agent with default memory plugin",
+      description: "Agent with default memory slice",
       schema: [
         status: [type: :atom, default: :idle]
       ]
@@ -72,8 +72,8 @@ defmodule JidoExampleTest.MemoryPluginTest do
     use Jido.Agent,
       name: "no_memory_agent",
       path: :domain,
-      description: "Agent with memory plugin disabled",
-      default_plugins: %{memory: false},
+      description: "Agent with memory slice disabled",
+      default_slices: %{memory: false},
       schema: [
         value: [type: :integer, default: 0]
       ]
@@ -83,7 +83,7 @@ defmodule JidoExampleTest.MemoryPluginTest do
   # TESTS
   # ===========================================================================
 
-  describe "memory plugin is a default singleton" do
+  describe "memory slice is a default singleton" do
     test "new agent has no memory until initialized on demand" do
       agent = MemoryAgent.new()
 
@@ -194,16 +194,15 @@ defmodule JidoExampleTest.MemoryPluginTest do
     end
   end
 
-  describe "disabling memory plugin" do
-    test "agent with __memory__ disabled has no memory capability" do
+  describe "disabling memory slice" do
+    test "agent with memory disabled has no memory capability" do
       agent = NoMemoryAgent.new()
 
       refute MemAgent.has_memory?(agent)
       refute Map.has_key?(agent.state, :memory)
 
-      specs = NoMemoryAgent.plugin_specs()
-      modules = Enum.map(specs, & &1.module)
-      refute Jido.Memory.Plugin in modules
+      modules = NoMemoryAgent.slices()
+      refute Jido.Memory.Slice in modules
     end
   end
 end

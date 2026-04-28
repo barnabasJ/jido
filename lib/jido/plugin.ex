@@ -13,6 +13,10 @@ defmodule Jido.Plugin do
     quote do
       use Jido.Slice, unquote(opts)
       use Jido.Middleware
+
+      @doc false
+      @spec __jido_plugin__() :: true
+      def __jido_plugin__, do: true
     end
   end
 end

@@ -171,6 +171,10 @@ defmodule Jido.Slice do
                                "Invalid slice configuration:\n#{Zoi.prettify_errors(errors)}"
                        end)
 
+      @doc false
+      @spec __jido_slice__() :: true
+      def __jido_slice__, do: true
+
       @doc "Returns the slice's name."
       @spec name() :: String.t()
       def name, do: @validated_opts.name

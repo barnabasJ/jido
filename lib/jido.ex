@@ -82,7 +82,7 @@ defmodule Jido do
   defmacro __using__(opts) do
     otp_app = Keyword.fetch!(opts, :otp_app)
     storage = Keyword.get(opts, :storage, {Jido.Storage.ETS, [table: :jido_storage]})
-    default_plugins = Keyword.get(opts, :default_plugins, nil)
+    default_slices = Keyword.get(opts, :default_slices, nil)
 
     quote location: :keep do
       @otp_app unquote(otp_app)
@@ -95,20 +95,20 @@ defmodule Jido do
       @spec __jido_storage__() :: {module(), keyword()}
       def __jido_storage__, do: Jido.Storage.normalize_storage(unquote(storage))
 
-      require Jido.Agent.DefaultPlugins
+      require Jido.Agent.DefaultSlices
 
-      @default_plugins Jido.Agent.DefaultPlugins.resolve_instance_defaults(
-                         @otp_app,
-                         __MODULE__,
-                         unquote(Macro.escape(default_plugins))
-                       )
+      @default_slices Jido.Agent.DefaultSlices.resolve_instance_defaults(
+                        @otp_app,
+                        __MODULE__,
+                        unquote(Macro.escape(default_slices))
+                      )
 
-      # The typespec for __default_plugins__ triggers a `contract_supertype`
+      # The typespec for __default_slices__ triggers a `contract_supertype`
       # warning from dialyzer.
-      @dialyzer {:nowarn_function, [__default_plugins__: 0]}
-      @doc "Returns the default plugins for agents bound to this Jido instance."
-      @spec __default_plugins__() :: [module() | {module(), map()}]
-      def __default_plugins__, do: @default_plugins
+      @dialyzer {:nowarn_function, [__default_slices__: 0]}
+      @doc "Returns the default slices for agents bound to this Jido instance."
+      @spec __default_slices__() :: [module() | {module(), map()}]
+      def __default_slices__, do: @default_slices
 
       @doc false
       def child_spec(init_arg \\ []) do

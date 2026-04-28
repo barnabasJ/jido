@@ -1,7 +1,7 @@
 defmodule Jido.Pod.Definition do
   @moduledoc false
 
-  alias Jido.Agent.DefaultPlugins
+  alias Jido.Agent.DefaultSlices
   alias Jido.Plugin.Instance, as: PluginInstance
   alias Jido.Pod.Plugin
   alias Jido.Pod.Topology
@@ -69,35 +69,35 @@ defmodule Jido.Pod.Definition do
     end
   end
 
-  def split_pod_plugins!(default_plugins, caller_env) do
+  def split_pod_plugins!(default_slices, caller_env) do
     pod_override =
-      if is_map(default_plugins) do
-        Map.take(default_plugins, [@pod_state_key])
+      if is_map(default_slices) do
+        Map.take(default_slices, [@pod_state_key])
       else
         %{}
       end
 
-    pod_plugins = DefaultPlugins.apply_agent_overrides([Plugin], pod_override)
+    pod_plugins = DefaultSlices.apply_agent_overrides([Plugin], pod_override)
 
     if pod_plugins == [] do
       raise CompileError,
         description:
           "Jido.Pod requires a singleton pod plugin under #{@pod_state_key}. " <>
-            "Replace it with `default_plugins: %{#{@pod_state_key}: YourPlugin}` instead of disabling it.",
+            "Replace it with `default_slices: %{#{@pod_state_key}: YourPlugin}` instead of disabling it.",
         file: caller_env.file,
         line: caller_env.line
     end
 
     Enum.each(pod_plugins, &validate_pod_plugin_decl!(&1, caller_env))
 
-    remaining_default_plugins =
-      if is_map(default_plugins) do
-        Map.delete(default_plugins, @pod_state_key)
+    remaining_default_slices =
+      if is_map(default_slices) do
+        Map.delete(default_slices, @pod_state_key)
       else
-        default_plugins
+        default_slices
       end
 
-    {pod_plugins, remaining_default_plugins}
+    {pod_plugins, remaining_default_slices}
   end
 
   defp validate_pod_plugin_decl!(decl, caller_env) do

@@ -1,43 +1,43 @@
-defmodule JidoTest.Thread.PluginTest do
+defmodule JidoTest.Thread.SliceTest do
   use ExUnit.Case, async: true
 
   alias Jido.Thread
-  alias Jido.Thread.Plugin, as: ThreadPlugin
+  alias Jido.Thread.Slice, as: ThreadSlice
 
-  describe "plugin metadata" do
+  describe "slice metadata" do
     test "name is thread" do
-      assert ThreadPlugin.name() == "thread"
+      assert ThreadSlice.name() == "thread"
     end
 
     test "path is :thread" do
-      assert ThreadPlugin.path() == :thread
+      assert ThreadSlice.path() == :thread
     end
 
     test "is singleton" do
-      assert ThreadPlugin.singleton?() == true
+      assert ThreadSlice.singleton?() == true
     end
 
     test "has thread capability" do
-      assert :thread in ThreadPlugin.capabilities()
+      assert :thread in ThreadSlice.capabilities()
     end
 
     test "has no actions" do
-      assert ThreadPlugin.actions() == []
+      assert ThreadSlice.actions() == []
     end
 
     test "schema is nil (no auto-initialization)" do
-      assert ThreadPlugin.schema() == nil
+      assert ThreadSlice.schema() == nil
     end
   end
 
   describe "manifest" do
     test "singleton is true in manifest" do
-      manifest = ThreadPlugin.manifest()
+      manifest = ThreadSlice.manifest()
       assert manifest.singleton == true
     end
 
     test "path is :thread in manifest" do
-      manifest = ThreadPlugin.manifest()
+      manifest = ThreadSlice.manifest()
       assert manifest.path == :thread
     end
   end
@@ -48,11 +48,11 @@ defmodule JidoTest.Thread.PluginTest do
         Thread.new(id: "t-1")
         |> Thread.append(%{kind: :message, payload: %{text: "hello"}})
 
-      assert %{id: "t-1", rev: 1} = ThreadPlugin.externalize(thread)
+      assert %{id: "t-1", rev: 1} = ThreadSlice.externalize(thread)
     end
 
     test "externalize/1 returns nil for nil input" do
-      assert nil == ThreadPlugin.externalize(nil)
+      assert nil == ThreadSlice.externalize(nil)
     end
 
     test "externalize/1 reflects rev count for multi-entry threads" do
@@ -62,30 +62,30 @@ defmodule JidoTest.Thread.PluginTest do
         |> Thread.append(%{kind: :message, payload: %{text: "two"}})
         |> Thread.append(%{kind: :message, payload: %{text: "three"}})
 
-      assert %{id: "t-2", rev: 3} = ThreadPlugin.externalize(thread)
+      assert %{id: "t-2", rev: 3} = ThreadSlice.externalize(thread)
     end
 
     test "reinstate/1 passes through (rehydration is the Persister's job)" do
       pointer = %{id: "t-1", rev: 5}
-      assert ThreadPlugin.reinstate(pointer) == pointer
+      assert ThreadSlice.reinstate(pointer) == pointer
     end
   end
 
   describe "agent integration" do
     defmodule AgentWithThread do
-      use Jido.Agent, name: "thread_plugin_test_agent", path: :domain
+      use Jido.Agent, name: "thread_slice_test_agent", path: :domain
     end
 
     defmodule AgentWithoutThread do
       use Jido.Agent,
-        name: "thread_plugin_test_no_thread",
+        name: "thread_slice_test_no_thread",
         path: :domain,
-        default_plugins: %{thread: false}
+        default_slices: %{thread: false}
     end
 
-    test "agent includes thread plugin by default" do
-      modules = AgentWithThread.plugins()
-      assert Jido.Thread.Plugin in modules
+    test "agent includes thread slice by default" do
+      modules = AgentWithThread.slices()
+      assert Jido.Thread.Slice in modules
     end
 
     test "agent.state[:thread] starts nil (no auto-init)" do
@@ -93,21 +93,15 @@ defmodule JidoTest.Thread.PluginTest do
       assert Map.get(agent.state, :thread) == nil
     end
 
-    test "agent can disable thread plugin" do
-      modules = AgentWithoutThread.plugins()
-      refute Jido.Thread.Plugin in modules
+    test "agent can disable thread slice" do
+      modules = AgentWithoutThread.slices()
+      refute Jido.Thread.Slice in modules
     end
 
     test "thread can be attached after creation via Thread.Agent" do
       agent = AgentWithThread.new()
       agent = Thread.Agent.ensure(agent)
       assert %Thread{} = Thread.Agent.get(agent)
-    end
-
-    test "cannot alias thread plugin" do
-      assert_raise ArgumentError, ~r/Cannot alias singleton plugin/, fn ->
-        Jido.Plugin.Instance.new({Jido.Thread.Plugin, as: :my_thread})
-      end
     end
   end
 end
