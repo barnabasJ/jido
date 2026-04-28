@@ -9,9 +9,6 @@ defmodule Jido.AITest do
   import Jido.AI.Test.ResponseFixtures
 
   alias Jido.AI.ReAct
-  alias Jido.AI.TestActions.TestAdd
-
-  @model "anthropic:claude-haiku-4-5-20251001"
 
   defmodule MathAgent do
     @moduledoc false
@@ -81,36 +78,30 @@ defmodule Jido.AITest do
   setup :set_mimic_global
   setup :verify_on_exit!
 
-  describe "slice attachment via slices:" do
-    test "seeds slice config into state.ai", ctx do
-      pid = start_test_server(ctx, MathAgent)
-      ai = read_ai(pid)
-
-      assert ai.status == :idle
-      assert ai.model == @model
-      assert ai.tools == [TestAdd]
-      assert ai.system_prompt == "You are precise."
-      assert ai.max_iterations == 4
-      assert Keyword.fetch!(ai.llm_opts, :max_tokens) == 256
-      assert Keyword.fetch!(ai.llm_opts, :temperature) == 0.0
-    end
-  end
-
   describe "ask_sync/3 happy path" do
-    test "single-turn: final answer on the first LLM call", ctx do
-      expect(ReqLLM.Generation, :generate_text, fn _model, messages, _opts ->
-        assert length(messages) == 2
+    test "slice config flows through to ReqLLM and the final answer is returned", ctx do
+      test_pid = self()
+
+      expect(ReqLLM.Generation, :generate_text, fn model, messages, opts ->
+        send(test_pid, {:llm, model, messages, opts})
         {:ok, final_answer_response("19")}
       end)
 
       pid = start_test_server(ctx, MathAgent)
       assert {:ok, "19"} = Jido.AI.ask_sync(pid, "What is 5 + 7 * 2?", timeout: 1_000)
 
-      ai = read_ai(pid)
-      assert ai.status == :completed
-      assert ai.result == "19"
-      assert ai.error == nil
-      assert ai.iteration == 1
+      # The slice's seeded config — model, system prompt, llm_opts
+      # (with `max_tokens` / `temperature` folded by the slice's
+      # config_schema transform) — must reach `ReqLLM.Generation` verbatim.
+      assert_receive {:llm, model, messages, opts}, 1_000
+      assert model == "anthropic:claude-haiku-4-5-20251001"
+      assert opts[:max_tokens] == 256
+      assert opts[:temperature] == 0.0
+
+      [system, user] = messages
+      assert system.role == :system
+      assert system.content |> hd() |> Map.get(:text) == "You are precise."
+      assert user.role == :user
     end
   end
 

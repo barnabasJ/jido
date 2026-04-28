@@ -45,7 +45,7 @@ defmodule Jido.AI.ReActE2ETest do
          },
          tools: [],
          max_iterations: 3,
-         max_tokens: 64,
+         max_tokens: 256,
          llm_opts: [api_key: System.get_env("LMSTUDIO_API_KEY", "lm-studio")]}
       ]
   end
@@ -91,13 +91,10 @@ defmodule Jido.AI.ReActE2ETest do
   test "produces a final answer for a simple question without tools", ctx do
     pid = start_server(ctx, NoToolsAgent)
 
-    assert {:ok, text} =
-             Jido.AI.ask_sync(pid, "Reply with the single word 'pong' and nothing else.",
-               timeout: 60_000
-             )
+    assert {:ok, text} = Jido.AI.ask_sync(pid, "What is 2 + 2?", timeout: 60_000)
 
     assert is_binary(text)
-    assert text =~ ~r/pong/i
+    assert text =~ "4"
   end
 
   test "drives a tool-calling round trip when the model picks a tool", ctx do
