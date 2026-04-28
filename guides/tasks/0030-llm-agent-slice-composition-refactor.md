@@ -1,63 +1,46 @@
 ---
-name: Task 0030 — Refactor LLM agent: ReAct as a configured slice on a regular `Jido.Agent`
-description: Replace the `use Jido.AI.Agent` macro (task 0023) with a slice-composition design. `Jido.AI.ReAct` is a slice exposing `schema/1` (accepting LLM config opts) and `signal_routes/0`; users wire it into a regular `use Jido.Agent` directly. User-facing API moves to `Jido.AI.ask/3`, `Jido.AI.await/2`, `Jido.AI.ask_sync/3`. Retire the standalone synchronous `Jido.AI.ReAct.run/2` runner (task 0022). Supersedes the user-facing surface from task 0023.
+name: Task 0030 — Refactor LLM agent: ReAct attached via `slices:` to a regular `Jido.Agent`
+description: With task 0032 in place, `Jido.AI.ReAct` becomes a `use Jido.Slice` module with a `config_schema` declaring `:model`, `:tools`, `:system_prompt`, `:max_iterations`, `:max_tokens`, `:temperature`, and `:llm_opts`. Users compose it via `use Jido.Agent, slices: [{Jido.AI.ReAct, model: ..., tools: ...}]`. The `Jido.AI.Agent` macro is deleted; user-facing API moves to `Jido.AI.{ask,await,ask_sync}/N`. The standalone `Jido.AI.ReAct.run/2` synchronous runner retires — the slice is the only ReAct.
 ---
 
-# Task 0030 — Refactor LLM agent: ReAct as a configured slice on a regular `Jido.Agent`
+# Task 0030 — Refactor LLM agent: ReAct attached via `slices:` to a regular `Jido.Agent`
 
-- Implements: [ADR 0022](../adr/0022-llm-agents-inlined-jido-ai-namespace.md) v2 §6, §7, and the `ReAct.run/2` retirement in *Consequences*.
-- Depends on: [task 0023](0023-llm-agent-slice-plugin.md) (provides the slice / actions / directives we keep), [task 0029](0029-reject-bare-slice-in-plugins.md) (frames why slices are not plugins).
+- Implements: [ADR 0022 v3](../adr/0022-llm-agents-inlined-jido-ai-namespace.md) §6, §7, and the `ReAct.run/2` retirement in *Consequences*.
+- Depends on: [task 0032](0032-framework-slices-attachment-option.md) (the `slices:` option must exist before this task can use it), [task 0023](0023-llm-agent-slice-plugin.md) (provides the slice / actions / directives we keep).
 - Supersedes the user-facing surface of: task 0022 (`Jido.AI.ReAct.run/2`), task 0023 (`use Jido.AI.Agent` macro).
 - Blocks: [task 0031](0031-llm-agent-livebook-and-tagged-integration-tests.md).
 - Leaves tree: **green**.
 
 ## Context
 
-Task 0023 shipped `Jido.AI.Agent` — a `use Jido.AI.Agent` macro that owned the
-slice path, schema, signal routes, AND LLM config (`model:`, `tools:`,
-`system_prompt:`, `max_iterations:`) at compile time. Two problems became
-apparent during implementation:
+Task 0023 shipped a `use Jido.AI.Agent` macro that carried LLM config on the
+agent module. ADR 0022 v2 walked that back to "the slice is the agent's own
+slice"; v3 walks it back further: the slice is its own thing, attached via
+the new `slices:` option from task 0032. The agent module is fully generic —
+it declares no `path`, no `schema`, no `signal_routes` related to the AI
+slice. The slice carries all of that internally and the framework wires it
+in.
 
-1. **The agent module ended up knowing about LLM concerns.** A generic agent
-   doesn't know what a "model" or a "tool" is; it knows `path:`, `schema:`,
-   `signal_routes:`. The `Jido.AI.Agent` macro forced model/tools/system_prompt
-   onto the agent surface and required a placeholder `model:` value to
-   instantiate the struct so the user could override per-call. That's a code
-   smell.
-
-2. **The slice ended up not being configurable as a slice.** Per ADR 0017 the
-   slice owns its routes, schema, and actions. But the LLM config (model,
-   tools, system_prompt) is run-config the slice needs — and the v1 design
-   pulled it onto the agent macro instead of letting it flow through the slice's
-   own `schema/1` defaults. The slice was the agent's own slice in name only.
-
-Task 0022 also shipped a standalone synchronous runner `Jido.AI.ReAct.run/2`
-that the agent envelope was originally going to wrap from inside a Task. The
-final task-0023 implementation drives the loop signal-driven directly through
-the slice's actions and the LLMCall/ToolExec directives, so `ReAct.run/2` has
-zero callers in `lib/`. Two parallel implementations of "the loop" violates
-"no dead code"; the slice is the only ReAct.
-
-ADR 0022 v2 codifies the new shape (§6 slice composition, §7 namespace helpers,
-no `ReAct.run/2`). This task implements it.
+The standalone synchronous `Jido.AI.ReAct.run/2` runner from task 0022 has
+zero callers in `lib/` after task 0023's signal-driven loop. Two parallel
+implementations of "the loop" violates "no dead code"; the slice is the only
+ReAct in v3.
 
 ## Goal
 
-After this commit, an LLM agent is composed like this:
+After this commit, an LLM agent looks like this — and only this:
 
 ```elixir
 defmodule MyApp.SupportAgent do
   use Jido.Agent,
     name: "support",
-    path: :ai,
-    schema:
-      Jido.AI.ReAct.schema(
+    slices: [
+      {Jido.AI.ReAct,
         model: "anthropic:claude-haiku-4-5-20251001",
         tools: [MyApp.Actions.LookupOrder, MyApp.Actions.RefundOrder],
         system_prompt: "You are a support agent.",
-        max_iterations: 5
-      ),
-    signal_routes: Jido.AI.ReAct.signal_routes()
+        max_iterations: 5}
+    ]
 end
 
 {:ok, pid}     = Jido.AgentServer.start_link(agent_module: MyApp.SupportAgent)
@@ -65,25 +48,25 @@ end
 {:ok, text}    = Jido.AI.await(request, timeout: 30_000)
 ```
 
-No `Jido.AI.Agent` macro. No placeholder `model:`. No `ReAct.run/2`.
+No `Jido.AI.Agent` macro. No `Jido.AI.ReAct.run/2`. No `path:`/`schema:`/
+`signal_routes:` mentioning AI on the agent module. No placeholder `model:`.
 
 ## Files to delete
 
-- `lib/jido/ai/agent.ex` — the `Jido.AI.Agent` macro is gone.
-- `lib/jido/ai/react.ex` — the standalone synchronous runner is gone (its
-  `Result` struct goes with it).
-- `test/jido/ai/agent_test.exs` — its tests cover the deleted macro.
+- `lib/jido/ai/agent.ex` — the `Jido.AI.Agent` macro.
+- `lib/jido/ai/react.ex` — the standalone synchronous runner (and its
+  `Result` struct).
+- `test/jido/ai/agent_test.exs` — tests covered the deleted macro.
 - `test/jido/ai/react_test.exs` — Mimic-stubbed tests for the deleted runner.
-- `test/jido/ai/react_e2e_test.exs` — integration tests for the deleted runner.
-  The `:e2e` coverage moves to task 0031's agent-level integration tests.
+- `test/jido/ai/react_e2e_test.exs` — integration tests for the deleted
+  runner. Agent-level e2e coverage is task 0031.
 
 ## Files to create
 
 ### `lib/jido/ai.ex`
 
-Namespace module exposing the user-facing functions. None of these are tied to
-a specific agent module — they work against any `pid` whose agent has the
-ReAct slice mounted at `:ai`.
+Namespace module. None of these are tied to a specific agent module — they
+work against any `pid` whose agent has the `Jido.AI.ReAct` slice attached.
 
 ```elixir
 defmodule Jido.AI do
@@ -103,49 +86,41 @@ end
 
 Implementation notes:
 
-- `ask/3` reads `s.agent.state.ai` for the slice's run-config defaults
-  (`model`, `tools`, `system_prompt`, `max_iterations`, `llm_opts`). Per-call
-  opts override per call. Required keys missing from BOTH the slice state and
-  the per-call opts (notably `:model` if the slice was constructed without one)
-  return `{:error, :no_model}` rather than crashing.
-- `ask/3` mints `request_id`, registers a `subscribe/4` for the slice's
-  terminal transition (pre-cast — ADR 0021), then casts `ai.react.ask`. Returns
-  `{:ok, %Jido.AI.Request{}}`.
-- `await/2` `receive`s the subscription fire. Returns `{:ok, text}` /
-  `{:error, reason}` / `{:error, :timeout}`. Pure `receive` — no polling.
+- One `state/3` projection reads the slice at `:ai` once, returning both the
+  busy guard and the run-config defaults: `{status, %{model:, tools:,
+  system_prompt:, max_iterations:, llm_opts:}}`. If `status == :running`,
+  return `{:error, :busy}`. Otherwise resolve per-call opts on top of the
+  slice defaults; if `:model` is still nil, return `{:error, :no_model}`.
+- `ask/3` mints `request_id`, registers `subscribe/4` for the slice's
+  terminal transition (pre-cast, ADR 0021), then casts `ai.react.ask`.
+- `await/2` `receive`s the subscription fire. Pure receive; no polling.
 - `ask_sync/3` pipes the two together.
-- The single-active-run guard (`{:error, :busy}`) is a `state/3` projection
-  read against `s.agent.state.ai.status` *before* the cast. Same shape as the
-  current `Jido.AI.Agent.__ask__/4`; lift the helper into `Jido.AI` and drop
-  the macro.
 
 ### `test/jido/ai_test.exs`
 
-Unit tests for the namespace functions. Mirror the cases from the deleted
-`test/jido/ai/agent_test.exs`:
+Unit tests for the namespace functions, mirroring the cases the deleted
+`agent_test.exs` covered:
 
-1. `ask/3` happy path — reads slice defaults, casts `ai.react.ask`, subscription
-   fires on the terminal transition, `await/2` returns the text.
-2. `ask_sync/3` pipes the two together.
-3. Per-call override of `:model`, `:tools`, `:system_prompt` overrides slice
-   defaults for that one call.
+1. `ask/3` happy path against a Mimic-stubbed `ReqLLM.Generation.generate_text/3`.
+2. `ask_sync/3` returns the text.
+3. Per-call `:model` / `:tools` / `:system_prompt` overrides on top of slice
+   defaults.
 4. `:busy` short-circuit while a run is `:running`.
-5. `await/2` `:timeout` when no terminal signal arrives.
-6. Stale `tool.completed` (different `request_id`) is ignored.
-7. LLM error settles `:failed`, `await/2` returns `{:error, reason}`.
-8. Cycle warning prepended on a repeated tool batch (integration through the
-   real signal pipeline; Mimic-stubs `ReqLLM.Generation.generate_text/3` for
-   three turns).
+5. `:timeout` from `await/2` when no terminal signal arrives.
+6. Stale `tool.completed` (different `request_id`) ignored.
+7. LLM error settles `:failed`; `await/2` returns `{:error, reason}`.
+8. Cycle warning prepended when two consecutive tool batches match.
+9. `{:error, :no_model}` when neither slice defaults nor per-call opts supply a model.
 
-These run against a generic `use Jido.Agent` test agent defined inside the
-test module — no AI-specific macro.
+These run against a generic `use Jido.Agent, slices: [...]` test agent
+defined inside the test module — no AI-specific macro.
 
 ## Files to modify
 
 ### `lib/jido/ai/slice.ex` → `lib/jido/ai/re_act.ex`
 
-Rename the module to `Jido.AI.ReAct` and rewrite the schema as a
-configurable function:
+Rename the module to `Jido.AI.ReAct` and rewrite as a `use Jido.Slice` with
+a real `config_schema/0`:
 
 ```elixir
 defmodule Jido.AI.ReAct do
@@ -163,67 +138,64 @@ defmodule Jido.AI.ReAct do
       {"ai.react.llm.completed", Jido.AI.Actions.LLMTurn},
       {"ai.react.tool.completed", Jido.AI.Actions.ToolResult},
       {"ai.react.failed", Jido.AI.Actions.Failed}
-    ]
-
-  # Override the macro-generated schema/0 with a parameterized schema/1.
-  # The framework's `__seed_own_slice__/2` calls `validated_opts[:schema]`
-  # at compile time of the using agent module — so the user passes
-  # `schema: Jido.AI.ReAct.schema(model: ..., tools: ...)` and the schema
-  # bakes those values in as the slice's defaults.
-  @spec schema(keyword()) :: Zoi.schema()
-  def schema(opts \\ []) do
-    Zoi.object(%{
-      status: Zoi.atom() |> Zoi.default(:idle),
-      request_id: Zoi.any() |> Zoi.default(nil),
-      context: Zoi.any() |> Zoi.default(nil),
-      iteration: Zoi.integer() |> Zoi.default(0),
-      max_iterations: Zoi.integer() |> Zoi.default(Keyword.get(opts, :max_iterations, 10)),
-      result: Zoi.any() |> Zoi.default(nil),
-      error: Zoi.any() |> Zoi.default(nil),
-      pending_tool_calls: Zoi.list(Zoi.any()) |> Zoi.default([]),
-      tool_results_received: Zoi.list(Zoi.any()) |> Zoi.default([]),
-      previous_tool_signature: Zoi.any() |> Zoi.default(nil),
-      model: Zoi.any() |> Zoi.default(Keyword.get(opts, :model)),
-      tools: Zoi.list(Zoi.atom()) |> Zoi.default(Keyword.get(opts, :tools, [])),
-      system_prompt: Zoi.any() |> Zoi.default(Keyword.get(opts, :system_prompt)),
-      llm_opts: Zoi.any() |> Zoi.default(build_llm_opts(opts))
-    }, coerce: true)
-  end
-
-  defp build_llm_opts(opts) do
-    base = [
-      max_tokens: Keyword.get(opts, :max_tokens, 4096),
-      temperature: Keyword.get(opts, :temperature, 0.2)
-    ]
-    Keyword.merge(base, Keyword.get(opts, :llm_opts, []))
-  end
-
-  # cycle_warning/0 and tool_call_signature/1 stay as-is.
+    ],
+    schema:
+      Zoi.object(%{
+        status: Zoi.atom() |> Zoi.default(:idle),
+        request_id: Zoi.any() |> Zoi.default(nil),
+        context: Zoi.any() |> Zoi.default(nil),
+        iteration: Zoi.integer() |> Zoi.default(0),
+        max_iterations: Zoi.integer() |> Zoi.default(10),
+        result: Zoi.any() |> Zoi.default(nil),
+        error: Zoi.any() |> Zoi.default(nil),
+        pending_tool_calls: Zoi.list(Zoi.any()) |> Zoi.default([]),
+        tool_results_received: Zoi.list(Zoi.any()) |> Zoi.default([]),
+        previous_tool_signature: Zoi.any() |> Zoi.default(nil),
+        model: Zoi.any() |> Zoi.default(nil),
+        tools: Zoi.list(Zoi.atom()) |> Zoi.default([]),
+        system_prompt: Zoi.any() |> Zoi.default(nil),
+        llm_opts: Zoi.any() |> Zoi.default([])
+      }, coerce: true),
+    config_schema:
+      Zoi.object(%{
+        model: Zoi.any() |> Zoi.optional(),
+        tools: Zoi.list(Zoi.atom()) |> Zoi.default([]),
+        system_prompt: Zoi.any() |> Zoi.optional(),
+        max_iterations: Zoi.integer() |> Zoi.default(10),
+        max_tokens: Zoi.integer() |> Zoi.default(4096),
+        temperature: Zoi.any() |> Zoi.default(0.2),
+        llm_opts: Zoi.any() |> Zoi.default([])
+      }, coerce: true)
 end
 ```
 
-Add `system_prompt` to the slice state (was previously per-signal-only). The
-`Ask` action falls back to slice state values when signal data omits a key —
-that's how runtime defaults flow through.
+The framework's `slices:` machinery (task 0032) validates the user's config
+through `config_schema/0`, then merges those values into the slice's initial
+state under the keys the schema declares. So the slice is born with `status:
+:idle`, `model:` from the user's config, etc.
+
+Add `system_prompt` to the slice state (was per-signal-only in task 0023);
+the `Ask` action falls back to the slice's `system_prompt` when signal data
+omits it.
 
 ### `lib/jido/ai/actions/ask.ex`
 
-Make signal data fields optional, fall back to slice state for run config.
-Keep `query` and `request_id` as required.
+Make signal data fields optional (except `query` and `request_id`). Fall back
+to slice state for run config:
 
 ```elixir
 schema: [
   query: [type: :string, required: true],
   request_id: [type: :string, required: true],
   model: [type: :any, default: nil],
-  tools: [type: {:list, :atom}, default: nil],
+  tools: [type: {:or, [{:list, :atom}, nil]}, default: nil],
   system_prompt: [type: {:or, [:string, nil]}, default: nil],
   max_iterations: [type: {:or, [:pos_integer, nil]}, default: nil],
   llm_opts: [type: {:or, [:keyword_list, nil]}, default: nil]
 ]
 ```
 
-In `run/4`:
+In `run/4`, resolve per-call → slice fallback:
 
 ```elixir
 model = data.model || slice.model
@@ -233,28 +205,26 @@ max_iter = data.max_iterations || slice.max_iterations
 llm_opts = data.llm_opts || slice.llm_opts || []
 ```
 
-Reject runs with `model == nil` (`{:error, :no_model}`) so a slice constructed
-without a default model fails clearly when asked without a per-call model.
+Reject runs with `model == nil` (`{:error, :no_model}`).
+
+### `lib/jido/ai/actions/{llm_turn,tool_result,failed}.ex`
+
+Replace `alias Jido.AI.Slice` with `alias Jido.AI.ReAct, as: Slice`, OR
+inline the module name. The `cycle_warning/0` and `tool_call_signature/1`
+helpers move to `Jido.AI.ReAct` along with the rename.
 
 ### `mix.exs`
 
 Update the "Jido AI" group: drop `Jido.AI.Agent`, `Jido.AI.ReAct.Result`,
-`Jido.AI.Slice`. Add `Jido.AI`, `Jido.AI.ReAct`. Keep `Jido.AI.Request`,
-`Jido.AI.ToolAdapter`, `Jido.AI.Turn`. Keep the `~r/Jido\.AI\.Actions\..*/`
+`Jido.AI.Slice`. Add `Jido.AI` and `Jido.AI.ReAct`. Keep `Jido.AI.Request`,
+`Jido.AI.ToolAdapter`, `Jido.AI.Turn`, plus the `~r/Jido\.AI\.Actions\..*/`
 and `~r/Jido\.AI\.Directive\..*/` regexes.
 
 ### `lib/jido/ai/turn.ex` moduledoc
 
-Replace "Used by the ReAct loop in `Jido.AI.ReAct`" (the deleted synchronous
-runner) with "Consumed by `Jido.AI.Actions.LLMTurn` after
+Replace "Used by the ReAct loop in `Jido.AI.ReAct`" (referring to the deleted
+synchronous runner) with "Consumed by `Jido.AI.Actions.LLMTurn` after
 `Jido.AI.Directive.LLMCall`'s executor packages a `ReqLLM.Response`."
-
-### `lib/jido/ai/actions/{llm_turn,tool_result,failed}.ex`
-
-Replace any `alias Jido.AI.Slice` with `alias Jido.AI.ReAct, as: Slice`, OR
-inline the module name. Same for `Slice.cycle_warning()` /
-`Slice.tool_call_signature/1` — those helper functions move to
-`Jido.AI.ReAct` along with the rename.
 
 ## Acceptance
 
@@ -262,68 +232,53 @@ inline the module name. Same for `Slice.cycle_warning()` /
 - `mix format --check-formatted` clean.
 - `mix credo --strict` clean.
 - `mix dialyzer` clean (allowing the pre-existing `LLMDB.Model.t/0` warning).
-- `mix test` passes with **zero `warning:` lines** in the output.
-- `mix test --include e2e` passes (the agent-level e2e tests land in task 0031;
-  this task's `:e2e` coverage is whatever already passes plus the new
-  `Jido.AI`-helper Mimic tests).
+- `mix test` clean — zero `warning:` lines.
+- `mix test --include e2e` clean — zero `warning:` lines (this dev machine
+  has LM Studio + a compatible model loaded; e2e is part of the gate).
 - The example agent in this task's docstring (`MyApp.SupportAgent`) compiles
   and runs end-to-end against a Mimic-stubbed `ReqLLM.Generation`.
+- ADR 0022 v3 §6 conformance: no `Jido.AI.Agent` macro, no `Jido.AI.ReAct.run/2`,
+  no `Jido.AI.Slice` module name. The user agent module declares **only**
+  `name:` and `slices: [{Jido.AI.ReAct, ...config...}]`. No `path:` / `schema:`
+  / `signal_routes:` mentioning anything AI-related.
 - ADR 0019 conformance: every action returns `{:ok, slice, [directive]}` or
   `{:error, reason}`. Directive executors emit signals; never return state.
 - ADR 0021 conformance: `Jido.AI.await/2` `receive`s; no polling.
-- ADR 0022 v2 §6 conformance: no `Jido.AI.Agent` macro, no `Jido.AI.ReAct.run/2`,
-  no `Jido.AI.Slice` module name (the slice module is `Jido.AI.ReAct`).
-
-## Files left untouched
-
-- `lib/jido/ai/tool_adapter.ex`, `lib/jido/ai/turn.ex` (besides the moduledoc tweak),
-  `lib/jido/ai/request.ex` — these are content-stable from task 0021/0023.
-- `lib/jido/ai/directive/llm_call.ex`, `lib/jido/ai/directive/tool_exec.ex` —
-  content-stable from task 0023; only the inline `Jido.task_supervisor_name/1`
-  call stays as-is (no helper module).
-- `lib/jido/ai/actions/{llm_turn,tool_result,failed}.ex` — content-stable
-  apart from the `Jido.AI.Slice` → `Jido.AI.ReAct` rename and the
-  `Ask` action's fallback-to-slice-state change.
 
 ## Out of scope
 
-- Streaming, checkpoint resume, multi-run concurrency — same as ADR 0022 v1.
-- A migration guide from the v1 macro to the v2 composition. The v1 commit is
-  `4f4532e` on the same branch; if anyone built on it, they have the diff.
-- An attachment mechanism for non-default, non-own configured slices (i.e.,
-  putting the ReAct slice on an agent that already has its own non-AI slice).
-  v1 keeps the slice as the agent's own.
-- A second livebook for "synchronous one-off LLM calls." That use case is
-  served by spinning an agent with `Jido.AgentServer.start_link` and calling
-  `Jido.AI.ask_sync/3`.
+- Streaming, checkpoint resume, multi-run concurrency.
+- Migration guide from v1 macro to v3 composition. The v1 commit is `4f4532e`;
+  the diff is available there.
+- Multi-instance ReAct slice (`{Jido.AI.ReAct, as: :customer, model: ...},
+  {Jido.AI.ReAct, as: :sales, model: ...}` on the same agent). Task 0032
+  reserves the `:as` field but does not wire multi-instance for v1.
+- A separate sync-LLM-call livebook. The agent path is the one path; one-off
+  use is `Jido.AI.ask_sync/3` against a quickly-spun-up agent server.
 
 ## Risks
 
-- **The slice's `schema/1` is parameterized at compile time.** Users pass
-  `schema: Jido.AI.ReAct.schema(model: ...)` inside `use Jido.Agent`. The
-  macro evaluates it then. `Jido.AI.ReAct` must be compiled before any user
-  agent module that depends on it. Mix dependency tracking handles this — both
-  files live in the same project.
+- **Order of work.** This task depends on task 0032 (`slices:` framework
+  option) and task 0029 (rejecting bare slices in `plugins:`). 0032 must land
+  first; 0029 can land before or alongside 0030.
 
-- **Slice's macro-generated `schema/0` vs custom `schema/1`.** `use Jido.Slice`
-  generates `schema/0` returning `@validated_opts[:schema]`. We do not pass a
-  `schema:` to `use Jido.Slice` (since the schema is parameterized); the
-  generated `schema/0` would return `nil`. We intentionally hide it by defining
-  `schema/1` instead — users always call `Jido.AI.ReAct.schema(opts)` from
-  their `use Jido.Agent`. Document this clearly in the slice's moduledoc.
+- **`Jido.AI.ReAct.config_schema/0` validation timing.** The framework's
+  `slices:` machinery validates the supplied config at the agent module's
+  compile time (when `use Jido.Agent` runs). A typo in `tools:` (e.g., a
+  missing module reference) raises CompileError there, not at runtime —
+  good. Make sure the error message names the slice and the config key.
 
-- **Required `:model` validation timing.** Validating `model != nil` happens
-  at the `Ask` action's `run/4` (`{:error, :no_model}`), not at compile time.
-  A user who builds an agent without a `:model` and never overrides per call
-  will get a clean `{:error, :no_model}` from the first `ask/3` instead of a
-  cryptic ReqLLM crash later. Test this case explicitly.
+- **Required `:model` validation.** v3 makes `:model` optional in
+  `config_schema:` so an agent can be defined without baking a model in (the
+  caller supplies it per-call). The action's runtime check
+  (`{:error, :no_model}`) is the floor. Test this case.
 
-- **`Jido.AI.ask/3` reads slice state before casting.** That's the single-
-  active-run guard *and* the run-config defaulting. Two `state/3` reads in a
-  row would be wasteful — fold both into one selector that returns `{:busy
-  | :idle | :completed | :failed, defaults_map}`.
+- **Slice rename `Jido.AI.Slice` → `Jido.AI.ReAct`.** The actions reference
+  the slice's helpers (`cycle_warning/0`, `tool_call_signature/1`). Move those
+  to the renamed module. Catch every reference in `lib/`, `test/`, and
+  `guides/`.
 
-- **The deleted `Jido.AI.ReAct.run/2`'s docs.** `lib/jido/ai/turn.ex` had a
-  back-reference. Catch every reference to `Jido.AI.ReAct.run/2` /
-  `Jido.AI.ReAct.Result` and either remove or repoint; otherwise `mix docs`
-  emits broken xref warnings.
+- **`Jido.AI.ReAct.run/2`'s docs.** `lib/jido/ai/turn.ex` had a back-reference;
+  task 0023's slice doc referenced "the synchronous loop." Catch every
+  reference and either remove or repoint; otherwise `mix docs` emits broken
+  xref warnings.

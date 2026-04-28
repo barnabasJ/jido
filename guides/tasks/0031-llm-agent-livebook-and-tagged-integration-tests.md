@@ -72,11 +72,12 @@ is configurability — the reader can type any ReqLLM-supported spec.
 pick (`Add` and `Multiply`, or similar), defined inline. These are the
 "tools" the slice will expose to the LLM.
 
-**Cell 3 — Define the agent.** A regular `use Jido.Agent`, composing
-`Jido.AI.ReAct.schema/1` (with the model from cell 1, the tools from cell 2,
-a system prompt, and `max_iterations`) and `Jido.AI.ReAct.signal_routes/0`.
-This is the only thing the reader needs to do to make an LLM agent — no
-custom macro, no plugin, no `path:` shenanigans.
+**Cell 3 — Define the agent.** A regular `use Jido.Agent`, attaching
+`Jido.AI.ReAct` via `slices: [{Jido.AI.ReAct, model: ..., tools: ...,
+system_prompt: ..., max_iterations: ...}]`. The agent module mentions no AI
+internals; the slice carries everything. This is the only thing the reader
+needs to do to make an LLM agent — no custom macro, no plugin, no `path:`/
+`schema:`/`signal_routes:` plumbing.
 
 **Cell 4 — Start.** `Jido.AgentServer.start_link/1`. Returns the pid that the
 helpers in `Jido.AI` accept.
@@ -96,8 +97,8 @@ hood). No `Process.sleep`. Per ADR 0021, no full-state reads.
 
 Agent-level integration tests, tagged `:e2e`. Each test:
 
-1. Defines a regular `use Jido.Agent` test agent that composes
-   `Jido.AI.ReAct.schema(...)` and `signal_routes/0`.
+1. Defines a regular `use Jido.Agent` test agent that attaches
+   `Jido.AI.ReAct` via `slices: [{Jido.AI.ReAct, model: ..., tools: ..., system_prompt: ...}]`.
 2. Starts it via `Jido.AgentServer.start_link/1` (using `JidoTest.Case`'s
    per-test Jido instance).
 3. Calls `Jido.AI.ask/3` + `Jido.AI.await/2` (or `ask_sync/3`).

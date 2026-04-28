@@ -2,10 +2,13 @@
 
 - Status: Proposed (revised — see *Revision history* at the bottom)
 - Implementation: Tasks [0021](../tasks/0021-reqllm-dep-and-tool-adapter.md) (done),
-  [0022](../tasks/0022-react-runtime-pure.md) (done — to be retired by task 0030 below),
-  [0023](../tasks/0023-llm-agent-slice-plugin.md) (done — to be refactored by task 0030),
-  [0029](../tasks/0029-reject-bare-slice-in-plugins.md), [0030](../tasks/0030-llm-agent-slice-composition-refactor.md), [0031](../tasks/0031-llm-agent-livebook-and-tagged-integration-tests.md).
-- Date: 2026-04-27 (revised 2026-04-28)
+  [0022](../tasks/0022-react-runtime-pure.md) (done — retired by task 0030),
+  [0023](../tasks/0023-llm-agent-slice-plugin.md) (done — superseded by task 0030),
+  [0029](../tasks/0029-reject-bare-slice-in-plugins.md),
+  [0032](../tasks/0032-framework-slices-attachment-option.md),
+  [0030](../tasks/0030-llm-agent-slice-composition-refactor.md),
+  [0031](../tasks/0031-llm-agent-livebook-and-tagged-integration-tests.md).
+- Date: 2026-04-27 (revised twice — see *Revision history* at the bottom)
 - Related ADRs: [0014](0014-slice-middleware-plugin.md), [0017](0017-pod-mutations-are-signal-driven.md),
   [0018](0018-tagged-tuple-return-shape.md), [0019](0019-actions-mutate-state-directives-do-side-effects.md),
   [0021](0021-no-full-state-no-polling.md)
@@ -150,47 +153,67 @@ Concurrency is **single active run per agent in v1**. A new `ai.react.ask` while
 `status == :running` is rejected (`{:error, :busy}`). `steer/3` and `inject/3`
 from `jido_ai` are out of scope.
 
-### 6. ReAct is a slice attached to a regular `Jido.Agent` — no `Jido.AI.Agent` macro
+### 6. ReAct is a slice attached via `slices:` on a regular `Jido.Agent`
 
 There is no `use Jido.AI.Agent` macro. There is no AI-specific agent wrapper.
-Users compose a regular `Jido.Agent` with a configured `Jido.AI.ReAct` slice:
+Users compose a regular `Jido.Agent` with a configured `Jido.AI.ReAct` slice
+via the framework's `slices:` option (added in task 0032):
 
 ```elixir
 defmodule MyApp.SupportAgent do
   use Jido.Agent,
     name: "support",
-    path: :ai,
-    schema:
-      Jido.AI.ReAct.schema(
+    slices: [
+      {Jido.AI.ReAct,
         model: "anthropic:claude-haiku-4-5-20251001",
         tools: [MyApp.Actions.LookupOrder, MyApp.Actions.RefundOrder],
         system_prompt: "You are a support agent.",
-        max_iterations: 5
-      ),
-    signal_routes: Jido.AI.ReAct.signal_routes()
+        max_iterations: 5}
+    ]
 end
 ```
 
-The agent module is generic. It declares no LLM concepts. The slice provides:
+The agent module declares **no LLM concepts**. It does not name a `path:`, a
+`schema:`, or `signal_routes:` for the AI slice — those are slice-internal.
 
-- `Jido.AI.ReAct.schema/1` — accepts opts (`:model`, `:tools`, `:system_prompt`,
-  `:max_iterations`, `:max_tokens`, `:temperature`, `:llm_opts`) and returns a Zoi
-  schema whose defaults are seeded from those opts. The framework's slice-seeding
-  path picks up the schema's defaults and the slice starts in `:idle` with the
-  user's run config baked in.
-- `Jido.AI.ReAct.signal_routes/0` — the four `ai.react.*` routes wired to the
-  four actions (`Ask`, `LLMTurn`, `ToolResult`, `Failed`).
+`Jido.AI.ReAct` is `use Jido.Slice` with:
 
-The slice is the agent's *own* slice (`path: :ai`). It is **not** attached via
-`plugins:`; ADR 0014 reserves `plugins:` for `Slice + Middleware` modules
-(`use Jido.Plugin`). A bare slice in `plugins:` should fail at compile time —
-that's task 0029, separate from this ADR.
+- `path: :ai`
+- `actions: [Jido.AI.Actions.{Ask, LLMTurn, ToolResult, Failed}]`
+- `signal_routes:` — the four `ai.react.*` routes (absolute paths; no
+  plugin-style prefixing happens for `slices:` attachment)
+- `schema:` — the slice's state shape (`status`, `request_id`, `context`,
+  `iteration`, `result`, `error`, `pending_tool_calls`, etc., plus the
+  `model` / `tools` / `system_prompt` / `max_iterations` / `llm_opts`
+  run-config fields)
+- `config_schema:` — declares `:model`, `:tools`, `:system_prompt`,
+  `:max_iterations`, `:max_tokens`, `:temperature`, `:llm_opts` as the keys
+  the slice accepts at attachment time
 
-If a future use case needs ReAct *alongside* other slices in the same agent — a
-chat slice, a memory slice, a planning slice — that's a separate framework
-problem (an attachment mechanism for non-default, non-own, configured slices).
-That's not in scope for v1; v1's "ReAct slice = agent's own slice" works cleanly
-within the existing `path:` / `schema:` / `signal_routes:` contract.
+The framework's `slices:` machinery seeds the slice's initial state by
+validating the supplied config through `config_schema/0` and merging into the
+slice state under `path()` (`:ai`). Per ADR 0017 the slice's signal_routes
+land verbatim — no prefix.
+
+`slices:` is **not** `plugins:`. ADR 0014 reserves `plugins:` for `use
+Jido.Plugin` modules (Slice + Middleware). Putting `Jido.AI.ReAct` (a bare
+slice) in `plugins:` is a compile-time error after task 0029; the right bucket
+is `slices:` (added in task 0032).
+
+Multiple slices compose. An agent that wants ReAct alongside a chat slice or
+a memory slice just lists them all:
+
+```elixir
+slices: [
+  Jido.Memory.Slice,
+  {Jido.AI.ReAct, model: "...", tools: [...]},
+  {MyApp.AnalyticsSlice, sample_rate: 0.1}
+]
+```
+
+Path collisions across the agent's own `path:`, between two `slices:` entries,
+or between a slice and `default_plugins:` raise `CompileError` at the agent
+module's compile time.
 
 ### 7. User-facing API — `Jido.AI` namespace functions
 
@@ -326,16 +349,25 @@ through macro internals, and a placeholder `model:` was needed to instantiate th
 struct before per-call overrides could land. The agent module ended up knowing
 about LLM concerns it should not own; the slice ended up not really being
 configurable — its config flowed from the agent macro instead of from where it
-naturally lives. Replaced with the §6 design: generic `Jido.Agent`, slice provides
-`schema/1` accepting LLM opts.
+naturally lives. Replaced.
+
+**Pull slice metadata into `use Jido.Agent` via `path:` / `schema:` / `signal_routes:`.**
+This was v2. The agent module wrote `path: :ai, schema: Jido.AI.ReAct.schema(...)`,
+`signal_routes: Jido.AI.ReAct.signal_routes()` — the slice's schema function
+returned a parameterized Zoi schema baking the LLM config into defaults. Two
+problems: the agent's macro still mentioned `:ai` and the slice's schema/routes
+(slice internals leaking into the agent), and the design only worked when the
+AI slice was the agent's *own* slice (no composition with other agent state).
+Replaced by §6 v3, which uses a framework-level `slices:` attachment so the
+agent module declares nothing about the slice's internals.
 
 **Slice attached as a plugin (`plugins: [Jido.AI.ReAct]`).** A `use Jido.Plugin`
 module is `Slice + Middleware`. The ReAct slice doesn't need a middleware half.
 Putting a bare slice in `plugins:` works today only because the validation is
 weak (task 0029 fixes that). Even if it worked, the plugin's `route_prefix` would
 prepend the slice's name to its routes, producing `"ai.ai.react.ask"` instead of
-`"ai.react.ask"`. The natural shape is "the slice is the agent's own slice"
-(`path: :ai`), bypassing the plugin path entirely.
+`"ai.react.ask"`. The natural bucket for bare slices is `slices:` (added in
+task 0032), which mounts the slice without prefixing.
 
 **Build a thin `Jido.AI.Model` behaviour and write per-provider HTTP clients
 ourselves.** Pros: smaller dep list. Cons: duplicates ReqLLM's provider catalogue,
@@ -385,15 +417,23 @@ The rule is configurable; a sensible default is a UX nicety on top.
 
 ## Revision history
 
+- **v3 (2026-04-28, second revision)** — replaced the §6 v2 design (slice
+  metadata pulled into `use Jido.Agent` via `path:` / `schema:` /
+  `signal_routes:`) with proper slice attachment via a new framework option
+  `slices:` (added in task 0032). The agent module no longer declares
+  *anything* about the AI slice — its `path`, schema, routes, and actions all
+  live on `Jido.AI.ReAct` and are wired in by the framework when the user
+  writes `slices: [{Jido.AI.ReAct, model: ..., tools: ...}]`. The v2 design
+  still bled slice internals into the agent macro; v3 fixes that.
+
 - **v2 (2026-04-28)** — replaced the `use Jido.AI.Agent` macro design (§6 v1)
-  with the slice-composition design (§6 v2): a generic `Jido.Agent` consumes
-  `Jido.AI.ReAct.schema/1` and `signal_routes/0` directly. Added §7 (`Jido.AI`
-  namespace helpers). Rewrote §8 (tests are tagged, not probed). Retired the
-  standalone `Jido.AI.ReAct.run/2` synchronous runner. Implementation tracked
-  by tasks 0030 (refactor) and 0031 (livebook + tagged integration tests),
-  which together supersede tasks 0022 and 0023's user-facing surfaces. Task
-  0029 (reject bare slice in `plugins:`) was added and remains separate.
+  with a slice-composition design where the agent's *own* slice is the AI
+  slice (`path: :ai`, `schema: Jido.AI.ReAct.schema(...)`, `signal_routes:
+  Jido.AI.ReAct.signal_routes()`). Added §7 (`Jido.AI` namespace helpers).
+  Rewrote §8 (tests are tagged, not probed). Retired the standalone
+  `Jido.AI.ReAct.run/2` synchronous runner. Replaced by v3 because the agent
+  macro still ended up declaring slice internals.
 
 - **v1 (2026-04-27)** — original ADR. Proposed `use Jido.AI.Agent` macro,
   `plugins: [Jido.AI.Slice]`, probe-and-skip integration tests. Implemented
-  in task 0023 commit `4f4532e`; retired by v2.
+  in task 0023 commit `4f4532e`; retired by v2 / v3.
