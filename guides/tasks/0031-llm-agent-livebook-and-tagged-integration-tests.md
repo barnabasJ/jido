@@ -5,9 +5,9 @@ description: Ship `guides/llm-agent.livemd` with the model spec as a `Kino.Input
 
 # Task 0031 — Livebook with configurable model + tagged-and-excluded integration tests
 
-- Implements: [ADR 0022](../adr/0022-llm-agents-inlined-jido-ai-namespace.md) v2 §8, §9.
+- Implements: [ADR 0022](../adr/0022-llm-agents-inlined-jido-ai-namespace.md) v3.1 §8, §9.
 - Depends on: [task 0030](0030-llm-agent-slice-composition-refactor.md).
-- Supersedes: [task 0024](0024-llm-agent-livebook-and-local-integration-test.md) (same goal, two rules updated to match ADR v2: tagged-not-probed, slice-composition agent shape).
+- Supersedes: [task 0024](0024-llm-agent-livebook-and-local-integration-test.md) (same goal, three rules updated to match ADR v3.1: tagged-not-probed, slice-composition agent shape, `ask/3` + `ask_sync/3` only — no `await/2`/`Request{}`).
 - Blocks: nothing.
 - Leaves tree: **green**.
 
@@ -31,10 +31,11 @@ separate tag (`:paid_llm`); never the same `:e2e` test wired to a different
 provider.
 
 **Rule 2 — Livebook: configurable.** The livebook exposes the model spec as a
-`Kino.Input` at the top. The reader picks the provider — Anthropic, OpenAI,
-Groq, a local endpoint, whatever ReqLLM supports — by typing into the input.
-The rule is "configurable," not "configurable with a local default." Picking
-the input's default is a secondary, separate UX choice.
+`Kino.Input` at the top. The reader picks the provider — Anthropic, OpenAI, a
+local OpenAI-compatible endpoint (LM Studio / Ollama / vLLM at
+`http://localhost:1234/v1`), whatever ReqLLM supports — by selecting from the
+input. The rule is "configurable," not "configurable with a local default."
+Picking the input's default is a secondary, separate UX choice.
 
 ## Goal
 
@@ -42,78 +43,118 @@ After this commit:
 
 1. A reader opens `guides/llm-agent.livemd` and runs cells top-to-bottom. The
    model spec is a `Kino.Input` at the top. The agent is a regular
-   `use Jido.Agent` composing `Jido.AI.ReAct.schema/1` and `signal_routes/0`.
-   `Jido.AI.ask_sync/3` is the reader-facing call. No `Jido.AI.Agent` macro
-   appears anywhere.
+   `use Jido.Agent` composing `Jido.AI.ReAct` via the framework's `slices:`
+   option (`slices: [{Jido.AI.ReAct, model: ..., tools: ..., system_prompt:
+   ..., max_iterations: ..., llm_opts: ...}]`). `Jido.AI.ask/3` and
+   `Jido.AI.ask_sync/3` are the reader-facing calls. No `Jido.AI.Agent`
+   macro, no `Jido.AI.await/2`, no `%Jido.AI.Request{}` appears anywhere.
 
-2. `mix test --include e2e` runs the agent-level integration tests against the
+2. The headline cell drives **subscription-driven streaming of ReAct
+   steps**: a `Kino.Input.text` for the question, a `Kino.Control.button`
+   for submit, and a `Kino.Frame` rendering each step (thinking, tool
+   calls, tool results, final answer) as the run progresses. The
+   subscription is the caller's — set up via `Jido.AgentServer.subscribe/4`
+   with a pure projecting selector before `Jido.AI.ask/3` fires. No
+   `Process.sleep`, no polling — the receive loop drains dispatches until
+   the slice settles `:completed` or `:failed`, with a generous deadline
+   that surfaces as a clear "timed out" message rather than silent hang.
+
+3. `mix test --include e2e` runs the agent-level integration tests against the
    local LLM. With the operator's local stack up, all tests pass. With it
    down, the relevant tests fail (not skip).
 
-3. `mix docs` shows the livebook in the sidebar under a new "AI Agents"
-   section. ADR 0022 (v2) is indexed in `guides/adr/README.md`.
+4. `mix docs` shows the livebook in the sidebar under a new "AI Agents"
+   section.
 
 This task is "make it findable, runnable, verified end-to-end." No new runtime
-code; only a livebook, integration tests, and documentation wiring.
+code; only a livebook, optional additional tagged tests, and documentation
+wiring.
 
 ## Files to create
 
 ### `guides/llm-agent.livemd`
 
-Six-cell quickstart livebook.
+Cell breakdown (titles approximate; the livebook may collapse adjacent
+cells where the prose flows naturally).
 
-**Cell 1 — Setup + model input.** Mix install, ReqLLM key registration, and a
-`Kino.Input.text/2` for the model spec. The default is a sensible local-LLM
-spec (e.g. `"openai:google/gemma-4-26b-a4b"` against `http://localhost:1234/v1`,
-since that matches the dev machine the project develops against), but the rule
-is configurability — the reader can type any ReqLLM-supported spec.
+**Setup.** `Mix.install` with `{:jido, path: ...}` and `{:kino, "~> 0.16"}`,
+plus a small `Demo.Jido` OTP harness (mirroring `call-cast-await-subscribe.livemd`'s
+setup) so the livebook has a Jido instance to start agents under.
 
-**Cell 2 — Two tool actions.** Two minimal `Jido.Action` modules a model can
-pick (`Add` and `Multiply`, or similar), defined inline. These are the
-"tools" the slice will expose to the LLM.
+**Model + API key.** A `Kino.Input.select/2` with a small set of provider
+options:
 
-**Cell 3 — Define the agent.** A regular `use Jido.Agent`, attaching
-`Jido.AI.ReAct` via `slices: [{Jido.AI.ReAct, model: ..., tools: ...,
-system_prompt: ..., max_iterations: ...}]`. The agent module mentions no AI
-internals; the slice carries everything. This is the only thing the reader
-needs to do to make an LLM agent — no custom macro, no plugin, no `path:`/
-`schema:`/`signal_routes:` plumbing.
+  * Local OpenAI-compatible endpoint (LM Studio / Ollama / vLLM at
+    `http://localhost:1234/v1`) — sensible default so the cells run on
+    first open if a local stack is up.
+  * Anthropic — needs API key.
+  * OpenAI — needs API key.
 
-**Cell 4 — Start.** `Jido.AgentServer.start_link/1`. Returns the pid that the
-helpers in `Jido.AI` accept.
+A separate `Kino.Input.password/1` for the API key (defaulting empty;
+local endpoints don't need one).
 
-**Cell 5 — Ask.** `Jido.AI.ask_sync(pid, "...")` and render the result. A
-second cell shows a tool-using prompt so the reader sees the model picking a
-tool and the agent running it.
+**Tool actions.** Two `use Jido.Action` modules inline (e.g. `Add` and
+`Multiply`). The slice exposes both to the LLM via `ReqLLM.Tool` adapters.
 
-**Cell 6 — Inspect.** A projecting selector (per ADR 0021) that returns the
-slice's iteration count, status, and the conversation length. Demonstrates how
-to read agent state without a full-state read.
+**Agent module.** A regular `use Jido.Agent` that reads the input values
+and attaches `Jido.AI.ReAct` via `slices: [{Jido.AI.ReAct, model: ...,
+tools: ..., system_prompt: ..., max_iterations: ..., llm_opts: [api_key:
+...]}]`. The agent module declares no AI internals.
 
-Every wait inside the livebook is `ask_sync/3` (which `receive`s under the
-hood). No `Process.sleep`. Per ADR 0021, no full-state reads.
+**Streaming output via subscription.** A small `Demo.Streamer` module
+holding the projecting selector + a `render/3` function that maps signal
+type + projection to a Kino.Markdown line, plus a `drain/3` receive loop
+that runs through the subscription dispatches until terminal.
 
-### `test/jido/ai/agent_e2e_test.exs`
+**Run cell — question + button + live output.** This is the headline.
+A `Kino.Input.text` for the question, a `Kino.Control.button("Ask")` for
+submit, and a `Kino.Frame` for live output. Wiring:
 
-Agent-level integration tests, tagged `:e2e`. Each test:
+  * Subscribe to `"ai.react.**"` with a pure projecting selector that
+    returns `{status, iteration, pending_tool_calls, last_tool_message,
+    result, error}`. Default subscribe dispatch sends
+    `{:jido_subscription, sub_ref, %{signal_type: type, result: {:ok,
+    projection}}}` to the calling process.
+  * On click: `Jido.AI.ask(pid, question)` to get the request_id, then
+    `drain/3` reads dispatches and `Kino.Frame.append/2`s a step line for
+    each:
+      - "Thinking…" on `ai.react.ask`.
+      - "Calling tool: <name>(<args>)" on `ai.react.llm.completed` with
+        non-empty `pending_tool_calls`.
+      - "Tool result: <name> → <content>" on `ai.react.tool.completed`.
+      - The final answer on `ai.react.llm.completed` with `:completed`.
+      - The error term on `ai.react.failed`.
+  * No `Process.sleep`, no polling. Pure receive on the subscription's
+    dispatches with a deadline (60s) that renders "timed out" rather than
+    hanging silently.
 
-1. Defines a regular `use Jido.Agent` test agent that attaches
-   `Jido.AI.ReAct` via `slices: [{Jido.AI.ReAct, model: ..., tools: ..., system_prompt: ...}]`.
-2. Starts it via `Jido.AgentServer.start_link/1` (using `JidoTest.Case`'s
-   per-test Jido instance).
-3. Calls `Jido.AI.ask/3` + `Jido.AI.await/2` (or `ask_sync/3`).
-4. Asserts the result.
+This cell explicitly demonstrates that `ask/3` is fire-and-forget
+(returns `{:ok, request_id}`), the subscription is the caller's, and the
+framework imposes no opinion on what to filter for. This is "streaming
+output via subscription" at the **signal level** (each ReAct step), not
+the token level (the slice doesn't do token streaming today; the cell's
+prose says so).
 
-Cases:
+**`ask_sync/3` contrast (optional).** Same agent, same question, but
+`Jido.AI.ask_sync/3` returns just the final text. Two paths, same agent —
+pick the shape that fits your use case.
 
-1. **Single-turn final answer.** No tools, simple prompt, the model returns a
-   final answer in one LLM call. Asserts text content, slice `:completed`,
-   `iteration >= 1`.
-2. **Tool round trip.** A tool is exposed; prompt asks the model to use it.
-   Asserts `iteration >= 2`, slice context contains a `:tool` message.
+### `test/jido/ai/react_e2e_test.exs` (already shipped in task 0030)
 
-These two are the floor. Add more if a regression bites; do not pre-build
-exhaustive coverage that depends on model-specific quirks.
+Four tagged-`:e2e` tests already cover the agent against a real local
+LLM, including:
+
+1. Single-turn final answer (no tools).
+2. Tool-calling round trip with `TestEcho`.
+3. Numeric tool call with `TestAdd`.
+4. Out-of-band subscription observing every intermediate signal — the
+   canonical pattern the livebook mirrors in UI form
+   (`drain_until_completed/3`).
+
+Task 0031 may add additional tagged coverage if the livebook surfaces
+something new (e.g. paid-API coverage under a separate `:paid_llm` tag —
+never the same `:e2e` test wired to a different provider, per ADR 0022
+§8). It does not need to ship new e2e tests.
 
 Configurable via env vars (matching the existing convention):
 
@@ -130,20 +171,14 @@ this task verifies the opt-in is intact.
 
 ### `mix.exs` — docs
 
-- Add `"guides/llm-agent.livemd"` to `groups_for_extras` under a new
-  "AI Agents" section.
-- Add `{"guides/llm-agent.livemd", title: "LLM Agents"}` to `extras`.
-
-### `guides/adr/README.md`
-
-Add an entry for ADR 0022 (v2). The README isn't tracked here today; if it
-exists, append the entry. If not, the docs index task is satisfied by the
-`mix.exs` `groups_for_extras` change.
+- Add a new "AI Agents" section to `groups_for_extras` containing
+  `"guides/llm-agent.livemd"`.
+- Add `{"guides/llm-agent.livemd", title: "LLM Agent — Quick Start"}` to
+  `extras`.
 
 ### `guides/tasks/README.md`
 
-Add rows for tasks 0030 and 0031. Mark tasks 0022, 0023 as superseded by
-0030 in their description column.
+Mark task 0031 row as **green**.
 
 ## Acceptance
 
@@ -152,15 +187,18 @@ Add rows for tasks 0030 and 0031. Mark tasks 0022, 0023 as superseded by
 - `mix credo --strict` clean.
 - `mix dialyzer` clean (allowing the pre-existing `LLMDB.Model.t/0` warning).
 - `mix test` clean — zero `warning:` lines.
-- `mix test --include e2e` clean — zero `warning:` lines, two new agent-level
-  tests pass against the operator's local LLM.
+- `mix test --include e2e` clean — zero `warning:` lines, the four
+  agent-level tests pass against the operator's local LLM.
 - `mix docs` builds without xref warnings; the livebook appears in the sidebar
   under "AI Agents".
-- Manually opening `guides/llm-agent.livemd` and clicking Run runs all six
-  cells top-to-bottom against the operator's local LLM with no edits.
-- ADR 0019 / 0021 / 0022 v2 conformance: no polling in the livebook or the
+- Manually opening `guides/llm-agent.livemd` and clicking Run runs all the
+  cells top-to-bottom against the operator's local LLM with no edits, and
+  the question-input cell streams ReAct steps live into the Kino.Frame.
+- ADR 0019 / 0021 / 0022 v3.1 conformance: no polling in the livebook or the
   tests; no `Process.sleep` outside intentional fixture pauses; agent shape
-  is the slice-composition pattern, not a `Jido.AI.Agent` macro.
+  is the slice-composition pattern, not a `Jido.AI.Agent` macro; the
+  user-facing API is `Jido.AI.ask/3` + `Jido.AI.ask_sync/3`, no
+  `await/2`/`Request{}`.
 
 ## Out of scope
 
@@ -168,9 +206,16 @@ Add rows for tasks 0030 and 0031. Mark tasks 0022, 0023 as superseded by
   `Jido.AI.ReAct.run/2` anymore (retired by task 0030). The agent path is the
   one path; one-off use is `Jido.AI.ask_sync/3` against an agent server you
   spin up and let go.
-- Streaming / token-level UX in the livebook.
+- **Token-level streaming** (per-token signals through
+  `ReqLLM.Generation.stream_text/3`). v1 streams ReAct *steps* via the
+  subscription — each LLM turn / tool call / tool result is one step.
+  Token streaming is a separate design with its own ADR.
 - A migration guide from `jido_ai`. Out of scope for v1 per ADR 0022.
-- Paid-API integration tests. Separate tag, separate task if/when needed.
+- Paid-API integration tests. Separate tag (`:paid_llm`), separate task
+  if/when needed.
+- Multi-instance ReAct (two `Jido.AI.ReAct` slices on the same agent
+  with `as: :sales` / `as: :support`). Task 0032 reserves the field;
+  v1 doesn't wire it.
 
 ## Risks
 
@@ -183,17 +228,22 @@ Add rows for tasks 0030 and 0031. Mark tasks 0022, 0023 as superseded by
 
 - **`mix test --include e2e` is now part of the local quality gate.** The
   project's working agreement is that the gate passes including e2e on the dev
-  machine. Document the env vars at the top of `agent_e2e_test.exs` and in the
-  ADR's §8 cross-reference so a contributor knows what to point at.
+  machine. The env vars are documented at the top of `react_e2e_test.exs` and
+  in the ADR's §8 cross-reference so a contributor knows what to point at.
 
-- **The livebook's default model spec.** The default points at the dev
-  machine's local LM Studio config. Contributors on macOS / Linux with LM
-  Studio installed will get the default to "just work" if they have a
-  compatible model loaded; everyone else swaps the input. Keep the
-  default-pick logic visible in cell 1 with a comment naming both the install
-  command (`lms get ...` or equivalent) and the rule that the input is the
-  source of truth.
+- **The livebook's default model spec.** The default points at a local
+  OpenAI-compatible endpoint. Contributors with LM Studio / Ollama / vLLM
+  installed and a compatible model loaded will get the default to "just
+  work"; everyone else swaps the input. Keep the default-pick logic
+  visible in the cell with a comment naming the rule that the input is
+  the source of truth.
+
+- **Subscription-driven streaming of ReAct steps.** This is the headline
+  feature of the livebook and the closest thing v1 has to "streaming
+  output." Make sure the cell's prose distinguishes signal-step
+  streaming from token streaming — they're different things, and a
+  reader expecting token-level deltas needs to know v1 doesn't do that.
 
 - **`docs index` updates risk drifting from ADR file moves.** If a future ADR
-  renumber happens, the `mix.exs` extras list and the README needs updating.
-  Keep the entries minimal and grouped so the maintenance surface is small.
+  renumber happens, the `mix.exs` extras list needs updating. Keep the entries
+  minimal and grouped so the maintenance surface is small.

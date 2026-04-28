@@ -1,0 +1,461 @@
+# LLM Agent — Quick Start
+
+```elixir
+Mix.install([
+  {:jido, path: Path.expand("..", __DIR__)},
+  {:kino, "~> 0.16"}
+])
+```
+
+## What this notebook builds
+
+A working LLM agent in five cells. The model spec is a `Kino.Input` —
+you pick the provider (local OpenAI-compat / Anthropic / OpenAI). Two
+inline `Jido.Action` modules become the agent's tools. A `use Jido.Agent`
+attaches `Jido.AI.ReAct` via `slices:` — that's the whole agent
+declaration, no AI-specific macro.
+
+The headline cell streams **ReAct steps live** into a `Kino.Frame`: you
+type a question, click Ask, and watch the agent think, call tools,
+receive results, and answer — driven by an out-of-band subscription you
+control. See ADR 0022 v3.1 §7 (the `ask/3` + `ask_sync/3` API shape) and
+§9 (the configurable-input rule) in `guides/adr/`.
+
+> **Signal-level streaming, not token-level.** Each ReAct step (one
+> LLM turn, one tool exec, one tool result) is one signal — the
+> subscription dispatches one event per step. Token-by-token streaming
+> through `ReqLLM.Generation.stream_text/3` is out of scope for v1.
+
+## Setup — Demo.Jido
+
+Boot a small Jido instance to start agents under, the same pattern as
+the rest of the livebook set.
+
+```elixir
+defmodule Demo.Jido do
+  use Jido, otp_app: :demo
+end
+
+case Demo.Jido.start_link() do
+  {:ok, _pid} -> :started
+  {:error, {:already_started, _pid}} -> :already_started
+end
+```
+
+## Pick your model
+
+A `Kino.Input.select/2` for the provider plus a `Kino.Input.password/1`
+for the API key. The default is a local OpenAI-compatible endpoint at
+`http://localhost:1234/v1` so the cells run end-to-end out of the box if
+you have LM Studio / Ollama / vLLM up with a compatible model loaded.
+Cloud providers need an API key.
+
+```elixir
+provider_input =
+  Kino.Input.select(
+    "Provider",
+    [
+      {:local, "Local OpenAI-compatible (LM Studio / Ollama / vLLM @ localhost:1234)"},
+      {:anthropic, "Anthropic — claude-haiku-4-5 (paid)"},
+      {:openai, "OpenAI — gpt-5-mini (paid)"}
+    ]
+  )
+
+api_key_input = Kino.Input.password("API key (leave blank for local)")
+
+Kino.Layout.grid([provider_input, api_key_input], columns: 1)
+```
+
+After changing either input, re-run the **Define the agent** cell below
+so the new spec takes effect, then re-run the **Start the agent** cell
+to spin up a fresh server.
+
+## Define the tools
+
+Two inline `use Jido.Action` modules — the agent's tools. The slice
+converts each one into a `ReqLLM.Tool` via `Jido.AI.ToolAdapter` and
+exposes them to the LLM.
+
+```elixir
+defmodule Demo.AI.Add do
+  use Jido.Action,
+    name: "add",
+    description: "Adds two integers and returns the sum.",
+    schema: [
+      a: [type: :integer, required: true, doc: "First addend"],
+      b: [type: :integer, required: true, doc: "Second addend"]
+    ]
+
+  @impl true
+  def run(%Jido.Signal{data: %{a: a, b: b}}, _slice, _opts, _ctx),
+    do: {:ok, %{result: a + b}, []}
+end
+
+defmodule Demo.AI.Multiply do
+  use Jido.Action,
+    name: "multiply",
+    description: "Multiplies two integers and returns the product.",
+    schema: [
+      a: [type: :integer, required: true, doc: "First factor"],
+      b: [type: :integer, required: true, doc: "Second factor"]
+    ]
+
+  @impl true
+  def run(%Jido.Signal{data: %{a: a, b: b}}, _slice, _opts, _ctx),
+    do: {:ok, %{result: a * b}, []}
+end
+```
+
+## Define the agent
+
+A regular `use Jido.Agent`. It declares `name:`, a `path:` for its own
+user-domain slice (unused — the AI slice owns its own `:ai` key), and
+`slices: [{Jido.AI.ReAct, ...}]` carrying every LLM-specific value.
+
+The slice's `config_schema/0` validates the keys at compile time; if you
+typo `tools:` or pass an unknown field, `defmodule` raises `CompileError`
+naming the slice and key. (See ADR 0022 §6 in `guides/adr/`.)
+
+```elixir
+provider_choice = Kino.Input.read(provider_input)
+api_key_value = Kino.Input.read(api_key_input)
+
+model_spec =
+  case provider_choice do
+    :local ->
+      %{
+        provider: :openai,
+        id: "google/gemma-4-26b-a4b",
+        base_url: "http://localhost:1234/v1"
+      }
+
+    :anthropic ->
+      "anthropic:claude-haiku-4-5-20251001"
+
+    :openai ->
+      "openai:gpt-5-mini"
+  end
+
+# Local OpenAI-compatible servers ignore the api_key but still expect
+# *something* in the Authorization header — pass a stub when the field
+# is empty. ReqLLM uses the per-call :api_key as the highest-precedence
+# source (above app config / env vars), so this `llm_opts:` plumbs your
+# secret through verbatim. Multi-tenant callers set it per-call instead.
+api_key_opt =
+  case {provider_choice, api_key_value} do
+    {:local, ""} -> "lm-studio"
+    {:local, nil} -> "lm-studio"
+    {_, key} when is_binary(key) and key != "" -> key
+    _ -> ""
+  end
+
+defmodule LivebookAgent do
+  use Jido.Agent,
+    name: "livebook_ai",
+    path: :state,
+    slices: [
+      {Jido.AI.ReAct,
+       model: model_spec,
+       tools: [Demo.AI.Add, Demo.AI.Multiply],
+       system_prompt:
+         "You are a concise arithmetic assistant. " <>
+           "Use the `add` and `multiply` tools when calculations are needed, " <>
+           "then state the final answer. Keep the answer to one sentence.",
+       max_iterations: 5,
+       max_tokens: 512,
+       llm_opts: [api_key: api_key_opt]}
+    ]
+end
+
+:ok
+```
+
+## Streaming output via subscription
+
+A small helper module the run cell will use:
+
+  * `selector/1` — projects the slice's status, iteration, the
+    in-flight tool calls, and the most recent tool message from the
+    `ReqLLM.Context`. Returns `:skip` until a run is in flight so we
+    don't see lifecycle signals from agent startup.
+  * `render/3` — pattern-matches on signal type + projection and
+    appends one Markdown line to a `Kino.Frame` per ReAct step.
+  * `drain/3` — receives subscription dispatches in a loop until the
+    slice settles `:completed` or `:failed`. No polling; no
+    `Process.sleep`. A timeout renders a clear "timed out" line rather
+    than hanging silently.
+
+The dispatches arrive as `{:jido_subscription, sub_ref, %{signal_type:
+type, result: {:ok, projection}}}` — the default `subscribe/4` shape.
+
+```elixir
+defmodule Demo.Streamer do
+  @moduledoc false
+
+  alias ReqLLM.Context
+
+  @doc """
+  Pure projecting selector — runs in the agent process, returns
+  the slice fields the UI needs. `:skip` while no run is in flight.
+  """
+  def selector(state) do
+    ai = state.agent.state.ai
+
+    if is_nil(ai.request_id) do
+      :skip
+    else
+      {:ok, project(ai)}
+    end
+  end
+
+  @doc """
+  Append one Markdown line to `frame` for the ReAct step described by
+  `signal_type` + `projection`.
+  """
+  def render(frame, "ai.react.ask", _projection) do
+    Kino.Frame.append(frame, Kino.Markdown.new("**Step 0** — _Thinking…_"))
+  end
+
+  def render(frame, "ai.react.llm.completed", %{
+        status: :completed,
+        result: result,
+        iteration: iter
+      }) do
+    Kino.Frame.append(
+      frame,
+      Kino.Markdown.new(
+        "**Step #{iter}** — _Final answer:_\n\n#{result || "_(model returned no text)_"}"
+      )
+    )
+  end
+
+  def render(frame, "ai.react.llm.completed", %{
+        pending_tool_calls: [_ | _] = calls,
+        iteration: iter
+      }) do
+    pretty =
+      Enum.map_join(calls, "\n", fn c ->
+        "- `#{c.name}(#{inspect(c.arguments)})`"
+      end)
+
+    Kino.Frame.append(
+      frame,
+      Kino.Markdown.new("**Step #{iter}** — _Model picked tools:_\n#{pretty}")
+    )
+  end
+
+  def render(frame, "ai.react.llm.completed", %{iteration: iter, status: status}) do
+    Kino.Frame.append(
+      frame,
+      Kino.Markdown.new("**Step #{iter}** — _LLM turn (#{status})._")
+    )
+  end
+
+  def render(frame, "ai.react.tool.completed", %{
+        last_tool_message: %{name: name, content: text}
+      }) do
+    truncated = String.slice(text || "", 0, 200)
+
+    Kino.Frame.append(
+      frame,
+      Kino.Markdown.new("_Tool result_ — `#{name}` → `#{truncated}`")
+    )
+  end
+
+  def render(frame, "ai.react.tool.completed", _projection) do
+    Kino.Frame.append(frame, Kino.Markdown.new("_Tool result received._"))
+  end
+
+  def render(frame, "ai.react.failed", %{error: error}) do
+    Kino.Frame.append(frame, Kino.Markdown.new("**Failed** — `#{inspect(error)}`"))
+  end
+
+  def render(_frame, _type, _projection), do: :noop
+
+  @doc """
+  Receive subscription dispatches until the slice settles. Returns
+  `:done` on `:completed` / `:failed`, or `:timeout` after `deadline_ms`.
+  """
+  def drain(sub_ref, frame, deadline_ms) do
+    receive do
+      {:jido_subscription, ^sub_ref, %{signal_type: type, result: {:ok, projection}}} ->
+        render(frame, type, projection)
+
+        if projection.status in [:completed, :failed] do
+          :done
+        else
+          drain(sub_ref, frame, deadline_ms)
+        end
+
+      {:jido_subscription, ^sub_ref, %{result: {:error, reason}}} ->
+        Kino.Frame.append(
+          frame,
+          Kino.Markdown.new("_Selector error:_ `#{inspect(reason)}`")
+        )
+
+        drain(sub_ref, frame, deadline_ms)
+    after
+      deadline_ms ->
+        Kino.Frame.append(
+          frame,
+          Kino.Markdown.new("**Timed out** waiting for completion (#{deadline_ms}ms).")
+        )
+
+        :timeout
+    end
+  end
+
+  defp project(ai) do
+    last_tool_message =
+      if ai.context do
+        ai.context
+        |> Context.to_list()
+        |> Enum.reverse()
+        |> Enum.find_value(fn
+          %{role: :tool} = msg -> format_tool_message(msg)
+          _ -> nil
+        end)
+      end
+
+    %{
+      status: ai.status,
+      iteration: ai.iteration,
+      pending_tool_calls: ai.pending_tool_calls,
+      result: ai.result,
+      error: ai.error,
+      last_tool_message: last_tool_message
+    }
+  end
+
+  defp format_tool_message(%{role: :tool, name: name, content: parts}) do
+    text =
+      Enum.map_join(parts, "", fn
+        %{type: :text, text: t} -> t
+        _ -> ""
+      end)
+
+    %{name: name, content: text}
+  end
+end
+
+:ok
+```
+
+## Start the agent
+
+`Demo.Jido.start_agent/2` returns the pid that `Jido.AI.ask/3` and
+`Jido.AI.ask_sync/3` accept. The id is unique per cell evaluation so
+re-running this cell doesn't conflict with a running agent.
+
+```elixir
+agent_id = "llm-agent-#{System.unique_integer([:positive])}"
+{:ok, agent_pid} = Demo.Jido.start_agent(LivebookAgent, id: agent_id)
+:ok = Jido.AgentServer.await_ready(agent_pid)
+
+agent_pid
+```
+
+## Ask — live ReAct steps in a Kino.Frame
+
+The headline cell. Type a question, click Ask, watch each ReAct step
+appear in the frame as it happens.
+
+The wiring is the canonical out-of-band subscription pattern: the
+caller subscribes to `"ai.react.**"` with a pure selector that projects
+just what the UI needs, then `Jido.AI.ask/3` fires the run and the
+receive loop drains dispatches. `ask/3` returns immediately with
+`{:ok, request_id}` — the framework imposes no opinion on what the
+caller filters for. Compare with `Jido.AI.ask_sync/3` in the next
+section, which subscribes for the terminal transition only.
+
+A good prompt for two-tool agents: `"What is (4 + 7) * 5?"` — the model
+typically calls `add(4, 7)`, then `multiply(11, 5)`, then states 55.
+
+```elixir
+question_input = Kino.Input.text("Question", default: "What is (4 + 7) * 5?")
+submit_button = Kino.Control.button("Ask")
+output_frame = Kino.Frame.new()
+
+Kino.listen(submit_button, fn _event ->
+  question = Kino.Input.read(question_input)
+
+  Kino.Frame.render(output_frame, Kino.Markdown.new("_Asking:_ #{inspect(question)}"))
+
+  {:ok, sub_ref} =
+    Jido.AgentServer.subscribe(
+      agent_pid,
+      "ai.react.**",
+      &Demo.Streamer.selector/1
+    )
+
+  case Jido.AI.ask(agent_pid, question) do
+    {:ok, _request_id} ->
+      _ = Demo.Streamer.drain(sub_ref, output_frame, 60_000)
+
+    {:error, reason} ->
+      Kino.Frame.append(
+        output_frame,
+        Kino.Markdown.new("**Error launching run:** `#{inspect(reason)}`")
+      )
+  end
+
+  :ok = Jido.AgentServer.unsubscribe(agent_pid, sub_ref)
+end)
+
+Kino.Layout.grid([
+  Kino.Layout.grid([question_input, submit_button], columns: 2),
+  output_frame
+])
+```
+
+## Same agent, sync — `ask_sync/3`
+
+Two paths, one agent. `ask/3` is fire-and-forget — for streaming UIs,
+multi-tenant request-id correlation, or any caller that wants the raw
+signal stream. `ask_sync/3` is the convenience for "give me the
+answer" — it subscribes internally for the terminal `:completed` /
+`:failed` transition, blocks on the result, and returns just the final
+text. Pick the shape that fits.
+
+```elixir
+sync_input =
+  Kino.Input.text("Question (sync)", default: "What is 12 multiplied by 7?")
+
+sync_button = Kino.Control.button("Ask (sync)")
+sync_frame = Kino.Frame.new()
+
+Kino.listen(sync_button, fn _event ->
+  question = Kino.Input.read(sync_input)
+  Kino.Frame.render(sync_frame, Kino.Markdown.new("_Working…_"))
+
+  case Jido.AI.ask_sync(agent_pid, question, timeout: 60_000) do
+    {:ok, text} ->
+      Kino.Frame.render(
+        sync_frame,
+        Kino.Markdown.new("**Answer:** #{text || "_(no text)_"}")
+      )
+
+    {:error, reason} ->
+      Kino.Frame.render(
+        sync_frame,
+        Kino.Markdown.new("**Error:** `#{inspect(reason)}`")
+      )
+  end
+end)
+
+Kino.Layout.grid([
+  Kino.Layout.grid([sync_input, sync_button], columns: 2),
+  sync_frame
+])
+```
+
+## Where to next
+
+- [Slices](slices.md) — what `slices: [{Jido.AI.ReAct, ...}]` actually
+  attaches: declarative state, action set, and signal-route table.
+- [Observability](observability.md) — telemetry, traces, and
+  selector-based reads as the no-polling pattern that powers the
+  streaming demo above.
+- ADR 0022 (`guides/adr/0022-llm-agents-inlined-jido-ai-namespace.md`)
+  — the full design rationale for inlining `Jido.AI.*` and the
+  slice-driven ReAct loop.

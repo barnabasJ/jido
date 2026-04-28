@@ -115,6 +115,9 @@ defmodule Jido.MixProject do
           "guides/phoenix-integration.md",
           "guides/ash-integration.md"
         ],
+        "AI Agents": [
+          "guides/llm-agent.livemd"
+        ],
         Advanced: [
           "guides/orphans.md",
           "guides/errors.md"
@@ -170,6 +173,9 @@ defmodule Jido.MixProject do
         # Integrations
         {"guides/phoenix-integration.md", title: "Phoenix Integration"},
         {"guides/ash-integration.md", title: "Ash Integration"},
+
+        # AI Agents
+        {"guides/llm-agent.livemd", title: "LLM Agent — Quick Start"},
 
         # Advanced
         {"guides/orphans.md", title: "Orphans & Adoption"},

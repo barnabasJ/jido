@@ -152,8 +152,7 @@ defmodule Jido.AITest do
       # llm.completed final (completed, 2). Order and exact counts
       # depend on signal interleaving; the important thing is we
       # observe both :running and :completed without await/2.
-      assert_receive {:jido_subscription, ^sub_ref,
-                      %{result: {:ok, %{status: :running}}}},
+      assert_receive {:jido_subscription, ^sub_ref, %{result: {:ok, %{status: :running}}}},
                      1_000
 
       assert_receive {:jido_subscription, ^sub_ref,
@@ -389,7 +388,9 @@ defmodule Jido.AITest do
       end)
 
       pid = start_test_server(ctx, NoModelAgent)
-      assert {:ok, "ok"} = Jido.AI.ask_sync(pid, "anything", model: "openai:gpt-5", timeout: 1_000)
+
+      assert {:ok, "ok"} =
+               Jido.AI.ask_sync(pid, "anything", model: "openai:gpt-5", timeout: 1_000)
     end
 
     test ":tools override replaces slice defaults", ctx do

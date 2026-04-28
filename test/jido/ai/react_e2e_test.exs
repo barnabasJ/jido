@@ -185,16 +185,13 @@ defmodule Jido.AI.ReActE2ETest do
 
   defp drain_until_completed(sub_ref, deadline_ms, {max_iter, count}) do
     receive do
-      {:jido_subscription, ^sub_ref,
-       %{result: {:ok, %{status: :completed, iteration: iter}}}} ->
+      {:jido_subscription, ^sub_ref, %{result: {:ok, %{status: :completed, iteration: iter}}}} ->
         {max(max_iter, iter), count + 1}
 
-      {:jido_subscription, ^sub_ref,
-       %{result: {:ok, %{status: :failed} = projection}}} ->
+      {:jido_subscription, ^sub_ref, %{result: {:ok, %{status: :failed} = projection}}} ->
         flunk("slice transitioned to :failed mid-run: #{inspect(projection)}")
 
-      {:jido_subscription, ^sub_ref,
-       %{result: {:ok, %{status: :running, iteration: iter}}}} ->
+      {:jido_subscription, ^sub_ref, %{result: {:ok, %{status: :running, iteration: iter}}}} ->
         drain_until_completed(sub_ref, deadline_ms, {max(max_iter, iter), count + 1})
     after
       deadline_ms ->
