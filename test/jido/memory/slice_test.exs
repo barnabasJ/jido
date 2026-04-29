@@ -1,25 +1,27 @@
 defmodule JidoTest.Memory.SliceTest do
   use ExUnit.Case, async: true
 
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
+  alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias Jido.Memory
   alias Jido.Memory.Actions
   alias Jido.Memory.Slice, as: MemorySlice
 
   describe "slice metadata" do
     test "name is memory" do
-      assert MemorySlice.name() == "memory"
+      assert SliceInfo.name(MemorySlice) == "memory"
     end
 
     test "path is :memory" do
-      assert MemorySlice.path() == :memory
+      assert SliceInfo.path(MemorySlice) == :memory
     end
 
     test "has memory capability" do
-      assert :memory in MemorySlice.capabilities()
+      assert :memory in SliceInfo.capabilities(MemorySlice)
     end
 
-    test "exposes the eight Jido.Memory.Actions.* modules via actions/0" do
-      action_set = MapSet.new(MemorySlice.actions())
+    test "exposes the eight Jido.Memory.Actions.* modules via actions/1" do
+      action_set = MapSet.new(SliceInfo.actions(MemorySlice))
 
       assert MapSet.equal?(
                action_set,
@@ -37,12 +39,13 @@ defmodule JidoTest.Memory.SliceTest do
     end
 
     test "schema is bound to Jido.Memory.schema/0" do
-      assert MemorySlice.schema() == Memory.schema()
+      assert SliceInfo.schema(MemorySlice) == Memory.schema()
     end
 
     test "exposes one signal route per action" do
       route_types =
-        MemorySlice.signal_routes()
+        MemorySlice
+        |> SliceInfo.signal_routes()
         |> Enum.map(fn
           {type, _action} -> type
           {type, _action, _opts} -> type
@@ -56,13 +59,6 @@ defmodule JidoTest.Memory.SliceTest do
       assert "jido.memory.put_in_space" in route_types
       assert "jido.memory.delete_from_space" in route_types
       assert "jido.memory.append_to_space" in route_types
-    end
-  end
-
-  describe "manifest" do
-    test "path is :memory in manifest" do
-      manifest = MemorySlice.manifest()
-      assert manifest.path == :memory
     end
   end
 
@@ -85,13 +81,11 @@ defmodule JidoTest.Memory.SliceTest do
     end
 
     test "agent includes memory slice by default" do
-      modules = AgentWithMemory.slices()
-      assert Jido.Memory.Slice in modules
+      assert Jido.Memory.Slice in AgentInfo.slices(AgentWithMemory)
     end
 
     test "agent can disable memory slice" do
-      modules = AgentWithoutMemory.slices()
-      refute Jido.Memory.Slice in modules
+      refute Jido.Memory.Slice in AgentInfo.slices(AgentWithoutMemory)
     end
 
     test "memory can be attached after creation via Memory.Agent" do

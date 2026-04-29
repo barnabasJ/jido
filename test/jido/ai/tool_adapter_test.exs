@@ -148,7 +148,7 @@ defmodule Jido.AI.ToolAdapterTest do
       tools =
         ToolAdapter.from_actions(
           [EmptySchemaAction, ParamAction],
-          filter: fn mod -> mod.name() == "param_action" end
+          filter: fn mod -> Jido.Dsl.Action.Info.name(mod) == "param_action" end
         )
 
       assert length(tools) == 1
@@ -222,24 +222,24 @@ defmodule Jido.AI.ToolAdapterTest do
 
     test "normalizes list of modules to name => module map" do
       assert ToolAdapter.to_action_map([ParamAction]) == %{
-               ParamAction.name() => ParamAction
+               Jido.Dsl.Action.Info.name(ParamAction) => ParamAction
              }
     end
 
     test "normalizes single module to map" do
       assert ToolAdapter.to_action_map(ParamAction) == %{
-               ParamAction.name() => ParamAction
+               Jido.Dsl.Action.Info.name(ParamAction) => ParamAction
              }
     end
 
     test "keeps already-normalized maps intact" do
-      tools = %{ParamAction.name() => ParamAction}
+      tools = %{Jido.Dsl.Action.Info.name(ParamAction) => ParamAction}
       assert ToolAdapter.to_action_map(tools) == tools
     end
 
     test "ignores invalid non-module atoms in module lists" do
       assert ToolAdapter.to_action_map([ParamAction, :not_a_module]) == %{
-               ParamAction.name() => ParamAction
+               Jido.Dsl.Action.Info.name(ParamAction) => ParamAction
              }
     end
 

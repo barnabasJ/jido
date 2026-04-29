@@ -5,9 +5,12 @@ defmodule Jido.Dsl.PluginTest do
   # behaviour. The plugin DSL re-exports `Jido.Dsl.Slice.sections/0`, so
   # every section the slice DSL exposes is also available inside a
   # `use Jido.Plugin` module — this test asserts that, and also
-  # verifies the simultaneous `__jido_slice__/0` + `__jido_plugin__/0`
-  # markers + `Jido.Middleware` behaviour the spec calls out as a
-  # regression.
+  # verifies the simultaneous `Spark.Dsl.is?(mod, Jido.Plugin)` /
+  # `Spark.Dsl.is?(mod, Jido.Slice)` identities + `Jido.Middleware`
+  # behaviour the spec calls out as a regression.
+
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
+  alias Jido.Dsl.Plugin.Info, as: PluginInfo
 
   Code.ensure_compiled!(JidoTest.PluginTestAction)
 
@@ -45,14 +48,9 @@ defmodule Jido.Dsl.PluginTest do
   end
 
   describe "plugin markers and behaviour" do
-    test "__jido_slice__/0 returns true" do
-      assert SimplePlugin.__jido_slice__() == true
-      assert FullPlugin.__jido_slice__() == true
-    end
-
-    test "__jido_plugin__/0 returns true" do
-      assert SimplePlugin.__jido_plugin__() == true
-      assert FullPlugin.__jido_plugin__() == true
+    test "Spark.Dsl.is?(mod, Jido.Plugin) is true for plugin modules" do
+      assert Spark.Dsl.is?(SimplePlugin, Jido.Plugin)
+      assert Spark.Dsl.is?(FullPlugin, Jido.Plugin)
     end
 
     test "module implements Jido.Middleware behaviour" do
@@ -66,12 +64,12 @@ defmodule Jido.Dsl.PluginTest do
       assert function_exported?(FullPlugin, :on_signal, 4)
     end
 
-    test "all three (slice marker, plugin marker, middleware behaviour) hold simultaneously" do
-      # Per task 0035 spec: the plugin must expose all three identities
-      # at the same time, since the agent's WalkExtensions transformer
-      # uses each in different code paths.
-      assert FullPlugin.__jido_slice__() == true
-      assert FullPlugin.__jido_plugin__() == true
+    test "plugin identity + middleware behaviour hold simultaneously" do
+      # Per task 0035 spec: the plugin must expose its plugin identity
+      # plus the middleware behaviour at the same time, since the
+      # agent's WalkExtensions transformer uses each in different
+      # code paths.
+      assert Spark.Dsl.is?(FullPlugin, Jido.Plugin)
 
       behaviours =
         FullPlugin.module_info(:attributes) |> Keyword.get_values(:behaviour) |> List.flatten()
@@ -85,18 +83,14 @@ defmodule Jido.Dsl.PluginTest do
       assert Jido.Dsl.Plugin.sections() == Jido.Dsl.Slice.sections()
     end
 
-    test "plugin module exposes the same accessor surface as a slice" do
-      assert FullPlugin.name() == "full_plugin"
-      assert FullPlugin.path() == :full_plugin
-      assert FullPlugin.description() == "A plugin with slice + middleware halves"
-      assert FullPlugin.actions() == [JidoTest.PluginTestAction]
-      assert FullPlugin.signal_routes() == [{"plugin.fired", JidoTest.PluginTestAction}]
-      assert FullPlugin.capabilities() == [:plugin_capability]
-      assert is_struct(FullPlugin.schema())
-    end
-
-    test "manifest/0 returns a Jido.Plugin.Manifest" do
-      assert %Jido.Plugin.Manifest{} = FullPlugin.manifest()
+    test "plugin module exposes the same accessor surface as a slice via Plugin.Info" do
+      assert PluginInfo.name(FullPlugin) == "full_plugin"
+      assert PluginInfo.path(FullPlugin) == :full_plugin
+      assert PluginInfo.description(FullPlugin) == "A plugin with slice + middleware halves"
+      assert PluginInfo.actions(FullPlugin) == [JidoTest.PluginTestAction]
+      assert PluginInfo.signal_routes(FullPlugin) == [{"plugin.fired", JidoTest.PluginTestAction}]
+      assert PluginInfo.capabilities(FullPlugin) == [:plugin_capability]
+      assert is_struct(PluginInfo.schema(FullPlugin))
     end
   end
 
@@ -112,10 +106,10 @@ defmodule Jido.Dsl.PluginTest do
       end
     end
 
-    test "plugin appears in plugins/0, not slices/0 or middleware/0" do
-      assert FullPlugin in PluginAgent.plugins()
-      refute FullPlugin in PluginAgent.slices()
-      refute Enum.any?(PluginAgent.middleware(), &match?({FullPlugin, _}, &1))
+    test "plugin appears in plugins/1, not slices/1 or middleware/1" do
+      assert FullPlugin in AgentInfo.plugins(PluginAgent)
+      refute FullPlugin in AgentInfo.slices(PluginAgent)
+      refute Enum.any?(AgentInfo.middleware(PluginAgent), &match?({FullPlugin, _}, &1))
     end
 
     test "plugin's schema is merged into the agent's seed state" do
@@ -139,8 +133,8 @@ defmodule Jido.Dsl.PluginTest do
       # The new design allows the explicit `as: :slice` override. The
       # OLD task 0029 check ("plugin in slices: raises") is replaced by
       # the requirement that the user explicitly opt in via `as: :slice`.
-      assert FullPlugin in PluginAsSliceAgent.slices()
-      refute FullPlugin in PluginAsSliceAgent.plugins()
+      assert FullPlugin in AgentInfo.slices(PluginAsSliceAgent)
+      refute FullPlugin in AgentInfo.plugins(PluginAsSliceAgent)
     end
   end
 end

@@ -57,11 +57,9 @@ defmodule JidoTest.Signal.CallTest do
       name "call_test_agent"
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"jido.test.echo", EchoAction},
-        {"jido.test.silent", SilentAction}
-      ]
+    signal_routes do
+      route "jido.test.echo", EchoAction
+      route "jido.test.silent", SilentAction
     end
   end
 

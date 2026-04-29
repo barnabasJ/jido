@@ -4,8 +4,7 @@ defmodule Jido.Dsl.Agent.Transformers.MergeSchemas do
   the schemas of every plugin and bare-slice instance attached to the
   agent. Persists the merged schema as `:merged_schema`.
 
-  Replaces the inline `Jido.Agent.Schema.merge_with_plugins/2` call from
-  the legacy `__quoted_compile_aggregates__/0`.
+  Replaces the inline schema-merge call from the legacy compile aggregates.
   """
 
   use Spark.Dsl.Transformer

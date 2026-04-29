@@ -213,13 +213,11 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       )
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"validate", ValidateAction},
-        {"retry", HandleRetryAction},
-        {"recover", RecoverAction},
-        {"bounded_retry", BoundedRetryAction}
-      ]
+    signal_routes do
+      route "validate", ValidateAction
+      route "retry", HandleRetryAction
+      route "recover", RecoverAction
+      route "bounded_retry", BoundedRetryAction
     end
   end
 

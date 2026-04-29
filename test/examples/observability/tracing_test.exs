@@ -119,12 +119,10 @@ defmodule JidoExampleTest.TracingTest do
       )
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"start_workflow", StartWorkflowAction},
-        {"process_step", ProcessStepAction},
-        {"complete_workflow", CompleteWorkflowAction}
-      ]
+    signal_routes do
+      route "start_workflow", StartWorkflowAction
+      route "process_step", ProcessStepAction
+      route "complete_workflow", CompleteWorkflowAction
     end
   end
 

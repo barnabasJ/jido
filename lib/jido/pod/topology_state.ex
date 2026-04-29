@@ -4,22 +4,19 @@ defmodule Jido.Pod.TopologyState do
   alias Jido.Agent
   alias Jido.AgentServer
   alias Jido.AgentServer.State
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
+  alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Plugin.Instance, as: PluginInstance
   alias Jido.Pod.Plugin
   alias Jido.Pod.Topology
   alias Jido.Signal
   alias Jido.Signal.Call
 
-  @pod_state_key Plugin.path()
+  @pod_state_key PluginInfo.path(Plugin)
 
   @spec pod_plugin_instance(module()) :: {:ok, PluginInstance.t()} | {:error, term()}
   def pod_plugin_instance(agent_module) when is_atom(agent_module) do
-    instances =
-      if function_exported?(agent_module, :plugin_instances, 0) do
-        agent_module.plugin_instances()
-      else
-        []
-      end
+    instances = AgentInfo.plugin_instances(agent_module)
 
     case Enum.find(instances, &(&1.path == @pod_state_key)) do
       %PluginInstance{} = instance ->

@@ -104,8 +104,11 @@ defmodule Jido.Dsl.Slice.Verifiers.HasSchemaAndRoutesTest do
         end
       end
 
-      assert HappyPathSlice.path() == :happy_path
-      assert HappyPathSlice.signal_routes() == [{"happy_path.go", JidoTest.PluginTestAction}]
+      assert Jido.Dsl.Slice.Info.path(HappyPathSlice) == :happy_path
+
+      assert Jido.Dsl.Slice.Info.signal_routes(HappyPathSlice) == [
+               {"happy_path.go", JidoTest.PluginTestAction}
+             ]
     end
   end
 

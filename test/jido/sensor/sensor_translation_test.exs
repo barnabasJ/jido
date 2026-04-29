@@ -1,7 +1,7 @@
 defmodule JidoTest.Sensor.TranslationTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Sensor.Spec
+  alias Jido.Dsl.Sensor.Info, as: SensorInfo
 
   defmodule SimpleSensor do
     @moduledoc false
@@ -120,67 +120,31 @@ defmodule JidoTest.Sensor.TranslationTest do
   end
 
   describe "SimpleSensor metadata" do
-    test "name/0 returns the configured name" do
-      assert SimpleSensor.name() == "simple_sensor"
+    test "Info.name/1 returns the configured name" do
+      assert SensorInfo.name(SimpleSensor) == "simple_sensor"
     end
 
-    test "description/0 returns the configured description" do
-      assert SimpleSensor.description() ==
+    test "Info.description/1 returns the configured description" do
+      assert SensorInfo.description(SimpleSensor) ==
                "A simple test sensor that translates events to signals"
     end
 
-    test "schema/0 returns the Zoi schema" do
-      schema = SimpleSensor.schema()
-      assert schema != nil
-    end
-
-    test "spec/0 returns a Sensor.Spec struct" do
-      spec = SimpleSensor.spec()
-
-      assert %Spec{} = spec
-      assert spec.module == SimpleSensor
-      assert spec.name == "simple_sensor"
-      assert spec.description == "A simple test sensor that translates events to signals"
-      assert spec.schema != nil
-    end
-
-    test "__sensor_metadata__/0 returns metadata map" do
-      metadata = SimpleSensor.__sensor_metadata__()
-
-      assert is_map(metadata)
-      assert metadata.name == "simple_sensor"
-      assert metadata.description == "A simple test sensor that translates events to signals"
-      assert metadata.schema != nil
+    test "Info.schema/1 returns the Zoi schema" do
+      assert SensorInfo.schema(SimpleSensor) != nil
     end
   end
 
   describe "MinimalSensor metadata" do
-    test "name/0 returns the configured name" do
-      assert MinimalSensor.name() == "minimal_sensor"
+    test "Info.name/1 returns the configured name" do
+      assert SensorInfo.name(MinimalSensor) == "minimal_sensor"
     end
 
-    test "description/0 returns the configured description" do
-      assert MinimalSensor.description() == "A minimal sensor with no schema"
+    test "Info.description/1 returns the configured description" do
+      assert SensorInfo.description(MinimalSensor) == "A minimal sensor with no schema"
     end
 
-    test "schema/0 returns nil when not configured" do
-      assert MinimalSensor.schema() == nil
-    end
-
-    test "spec/0 returns a Sensor.Spec with optional fields" do
-      spec = MinimalSensor.spec()
-
-      assert %Spec{} = spec
-      assert spec.module == MinimalSensor
-      assert spec.name == "minimal_sensor"
-    end
-
-    test "__sensor_metadata__/0 returns metadata with description and nil schema" do
-      metadata = MinimalSensor.__sensor_metadata__()
-
-      assert metadata.name == "minimal_sensor"
-      assert metadata.description == "A minimal sensor with no schema"
-      assert metadata.schema == nil
+    test "Info.schema/1 returns nil when not configured" do
+      assert SensorInfo.schema(MinimalSensor) == nil
     end
   end
 
@@ -311,13 +275,11 @@ defmodule JidoTest.Sensor.TranslationTest do
   end
 
   describe "SchedulingSensor metadata" do
-    test "spec/0 returns valid Sensor.Spec" do
-      spec = SchedulingSensor.spec()
+    test "Info exposes name + description" do
+      assert SensorInfo.name(SchedulingSensor) == "scheduling_sensor"
 
-      assert %Spec{} = spec
-      assert spec.module == SchedulingSensor
-      assert spec.name == "scheduling_sensor"
-      assert spec.description == "A sensor that uses scheduling directives"
+      assert SensorInfo.description(SchedulingSensor) ==
+               "A sensor that uses scheduling directives"
     end
   end
 

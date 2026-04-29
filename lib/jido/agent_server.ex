@@ -91,7 +91,7 @@ defmodule Jido.AgentServer do
       # External code polls for completion via a selector:
       {:ok, status} =
         AgentServer.state(server, fn s ->
-          domain = s.agent_module.path()
+          domain = Jido.Dsl.Agent.Info.path(s.agent_module)
           case get_in(s.agent.state, [domain, :status]) do
             :completed -> {:ok, {:completed, get_in(s.agent.state, [domain, :last_answer])}}
             :failed -> {:ok, {:failed, get_in(s.agent.state, [domain, :error])}}
@@ -2048,11 +2048,7 @@ defmodule Jido.AgentServer do
   # wrap, the last entry the innermost. Duplicate-module detection is left
   # to user discretion — the chain runs whatever is declared, in order.
   defp build_middleware_chain(agent_module, %Options{middleware: runtime_mw}) do
-    compile_mw =
-      if function_exported?(agent_module, :middleware, 0),
-        do: agent_module.middleware(),
-        else: []
-
+    compile_mw = Jido.Dsl.Agent.Info.middleware(agent_module)
     plugin_halves = plugin_middleware_halves(agent_module)
     all_entries = compile_mw ++ runtime_mw ++ plugin_halves
 
@@ -2138,12 +2134,7 @@ defmodule Jido.AgentServer do
 
   @doc false
   defp start_plugin_children(%State{} = state) do
-    agent_module = state.agent_module
-
-    plugin_specs =
-      if function_exported?(agent_module, :plugin_specs, 0),
-        do: agent_module.plugin_specs(),
-        else: []
+    plugin_specs = Jido.Dsl.Agent.Info.plugin_specs(state.agent_module)
 
     Enum.reduce(plugin_specs, state, fn spec, acc_state ->
       config = spec.config || %{}
@@ -2222,11 +2213,7 @@ defmodule Jido.AgentServer do
   @doc false
   defp start_plugin_subscriptions(%State{} = state) do
     agent_module = state.agent_module
-
-    plugin_specs =
-      if function_exported?(agent_module, :plugin_specs, 0),
-        do: agent_module.plugin_specs(),
-        else: []
+    plugin_specs = Jido.Dsl.Agent.Info.plugin_specs(agent_module)
 
     Enum.reduce(plugin_specs, state, fn spec, acc_state ->
       context = %{
@@ -2241,15 +2228,10 @@ defmodule Jido.AgentServer do
       config = spec.config || %{}
 
       subscriptions =
-        cond do
-          function_exported?(spec.module, :subscriptions, 2) ->
-            spec.module.subscriptions(config, context)
-
-          function_exported?(spec.module, :subscriptions, 0) ->
-            spec.module.subscriptions()
-
-          true ->
-            []
+        if function_exported?(spec.module, :subscriptions, 2) do
+          spec.module.subscriptions(config, context)
+        else
+          Jido.Dsl.Plugin.Info.subscriptions(spec.module)
         end
 
       Enum.reduce(subscriptions, acc_state, fn {sensor_module, sensor_config}, inner_state ->
@@ -2311,10 +2293,7 @@ defmodule Jido.AgentServer do
   defp register_plugin_schedules(%State{} = state) do
     agent_module = state.agent_module
 
-    schedules =
-      if function_exported?(agent_module, :plugin_schedules, 0),
-        do: agent_module.plugin_schedules(),
-        else: []
+    schedules = Jido.Dsl.Agent.Info.plugin_schedules(agent_module)
 
     Enum.reduce(schedules, state, fn schedule_spec, acc_state ->
       register_schedule(acc_state, schedule_spec)

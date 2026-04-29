@@ -1,6 +1,8 @@
 defmodule Jido.Dsl.ActionTest do
   use ExUnit.Case, async: true
 
+  alias Jido.Dsl.Action.Info, as: ActionInfo
+
   describe "sectioned DSL accessor parity" do
     defmodule MinimalAction do
       @moduledoc false
@@ -34,38 +36,38 @@ defmodule Jido.Dsl.ActionTest do
       end
     end
 
-    test "name/0 returns the configured name" do
-      assert FullAction.name() == "full"
-      assert MinimalAction.name() == "minimal"
+    test "name/1 returns the configured name" do
+      assert ActionInfo.name(FullAction) == "full"
+      assert ActionInfo.name(MinimalAction) == "minimal"
     end
 
-    test "description/0, category/0, tags/0, vsn/0 round-trip" do
-      assert FullAction.description() == "Full action with every accessor populated."
-      assert FullAction.category() == "test"
-      assert FullAction.tags() == ["a", "b"]
-      assert FullAction.vsn() == "1.2.3"
+    test "description/1, category/1, tags/1, vsn/1 round-trip" do
+      assert ActionInfo.description(FullAction) == "Full action with every accessor populated."
+      assert ActionInfo.category(FullAction) == "test"
+      assert ActionInfo.tags(FullAction) == ["a", "b"]
+      assert ActionInfo.vsn(FullAction) == "1.2.3"
     end
 
-    test "tags/0 defaults to []" do
-      assert MinimalAction.tags() == []
+    test "tags/1 defaults to []" do
+      assert ActionInfo.tags(MinimalAction) == []
     end
 
-    test "schema/0 and output_schema/0 round-trip the configured value" do
-      assert FullAction.schema() == [by: [type: :integer, default: 1]]
-      assert FullAction.output_schema() == [count: [type: :integer]]
+    test "schema/1 and output_schema/1 round-trip the configured value" do
+      assert ActionInfo.schema(FullAction) == [by: [type: :integer, default: 1]]
+      assert ActionInfo.output_schema(FullAction) == [count: [type: :integer]]
     end
 
-    test "schema/0 and output_schema/0 default to []" do
-      assert MinimalAction.schema() == []
-      assert MinimalAction.output_schema() == []
+    test "schema/1 and output_schema/1 default to []" do
+      assert ActionInfo.schema(MinimalAction) == []
+      assert ActionInfo.output_schema(MinimalAction) == []
     end
 
-    test "__action__/0 marker is emitted" do
-      assert FullAction.__action__() == true
+    test "Spark.Dsl.is?(mod, Jido.Action) is true for action modules" do
+      assert Spark.Dsl.is?(FullAction, Jido.Action)
     end
 
-    test "__action_metadata__/0 returns the same shape as the legacy macro" do
-      meta = FullAction.__action_metadata__()
+    test "to_json/1 returns the same shape as the legacy macro emit" do
+      meta = ActionInfo.to_json(FullAction)
       assert meta.name == "full"
       assert meta.description == "Full action with every accessor populated."
       assert meta.category == "test"
@@ -90,11 +92,11 @@ defmodule Jido.Dsl.ActionTest do
       def run(_signal, slice, _opts, _ctx), do: {:ok, slice, []}
     end
 
-    test "an action with no path: returns nil from path/0" do
+    test "an action with no path: returns nil from path/1" do
       # Jido.Agent.cmd/2 falls back to the agent's own path: when the
-      # action's path/0 is nil. The accessor must return nil so that
+      # action's path/1 is nil. The accessor must return nil so that
       # fallback is reachable.
-      assert PathlessAction.path() == nil
+      assert ActionInfo.path(PathlessAction) == nil
     end
   end
 
@@ -124,20 +126,20 @@ defmodule Jido.Dsl.ActionTest do
       def run(_signal, slice, _opts, _ctx), do: {:ok, slice, []}
     end
 
-    test "schema/0 exposes a Zoi schema verbatim" do
-      schema = ZoiSchemaAction.schema()
+    test "schema/1 exposes a Zoi schema verbatim" do
+      schema = ActionInfo.schema(ZoiSchemaAction)
       assert is_struct(schema)
       assert {:ok, %{value: 7}} = Zoi.parse(schema, %{value: 7})
     end
 
-    test "output_schema/0 exposes a Zoi schema verbatim" do
-      schema = ZoiSchemaAction.output_schema()
+    test "output_schema/1 exposes a Zoi schema verbatim" do
+      schema = ActionInfo.output_schema(ZoiSchemaAction)
       assert is_struct(schema)
       assert {:ok, %{result: 5}} = Zoi.parse(schema, %{result: 5})
     end
 
-    test "schema/0 also accepts a NimbleOptions keyword shape" do
-      assert NimbleSchemaAction.schema() == [value: [type: :integer, default: 0]]
+    test "schema/1 also accepts a NimbleOptions keyword shape" do
+      assert ActionInfo.schema(NimbleSchemaAction) == [value: [type: :integer, default: 0]]
     end
   end
 

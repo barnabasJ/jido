@@ -568,18 +568,16 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
       assert length(sensor_children) == 1
 
-      # Verify manifest includes static subscriptions
-      manifest = PluginWithStaticSubscriptions.manifest()
-
-      assert manifest.subscriptions == [
+      # Verify the plugin's static subscriptions surface via Plugin.Info
+      assert Jido.Dsl.Plugin.Info.subscriptions(PluginWithStaticSubscriptions) == [
                {TestSensor, %{emit_on_init: true, signal_type: "static.sensor.ready"}}
              ]
 
       GenServer.stop(pid)
     end
 
-    test "static subscriptions are available via subscriptions/0" do
-      assert PluginWithStaticSubscriptions.subscriptions() == [
+    test "static subscriptions are available via Plugin.Info" do
+      assert Jido.Dsl.Plugin.Info.subscriptions(PluginWithStaticSubscriptions) == [
                {TestSensor, %{emit_on_init: true, signal_type: "static.sensor.ready"}}
              ]
     end

@@ -105,7 +105,7 @@ defmodule Jido.Agent.DefaultSlices do
 
     Enum.flat_map(defaults, fn slice_decl ->
       mod = extract_module(slice_decl)
-      path = mod.path()
+      path = Jido.Dsl.Slice.Info.path(mod)
 
       case Map.get(overrides, path) do
         nil -> [slice_decl]
@@ -118,8 +118,8 @@ defmodule Jido.Agent.DefaultSlices do
 
   defp build_path_index(defaults) do
     Enum.map(defaults, fn
-      mod when is_atom(mod) -> {mod.path(), mod}
-      {mod, _config} -> {mod.path(), mod}
+      mod when is_atom(mod) -> {Jido.Dsl.Slice.Info.path(mod), mod}
+      {mod, _config} -> {Jido.Dsl.Slice.Info.path(mod), mod}
     end)
     |> Map.new(fn {key, mod} -> {key, mod} end)
   end

@@ -139,12 +139,10 @@ defmodule JidoExampleTest.SensorDemoTest do
       )
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"sensor.quote", HandleQuoteAction},
-        {"webhook.github", HandleGitHubWebhookAction},
-        {"webhook.stripe", HandleStripeWebhookAction}
-      ]
+    signal_routes do
+      route "sensor.quote", HandleQuoteAction
+      route "webhook.github", HandleGitHubWebhookAction
+      route "webhook.stripe", HandleStripeWebhookAction
     end
   end
 

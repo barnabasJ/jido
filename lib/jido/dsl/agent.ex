@@ -10,10 +10,10 @@ defmodule Jido.Dsl.Agent do
 
   The `extensions: […]` keyword on `use Jido.Agent` is the single
   ordered registration list per ADR 0023 §3. The `WalkExtensions`
-  transformer classifies each entry by marker (`__jido_plugin__/0` /
-  `__jido_slice__/0` / `Jido.Middleware` behaviour) and produces
-  the same internal `slices` / `plugins` / `middleware` lists today's
-  macro builds.
+  transformer classifies each entry via `Spark.Dsl.is?(mod, Jido.Plugin)`
+  / `Spark.Dsl.is?(mod, Jido.Slice)` / `Jido.Middleware` behaviour and
+  produces the internal `slices` / `plugins` / `middleware` lists
+  agent introspection reads.
 
   Per-extension typed sections (e.g. `memory do … end`, `slack do … end`)
   arrive in task 0035 once `use Jido.Slice` / `use Jido.Plugin` /

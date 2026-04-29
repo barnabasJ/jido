@@ -1,10 +1,11 @@
 defmodule Jido.Plugin do
   @moduledoc """
   A Plugin is a Slice + Middleware in one module. `use Jido.Plugin` is
-  equivalent to `use Jido.Slice` plus `@behaviour Jido.Middleware`, with
-  an additional `__jido_plugin__/0` marker so the agent's
-  `WalkExtensions` transformer can route the module into the plugin
-  bucket.
+  equivalent to `use Jido.Slice` plus `@behaviour Jido.Middleware`.
+  Modules created via `use Jido.Plugin` are identified through Spark's
+  parent-of-host machinery — `Spark.Dsl.is?(mod, Jido.Plugin)` returns
+  `true` for them — so the agent's `WalkExtensions` classifier can
+  route them into the plugin bucket without a custom marker.
 
   Use this when a module needs both declarative slice surface (state
   schema, actions, routes, subscriptions, schedules) AND middleware
@@ -17,14 +18,6 @@ defmodule Jido.Plugin do
   @impl Spark.Dsl
   def handle_opts(_opts) do
     quote do
-      @doc false
-      @spec __jido_slice__() :: true
-      def __jido_slice__, do: true
-
-      @doc false
-      @spec __jido_plugin__() :: true
-      def __jido_plugin__, do: true
-
       @behaviour Jido.Middleware
     end
   end

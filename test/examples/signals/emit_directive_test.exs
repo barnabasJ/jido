@@ -127,12 +127,10 @@ defmodule JidoExampleTest.EmitDirectiveTest do
       )
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"create_order", CreateOrderAction},
-        {"process_payment", ProcessPaymentAction},
-        {"multi_emit", MultiEmitAction}
-      ]
+    signal_routes do
+      route "create_order", CreateOrderAction
+      route "process_payment", ProcessPaymentAction
+      route "multi_emit", MultiEmitAction
     end
   end
 
@@ -199,11 +197,9 @@ defmodule JidoExampleTest.EmitDirectiveTest do
       )
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"count.increment", InternalIncrementAction},
-        {"print.count", InternalPrintCountAction}
-      ]
+    signal_routes do
+      route "count.increment", InternalIncrementAction
+      route "print.count", InternalPrintCountAction
     end
   end
 

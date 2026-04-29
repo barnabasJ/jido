@@ -197,11 +197,9 @@ defmodule Jido.Sensor.Runtime do
   defp parse_config(sensor, config) do
     config_map = if is_list(config), do: Map.new(config), else: config
 
-    if function_exported?(sensor, :schema, 0) do
-      schema = sensor.schema()
-      Zoi.parse(schema, config_map)
-    else
-      {:ok, config_map}
+    case Jido.Dsl.Sensor.Info.schema(sensor) do
+      nil -> {:ok, config_map}
+      schema -> Zoi.parse(schema, config_map)
     end
   end
 

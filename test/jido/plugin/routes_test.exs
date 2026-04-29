@@ -122,26 +122,25 @@ defmodule JidoTest.Plugin.RoutesTest do
       assert routes == []
     end
 
-    test "returns empty when plugin has custom signal_routes/1 callback" do
-      defmodule PluginWithCustomRouter do
+    test "returns the plugin's section-declared routes prefixed by route_prefix" do
+      defmodule PluginWithSectionRoutes do
         @moduledoc false
         use Jido.Plugin
 
         slice do
-          name "custom_router"
-          path :custom_router
+          name "section_routes"
+          path :section_routes
         end
 
-        def signal_routes(_config) do
-          [{"custom.route", TestAction1}]
+        signal_routes do
+          route "custom.route", TestAction1
         end
       end
 
-      instance = Instance.new(PluginWithCustomRouter)
-
+      instance = Instance.new(PluginWithSectionRoutes)
       routes = Routes.expand_routes(instance)
 
-      assert routes == []
+      assert routes == [{"section_routes.custom.route", TestAction1, []}]
     end
   end
 

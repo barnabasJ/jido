@@ -73,13 +73,4 @@ defmodule Jido.Slice do
         {:ok, actions}
     end
   end
-
-  @impl Spark.Dsl
-  def handle_opts(_opts) do
-    quote do
-      @doc false
-      @spec __jido_slice__() :: true
-      def __jido_slice__, do: true
-    end
-  end
 end

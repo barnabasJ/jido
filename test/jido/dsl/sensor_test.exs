@@ -1,7 +1,7 @@
 defmodule Jido.Dsl.SensorTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Sensor.Spec
+  alias Jido.Dsl.Sensor.Info, as: SensorInfo
 
   describe "sectioned DSL accessor parity" do
     defmodule MinimalSensor do
@@ -39,50 +39,39 @@ defmodule Jido.Dsl.SensorTest do
       def handle_event(_event, state), do: {:ok, state}
     end
 
-    test "name/0 returns the configured name" do
-      assert FullSensor.name() == "full_sensor"
-      assert MinimalSensor.name() == "minimal_sensor"
+    test "name/1 returns the configured name" do
+      assert SensorInfo.name(FullSensor) == "full_sensor"
+      assert SensorInfo.name(MinimalSensor) == "minimal_sensor"
     end
 
-    test "description/0, category/0, tags/0, vsn/0 round-trip" do
-      assert FullSensor.description() == "Full sensor with every accessor populated."
-      assert FullSensor.category() == "test"
-      assert FullSensor.tags() == ["a", "b"]
-      assert FullSensor.vsn() == "1.0.0"
+    test "description/1, category/1, tags/1, vsn/1 round-trip" do
+      assert SensorInfo.description(FullSensor) == "Full sensor with every accessor populated."
+      assert SensorInfo.category(FullSensor) == "test"
+      assert SensorInfo.tags(FullSensor) == ["a", "b"]
+      assert SensorInfo.vsn(FullSensor) == "1.0.0"
     end
 
-    test "tags/0 defaults to []" do
-      assert MinimalSensor.tags() == []
+    test "tags/1 defaults to []" do
+      assert SensorInfo.tags(MinimalSensor) == []
     end
 
-    test "description/0 returns nil when omitted" do
-      assert MinimalSensor.description() == nil
+    test "description/1 returns nil when omitted" do
+      assert SensorInfo.description(MinimalSensor) == nil
     end
 
-    test "schema/0 round-trips a Zoi schema" do
-      schema = FullSensor.schema()
+    test "schema/1 round-trips a Zoi schema" do
+      schema = SensorInfo.schema(FullSensor)
       assert is_struct(schema)
       assert {:ok, %{interval: 5000}} = Zoi.parse(schema, %{interval: 5000})
     end
 
-    test "schema/0 returns nil when omitted" do
-      assert MinimalSensor.schema() == nil
+    test "schema/1 returns nil when omitted" do
+      assert SensorInfo.schema(MinimalSensor) == nil
     end
 
-    test "spec/0 returns a populated Sensor.Spec struct" do
-      spec = FullSensor.spec()
-      assert %Spec{} = spec
-      assert spec.module == FullSensor
-      assert spec.name == "full_sensor"
-      assert spec.description == "Full sensor with every accessor populated."
-      assert spec.schema == FullSensor.schema()
-    end
-
-    test "__sensor_metadata__/0 returns the discovery shape" do
-      meta = FullSensor.__sensor_metadata__()
-      assert meta.name == "full_sensor"
-      assert meta.description == "Full sensor with every accessor populated."
-      assert meta.schema == FullSensor.schema()
+    test "Spark.Dsl.is?(mod, Jido.Sensor) is true for sensor modules" do
+      assert Spark.Dsl.is?(FullSensor, Jido.Sensor)
+      assert Spark.Dsl.is?(MinimalSensor, Jido.Sensor)
     end
   end
 

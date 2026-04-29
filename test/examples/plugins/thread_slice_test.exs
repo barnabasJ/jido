@@ -84,11 +84,9 @@ defmodule JidoExampleTest.ThreadSliceTest do
       schema last_role: [type: :string, default: nil], summary: [type: :string, default: nil]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"record_message", RecordMessageAction},
-        {"summarize", SummarizeAction}
-      ]
+    signal_routes do
+      route "record_message", RecordMessageAction
+      route "summarize", SummarizeAction
     end
   end
 

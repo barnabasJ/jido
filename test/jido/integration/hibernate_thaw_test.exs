@@ -18,9 +18,6 @@ defmodule JidoTest.Integration.HibernateThawTest do
         data: [type: :map, default: %{}]
       )
     end
-
-    @impl true
-    def signal_routes(_ctx), do: []
   end
 
   defp unique_table do

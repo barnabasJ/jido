@@ -19,9 +19,6 @@ defmodule JidoTest.InstanceTest do
       path :domain
       schema counter: [type: :integer, default: 0]
     end
-
-    @impl true
-    def signal_routes(_ctx), do: []
   end
 
   defmodule RedisMock do

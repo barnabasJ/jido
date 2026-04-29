@@ -71,11 +71,9 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
       )
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"set_multiple", SetMultipleKeysAction},
-        {"observe", ObserveAction}
-      ]
+    signal_routes do
+      route "set_multiple", SetMultipleKeysAction
+      route "observe", ObserveAction
     end
   end
 

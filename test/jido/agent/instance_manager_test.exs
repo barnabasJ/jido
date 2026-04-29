@@ -151,13 +151,10 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       schema tick_count: [type: :integer, default: 0]
     end
 
-    @impl true
-    def signal_routes(_ctx) do
-      [
-        {"register_cron", RegisterCronAction},
-        {"cancel_cron", CancelCronAction},
-        {"cron.tick", CronTickAction}
-      ]
+    signal_routes do
+      route "register_cron", RegisterCronAction
+      route "cancel_cron", CancelCronAction
+      route "cron.tick", CronTickAction
     end
   end
 
@@ -175,13 +172,10 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       schedule "* * * * *", "cron.tick", job_id: :declarative_conflict
     end
 
-    @impl true
-    def signal_routes(_ctx) do
-      [
-        {"register_cron", RegisterCronAction},
-        {"cancel_cron", CancelCronAction},
-        {"cron.tick", CronTickAction}
-      ]
+    signal_routes do
+      route "register_cron", RegisterCronAction
+      route "cancel_cron", CancelCronAction
+      route "cron.tick", CronTickAction
     end
   end
 

@@ -10,8 +10,6 @@ defmodule JidoTest.AgentServer.LifecycleSignalsTest do
     agent do
       name "lifecycle_signals_agent"
     end
-
-    def signal_routes(_ctx), do: []
   end
 
   setup ctx do

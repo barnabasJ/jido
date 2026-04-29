@@ -67,64 +67,34 @@ defmodule Jido.AgentServer.SignalRouter do
     routes ++ normalize_routes(builtin, @plugin_default_priority - 10)
   end
 
-  # Collects routes from agent_module.signal_routes/1
+  # Collects routes for the agent. Users may override `signal_routes/1`
+  # on their `use Jido.Agent` module to compute routes from a runtime
+  # `ctx`; otherwise the default is the `signal_routes do …` section
+  # the agent declared.
   defp add_agent_routes(routes, %State{
          agent_module: agent_module,
          jido: jido_instance,
          partition: partition
        }) do
-    if function_exported?(agent_module, :signal_routes, 1) do
-      ctx = %{agent_module: agent_module, jido_instance: jido_instance, partition: partition}
-      agent_routes = agent_module.signal_routes(ctx)
-      normalized = normalize_routes(agent_routes, @agent_default_priority)
-      routes ++ normalized
-    else
-      routes
-    end
+    ctx = %{agent_module: agent_module, jido_instance: jido_instance, partition: partition}
+
+    agent_routes =
+      if function_exported?(agent_module, :signal_routes, 1) do
+        agent_module.signal_routes(ctx)
+      else
+        Jido.Dsl.Agent.Info.signal_routes(agent_module)
+      end
+
+    normalized = normalize_routes(agent_routes, @agent_default_priority)
+    routes ++ normalized
   end
 
-  # Collects routes from plugins via plugin_routes/0 (pre-expanded) or fallback to signal_routes/1
+  # Collects routes from plugins via the agent's pre-expanded `plugin_routes`
+  # table — the slice/plugin DSL's `signal_routes do … end` block is the
+  # single source of truth for plugin routes. Already normalized with
+  # priority by the agent transformer pipeline.
   defp add_plugin_routes(routes, %State{agent_module: agent_module}) do
-    # First, try to get pre-expanded routes from plugin_routes/0 (Phase 3 approach)
-    pre_expanded_routes =
-      if function_exported?(agent_module, :plugin_routes, 0) do
-        agent_module.plugin_routes()
-      else
-        []
-      end
-
-    # Get custom routes from plugins that define signal_routes/1 callback (legacy support)
-    plugin_specs =
-      if function_exported?(agent_module, :plugin_specs, 0) do
-        agent_module.plugin_specs()
-      else
-        []
-      end
-
-    custom_routes =
-      Enum.flat_map(plugin_specs, fn spec ->
-        get_plugin_custom_routes(spec)
-      end)
-
-    # Combine: pre-expanded routes are already normalized with priority
-    # Custom routes need normalization
-    normalized_custom = normalize_routes(custom_routes, @plugin_default_priority)
-
-    routes ++ pre_expanded_routes ++ normalized_custom
-  end
-
-  defp get_plugin_custom_routes(spec) do
-    plugin_module = spec.module
-
-    if function_exported?(plugin_module, :signal_routes, 1) do
-      case plugin_module.signal_routes(spec.config) do
-        [] -> []
-        routes when is_list(routes) -> routes
-        _other -> []
-      end
-    else
-      []
-    end
+    routes ++ Jido.Dsl.Agent.Info.plugin_routes(agent_module)
   end
 
   defp normalize_routes(routes, default_priority) do

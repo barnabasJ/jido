@@ -42,13 +42,11 @@ defmodule JidoTest.Agent.SignalHandlingTest do
              messages: [type: {:list, :any}, default: []]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"increment", TestActions.IncrementAction},
-        {"decrement", TestActions.DecrementAction},
-        {"record", TestActions.RecordAction},
-        {"emit_test", EmitTestAction}
-      ]
+    signal_routes do
+      route "increment", TestActions.IncrementAction
+      route "decrement", TestActions.DecrementAction
+      route "record", TestActions.RecordAction
+      route "emit_test", EmitTestAction
     end
   end
 
@@ -65,11 +63,9 @@ defmodule JidoTest.Agent.SignalHandlingTest do
              last_action_type: [type: :string, default: nil]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"increment", TestActions.IncrementAction},
-        {"decrement", TestActions.DecrementAction}
-      ]
+    signal_routes do
+      route "increment", TestActions.IncrementAction
+      route "decrement", TestActions.DecrementAction
     end
 
     # Intercept actions to capture the action type before processing

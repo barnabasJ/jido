@@ -36,17 +36,19 @@ defmodule JidoTest.Plugin.FSMTest do
     end
   end
 
-  describe "Slice surface" do
-    test "FSM.path/0 is :fsm" do
-      assert FSM.path() == :fsm
+  describe "Plugin.Info surface" do
+    alias Jido.Dsl.Plugin.Info, as: PluginInfo
+
+    test "FSM path is :fsm" do
+      assert PluginInfo.path(FSM) == :fsm
     end
 
-    test "FSM.signal_routes/0 routes jido.fsm.transition" do
-      assert {"jido.fsm.transition", Transition} in FSM.signal_routes()
+    test "FSM signal_routes routes jido.fsm.transition" do
+      assert {"jido.fsm.transition", Transition} in PluginInfo.signal_routes(FSM)
     end
 
-    test "FSM.actions/0 returns the Transition action" do
-      assert Transition in FSM.actions()
+    test "FSM actions return the Transition action" do
+      assert Transition in PluginInfo.actions(FSM)
     end
   end
 

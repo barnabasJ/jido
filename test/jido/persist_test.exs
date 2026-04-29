@@ -18,9 +18,6 @@ defmodule JidoTest.PersistTest do
       path :domain
       schema counter: [type: :integer, default: 0], status: [type: :atom, default: :idle]
     end
-
-    @impl true
-    def signal_routes(_ctx), do: []
   end
 
   defmodule CustomAgent do
@@ -31,9 +28,6 @@ defmodule JidoTest.PersistTest do
       path :domain
       schema value: [type: :string, default: ""]
     end
-
-    @impl true
-    def signal_routes(_ctx), do: []
 
     @impl true
     def checkpoint(agent, _ctx) do
@@ -71,9 +65,6 @@ defmodule JidoTest.PersistTest do
     end
 
     @impl true
-    def signal_routes(_ctx), do: []
-
-    @impl true
     def checkpoint(agent, _ctx) do
       {:ok,
        %{
@@ -99,9 +90,6 @@ defmodule JidoTest.PersistTest do
     end
 
     @impl true
-    def signal_routes(_ctx), do: []
-
-    @impl true
     def checkpoint(_agent, _ctx) do
       raise "checkpoint boom"
     end
@@ -115,9 +103,6 @@ defmodule JidoTest.PersistTest do
       path :domain
       schema value: [type: :string, default: ""]
     end
-
-    @impl true
-    def signal_routes(_ctx), do: []
 
     @impl true
     def checkpoint(agent, _ctx) do
@@ -142,9 +127,6 @@ defmodule JidoTest.PersistTest do
     end
 
     @impl true
-    def signal_routes(_ctx), do: []
-
-    @impl true
     def restore(_data, _ctx) do
       raise "restore boom"
     end
@@ -158,9 +140,6 @@ defmodule JidoTest.PersistTest do
       path :domain
       schema value: [type: :string, default: ""]
     end
-
-    @impl true
-    def signal_routes(_ctx), do: []
 
     @impl true
     def restore(data, _ctx) do

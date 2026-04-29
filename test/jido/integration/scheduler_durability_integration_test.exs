@@ -88,9 +88,6 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
     end
 
     @impl true
-    def signal_routes(_ctx), do: []
-
-    @impl true
     def restore(data, _ctx) do
       case :persistent_term.get({__MODULE__, :notify_pid}, nil) do
         pid when is_pid(pid) -> send(pid, {:restore_called, data.id})

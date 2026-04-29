@@ -32,6 +32,7 @@ defmodule Jido.Plugin.Schedules do
   `{:plugin_schedule, state_key, ActionModule}`
   """
 
+  alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Plugin.Instance
 
   @schedule_route_priority -20
@@ -87,8 +88,7 @@ defmodule Jido.Plugin.Schedules do
   """
   @spec expand_schedules(Instance.t()) :: [schedule_spec()]
   def expand_schedules(%Instance{} = instance) do
-    manifest = instance.manifest
-    schedules = manifest.schedules || []
+    schedules = PluginInfo.schedules(instance.module)
     state_key = instance.path
     route_prefix = instance.route_prefix
 

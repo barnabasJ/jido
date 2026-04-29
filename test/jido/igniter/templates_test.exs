@@ -4,7 +4,7 @@ defmodule JidoTest.Igniter.TemplatesTest do
   alias Jido.Igniter.Templates
 
   describe "agent_template/3" do
-    test "includes optional plugins list when provided" do
+    test "includes optional extensions list when provided" do
       template =
         Templates.agent_template(
           "MyApp.Agent",
@@ -12,16 +12,16 @@ defmodule JidoTest.Igniter.TemplatesTest do
           plugins: [MyApp.PluginOne, MyApp.PluginTwo]
         )
 
-      assert template =~ "plugins: [MyApp.PluginOne, MyApp.PluginTwo]"
+      assert template =~ "extensions: [MyApp.PluginOne, MyApp.PluginTwo]"
     end
   end
 
   describe "agent_test_template/2" do
-    test "uses module alias name in assertions" do
+    test "uses module alias name in Info-based assertions" do
       template = Templates.agent_test_template("MyApp.Agents.Example", "JidoTest.Agents.Example")
 
       assert template =~ "agent = Example.new()"
-      assert template =~ "assert agent.name == Example.name()"
+      assert template =~ "assert agent.name == AgentInfo.name(Example)"
     end
   end
 end

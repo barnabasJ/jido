@@ -134,22 +134,29 @@ defmodule Jido.Middleware.Persister do
 
     new_state =
       Enum.reduce(mods, agent.state, fn mod, acc ->
-        if transform_impl?(mod) and Map.has_key?(acc, mod.path()) do
-          Map.update!(acc, mod.path(), &apply(mod, callback, [&1]))
+        with true <- transform_impl?(mod),
+             path when not is_nil(path) <- module_path(mod),
+             true <- Map.has_key?(acc, path) do
+          Map.update!(acc, path, &apply(mod, callback, [&1]))
         else
-          acc
+          _ -> acc
         end
       end)
 
     %{agent | state: new_state}
   end
 
-  defp declared_plugin_modules(agent_module) do
-    if function_exported?(agent_module, :plugins, 0) do
-      agent_module.plugins()
-    else
-      []
+  defp module_path(mod) do
+    cond do
+      Spark.Dsl.is?(mod, Jido.Agent) -> Jido.Dsl.Agent.Info.path(mod)
+      Spark.Dsl.is?(mod, Jido.Plugin) -> Jido.Dsl.Plugin.Info.path(mod)
+      Spark.Dsl.is?(mod, Jido.Slice) -> Jido.Dsl.Slice.Info.path(mod)
+      true -> nil
     end
+  end
+
+  defp declared_plugin_modules(agent_module) do
+    Jido.Dsl.Agent.Info.plugins(agent_module)
   end
 
   defp transform_impl?(mod) do

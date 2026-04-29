@@ -2,6 +2,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
   use ExUnit.Case, async: true
 
   alias Jido.Agent.DefaultSlices
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
 
   defmodule FakeMemorySlice do
     @moduledoc false
@@ -169,7 +170,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
         end
       end
 
-      instances = AgentNoDefaults.slice_instances()
+      instances = AgentInfo.slice_instances(AgentNoDefaults)
       assert length(instances) == 3
       modules = Enum.map(instances, & &1.module)
       assert Jido.Thread.Slice in modules
@@ -187,7 +188,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
         end
       end
 
-      assert AgentDisableDefaults.slice_instances() == []
+      assert AgentInfo.slice_instances(AgentDisableDefaults) == []
     end
 
     test "agent with slices still gets them when default_slices is false" do
@@ -201,7 +202,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
         end
       end
 
-      instances = AgentUserSlicesOnly.slice_instances()
+      instances = AgentInfo.slice_instances(AgentUserSlicesOnly)
       assert length(instances) == 1
       assert hd(instances).module == UserSlice
     end
@@ -220,7 +221,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
         end
       end
 
-      instances = AgentWithJido.slice_instances()
+      instances = AgentInfo.slice_instances(AgentWithJido)
       assert length(instances) == 1
       assert hd(instances).module == FakeMemorySlice
     end
@@ -240,7 +241,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
         end
       end
 
-      instances = AgentWithJidoOverride.slice_instances()
+      instances = AgentInfo.slice_instances(AgentWithJidoOverride)
       assert length(instances) == 1
       assert hd(instances).module == FakeMemorySlice
     end
@@ -260,7 +261,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
         end
       end
 
-      instances = AgentWithReplacement.slice_instances()
+      instances = AgentInfo.slice_instances(AgentWithReplacement)
       modules = Enum.map(instances, & &1.module)
       assert ReplacementMemorySlice in modules
       assert FakeThreadSlice in modules
@@ -282,7 +283,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
         end
       end
 
-      instances = AgentMountOrder.slice_instances()
+      instances = AgentInfo.slice_instances(AgentMountOrder)
       assert length(instances) == 2
       assert Enum.at(instances, 0).module == FakeMemorySlice
       assert Enum.at(instances, 1).module == UserSlice

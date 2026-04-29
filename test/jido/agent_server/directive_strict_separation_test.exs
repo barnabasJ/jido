@@ -51,8 +51,8 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
       schema observed: [type: :any, default: nil]
     end
 
-    def signal_routes(_ctx) do
-      [{"test.directive", EmitDirectiveAction}]
+    signal_routes do
+      route "test.directive", EmitDirectiveAction
     end
   end
 
@@ -100,12 +100,12 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
       schema captured: [type: :atom, default: nil]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"test.directive",
-         JidoTest.AgentServer.DirectiveStrictSeparationTest.EmitDirectiveAction},
-        {"test.routed.captured", JidoTest.AgentServer.DirectiveStrictSeparationTest.CaptureAction}
-      ]
+    signal_routes do
+      route "test.directive",
+            JidoTest.AgentServer.DirectiveStrictSeparationTest.EmitDirectiveAction
+
+      route "test.routed.captured",
+            JidoTest.AgentServer.DirectiveStrictSeparationTest.CaptureAction
     end
   end
 

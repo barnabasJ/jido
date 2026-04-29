@@ -161,7 +161,7 @@ defmodule Jido.Exec do
          :ok <- Validator.validate_action(action),
          {:ok, validated_params} <- Validator.validate_params(action, normalized_params) do
       enhanced_context =
-        Map.put(normalized_context, :action_metadata, action.__action_metadata__())
+        Map.put(normalized_context, :action_metadata, Jido.Dsl.Action.Info.to_json(action))
 
       Telemetry.cond_log_start(log_level, action, validated_params, enhanced_context)
 
@@ -674,10 +674,9 @@ defmodule Jido.Exec do
 
     defp synthesize_signal(action, params) do
       type =
-        if function_exported?(action, :name, 0) do
-          action.name()
-        else
-          Atom.to_string(action)
+        case Jido.Dsl.Action.Info.name(action) do
+          nil -> Atom.to_string(action)
+          name when is_binary(name) -> name
         end
 
       data = ensure_map(params)

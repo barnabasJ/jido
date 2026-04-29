@@ -2,6 +2,7 @@ defmodule Jido.Dsl.AgentTest do
   use ExUnit.Case, async: true
 
   alias Jido.Agent
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
 
   defmodule SimpleAgent do
     @moduledoc false
@@ -18,56 +19,44 @@ defmodule Jido.Dsl.AgentTest do
       schema counter: [type: :integer, default: 0],
              status: [type: :atom, default: :idle]
     end
-
-    def signal_routes(_ctx), do: []
   end
 
   describe "basic accessors (sectioned `agent do … end`)" do
-    test "name/0" do
-      assert SimpleAgent.name() == "simple_agent"
+    test "name/1" do
+      assert AgentInfo.name(SimpleAgent) == "simple_agent"
     end
 
-    test "description/0" do
-      assert SimpleAgent.description() == "Bare agent — no plugins, no slices."
+    test "description/1" do
+      assert AgentInfo.description(SimpleAgent) == "Bare agent — no plugins, no slices."
     end
 
-    test "category/0" do
-      assert SimpleAgent.category() == "test"
+    test "category/1" do
+      assert AgentInfo.category(SimpleAgent) == "test"
     end
 
-    test "tags/0" do
-      assert SimpleAgent.tags() == ["simple", "test"]
+    test "tags/1" do
+      assert AgentInfo.tags(SimpleAgent) == ["simple", "test"]
     end
 
-    test "vsn/0" do
-      assert SimpleAgent.vsn() == "1.0.0"
+    test "vsn/1" do
+      assert AgentInfo.vsn(SimpleAgent) == "1.0.0"
     end
 
-    test "path/0" do
-      assert SimpleAgent.path() == :domain
+    test "path/1" do
+      assert AgentInfo.path(SimpleAgent) == :domain
     end
 
-    test "plugins/0 / slices/0 / middleware/0 default to empty / framework defaults" do
-      assert SimpleAgent.plugins() == []
+    test "plugins/1 / slices/1 / middleware/1 default to empty / framework defaults" do
+      assert AgentInfo.plugins(SimpleAgent) == []
       # Framework default slices are auto-attached.
-      assert Jido.Memory.Slice in SimpleAgent.slices()
-      assert Jido.Identity.Slice in SimpleAgent.slices()
-      assert Jido.Thread.Slice in SimpleAgent.slices()
-      assert SimpleAgent.middleware() == []
+      assert Jido.Memory.Slice in AgentInfo.slices(SimpleAgent)
+      assert Jido.Identity.Slice in AgentInfo.slices(SimpleAgent)
+      assert Jido.Thread.Slice in AgentInfo.slices(SimpleAgent)
+      assert AgentInfo.middleware(SimpleAgent) == []
     end
 
-    test "actions/0 returns the union from all attached slices" do
-      assert is_list(SimpleAgent.actions())
-    end
-
-    test "__agent_metadata__/0 returns the full metadata map" do
-      meta = SimpleAgent.__agent_metadata__()
-      assert meta.name == "simple_agent"
-      assert meta.description == "Bare agent — no plugins, no slices."
-      assert meta.category == "test"
-      assert meta.tags == ["simple", "test"]
-      assert meta.vsn == "1.0.0"
-      assert meta.module == SimpleAgent
+    test "actions/1 returns the union from all attached slices" do
+      assert is_list(AgentInfo.actions(SimpleAgent))
     end
   end
 
@@ -110,7 +99,7 @@ defmodule Jido.Dsl.AgentTest do
     end
 
     test "section entries become legacy route_spec tuples" do
-      routes = RouteAgent.signal_routes()
+      routes = AgentInfo.signal_routes(RouteAgent)
       assert {"user.created", JidoTest.PluginTestAction} in routes
       assert {"high.priority", JidoTest.PluginTestAction, 10} in routes
     end

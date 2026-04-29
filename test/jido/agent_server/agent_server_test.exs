@@ -82,17 +82,15 @@ defmodule JidoTest.AgentServerTest do
 
     alias JidoTest.TestActions
 
-    def signal_routes(_ctx) do
-      [
-        {"increment", TestActions.IncrementAction},
-        {"decrement", TestActions.DecrementAction},
-        {"record", TestActions.RecordAction},
-        {"emit_test", EmitTestAction},
-        {"schedule_test", ScheduleTestAction},
-        {"stop_test", StopTestAction},
-        {"error_test", ErrorTestAction},
-        {"noop", TestActions.NoSchema}
-      ]
+    signal_routes do
+      route "increment", TestActions.IncrementAction
+      route "decrement", TestActions.DecrementAction
+      route "record", TestActions.RecordAction
+      route "emit_test", EmitTestAction
+      route "schedule_test", ScheduleTestAction
+      route "stop_test", StopTestAction
+      route "error_test", ErrorTestAction
+      route "noop", TestActions.NoSchema
     end
   end
 
@@ -261,11 +259,9 @@ defmodule JidoTest.AgentServerTest do
                  slow_done: [type: :boolean, default: false]
         end
 
-        def signal_routes(_ctx) do
-          [
-            {"slow", InlineSlowAction},
-            {"increment", TestActions.IncrementAction}
-          ]
+        signal_routes do
+          route "slow", InlineSlowAction
+          route "increment", TestActions.IncrementAction
         end
       end
 
@@ -335,11 +331,9 @@ defmodule JidoTest.AgentServerTest do
                  slow_done: [type: :boolean, default: false]
         end
 
-        def signal_routes(_ctx) do
-          [
-            {"slow", BufferedSlowAction},
-            {"increment", BufferedIncrementAction}
-          ]
+        signal_routes do
+          route "slow", BufferedSlowAction
+          route "increment", BufferedIncrementAction
         end
       end
 
@@ -702,11 +696,9 @@ defmodule JidoTest.AgentServerTest do
           schema pings: [type: :integer, default: 0]
         end
 
-        def signal_routes(_ctx) do
-          [
-            {"start_schedule", StartScheduleAction},
-            {"scheduled.ping", ScheduledPingAction}
-          ]
+        signal_routes do
+          route "start_schedule", StartScheduleAction
+          route "scheduled.ping", ScheduledPingAction
         end
       end
 
@@ -777,11 +769,9 @@ defmodule JidoTest.AgentServerTest do
           schema events: [type: {:list, :any}, default: []]
         end
 
-        def signal_routes(_ctx) do
-          [
-            {"schedule_many", ScheduleManyAction},
-            {"tick", TickAction}
-          ]
+        signal_routes do
+          route "schedule_many", ScheduleManyAction
+          route "tick", TickAction
         end
       end
 
@@ -845,11 +835,9 @@ defmodule JidoTest.AgentServerTest do
           schema received: [type: :any, default: nil]
         end
 
-        def signal_routes(_ctx) do
-          [
-            {"schedule_atom", ScheduleAtomAction},
-            {"jido.scheduled", JidoScheduledAction}
-          ]
+        signal_routes do
+          route "schedule_atom", ScheduleAtomAction
+          route "jido.scheduled", JidoScheduledAction
         end
       end
 
@@ -1065,8 +1053,8 @@ defmodule JidoTest.AgentServerTest do
           schema drain_count: [type: :integer, default: 0]
         end
 
-        def signal_routes(_ctx) do
-          [{"slow", SlowAction2}]
+        signal_routes do
+          route "slow", SlowAction2
         end
       end
 
@@ -1179,7 +1167,7 @@ defmodule JidoTest.AgentServerTest do
     end
 
     test "agent exposes plugin_schedules/0 accessor" do
-      schedules = AgentWithScheduledPlugin.plugin_schedules()
+      schedules = Jido.Dsl.Agent.Info.plugin_schedules(AgentWithScheduledPlugin)
 
       assert length(schedules) == 1
       [spec] = schedules
@@ -1190,7 +1178,7 @@ defmodule JidoTest.AgentServerTest do
     end
 
     test "schedule routes are included in plugin_routes/0" do
-      routes = AgentWithScheduledPlugin.plugin_routes()
+      routes = Jido.Dsl.Agent.Info.plugin_routes(AgentWithScheduledPlugin)
 
       schedule_route =
         Enum.find(routes, fn {signal_type, _, _} ->

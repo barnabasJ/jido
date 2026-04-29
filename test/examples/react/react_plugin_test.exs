@@ -81,14 +81,12 @@ defmodule JidoExampleTest.ReactPluginTest do
           )
         end
 
-        def signal_routes(_config) do
-          [
-            {"react.user_query", ReAct.StartQuery},
-            {"ai.llm_response", ReAct.LLMEmitted},
-            {"ai.llm_timeout",  ReAct.LLMEmitted},
-            {"tool.result",     ReAct.ToolCompleted},
-            {"tool.timeout",    ReAct.ToolCompleted}
-          ]
+        signal_routes do
+          route "react.user_query", ReAct.StartQuery
+          route "ai.llm_response", ReAct.LLMEmitted
+          route "ai.llm_timeout", ReAct.LLMEmitted
+          route "tool.result", ReAct.ToolCompleted
+          route "tool.timeout", ReAct.ToolCompleted
         end
       end
 

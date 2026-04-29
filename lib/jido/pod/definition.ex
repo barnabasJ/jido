@@ -2,11 +2,12 @@ defmodule Jido.Pod.Definition do
   @moduledoc false
 
   alias Jido.Agent.DefaultSlices
+  alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Plugin.Instance, as: PluginInstance
   alias Jido.Pod.Plugin
   alias Jido.Pod.Topology
 
-  @pod_state_key Plugin.path()
+  @pod_state_key PluginInfo.path(Plugin)
   @pod_capability Plugin.capability()
 
   def expand_aliases_in_ast(ast, caller_env) do
@@ -141,7 +142,7 @@ defmodule Jido.Pod.Definition do
           file: caller_env.file,
           line: caller_env.line
 
-      @pod_capability not in (instance.manifest.capabilities || []) ->
+      @pod_capability not in PluginInfo.capabilities(instance.module) ->
         raise CompileError,
           description:
             "#{inspect(mod)} must advertise capability #{@pod_capability} to replace the pod plugin.",

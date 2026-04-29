@@ -34,7 +34,7 @@ defmodule JidoTest.Plugin.InstanceTest do
       assert instance.config == %{}
       assert instance.path == :test
       assert instance.route_prefix == "test_plugin"
-      assert instance.manifest.name == "test_plugin"
+      assert Jido.Dsl.Plugin.Info.name(instance.module) == "test_plugin"
     end
 
     test "creates instance from {module, map} tuple" do
@@ -77,12 +77,12 @@ defmodule JidoTest.Plugin.InstanceTest do
       assert instance.route_prefix == "sales.slack"
     end
 
-    test "manifest is populated from plugin module" do
+    test "Info accessors read directly from the plugin module" do
       instance = Instance.new(TestPlugin)
 
-      assert instance.manifest.module == TestPlugin
-      assert instance.manifest.name == "test_plugin"
-      assert instance.manifest.path == :test
+      assert instance.module == TestPlugin
+      assert Jido.Dsl.Plugin.Info.name(instance.module) == "test_plugin"
+      assert Jido.Dsl.Plugin.Info.path(instance.module) == :test
     end
   end
 

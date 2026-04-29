@@ -68,11 +68,9 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
       schema tick_count: [type: :integer, default: 0]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"register_cron", RegisterCronAction},
-        {"cron.tick", TickCountAction}
-      ]
+    signal_routes do
+      route "register_cron", RegisterCronAction
+      route "cron.tick", TickCountAction
     end
   end
 

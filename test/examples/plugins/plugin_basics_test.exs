@@ -74,11 +74,9 @@ defmodule JidoExampleTest.PluginBasicsTest do
       {:ok, %{label: label}}
     end
 
-    def signal_routes(_config) do
-      [
-        {"notes.add", JidoExampleTest.PluginBasicsTest.AddNoteAction},
-        {"notes.clear", JidoExampleTest.PluginBasicsTest.ClearNotesAction}
-      ]
+    signal_routes do
+      route "notes.add", JidoExampleTest.PluginBasicsTest.AddNoteAction
+      route "notes.clear", JidoExampleTest.PluginBasicsTest.ClearNotesAction
     end
   end
 

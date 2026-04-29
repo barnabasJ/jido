@@ -40,12 +40,8 @@ defmodule Jido.Exec.Compensation do
   """
   @spec enabled?(action()) :: boolean()
   def enabled?(action) do
-    metadata = action.__action_metadata__()
-    compensation_opts = metadata[:compensation] || []
-
     enabled =
-      case compensation_opts do
-        opts when is_list(opts) -> Keyword.get(opts, :enabled, false)
+      case Jido.Dsl.Action.Info.compensation(action) do
         %{enabled: enabled} -> enabled
         _ -> false
       end
@@ -89,8 +85,7 @@ defmodule Jido.Exec.Compensation do
     @spec execute_compensation(action(), params(), context(), Exception.t(), run_opts()) ::
             exec_result
     defp execute_compensation(action, params, context, error, opts) do
-      metadata = action.__action_metadata__()
-      compensation_opts = metadata[:compensation] || []
+      compensation_opts = Jido.Dsl.Action.Info.compensation(action)
       timeout = get_compensation_timeout(opts, compensation_opts)
 
       current_gl = Process.group_leader()
@@ -162,15 +157,12 @@ defmodule Jido.Exec.Compensation do
       end
     end
 
-    @spec get_compensation_timeout(run_opts(), keyword() | map()) :: non_neg_integer()
+    @spec get_compensation_timeout(run_opts(), map()) :: non_neg_integer()
     defp get_compensation_timeout(opts, compensation_opts) do
       Keyword.get(opts, :timeout) || extract_timeout_from_compensation_opts(compensation_opts)
     end
 
-    @spec extract_timeout_from_compensation_opts(keyword() | map() | any()) :: non_neg_integer()
-    defp extract_timeout_from_compensation_opts(opts) when is_list(opts),
-      do: Keyword.get(opts, :timeout, 5_000)
-
+    @spec extract_timeout_from_compensation_opts(map() | any()) :: non_neg_integer()
     defp extract_timeout_from_compensation_opts(%{timeout: timeout}), do: timeout
     defp extract_timeout_from_compensation_opts(_), do: 5_000
 

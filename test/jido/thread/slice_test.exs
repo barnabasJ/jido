@@ -1,25 +1,27 @@
 defmodule JidoTest.Thread.SliceTest do
   use ExUnit.Case, async: true
 
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
+  alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias Jido.Thread
   alias Jido.Thread.Actions
   alias Jido.Thread.Slice, as: ThreadSlice
 
   describe "slice metadata" do
     test "name is thread" do
-      assert ThreadSlice.name() == "thread"
+      assert SliceInfo.name(ThreadSlice) == "thread"
     end
 
     test "path is :thread" do
-      assert ThreadSlice.path() == :thread
+      assert SliceInfo.path(ThreadSlice) == :thread
     end
 
     test "has thread capability" do
-      assert :thread in ThreadSlice.capabilities()
+      assert :thread in SliceInfo.capabilities(ThreadSlice)
     end
 
-    test "exposes Thread.Actions.{Ensure,Append,Clear} via actions/0" do
-      action_set = MapSet.new(ThreadSlice.actions())
+    test "exposes Thread.Actions.{Ensure,Append,Clear} via actions/1" do
+      action_set = MapSet.new(SliceInfo.actions(ThreadSlice))
 
       assert MapSet.equal?(
                action_set,
@@ -28,12 +30,13 @@ defmodule JidoTest.Thread.SliceTest do
     end
 
     test "schema is bound to Jido.Thread.schema/0" do
-      assert ThreadSlice.schema() == Thread.schema()
+      assert SliceInfo.schema(ThreadSlice) == Thread.schema()
     end
 
     test "exposes one signal route per action" do
       route_types =
-        ThreadSlice.signal_routes()
+        ThreadSlice
+        |> SliceInfo.signal_routes()
         |> Enum.map(fn
           {type, _action} -> type
           {type, _action, _opts} -> type
@@ -42,13 +45,6 @@ defmodule JidoTest.Thread.SliceTest do
       assert "jido.thread.ensure" in route_types
       assert "jido.thread.append" in route_types
       assert "jido.thread.clear" in route_types
-    end
-  end
-
-  describe "manifest" do
-    test "path is :thread in manifest" do
-      manifest = ThreadSlice.manifest()
-      assert manifest.path == :thread
     end
   end
 
@@ -100,8 +96,7 @@ defmodule JidoTest.Thread.SliceTest do
     end
 
     test "agent includes thread slice by default" do
-      modules = AgentWithThread.slices()
-      assert Jido.Thread.Slice in modules
+      assert Jido.Thread.Slice in AgentInfo.slices(AgentWithThread)
     end
 
     test "agent.state[:thread] starts nil (lazy init)" do
@@ -110,8 +105,7 @@ defmodule JidoTest.Thread.SliceTest do
     end
 
     test "agent can disable thread slice" do
-      modules = AgentWithoutThread.slices()
-      refute Jido.Thread.Slice in modules
+      refute Jido.Thread.Slice in AgentInfo.slices(AgentWithoutThread)
     end
 
     test "thread can be attached after creation via Thread.Agent" do

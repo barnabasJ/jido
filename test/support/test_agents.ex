@@ -15,8 +15,6 @@ defmodule JidoTest.TestAgents do
     agent do
       name "minimal_agent"
     end
-
-    def signal_routes(_ctx), do: []
   end
 
   defmodule Counter do
@@ -41,14 +39,12 @@ defmodule JidoTest.TestAgents do
              messages: [type: {:list, :any}, default: []]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"increment", JidoTest.TestActions.IncrementAction},
-        {"decrement", JidoTest.TestActions.DecrementAction},
-        {"record", JidoTest.TestActions.RecordAction},
-        {"slow", JidoTest.TestActions.SlowAction},
-        {"fail", JidoTest.TestActions.FailingAction}
-      ]
+    signal_routes do
+      route "increment", JidoTest.TestActions.IncrementAction
+      route "decrement", JidoTest.TestActions.DecrementAction
+      route "record", JidoTest.TestActions.RecordAction
+      route "slow", JidoTest.TestActions.SlowAction
+      route "fail", JidoTest.TestActions.FailingAction
     end
   end
 
@@ -67,8 +63,6 @@ defmodule JidoTest.TestAgents do
       schema counter: [type: :integer, default: 0],
              status: [type: :atom, default: :idle]
     end
-
-    def signal_routes(_ctx), do: []
   end
 
   defmodule Hook do
@@ -80,8 +74,6 @@ defmodule JidoTest.TestAgents do
       path :domain
       schema counter: [type: :integer, default: 0]
     end
-
-    def signal_routes(_ctx), do: []
 
     def on_after_cmd(agent, _action, directives) do
       new_agent = %{agent | state: put_in(agent.state, [:domain, :hook_called], true)}
@@ -104,8 +96,6 @@ defmodule JidoTest.TestAgents do
         })
       )
     end
-
-    def signal_routes(_ctx), do: []
   end
 
   defmodule TestPluginWithRoutes do
@@ -148,8 +138,6 @@ defmodule JidoTest.TestAgents do
     agent do
       name "agent_with_plugin_routes"
     end
-
-    def signal_routes(_ctx), do: []
   end
 
   defmodule AgentWithMultiInstancePlugins do
@@ -164,7 +152,5 @@ defmodule JidoTest.TestAgents do
     agent do
       name "agent_multi_instance"
     end
-
-    def signal_routes(_ctx), do: []
   end
 end

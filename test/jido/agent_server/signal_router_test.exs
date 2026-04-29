@@ -63,11 +63,9 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
       name "agent_with_routes"
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"agent.action", JidoTest.AgentServer.SignalRouterTest.TestAction},
-        {"agent.priority", JidoTest.AgentServer.SignalRouterTest.TestAction, 10}
-      ]
+    signal_routes do
+      route "agent.action", JidoTest.AgentServer.SignalRouterTest.TestAction
+      route "agent.priority", JidoTest.AgentServer.SignalRouterTest.TestAction, priority: 10
     end
   end
 

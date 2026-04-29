@@ -27,6 +27,7 @@ defmodule Jido.Plugin.Routes do
   Default priority for plugin routes is -10 (from signal router conventions).
   """
 
+  alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Plugin.Instance
 
   @plugin_default_priority -10
@@ -43,11 +44,6 @@ defmodule Jido.Plugin.Routes do
   - `{"post", ActionModule, priority: 5}` => `{"slack.post", ActionModule, [priority: 5]}`
   - `{"post", ActionModule, on_conflict: :replace}` => with option preserved
 
-  ## Legacy Support
-
-  If `manifest.signal_routes` is empty but `manifest.signal_patterns` exists,
-  routes are generated from patterns + actions.
-
   ## Examples
 
       instance = Instance.new(SlackPlugin)  # route_prefix: "slack"
@@ -60,36 +56,15 @@ defmodule Jido.Plugin.Routes do
   """
   @spec expand_routes(Instance.t()) :: [{String.t(), module(), keyword()}]
   def expand_routes(%Instance{} = instance) do
-    manifest = instance.manifest
     prefix = instance.route_prefix
     module = instance.module
 
-    routes = manifest.signal_routes || []
+    routes = PluginInfo.signal_routes(module)
 
-    expanded =
-      cond do
-        routes != [] ->
-          Enum.map(routes, fn route -> expand_route(route, prefix) end)
-
-        has_custom_signal_routes?(module) ->
-          []
-
-        true ->
-          expand_legacy_routes(manifest, prefix)
-      end
-
-    expanded
-  end
-
-  defp has_custom_signal_routes?(module) do
-    if function_exported?(module, :signal_routes, 1) do
-      case module.signal_routes(%{}) do
-        [] -> false
-        routes when is_list(routes) -> true
-        _ -> false
-      end
+    if routes == [] do
+      []
     else
-      false
+      Enum.map(routes, fn route -> expand_route(route, prefix) end)
     end
   end
 
@@ -200,16 +175,6 @@ defmodule Jido.Plugin.Routes do
   # plugin's `route_prefix`. Plugin-namespaced routes get the standard prefix.
   defp effective_path(_prefix, "jido." <> _ = absolute), do: absolute
   defp effective_path(prefix, path), do: prefix_path(prefix, path)
-
-  defp expand_legacy_routes(manifest, prefix) do
-    patterns = manifest.signal_patterns || []
-    action_modules = manifest.actions || []
-
-    for pattern <- patterns, action <- action_modules do
-      prefixed_pattern = prefix_path(prefix, pattern)
-      {prefixed_pattern, action, []}
-    end
-  end
 
   defp prefix_path(prefix, path) do
     "#{prefix}.#{path}"

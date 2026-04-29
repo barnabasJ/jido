@@ -98,10 +98,6 @@ defmodule Jido.Action do
   def handle_opts(_opts) do
     quote do
       @behaviour Jido.Action
-
-      @doc false
-      @spec __action__() :: true
-      def __action__, do: true
     end
   end
 

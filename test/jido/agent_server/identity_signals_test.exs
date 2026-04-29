@@ -29,11 +29,9 @@ defmodule JidoTest.AgentServer.IdentitySignalsTest do
       schema identity_events: [type: {:list, :any}, default: []]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"jido.agent.identity.partition_assigned",
-         JidoTest.AgentServer.IdentitySignalsTest.WatcherAction}
-      ]
+    signal_routes do
+      route "jido.agent.identity.partition_assigned",
+            JidoTest.AgentServer.IdentitySignalsTest.WatcherAction
     end
   end
 

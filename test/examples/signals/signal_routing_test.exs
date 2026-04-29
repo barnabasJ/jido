@@ -92,12 +92,10 @@ defmodule JidoExampleTest.SignalRoutingTest do
       )
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"increment", IncrementAction},
-        {"set_name", SetNameAction},
-        {"record_event", RecordEventAction}
-      ]
+    signal_routes do
+      route "increment", IncrementAction
+      route "set_name", SetNameAction
+      route "record_event", RecordEventAction
     end
   end
 

@@ -54,10 +54,8 @@ defmodule JidoExampleTest.IdentitySliceTest do
       description "Agent with identity for capability-based routing"
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"evolve", Jido.Identity.Actions.Evolve}
-      ]
+    signal_routes do
+      route "evolve", Jido.Identity.Actions.Evolve
     end
   end
 
@@ -168,7 +166,7 @@ defmodule JidoExampleTest.IdentitySliceTest do
 
   describe "replacing identity slice with custom implementation" do
     test "custom slice replaces default Identity.Slice" do
-      modules = PreConfiguredAgent.slices()
+      modules = Jido.Dsl.Agent.Info.slices(PreConfiguredAgent)
 
       assert CustomIdentitySlice in modules
       refute Jido.Identity.Slice in modules
@@ -182,7 +180,7 @@ defmodule JidoExampleTest.IdentitySliceTest do
       refute IdentityAgent.has_identity?(agent)
       refute Map.has_key?(agent.state, :identity)
 
-      modules = NoIdentityAgent.slices()
+      modules = Jido.Dsl.Agent.Info.slices(NoIdentityAgent)
       refute Jido.Identity.Slice in modules
     end
   end

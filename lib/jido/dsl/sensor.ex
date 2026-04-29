@@ -7,11 +7,9 @@ defmodule Jido.Dsl.Sensor do
     * `sensor do … end` — sensor identity (`name`, `description`,
       `category`, `tags`, `vsn`, `schema`).
 
-  The `GenerateAccessors` transformer reads this section and emits the
-  same compile-time accessor surface today's `Jido.Sensor.__using__/1`
-  macro emits — `name/0`, `description/0`, `schema/0`, `spec/0`,
-  `__sensor_metadata__/0`, plus the default `terminate/2` and the
-  associated `defoverridable` block.
+  The `GenerateAccessors` transformer emits the default `terminate/2`
+  callback and its `defoverridable`. Sensor introspection lives in
+  `Jido.Dsl.Sensor.Info`.
   """
 
   @sensor_section %Spark.Dsl.Section{

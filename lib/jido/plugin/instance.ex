@@ -11,7 +11,6 @@ defmodule Jido.Plugin.Instance do
   - `module` - The plugin module
   - `as` - Optional instance alias atom (e.g., `:support`, `:sales`)
   - `config` - Resolved config map (overrides from agent declaration)
-  - `manifest` - The plugin's manifest struct
   - `path` - Derived slice key (e.g., `:slack` or `:slack_support` if `as: :support`)
   - `route_prefix` - Derived route prefix (e.g., `"slack"` or `"support.slack"`)
 
@@ -26,6 +25,7 @@ defmodule Jido.Plugin.Instance do
       Instance.new({MyPlugin, as: :sales, token: "sales-token"})
   """
 
+  alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Plugin.Config
 
   @schema Zoi.struct(
@@ -34,7 +34,6 @@ defmodule Jido.Plugin.Instance do
               module: Zoi.atom(description: "The plugin module"),
               as: Zoi.atom(description: "Optional instance alias") |> Zoi.optional(),
               config: Zoi.map(description: "Resolved configuration") |> Zoi.default(%{}),
-              manifest: Zoi.any(description: "The plugin's manifest struct"),
               path: Zoi.atom(description: "Derived slice key in agent.state"),
               route_prefix: Zoi.string(description: "Derived route prefix for signal routing")
             },
@@ -81,9 +80,8 @@ defmodule Jido.Plugin.Instance do
   def new(plugin_declaration) do
     {module, as_opt, overrides} = normalize_declaration(plugin_declaration)
 
-    manifest = module.manifest()
-    base_path = manifest.path
-    base_name = manifest.name
+    base_path = PluginInfo.path(module)
+    base_name = PluginInfo.name(module)
 
     resolved_config = Config.resolve_config!(module, overrides)
 
@@ -94,7 +92,6 @@ defmodule Jido.Plugin.Instance do
       module: module,
       as: as_opt,
       config: resolved_config,
-      manifest: manifest,
       path: path,
       route_prefix: route_prefix
     }

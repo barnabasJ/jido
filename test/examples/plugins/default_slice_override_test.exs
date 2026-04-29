@@ -117,7 +117,7 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
 
   describe "default slices are auto-included" do
     test "default agent includes Thread.Slice and Identity.Slice in slices" do
-      modules = DefaultAgent.slices()
+      modules = Jido.Dsl.Agent.Info.slices(DefaultAgent)
 
       assert Jido.Thread.Slice in modules
       assert Jido.Identity.Slice in modules
@@ -127,7 +127,7 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
   describe "replacing a default slice" do
     test "overridden agent uses CustomThreadSlice instead of Thread.Slice" do
       agent = OverriddenAgent.new()
-      modules = OverriddenAgent.slices()
+      modules = Jido.Dsl.Agent.Info.slices(OverriddenAgent)
 
       assert CustomThreadSlice in modules
       refute Jido.Thread.Slice in modules
@@ -146,7 +146,7 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
   describe "disabling default slices" do
     test "disabled agent does not have :thread in state" do
       agent = DisabledAgent.new()
-      modules = DisabledAgent.slices()
+      modules = Jido.Dsl.Agent.Info.slices(DisabledAgent)
 
       refute Jido.Thread.Slice in modules
       refute Map.has_key?(agent.state, :thread)
@@ -155,7 +155,7 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
     test "bare agent with all defaults disabled does not have :thread" do
       agent = BareAgent.new()
 
-      assert BareAgent.slice_instances() == []
+      assert Jido.Dsl.Agent.Info.slice_instances(BareAgent) == []
       refute Map.has_key?(agent.state, :thread)
     end
   end

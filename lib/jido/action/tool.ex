@@ -54,10 +54,10 @@ defmodule Jido.Action.Tool do
   @spec to_tool(module(), keyword()) :: tool()
   def to_tool(action, opts) when is_atom(action) and is_list(opts) do
     %{
-      name: action.name(),
-      description: action.description(),
+      name: Jido.Dsl.Action.Info.name(action),
+      description: Jido.Dsl.Action.Info.description(action),
       function: &execute_action(action, &1, &2),
-      parameters_schema: build_parameters_schema(action.schema(), opts)
+      parameters_schema: build_parameters_schema(Jido.Dsl.Action.Info.schema(action), opts)
     }
   end
 
@@ -69,7 +69,7 @@ defmodule Jido.Action.Tool do
   @spec execute_action(module(), map(), map()) :: {:ok, String.t()} | {:error, String.t()}
   def execute_action(action, params, context) do
     # Convert string keys to atom keys and handle type conversion based on schema
-    converted_params = convert_params_using_schema(params, action.schema())
+    converted_params = convert_params_using_schema(params, Jido.Dsl.Action.Info.schema(action))
     safe_context = context || %{}
 
     case Jido.Exec.run(action, converted_params, safe_context) do

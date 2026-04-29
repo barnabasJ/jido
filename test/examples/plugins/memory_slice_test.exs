@@ -203,7 +203,7 @@ defmodule JidoExampleTest.MemorySliceTest do
       refute MemAgent.has_memory?(agent)
       refute Map.has_key?(agent.state, :memory)
 
-      modules = NoMemoryAgent.slices()
+      modules = Jido.Dsl.Agent.Info.slices(NoMemoryAgent)
       refute Jido.Memory.Slice in modules
     end
   end

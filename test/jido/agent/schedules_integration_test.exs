@@ -31,8 +31,8 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
       schedule "* * * * * * *", "agent.tick", job_id: :tick
     end
 
-    def signal_routes(_ctx) do
-      [{"agent.tick", TickAction}]
+    signal_routes do
+      route "agent.tick", TickAction
     end
   end
 
@@ -50,8 +50,9 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
       schedule "@daily", "cleanup.run", job_id: :cleanup, timezone: "America/New_York"
     end
 
-    def signal_routes(_ctx) do
-      [{"heartbeat.tick", TickAction}, {"cleanup.run", TickAction}]
+    signal_routes do
+      route "heartbeat.tick", TickAction
+      route "cleanup.run", TickAction
     end
   end
 
@@ -66,43 +67,16 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
   end
 
   describe "agent with schedules" do
-    test "plugin_schedules/0 typespec includes plugin and agent schedule specs" do
-      unique = System.unique_integer([:positive])
-      module = Module.concat(__MODULE__, "SpecAgent#{unique}")
-
-      old_options = Code.compiler_options()
-
-      [{^module, beam}] =
-        try do
-          Code.compiler_options(debug_info: true)
-
-          Code.compile_string("""
-          defmodule #{inspect(module)} do
-            use Jido.Agent
-
-            agent do
-              name "spec_agent_#{unique}"
-            end
-
-            schedules do
-              schedule "* * * * *", "agent.tick", job_id: :tick
-            end
-          end
-          """)
-        after
-          Code.compiler_options(old_options)
-        end
-
-      beam_path = Path.join(System.tmp_dir!(), "spec_agent_#{unique}.beam")
-      File.write!(beam_path, beam)
-      on_exit(fn -> File.rm(beam_path) end)
+    test "Info.plugin_schedules/1 typespec includes plugin and agent schedule specs" do
+      module = Jido.Dsl.Agent.Info
+      beam_path = :code.which(module) |> List.to_string()
 
       {:ok, {_module, [abstract_code: {:raw_abstract_v1, abstract_code}]}} =
         :beam_lib.chunks(String.to_charlist(beam_path), [:abstract_code])
 
-      {{:plugin_schedules, 0}, [spec]} =
+      {{:plugin_schedules, 1}, [spec]} =
         Enum.find_value(abstract_code, fn
-          {:attribute, _line, :spec, {{:plugin_schedules, 0}, _} = spec} -> spec
+          {:attribute, _line, :spec, {{:plugin_schedules, 1}, _} = spec} -> spec
           _other -> nil
         end)
 
@@ -117,7 +91,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
     end
 
     test "plugin_schedules/0 includes agent schedules" do
-      schedules = ScheduledAgent.plugin_schedules()
+      schedules = Jido.Dsl.Agent.Info.plugin_schedules(ScheduledAgent)
 
       agent_schedules =
         Enum.filter(schedules, fn spec ->
@@ -128,7 +102,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
     end
 
     test "agent schedules have correct job_id namespacing" do
-      schedules = ScheduledAgent.plugin_schedules()
+      schedules = Jido.Dsl.Agent.Info.plugin_schedules(ScheduledAgent)
 
       agent_schedule =
         Enum.find(schedules, fn spec ->
@@ -139,7 +113,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
     end
 
     test "agent schedules have correct signal_type" do
-      schedules = ScheduledAgent.plugin_schedules()
+      schedules = Jido.Dsl.Agent.Info.plugin_schedules(ScheduledAgent)
 
       agent_schedule =
         Enum.find(schedules, fn spec ->
@@ -150,7 +124,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
     end
 
     test "agent with no schedules has no agent schedules in plugin_schedules" do
-      schedules = NoScheduleAgent.plugin_schedules()
+      schedules = Jido.Dsl.Agent.Info.plugin_schedules(NoScheduleAgent)
 
       agent_schedules =
         Enum.filter(schedules, fn spec ->
@@ -161,7 +135,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
     end
 
     test "multiple schedules are all included" do
-      schedules = MultiScheduleAgent.plugin_schedules()
+      schedules = Jido.Dsl.Agent.Info.plugin_schedules(MultiScheduleAgent)
 
       agent_schedules =
         Enum.filter(schedules, fn spec ->

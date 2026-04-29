@@ -85,12 +85,10 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
       )
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"step1", Step1Action},
-        {"step1.followup", SetFollowupKeyAction},
-        {"step2", Step2Action}
-      ]
+    signal_routes do
+      route "step1", Step1Action
+      route "step1.followup", SetFollowupKeyAction
+      route "step2", Step2Action
     end
   end
 

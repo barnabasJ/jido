@@ -13,8 +13,6 @@ defmodule JidoTest.DebugIntegrationTest do
       path :domain
       schema counter: [type: :integer, default: 0]
     end
-
-    def signal_routes(_ctx), do: []
   end
 
   setup context do

@@ -14,7 +14,7 @@ defmodule Jido.Igniter.Templates do
   @spec agent_template(module :: String.t(), name :: String.t(), opts :: keyword()) :: String.t()
   def agent_template(module, name, opts) do
     plugins = Keyword.get(opts, :plugins, [])
-    plugins_opt = format_plugins_option(plugins)
+    extensions_opt = format_extensions_option(plugins)
 
     """
     defmodule #{module} do
@@ -26,11 +26,14 @@ defmodule Jido.Igniter.Templates do
       a `:counter` field is read as `agent.state.domain.counter`.
       \"\"\"
 
-      use Jido.Agent,
-        name: "#{name}",
-        path: :domain,
-        description: "TODO: Add description",
-        schema: []#{plugins_opt}
+      use Jido.Agent#{extensions_opt}
+
+      agent do
+        name "#{name}"
+        description "TODO: Add description"
+        path :domain
+        schema []
+      end
     end
     """
   end
@@ -46,12 +49,13 @@ defmodule Jido.Igniter.Templates do
     defmodule #{test_module} do
       use ExUnit.Case, async: true
 
+      alias Jido.Dsl.Agent.Info, as: AgentInfo
       alias #{module}
 
       describe "new/1" do
         test "creates agent with default state" do
           agent = #{alias_name}.new()
-          assert agent.name == #{alias_name}.name()
+          assert agent.name == AgentInfo.name(#{alias_name})
         end
 
         test "creates agent with custom id" do
@@ -73,18 +77,23 @@ defmodule Jido.Igniter.Templates do
           signal_routes :: [String.t()]
         ) :: String.t()
   def plugin_template(module, name, path, signal_routes) do
-    routes_str =
+    routes_block =
       signal_routes
-      |> Enum.map_join(", ", &~s({"#{&1}", :todo}))
+      |> Enum.map_join("\n", fn type -> "    route #{inspect(type)}, :todo" end)
 
     """
     defmodule #{module} do
-      use Jido.Plugin,
-        name: "#{name}",
-        path: :#{path},
-        actions: [],
-        schema: Zoi.object(%{}),
-        signal_routes: [#{routes_str}]
+      use Jido.Plugin
+
+      slice do
+        name "#{name}"
+        path :#{path}
+        schema Zoi.object(%{})
+      end
+
+      signal_routes do
+    #{routes_block}
+      end
     end
     """
   end
@@ -100,13 +109,16 @@ defmodule Jido.Igniter.Templates do
     defmodule #{test_module} do
       use ExUnit.Case, async: true
 
+      alias Jido.Dsl.Plugin.Info, as: PluginInfo
       alias #{module}
 
-      describe "plugin_spec/1" do
-        test "returns plugin specification" do
-          spec = #{alias_name}.plugin_spec(%{})
-          assert spec.module == #{alias_name}
-          assert spec.name == #{alias_name}.name()
+      describe "Plugin.Info introspection" do
+        test "exposes the configured name" do
+          assert is_binary(PluginInfo.name(#{alias_name}))
+        end
+
+        test "exposes the configured path" do
+          assert is_atom(PluginInfo.path(#{alias_name}))
         end
       end
     end
@@ -181,11 +193,11 @@ defmodule Jido.Igniter.Templates do
     """
   end
 
-  defp format_plugins_option([]), do: ""
+  defp format_extensions_option([]), do: ""
 
-  defp format_plugins_option(plugins) do
+  defp format_extensions_option(plugins) do
     plugins_str = Enum.map_join(plugins, ", ", &inspect/1)
-    ",\n    plugins: [#{plugins_str}]"
+    ", extensions: [#{plugins_str}]"
   end
 
   defp module_alias(module) do

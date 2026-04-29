@@ -44,7 +44,8 @@ defmodule Jido.Dsl.AgentExtensionsOrderTest do
   end
 
   test "middleware/0 preserves the `extensions: […]` keyword-list order" do
-    assert [{MiddlewareA, _}, {MiddlewareB, _}, {MiddlewareC, _}] = OrderedAgent.middleware()
+    assert [{MiddlewareA, _}, {MiddlewareB, _}, {MiddlewareC, _}] =
+             Jido.Dsl.Agent.Info.middleware(OrderedAgent)
   end
 
   defmodule InterleavedAgent do
@@ -59,6 +60,6 @@ defmodule Jido.Dsl.AgentExtensionsOrderTest do
 
   test "user-chosen order is preserved verbatim" do
     assert [{MiddlewareA, _}, {MiddlewareC, _}, {MiddlewareB, _}] =
-             InterleavedAgent.middleware()
+             Jido.Dsl.Agent.Info.middleware(InterleavedAgent)
   end
 end

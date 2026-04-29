@@ -22,6 +22,7 @@ defmodule Jido.Plugin.Requirements do
   If requirements are not met, agent compilation will fail with a descriptive error.
   """
 
+  alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Plugin.Instance
 
   @type requirement :: {:config, atom()} | {:app, atom()} | {:plugin, String.t() | atom()}
@@ -35,7 +36,7 @@ defmodule Jido.Plugin.Requirements do
 
   ## Parameters
 
-  - `instance` - The plugin instance with manifest containing requirements
+  - `instance` - The plugin instance whose module declares requirements
   - `context` - Map with `:mounted_plugins` and `:resolved_config`
 
   ## Returns
@@ -54,7 +55,7 @@ defmodule Jido.Plugin.Requirements do
   @spec validate_requirements(Instance.t(), context()) ::
           {:ok, :valid} | {:error, [requirement()]}
   def validate_requirements(%Instance{} = instance, context) do
-    requirements = instance.manifest.requires || []
+    requirements = PluginInfo.requires(instance.module)
     resolved_config = context[:resolved_config] || instance.config
     mounted_plugin_names = get_mounted_plugin_names(context[:mounted_plugins] || [])
 
@@ -105,7 +106,7 @@ defmodule Jido.Plugin.Requirements do
         resolved_config = Map.get(config_map, instance.path, instance.config)
 
         case validate_requirements_internal(
-               instance.manifest.requires || [],
+               PluginInfo.requires(instance.module),
                resolved_config,
                mounted_plugin_names
              ) do
@@ -113,7 +114,7 @@ defmodule Jido.Plugin.Requirements do
             acc
 
           missing ->
-            plugin_name = instance.manifest.name
+            plugin_name = PluginInfo.name(instance.module)
             Map.put(acc, plugin_name, missing)
         end
       end)
@@ -170,6 +171,6 @@ defmodule Jido.Plugin.Requirements do
   end
 
   defp get_mounted_plugin_names(instances) do
-    Enum.map(instances, fn instance -> instance.manifest.name end)
+    Enum.map(instances, fn instance -> PluginInfo.name(instance.module) end)
   end
 end

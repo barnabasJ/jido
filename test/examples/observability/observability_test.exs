@@ -154,11 +154,9 @@ defmodule JidoExampleTest.ObservabilityTest do
              async_result: [type: :integer, default: nil]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"observed_work", ObservedWorkAction},
-        {"observed_async", ObservedAsyncAction}
-      ]
+    signal_routes do
+      route "observed_work", ObservedWorkAction
+      route "observed_async", ObservedAsyncAction
     end
   end
 

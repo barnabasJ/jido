@@ -1,11 +1,13 @@
 defmodule Jido.Dsl.SliceTest do
   use ExUnit.Case, async: true
 
-  # Cover the seven slice DSL sections, the GenerateAccessors transformer's
-  # public surface, and the regression cases called out in the task spec
-  # (`schema/0` parity with the legacy macro, `defoverridable` parity,
-  # `__jido_slice__/0` marker, plugin-as-slice override, slice-as-plugin
-  # rejection).
+  # Cover the seven slice DSL sections, the Info-module accessor
+  # surface, and the regression cases called out in the task spec
+  # (`schema/1` parity with the legacy macro,
+  # `Spark.Dsl.is?(mod, Jido.Slice)` marker, plugin-as-slice override,
+  # slice-as-plugin rejection).
+
+  alias Jido.Dsl.Slice.Info, as: SliceInfo
 
   Code.ensure_compiled!(JidoTest.PluginTestAction)
 
@@ -69,110 +71,58 @@ defmodule Jido.Dsl.SliceTest do
 
   describe "slice section accessors" do
     test "minimal slice exposes name, path, schema, and a single route" do
-      assert MinimalSlice.name() == "minimal"
-      assert MinimalSlice.path() == :minimal
-      assert MinimalSlice.actions() == [JidoTest.PluginTestAction]
-      assert MinimalSlice.tags() == []
-      assert MinimalSlice.capabilities() == []
-      assert MinimalSlice.signal_routes() == [{"minimal.noop", JidoTest.PluginTestAction}]
-      assert MinimalSlice.subscriptions() == []
-      assert MinimalSlice.schedules() == []
-      assert MinimalSlice.requires() == []
-      assert MinimalSlice.description() == nil
-      assert MinimalSlice.category() == nil
-      assert MinimalSlice.vsn() == nil
-      assert MinimalSlice.otp_app() == nil
-      assert is_struct(MinimalSlice.schema())
-      assert MinimalSlice.config_schema() == nil
+      assert SliceInfo.name(MinimalSlice) == "minimal"
+      assert SliceInfo.path(MinimalSlice) == :minimal
+      assert SliceInfo.actions(MinimalSlice) == [JidoTest.PluginTestAction]
+      assert SliceInfo.tags(MinimalSlice) == []
+      assert SliceInfo.capabilities(MinimalSlice) == []
+
+      assert SliceInfo.signal_routes(MinimalSlice) == [
+               {"minimal.noop", JidoTest.PluginTestAction}
+             ]
+
+      assert SliceInfo.subscriptions(MinimalSlice) == []
+      assert SliceInfo.schedules(MinimalSlice) == []
+      assert SliceInfo.requires(MinimalSlice) == []
+      assert SliceInfo.description(MinimalSlice) == nil
+      assert SliceInfo.category(MinimalSlice) == nil
+      assert SliceInfo.vsn(MinimalSlice) == nil
+      assert SliceInfo.otp_app(MinimalSlice) == nil
+      assert is_struct(SliceInfo.schema(MinimalSlice))
+      assert SliceInfo.config_schema(MinimalSlice) == nil
     end
 
     test "full slice exposes every metadata field" do
-      assert FullSlice.name() == "full"
-      assert FullSlice.path() == :full
-      assert FullSlice.description() == "A full slice"
-      assert FullSlice.category() == "test"
-      assert FullSlice.vsn() == "0.1.0"
-      assert FullSlice.tags() == ["a", "b"]
-      assert FullSlice.actions() == [JidoTest.PluginTestAction]
-      assert FullSlice.capabilities() == [:speak]
-      assert FullSlice.requires() == [{:config, :token}]
-      assert FullSlice.signal_routes() == [{"send", JidoTest.PluginTestAction}]
-      assert is_struct(FullSlice.schema())
-      assert is_struct(FullSlice.config_schema())
+      assert SliceInfo.name(FullSlice) == "full"
+      assert SliceInfo.path(FullSlice) == :full
+      assert SliceInfo.description(FullSlice) == "A full slice"
+      assert SliceInfo.category(FullSlice) == "test"
+      assert SliceInfo.vsn(FullSlice) == "0.1.0"
+      assert SliceInfo.tags(FullSlice) == ["a", "b"]
+      assert SliceInfo.actions(FullSlice) == [JidoTest.PluginTestAction]
+      assert SliceInfo.capabilities(FullSlice) == [:speak]
+      assert SliceInfo.requires(FullSlice) == [{:config, :token}]
+      assert SliceInfo.signal_routes(FullSlice) == [{"send", JidoTest.PluginTestAction}]
+      assert is_struct(SliceInfo.schema(FullSlice))
+      assert is_struct(SliceInfo.config_schema(FullSlice))
     end
 
-    test "manifest/0 returns a Jido.Plugin.Manifest with all fields populated" do
-      manifest = FullSlice.manifest()
-      assert %Jido.Plugin.Manifest{} = manifest
-      assert manifest.module == FullSlice
-      assert manifest.path == :full
-      assert manifest.name == "full"
-      assert manifest.actions == [JidoTest.PluginTestAction]
-      assert manifest.signal_routes == [{"send", JidoTest.PluginTestAction}]
-      assert manifest.capabilities == [:speak]
-      assert manifest.requires == [{:config, :token}]
-    end
-
-    test "plugin_spec/1 returns a Jido.Plugin.Spec with config merged" do
-      spec = FullSlice.plugin_spec(%{enabled: false})
-      assert %Jido.Plugin.Spec{} = spec
-      assert spec.path == :full
-      assert spec.config == %{enabled: false}
-      assert spec.actions == [JidoTest.PluginTestAction]
-    end
-
-    test "__plugin_metadata__/0 returns discovery metadata" do
-      metadata = FullSlice.__plugin_metadata__()
-      assert metadata.name == "full"
-      assert metadata.description == "A full slice"
-      assert metadata.category == "test"
-      assert metadata.tags == ["a", "b"]
-    end
-
-    test "__jido_slice__/0 marker is emitted" do
-      assert MinimalSlice.__jido_slice__() == true
-      assert FullSlice.__jido_slice__() == true
+    test "Spark.Dsl.is?(mod, Jido.Slice) is true for slice modules" do
+      assert Spark.Dsl.is?(MinimalSlice, Jido.Slice)
+      assert Spark.Dsl.is?(FullSlice, Jido.Slice)
     end
   end
 
-  describe "schema/0 parity with the legacy macro" do
-    test "schema/0 returns the same Zoi struct passed into the section" do
-      schema = SchemaSlice.schema()
+  describe "schema/1 parity with the legacy macro" do
+    test "schema/1 returns the same Zoi struct passed into the section" do
+      schema = SliceInfo.schema(SchemaSlice)
       assert is_struct(schema)
       # Round-trip: parsing seed input through the schema yields the default
       assert {:ok, %{counter: 0}} = Zoi.parse(schema, %{})
     end
 
-    test "schema/0 returns the slice's declared schema struct" do
-      assert is_struct(MinimalSlice.schema())
-    end
-  end
-
-  describe "defoverridable parity (16 functions)" do
-    defmodule OverridingSlice do
-      @moduledoc false
-      use Jido.Slice
-
-      slice do
-        name "overriding"
-        path :overriding
-        schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
-      end
-
-      signal_routes do
-        route "overriding.noop", JidoTest.PluginTestAction
-      end
-
-      def name, do: "overridden_name"
-      def description, do: "overridden description"
-    end
-
-    test "user override of name/0 wins" do
-      assert OverridingSlice.name() == "overridden_name"
-    end
-
-    test "user override of description/0 wins" do
-      assert OverridingSlice.description() == "overridden description"
+    test "schema/1 returns the slice's declared schema struct" do
+      assert is_struct(SliceInfo.schema(MinimalSlice))
     end
   end
 
@@ -239,13 +189,13 @@ defmodule Jido.Dsl.SliceTest do
     end
 
     test "extensions: [Slice] mounts the slice at its path()" do
-      assert SchemaSlice in BareSliceAgent.slices()
+      assert SchemaSlice in Jido.Dsl.Agent.Info.slices(BareSliceAgent)
     end
   end
 
   describe "task 0029 enforcement: bare slice as :plugin override raises" do
-    test "extensions: [{BareSlice, as: :plugin}] raises a RuntimeError" do
-      assert_raise RuntimeError, ~r/missing __jido_plugin__/, fn ->
+    test "extensions: [{BareSlice, as: :plugin}] raises with a useful message" do
+      assert_raise RuntimeError, ~r/is not a `use Jido.Plugin` module/, fn ->
         defmodule BareSliceAsPluginAgent do
           use Jido.Agent,
             extensions: [{Jido.Dsl.SliceTest.MinimalSlice, [as: :plugin]}]

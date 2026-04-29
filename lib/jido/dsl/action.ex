@@ -8,13 +8,10 @@ defmodule Jido.Dsl.Action do
       `category`, `tags`, `vsn`, `path`, `compensation`, `schema`,
       `output_schema`).
 
-  The `GenerateAccessors` transformer reads this section and emits the
-  same compile-time accessors today's `Jido.Action.__using__/1` macro
-  emits — `name/0`, `description/0`, `category/0`, `tags/0`, `vsn/0`,
-  `path/0`, `schema/0`, `output_schema/0`, `validate_params/1`,
-  `validate_output/1`, `to_json/0`, `to_tool/0`,
-  `__action_metadata__/0`, plus a `defoverridable` block over the
-  lifecycle hook surface.
+  The `GenerateAccessors` transformer emits the runtime delegates
+  (`validate_params/1`, `validate_output/1`) and lifecycle-hook
+  defaults; introspection (name/description/path/schema/etc.) lives
+  in `Jido.Dsl.Action.Info`.
   """
 
   @action_section %Spark.Dsl.Section{

@@ -90,11 +90,7 @@ defmodule Jido.Plugin.Config do
   end
 
   defp get_otp_app(plugin_module) do
-    if function_exported?(plugin_module, :otp_app, 0) do
-      plugin_module.otp_app()
-    else
-      nil
-    end
+    Jido.Dsl.Slice.Info.otp_app(plugin_module)
   end
 
   defp normalize_to_map(config) when is_list(config), do: Map.new(config)
@@ -115,10 +111,6 @@ defmodule Jido.Plugin.Config do
   end
 
   defp get_config_schema(plugin_module) do
-    if function_exported?(plugin_module, :config_schema, 0) do
-      plugin_module.config_schema()
-    else
-      nil
-    end
+    Jido.Dsl.Slice.Info.config_schema(plugin_module)
   end
 end

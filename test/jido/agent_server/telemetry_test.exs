@@ -48,12 +48,10 @@ defmodule JidoTest.AgentServer.TelemetryTest do
       schema counter: [type: :integer, default: 0]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"increment", TestActions.IncrementAction},
-        {"emit_directive", EmitDirectiveAction},
-        {"schedule_directive", ScheduleDirectiveAction}
-      ]
+    signal_routes do
+      route "increment", TestActions.IncrementAction
+      route "emit_directive", EmitDirectiveAction
+      route "schedule_directive", ScheduleDirectiveAction
     end
   end
 

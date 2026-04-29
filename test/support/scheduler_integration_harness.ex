@@ -68,12 +68,10 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
              ticks: [type: {:list, :any}, default: []]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"register_cron", RegisterCronAction},
-        {"cancel_cron", CancelCronAction},
-        {"cron.tick", TickAction}
-      ]
+    signal_routes do
+      route "register_cron", RegisterCronAction
+      route "cancel_cron", CancelCronAction
+      route "cron.tick", TickAction
     end
   end
 
@@ -93,10 +91,8 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
       schedule "* * * * * * *", "cron.tick", job_id: :scheduled_heartbeat
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"cron.tick", TickAction}
-      ]
+    signal_routes do
+      route "cron.tick", TickAction
     end
   end
 

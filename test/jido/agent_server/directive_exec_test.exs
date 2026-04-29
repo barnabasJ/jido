@@ -30,10 +30,8 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       schema counter: [type: :integer, default: 0]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"test.directive", JidoTest.AgentServer.DirectiveExecTest.EmitDirectiveAction}
-      ]
+    signal_routes do
+      route "test.directive", JidoTest.AgentServer.DirectiveExecTest.EmitDirectiveAction
     end
   end
 
@@ -69,11 +67,9 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       schema observer_pid: [type: :any, default: nil], stop_reason: [type: :any, default: nil]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"jido.agent.stop", StopOnSignalAction},
-        {"test.directive", JidoTest.AgentServer.DirectiveExecTest.EmitDirectiveAction}
-      ]
+    signal_routes do
+      route "jido.agent.stop", StopOnSignalAction
+      route "test.directive", JidoTest.AgentServer.DirectiveExecTest.EmitDirectiveAction
     end
   end
 
@@ -177,14 +173,14 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       )
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"test.directive", JidoTest.AgentServer.DirectiveExecTest.EmitDirectiveAction},
-        {"test.run_instruction.captured",
-         JidoTest.AgentServer.DirectiveExecTest.CaptureResultAction},
-        {"test.run_instruction.failure",
-         JidoTest.AgentServer.DirectiveExecTest.CaptureResultEmitAction}
-      ]
+    signal_routes do
+      route "test.directive", JidoTest.AgentServer.DirectiveExecTest.EmitDirectiveAction
+
+      route "test.run_instruction.captured",
+            JidoTest.AgentServer.DirectiveExecTest.CaptureResultAction
+
+      route "test.run_instruction.failure",
+            JidoTest.AgentServer.DirectiveExecTest.CaptureResultEmitAction
     end
   end
 

@@ -2,6 +2,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
   use ExUnit.Case, async: true
 
   alias Jido.Agent.Schema
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Plugin.Spec
 
   # =============================================================================
@@ -266,14 +267,14 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
   describe "agent with single plugin" do
     test "skills/0 returns the plugin modules" do
-      modules = SinglePluginAgent.plugins()
+      modules = Jido.Dsl.Agent.Info.plugins(SinglePluginAgent)
 
       assert length(modules) == 1
       assert CounterPlugin in modules
     end
 
     test "plugin_specs/0 returns the skill spec" do
-      specs = SinglePluginAgent.plugin_specs()
+      specs = Jido.Dsl.Agent.Info.plugin_specs(SinglePluginAgent)
 
       assert length(specs) == 1
       [spec] = specs
@@ -284,7 +285,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "actions/0 includes plugin actions" do
-      actions = SinglePluginAgent.actions()
+      actions = AgentInfo.actions(SinglePluginAgent)
 
       assert IncrementAction in actions
       assert DecrementAction in actions
@@ -292,7 +293,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "schema/0 returns merged schema with plugin nested under state_key" do
-      schema = SinglePluginAgent.schema()
+      schema = AgentInfo.schema(SinglePluginAgent)
 
       assert is_struct(schema)
       keys = Schema.known_keys(schema)
@@ -319,7 +320,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
   describe "agent with multiple plugins" do
     test "skills/0 returns both plugin modules (deduplicated)" do
-      modules = MultiPluginAgent.plugins()
+      modules = Jido.Dsl.Agent.Info.plugins(MultiPluginAgent)
 
       assert length(modules) == 2
       assert CounterPlugin in modules
@@ -327,7 +328,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "plugin_specs/0 returns both skill specs" do
-      specs = MultiPluginAgent.plugin_specs()
+      specs = Jido.Dsl.Agent.Info.plugin_specs(MultiPluginAgent)
 
       assert length(specs) == 2
       modules = Enum.map(specs, & &1.module)
@@ -336,7 +337,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "actions/0 aggregates actions from both plugins" do
-      actions = MultiPluginAgent.actions()
+      actions = AgentInfo.actions(MultiPluginAgent)
 
       assert IncrementAction in actions
       assert DecrementAction in actions
@@ -368,7 +369,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
   describe "agent with three plugins" do
     test "all plugin modules are returned" do
-      modules = ThreePluginAgent.plugins()
+      modules = Jido.Dsl.Agent.Info.plugins(ThreePluginAgent)
 
       assert length(modules) == 3
       assert CounterPlugin in modules
@@ -377,7 +378,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "actions from all plugins are aggregated" do
-      actions = ThreePluginAgent.actions()
+      actions = AgentInfo.actions(ThreePluginAgent)
 
       assert IncrementAction in actions
       assert DecrementAction in actions
@@ -400,7 +401,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
   describe "plugin with config" do
     test "plugin_config/1 returns the config" do
-      config = ConfiguredPluginAgent.plugin_config(ConfigurablePlugin)
+      config = AgentInfo.plugin_config(ConfiguredPluginAgent, ConfigurablePlugin)
 
       assert config != nil
       assert config[:enabled] == false
@@ -408,20 +409,20 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "plugin_config/1 returns nil for unknown plugin module" do
-      config = ConfiguredPluginAgent.plugin_config(CounterPlugin)
+      config = AgentInfo.plugin_config(ConfiguredPluginAgent, CounterPlugin)
 
       assert config == nil
     end
 
     test "plugin_spec contains the config" do
-      [spec] = ConfiguredPluginAgent.plugin_specs()
+      [spec] = Jido.Dsl.Agent.Info.plugin_specs(ConfiguredPluginAgent)
 
       assert spec.config[:enabled] == false
       assert spec.config[:max_retries] == 5
     end
 
     test "config_schema is available on skill" do
-      config_schema = ConfigurablePlugin.config_schema()
+      config_schema = Jido.Dsl.Plugin.Info.config_schema(ConfigurablePlugin)
 
       assert config_schema != nil
     end
@@ -441,8 +442,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     test "plugin_state/2 returns only the plugin's state" do
       agent = MultiPluginAgent.new()
 
-      counter_state = MultiPluginAgent.plugin_state(agent, CounterPlugin)
-      greeter_state = MultiPluginAgent.plugin_state(agent, GreeterPlugin)
+      counter_state = AgentInfo.plugin_state(MultiPluginAgent, agent, CounterPlugin)
+      greeter_state = AgentInfo.plugin_state(MultiPluginAgent, agent, GreeterPlugin)
 
       assert counter_state == %{count: 0}
       assert greeter_state == %{}
@@ -451,7 +452,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     test "plugin_state/2 returns nil for unknown plugin" do
       agent = MultiPluginAgent.new()
 
-      result = MultiPluginAgent.plugin_state(agent, ConfigurablePlugin)
+      result = AgentInfo.plugin_state(MultiPluginAgent, agent, ConfigurablePlugin)
 
       assert result == nil
     end
@@ -483,7 +484,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
   describe "introspection APIs" do
     test "skills/0 returns list of plugin modules (deduplicated)" do
-      modules = MultiPluginAgent.plugins()
+      modules = Jido.Dsl.Agent.Info.plugins(MultiPluginAgent)
 
       assert is_list(modules)
       assert Enum.all?(modules, &is_atom/1)
@@ -491,14 +492,14 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "plugin_specs/0 returns list of skill specs" do
-      specs = MultiPluginAgent.plugin_specs()
+      specs = Jido.Dsl.Agent.Info.plugin_specs(MultiPluginAgent)
 
       assert is_list(specs)
       assert Enum.all?(specs, &match?(%Spec{}, &1))
     end
 
     test "actions/0 returns list of action modules" do
-      actions = MultiPluginAgent.actions()
+      actions = AgentInfo.actions(MultiPluginAgent)
 
       assert is_list(actions)
       assert Enum.all?(actions, &is_atom/1)
@@ -514,24 +515,24 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         end
       end
 
-      assert NoPluginAgent.actions() == []
+      assert AgentInfo.actions(NoPluginAgent) == []
     end
 
     test "plugin_config/1 with valid plugin returns config map" do
-      config = ConfiguredPluginAgent.plugin_config(ConfigurablePlugin)
+      config = AgentInfo.plugin_config(ConfiguredPluginAgent, ConfigurablePlugin)
 
       assert is_map(config)
     end
 
     test "plugin_config/1 with invalid plugin returns nil" do
-      config = ConfiguredPluginAgent.plugin_config(NonExistentModule)
+      config = AgentInfo.plugin_config(ConfiguredPluginAgent, NonExistentModule)
 
       assert config == nil
     end
 
     test "plugin_state/2 with valid plugin returns state map" do
       agent = SinglePluginAgent.new()
-      state = SinglePluginAgent.plugin_state(agent, CounterPlugin)
+      state = AgentInfo.plugin_state(SinglePluginAgent, agent, CounterPlugin)
 
       assert is_map(state)
       assert state[:count] == 0
@@ -539,19 +540,19 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     test "plugin_state/2 with invalid plugin returns nil" do
       agent = SinglePluginAgent.new()
-      state = SinglePluginAgent.plugin_state(agent, NonExistentModule)
+      state = AgentInfo.plugin_state(SinglePluginAgent, agent, NonExistentModule)
 
       assert state == nil
     end
 
     test "capabilities/0 returns empty list for agents without capability-declaring skills" do
-      capabilities = SinglePluginAgent.capabilities()
+      capabilities = AgentInfo.capabilities(SinglePluginAgent)
 
       assert capabilities == []
     end
 
     test "signal_types/0 reflects routes contributed by plugins" do
-      signal_types = SinglePluginAgent.signal_types()
+      signal_types = Jido.Dsl.Agent.Info.signal_types(SinglePluginAgent)
 
       assert "counter_plugin.increment" in signal_types
       assert "counter_plugin.decrement" in signal_types
@@ -619,7 +620,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "capabilities/0 returns union of all skill capabilities (deduplicated)" do
-      capabilities = CapabilityAgent.capabilities()
+      capabilities = AgentInfo.capabilities(CapabilityAgent)
 
       assert is_list(capabilities)
       assert :messaging in capabilities
@@ -630,7 +631,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "signal_types/0 returns all expanded route signal types" do
-      signal_types = CapabilityAgent.signal_types()
+      signal_types = Jido.Dsl.Agent.Info.signal_types(CapabilityAgent)
 
       assert is_list(signal_types)
       assert "slack_cap.post" in signal_types
@@ -654,7 +655,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         end
       end
 
-      signal_types = AliasedCapAgent.signal_types()
+      signal_types = Jido.Dsl.Agent.Info.signal_types(AliasedCapAgent)
 
       assert "support.slack_cap.post" in signal_types
       assert "support.slack_cap.channels.list" in signal_types
@@ -678,7 +679,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         end
       end
 
-      modules = MultiInstanceCapAgent.plugins()
+      modules = Jido.Dsl.Agent.Info.plugins(MultiInstanceCapAgent)
 
       assert length(modules) == 2
       assert SlackCapabilityPlugin in modules
@@ -700,7 +701,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         end
       end
 
-      capabilities = MultiInstanceCapAgent2.capabilities()
+      capabilities = AgentInfo.capabilities(MultiInstanceCapAgent2)
 
       assert :messaging in capabilities
       assert :channel_management in capabilities
@@ -714,7 +715,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
   describe "schema merging" do
     test "merged schema contains plugin paths" do
-      schema = MixedSchemaAgent.schema()
+      schema = AgentInfo.schema(MixedSchemaAgent)
       keys = Schema.known_keys(schema)
 
       assert :counter_plugin in keys
@@ -745,7 +746,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "agent schema/0 returns the merged schema" do
-      schema = SinglePluginAgent.schema()
+      schema = AgentInfo.schema(SinglePluginAgent)
 
       assert is_struct(schema)
     end
@@ -836,7 +837,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     test "accessing plugin state for plugin without schema returns nil" do
       agent = MinimalPluginAgent.new()
-      state = MinimalPluginAgent.plugin_state(agent, MinimalPlugin)
+      state = AgentInfo.plugin_state(MinimalPluginAgent, agent, MinimalPlugin)
 
       assert state == nil
     end
@@ -866,7 +867,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         end
       end
 
-      actions = DupAgent.actions()
+      actions = AgentInfo.actions(DupAgent)
       assert length(actions) == 1
       assert SimpleAction in actions
     end
@@ -911,7 +912,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         end
       end
 
-      actions = SharedActionAgent.actions()
+      actions = AgentInfo.actions(SharedActionAgent)
       assert length(actions) == 1
       assert SimpleAction in actions
     end
@@ -979,14 +980,14 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "plugin_instances/0 returns Instance structs" do
-      instances = MultiSlackAgent.plugin_instances()
+      instances = Jido.Dsl.Agent.Info.plugin_instances(MultiSlackAgent)
 
       assert length(instances) == 2
       assert Enum.all?(instances, &match?(%Jido.Plugin.Instance{}, &1))
     end
 
     test "instances have different derived paths" do
-      instances = MultiSlackAgent.plugin_instances()
+      instances = Jido.Dsl.Agent.Info.plugin_instances(MultiSlackAgent)
 
       paths = Enum.map(instances, & &1.path)
       assert :slack_support in paths
@@ -994,7 +995,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "plugin_specs/0 preserves Spec structs for aliased instances" do
-      specs = MultiSlackAgent.plugin_specs()
+      specs = Jido.Dsl.Agent.Info.plugin_specs(MultiSlackAgent)
 
       assert length(specs) == 2
       assert Enum.all?(specs, &match?(%Spec{}, &1))
@@ -1005,7 +1006,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "instances have different route_prefixes" do
-      instances = MultiSlackAgent.plugin_instances()
+      instances = Jido.Dsl.Agent.Info.plugin_instances(MultiSlackAgent)
 
       prefixes = Enum.map(instances, & &1.route_prefix)
       assert "support.slack" in prefixes
@@ -1020,22 +1021,27 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "plugin_config/1 with {module, alias} tuple returns correct config" do
-      assert MultiSlackAgent.plugin_config({SlackPlugin, :support}) == %{token: "support-token"}
-      assert MultiSlackAgent.plugin_config({SlackPlugin, :sales}) == %{token: "sales-token"}
+      assert AgentInfo.plugin_config(MultiSlackAgent, {SlackPlugin, :support}) == %{
+               token: "support-token"
+             }
+
+      assert AgentInfo.plugin_config(MultiSlackAgent, {SlackPlugin, :sales}) == %{
+               token: "sales-token"
+             }
     end
 
     test "plugin_state/2 with {module, alias} tuple returns correct state" do
       agent = MultiSlackAgent.new()
 
-      support_state = MultiSlackAgent.plugin_state(agent, {SlackPlugin, :support})
-      sales_state = MultiSlackAgent.plugin_state(agent, {SlackPlugin, :sales})
+      support_state = AgentInfo.plugin_state(MultiSlackAgent, agent, {SlackPlugin, :support})
+      sales_state = AgentInfo.plugin_state(MultiSlackAgent, agent, {SlackPlugin, :sales})
 
       assert is_map(support_state)
       assert is_map(sales_state)
     end
 
     test "mixed instances (with and without as:) have different paths" do
-      instances = MixedInstanceAgent.plugin_instances()
+      instances = Jido.Dsl.Agent.Info.plugin_instances(MixedInstanceAgent)
 
       paths = Enum.map(instances, & &1.path)
       assert :slack in paths
@@ -1043,13 +1049,13 @@ defmodule JidoTest.AgentPluginIntegrationTest do
     end
 
     test "plugin_config/1 with just module finds default instance first" do
-      config = MixedInstanceAgent.plugin_config(SlackPlugin)
+      config = AgentInfo.plugin_config(MixedInstanceAgent, SlackPlugin)
       assert config == %{}
     end
 
     test "plugin_state/2 with just module finds default instance first" do
       agent = MixedInstanceAgent.new()
-      state = MixedInstanceAgent.plugin_state(agent, SlackPlugin)
+      state = AgentInfo.plugin_state(MixedInstanceAgent, agent, SlackPlugin)
       assert is_map(state)
     end
   end
@@ -1107,7 +1113,7 @@ defmodule JidoTest.AgentPluginIntegrationTest do
         end
       end
 
-      instances = DifferentAsAgent.plugin_instances()
+      instances = Jido.Dsl.Agent.Info.plugin_instances(DifferentAsAgent)
       assert length(instances) == 2
 
       paths = Enum.map(instances, & &1.path)

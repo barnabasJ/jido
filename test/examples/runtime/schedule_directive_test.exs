@@ -208,16 +208,14 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
       )
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"start_timer", StartTimerAction},
-        {"timer.tick", HandleTickAction},
-        {"start_retryable", StartRetryableAction},
-        {"retry.attempt", HandleRetryAction},
-        {"start_timeout", StartTimeoutAction},
-        {"response", HandleResponseAction},
-        {"request.timeout", HandleTimeoutAction}
-      ]
+    signal_routes do
+      route "start_timer", StartTimerAction
+      route "timer.tick", HandleTickAction
+      route "start_retryable", StartRetryableAction
+      route "retry.attempt", HandleRetryAction
+      route "start_timeout", StartTimeoutAction
+      route "response", HandleResponseAction
+      route "request.timeout", HandleTimeoutAction
     end
   end
 

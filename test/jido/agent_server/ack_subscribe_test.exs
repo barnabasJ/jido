@@ -43,11 +43,9 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
       schema value: [type: :integer, default: 0], status: [type: :atom, default: :idle]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"write", JidoTest.AgentServer.AckSubscribeTest.WriteAction},
-        {"fail", JidoTest.AgentServer.AckSubscribeTest.FailingAction}
-      ]
+    signal_routes do
+      route "write", JidoTest.AgentServer.AckSubscribeTest.WriteAction
+      route "fail", JidoTest.AgentServer.AckSubscribeTest.FailingAction
     end
   end
 
@@ -95,8 +93,8 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
       schema value: [type: :integer, default: 0], status: [type: :atom, default: :idle]
     end
 
-    def signal_routes(_ctx) do
-      [{"flaky", JidoTest.AgentServer.AckSubscribeTest.FlakyAction}]
+    signal_routes do
+      route "flaky", JidoTest.AgentServer.AckSubscribeTest.FlakyAction
     end
   end
 

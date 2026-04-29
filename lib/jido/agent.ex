@@ -374,7 +374,7 @@ defmodule Jido.Agent do
   @doc false
   @spec __seed_plugin_slice__(module(), map()) :: term()
   def __seed_plugin_slice__(plugin_module, %{} = merged_input) do
-    case plugin_module.schema() do
+    case Jido.Dsl.Slice.Info.schema(plugin_module) do
       nil ->
         if map_size(merged_input) == 0, do: nil, else: merged_input
 
@@ -396,7 +396,7 @@ defmodule Jido.Agent do
 
       {:error, errors} ->
         raise Jido.Agent.SliceValidationError,
-          path: plugin_module.path(),
+          path: Jido.Dsl.Slice.Info.path(plugin_module),
           module: plugin_module,
           errors: errors
     end

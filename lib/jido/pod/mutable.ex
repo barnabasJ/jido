@@ -3,6 +3,7 @@ defmodule Jido.Pod.Mutable do
 
   alias Jido.Agent
   alias Jido.AgentServer
+  alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Pod
   alias Jido.Pod.Directive.StartNode
   alias Jido.Pod.Directive.StopNode
@@ -13,7 +14,7 @@ defmodule Jido.Pod.Mutable do
   alias Jido.Pod.TopologyState
   alias Jido.Signal
 
-  @pod_state_key Plugin.path()
+  @pod_state_key PluginInfo.path(Plugin)
 
   @spec mutate(AgentServer.server(), [Mutation.t() | term()], keyword()) ::
           {:ok, %{mutation_id: String.t(), queued: true}} | {:error, term()}

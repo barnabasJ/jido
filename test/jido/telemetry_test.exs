@@ -14,8 +14,6 @@ defmodule JidoTest.TelemetryTest do
       path :domain
       schema counter: [type: :integer, default: 0]
     end
-
-    def signal_routes(_ctx), do: []
   end
 
   defp with_telemetry_env(temp_value, fun) when is_function(fun, 0) do

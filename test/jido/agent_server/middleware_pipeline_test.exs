@@ -44,8 +44,9 @@ defmodule JidoTest.AgentServer.MiddlewarePipelineTest do
       schema last_tags: [type: {:list, :any}, default: []]
     end
 
-    def signal_routes(_ctx),
-      do: [{"inspect", JidoTest.AgentServer.MiddlewarePipelineTest.InspectAction}]
+    signal_routes do
+      route "inspect", JidoTest.AgentServer.MiddlewarePipelineTest.InspectAction
+    end
   end
 
   defp inspect_sig do

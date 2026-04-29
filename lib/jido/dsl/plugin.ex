@@ -3,15 +3,13 @@ defmodule Jido.Dsl.Plugin do
   Spark DSL extension for `Jido.Plugin`.
 
   Plugins are slice + middleware in one module. The DSL re-exports
-  `Jido.Dsl.Slice.sections/0` so a `use Jido.Plugin` module shares the
-  exact slice surface (`slice do …`, `actions do …`, `signal_routes do …`,
+  the slice DSL's sections so a `use Jido.Plugin` module shares the
+  exact slice surface (`slice do …`, `signal_routes do …`,
   `subscriptions do …`, `schedules do …`, `capabilities do …`,
-  `requires do …`). The accessors transformer is the same one the slice
-  uses; the middleware half is wired in via `@behaviour Jido.Middleware`
-  inside `Jido.Plugin.__using__/1`.
+  `requires do …`). Introspection lives in `Jido.Dsl.Plugin.Info`,
+  which delegates to `Jido.Dsl.Slice.Info`; the middleware half is
+  wired in via `@behaviour Jido.Middleware` inside `Jido.Plugin`.
   """
 
-  use Spark.Dsl.Extension,
-    sections: Jido.Dsl.Slice.sections(),
-    transformers: [Jido.Dsl.Slice.Transformers.GenerateAccessors]
+  use Spark.Dsl.Extension, sections: Jido.Dsl.Slice.sections()
 end

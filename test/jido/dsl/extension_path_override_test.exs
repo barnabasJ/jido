@@ -95,7 +95,6 @@ defmodule Jido.Dsl.ExtensionPathOverrideTest do
 
       assert result.module == instance.module
       assert result.config == instance.config
-      assert result.manifest == instance.manifest
       assert result.as == instance.as
     end
   end

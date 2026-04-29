@@ -1,9 +1,10 @@
 defmodule Jido.Dsl.AgentKindInferenceTest do
   use ExUnit.Case, async: true
 
-  # Cover kind inference from markers (`__jido_plugin__/0`,
-  # `__jido_slice__/0`, `Jido.Middleware` behaviour), the rare
-  # `{Mod, as: :slice}` override, and marker-mismatch errors.
+  # Cover kind inference from Spark host identity
+  # (`Spark.Dsl.is?(mod, Jido.Plugin)`,
+  # `Spark.Dsl.is?(mod, Jido.Slice)`, `Jido.Middleware` behaviour),
+  # the rare `{Mod, as: :slice}` override, and marker-mismatch errors.
 
   Code.ensure_compiled!(JidoTest.PluginTestAction)
 
@@ -57,9 +58,13 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
     end
 
     test "plugin marker → :plugin (appears in plugins/0, not slices/0 or middleware/0)" do
-      assert SamplePlugin in PluginAgent.plugins()
-      refute SamplePlugin in PluginAgent.slices()
-      refute Enum.any?(PluginAgent.middleware(), &match?({SamplePlugin, _}, &1))
+      assert SamplePlugin in Jido.Dsl.Agent.Info.plugins(PluginAgent)
+      refute SamplePlugin in Jido.Dsl.Agent.Info.slices(PluginAgent)
+
+      refute Enum.any?(
+               Jido.Dsl.Agent.Info.middleware(PluginAgent),
+               &match?({SamplePlugin, _}, &1)
+             )
     end
 
     defmodule SliceAgent do
@@ -73,9 +78,9 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
     end
 
     test "slice marker → :slice (appears in slices/0, not plugins/0 or middleware/0)" do
-      assert SampleSlice in SliceAgent.slices()
-      refute SampleSlice in SliceAgent.plugins()
-      refute Enum.any?(SliceAgent.middleware(), &match?({SampleSlice, _}, &1))
+      assert SampleSlice in Jido.Dsl.Agent.Info.slices(SliceAgent)
+      refute SampleSlice in Jido.Dsl.Agent.Info.plugins(SliceAgent)
+      refute Enum.any?(Jido.Dsl.Agent.Info.middleware(SliceAgent), &match?({SampleSlice, _}, &1))
     end
 
     defmodule MiddlewareAgent do
@@ -89,9 +94,13 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
     end
 
     test "Jido.Middleware behaviour → :middleware (appears in middleware/0, not plugins or slices)" do
-      assert Enum.any?(MiddlewareAgent.middleware(), &match?({SampleMiddleware, _}, &1))
-      refute SampleMiddleware in MiddlewareAgent.plugins()
-      refute SampleMiddleware in MiddlewareAgent.slices()
+      assert Enum.any?(
+               Jido.Dsl.Agent.Info.middleware(MiddlewareAgent),
+               &match?({SampleMiddleware, _}, &1)
+             )
+
+      refute SampleMiddleware in Jido.Dsl.Agent.Info.plugins(MiddlewareAgent)
+      refute SampleMiddleware in Jido.Dsl.Agent.Info.slices(MiddlewareAgent)
     end
   end
 
@@ -107,14 +116,14 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
     end
 
     test "force-mounts a plugin as a slice via `as: :slice`" do
-      assert SamplePlugin in OverridePluginToSliceAgent.slices()
-      refute SamplePlugin in OverridePluginToSliceAgent.plugins()
+      assert SamplePlugin in Jido.Dsl.Agent.Info.slices(OverridePluginToSliceAgent)
+      refute SamplePlugin in Jido.Dsl.Agent.Info.plugins(OverridePluginToSliceAgent)
     end
   end
 
   describe "marker-mismatch errors" do
     test "`as: :plugin` on a bare slice raises at compile time" do
-      assert_raise RuntimeError, ~r/missing __jido_plugin__/, fn ->
+      assert_raise RuntimeError, ~r/is not a `use Jido.Plugin` module/, fn ->
         defmodule BadOverride do
           use Jido.Agent,
             extensions: [{Jido.Dsl.AgentKindInferenceTest.SampleSlice, [as: :plugin]}]
@@ -162,21 +171,23 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
     end
   end
 
-  describe "defoverridable parity" do
-    defmodule OverridableAgent do
+  describe "signal_routes section" do
+    defmodule SectionedRoutesAgent do
       @moduledoc false
       use Jido.Agent
 
       agent do
-        name "overridable_agent"
+        name "sectioned_routes_agent"
       end
 
-      def signal_routes, do: [{"override.fired", JidoTest.PluginTestAction}]
+      signal_routes do
+        route "section.fired", JidoTest.PluginTestAction
+      end
     end
 
-    test "user override of signal_routes/0 wins" do
-      assert OverridableAgent.signal_routes() == [
-               {"override.fired", JidoTest.PluginTestAction}
+    test "section-declared routes are surfaced via Agent.Info.signal_routes/1" do
+      assert Jido.Dsl.Agent.Info.signal_routes(SectionedRoutesAgent) == [
+               {"section.fired", JidoTest.PluginTestAction}
              ]
     end
   end

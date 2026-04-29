@@ -71,7 +71,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.AI.Directive.ToolExec do
   end
 
   defp safe_invoke(module, args, name) do
-    params = ActionTool.convert_params_using_schema(args, module.schema())
+    params = ActionTool.convert_params_using_schema(args, Jido.Dsl.Action.Info.schema(module))
 
     case Jido.Exec.run(module, params, %{}, []) do
       {:ok, result, _directives} -> Jason.encode!(result)

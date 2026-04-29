@@ -90,42 +90,32 @@ defmodule JidoTest.SliceTest do
       end
     end
 
-    test "minimal slice exposes name and path" do
-      assert MinimalSlice.name() == "minimal"
-      assert MinimalSlice.path() == :minimal
-      assert MinimalSlice.actions() == [JidoTest.PluginTestAction]
-      assert MinimalSlice.tags() == []
-      assert MinimalSlice.capabilities() == []
-      assert MinimalSlice.signal_routes() == [{"minimal.noop", JidoTest.PluginTestAction}]
+    alias Jido.Dsl.Slice.Info, as: SliceInfo
+
+    test "minimal slice exposes name and path via Info" do
+      assert SliceInfo.name(MinimalSlice) == "minimal"
+      assert SliceInfo.path(MinimalSlice) == :minimal
+      assert SliceInfo.actions(MinimalSlice) == [JidoTest.PluginTestAction]
+      assert SliceInfo.tags(MinimalSlice) == []
+      assert SliceInfo.capabilities(MinimalSlice) == []
+
+      assert SliceInfo.signal_routes(MinimalSlice) == [
+               {"minimal.noop", JidoTest.PluginTestAction}
+             ]
     end
 
-    test "full slice exposes every metadata field" do
-      assert FullSlice.name() == "full"
-      assert FullSlice.path() == :full
-      assert FullSlice.description() == "A test slice"
-      assert FullSlice.category() == "test"
-      assert FullSlice.vsn() == "0.1.0"
-      assert FullSlice.tags() == ["a", "b"]
-      assert FullSlice.capabilities() == [:speak]
-      assert FullSlice.requires() == [{:config, :token}]
-      assert FullSlice.signal_routes() == [{"send", JidoTest.PluginTestAction}]
-      assert is_struct(FullSlice.schema())
-      assert is_struct(FullSlice.config_schema())
-    end
-
-    test "manifest/0 returns a Jido.Plugin.Manifest with path populated" do
-      manifest = FullSlice.manifest()
-      assert %Jido.Plugin.Manifest{} = manifest
-      assert manifest.path == :full
-      assert manifest.name == "full"
-      assert manifest.signal_routes == [{"send", JidoTest.PluginTestAction}]
-    end
-
-    test "plugin_spec/1 returns a Jido.Plugin.Spec with config merged" do
-      spec = FullSlice.plugin_spec(%{enabled: false})
-      assert %Jido.Plugin.Spec{} = spec
-      assert spec.path == :full
-      assert spec.config == %{enabled: false}
+    test "full slice exposes every metadata field via Info" do
+      assert SliceInfo.name(FullSlice) == "full"
+      assert SliceInfo.path(FullSlice) == :full
+      assert SliceInfo.description(FullSlice) == "A test slice"
+      assert SliceInfo.category(FullSlice) == "test"
+      assert SliceInfo.vsn(FullSlice) == "0.1.0"
+      assert SliceInfo.tags(FullSlice) == ["a", "b"]
+      assert SliceInfo.capabilities(FullSlice) == [:speak]
+      assert SliceInfo.requires(FullSlice) == [{:config, :token}]
+      assert SliceInfo.signal_routes(FullSlice) == [{"send", JidoTest.PluginTestAction}]
+      assert is_struct(SliceInfo.schema(FullSlice))
+      assert is_struct(SliceInfo.config_schema(FullSlice))
     end
   end
 

@@ -2,6 +2,7 @@ defmodule Jido.Dsl.AgentOptionalPathTest do
   use ExUnit.Case, async: true
 
   alias Jido.Agent
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
 
   describe "path-less agent compiles" do
     defmodule NoOpAgent do
@@ -15,10 +16,10 @@ defmodule Jido.Dsl.AgentOptionalPathTest do
     end
 
     test "with no extensions and default_slices disabled" do
-      assert NoOpAgent.name() == "noop_agent"
-      assert NoOpAgent.path() == nil
-      assert NoOpAgent.slice_instances() == []
-      assert NoOpAgent.plugins() == []
+      assert AgentInfo.name(NoOpAgent) == "noop_agent"
+      assert AgentInfo.path(NoOpAgent) == nil
+      assert AgentInfo.slice_instances(NoOpAgent) == []
+      assert AgentInfo.plugins(NoOpAgent) == []
     end
 
     test "new/1 produces an agent with empty state and no nil-keyed entry" do
@@ -53,9 +54,9 @@ defmodule Jido.Dsl.AgentOptionalPathTest do
       end
     end
 
-    test "with extensions: [Jido.Memory.Slice], slice_instances/0 contains the contributed slice" do
-      assert CompositionAgent.path() == nil
-      paths = Enum.map(CompositionAgent.slice_instances(), & &1.path)
+    test "with extensions: [Jido.Memory.Slice], slice_instances/1 contains the contributed slice" do
+      assert AgentInfo.path(CompositionAgent) == nil
+      paths = Enum.map(AgentInfo.slice_instances(CompositionAgent), & &1.path)
       assert :memory in paths
     end
 
@@ -78,7 +79,7 @@ defmodule Jido.Dsl.AgentOptionalPathTest do
         end
       end
 
-      assert BothSet.path() == :domain
+      assert AgentInfo.path(BothSet) == :domain
     end
 
     test "warns when `schema` is set but `path` is not" do
@@ -123,7 +124,7 @@ defmodule Jido.Dsl.AgentOptionalPathTest do
         end
       end
 
-      assert NeitherSet.path() == nil
+      assert AgentInfo.path(NeitherSet) == nil
     end
   end
 
@@ -138,7 +139,7 @@ defmodule Jido.Dsl.AgentOptionalPathTest do
     end
 
     test "default slices are still attached" do
-      paths = Enum.map(PathLessWithDefaults.slice_instances(), & &1.path)
+      paths = Enum.map(AgentInfo.slice_instances(PathLessWithDefaults), & &1.path)
       assert :memory in paths
       assert :thread in paths
       assert :identity in paths
@@ -164,8 +165,8 @@ defmodule Jido.Dsl.AgentOptionalPathTest do
       end
     end
 
-    test "signal_routes/0 returns the host-declared routes" do
-      assert {"ping", JidoTest.PluginTestAction} in RoutingPathLess.signal_routes()
+    test "signal_routes/1 returns the host-declared routes" do
+      assert {"ping", JidoTest.PluginTestAction} in AgentInfo.signal_routes(RoutingPathLess)
     end
   end
 end

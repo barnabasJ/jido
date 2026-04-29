@@ -2,6 +2,7 @@ defmodule JidoTest.AgentTest do
   use ExUnit.Case, async: true
 
   alias Jido.Agent
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias JidoTest.TestActions
   alias JidoTest.TestAgents
 
@@ -32,59 +33,34 @@ defmodule JidoTest.AgentTest do
     end
   end
 
-  defmodule LegacyRoutesAgent do
-    @moduledoc false
-    use Jido.Agent
-
-    agent do
-      name "legacy_routes_agent"
-    end
-
-    def signal_routes do
-      [{"legacy.route", JidoTest.TestActions.NoSchema}]
-    end
-  end
-
   describe "module definition" do
-    test "defines metadata accessors" do
-      assert TestAgents.Basic.name() == "basic_agent"
-      assert TestAgents.Basic.description() == "A basic test agent"
-      assert TestAgents.Basic.category() == "test"
-      assert TestAgents.Basic.tags() == ["test", "basic"]
-      assert TestAgents.Basic.vsn() == "1.0.0"
+    test "defines metadata accessors via Info" do
+      assert AgentInfo.name(TestAgents.Basic) == "basic_agent"
+      assert AgentInfo.description(TestAgents.Basic) == "A basic test agent"
+      assert AgentInfo.category(TestAgents.Basic) == "test"
+      assert AgentInfo.tags(TestAgents.Basic) == ["test", "basic"]
+      assert AgentInfo.vsn(TestAgents.Basic) == "1.0.0"
     end
 
     test "minimal agent has default values" do
-      assert TestAgents.Minimal.name() == "minimal_agent"
-      assert TestAgents.Minimal.description() == nil
-      schema = TestAgents.Minimal.schema()
-      assert is_struct(schema)
+      assert AgentInfo.name(TestAgents.Minimal) == "minimal_agent"
+      assert AgentInfo.description(TestAgents.Minimal) == nil
+      # The merged schema is non-empty because default slices contribute schemas.
+      assert is_struct(AgentInfo.schema(TestAgents.Minimal))
     end
   end
 
   describe "signal routes configuration" do
-    test "use Jido.Agent signal_routes option is exposed through signal_routes/1" do
-      routes = ConfiguredRoutesAgent.signal_routes(%{agent_module: ConfiguredRoutesAgent})
-
+    test "agent's signal_routes section is exposed via Agent.Info.signal_routes/1" do
+      routes = AgentInfo.signal_routes(ConfiguredRoutesAgent)
       assert routes == [{"configured.route", JidoTest.TestActions.NoSchema}]
     end
 
-    test "signal_routes/1 override can extend configured routes via super/1" do
-      routes = ExtendingRoutesAgent.signal_routes(%{agent_module: ExtendingRoutesAgent})
-
+    test "Agent.Info.signal_routes/1 returns configured routes for agents with multiple routes" do
+      routes = AgentInfo.signal_routes(ExtendingRoutesAgent)
       assert {"base.route", JidoTest.TestActions.NoSchema} in routes
       assert {"extended.route", JidoTest.TestActions.BasicAction} in routes
       assert length(routes) == 2
-    end
-
-    test "legacy signal_routes/0 override remains functional through signal_routes/1" do
-      assert LegacyRoutesAgent.signal_routes() == [
-               {"legacy.route", JidoTest.TestActions.NoSchema}
-             ]
-
-      assert LegacyRoutesAgent.signal_routes(%{agent_module: LegacyRoutesAgent}) == [
-               {"legacy.route", JidoTest.TestActions.NoSchema}
-             ]
     end
   end
 
@@ -435,7 +411,7 @@ defmodule JidoTest.AgentTest do
 
   describe "plugin routes" do
     test "plugin_routes/0 returns expanded routes with prefix" do
-      routes = TestAgents.AgentWithPluginRoutes.plugin_routes()
+      routes = AgentInfo.plugin_routes(TestAgents.AgentWithPluginRoutes)
 
       assert length(routes) == 2
       assert {"test_routes_plugin.post", JidoTest.PluginTestAction, -10} in routes
@@ -443,7 +419,7 @@ defmodule JidoTest.AgentTest do
     end
 
     test "multi-instance plugins get unique route prefixes" do
-      routes = TestAgents.AgentWithMultiInstancePlugins.plugin_routes()
+      routes = AgentInfo.plugin_routes(TestAgents.AgentWithMultiInstancePlugins)
 
       assert length(routes) == 4
       assert {"support.test_routes_plugin.post", JidoTest.PluginTestAction, -10} in routes
@@ -469,7 +445,7 @@ defmodule JidoTest.AgentTest do
     end
 
     test "no route conflict when plugins use different :as aliases" do
-      routes = TestAgents.AgentWithMultiInstancePlugins.plugin_routes()
+      routes = AgentInfo.plugin_routes(TestAgents.AgentWithMultiInstancePlugins)
       assert length(routes) == 4
     end
   end

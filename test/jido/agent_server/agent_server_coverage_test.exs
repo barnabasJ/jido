@@ -31,8 +31,8 @@ defmodule JidoTest.AgentServerCoverageTest do
       schema counter: [type: :integer, default: 0]
     end
 
-    def signal_routes(_ctx) do
-      [{"increment", JidoTest.TestActions.IncrementAction}]
+    signal_routes do
+      route "increment", JidoTest.TestActions.IncrementAction
     end
   end
 
@@ -69,8 +69,8 @@ defmodule JidoTest.AgentServerCoverageTest do
       schema counter: [type: :integer, default: 0], directive_count: [type: :integer, default: 0]
     end
 
-    def signal_routes(_ctx) do
-      [{"many_directives", ManyDirectivesAction}]
+    signal_routes do
+      route "many_directives", ManyDirectivesAction
     end
   end
 
@@ -134,12 +134,10 @@ defmodule JidoTest.AgentServerCoverageTest do
       )
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"complete", CompleteAction},
-        {"fail", FailAction},
-        {"delay_complete", DelayCompleteAction}
-      ]
+    signal_routes do
+      route "complete", CompleteAction
+      route "fail", FailAction
+      route "delay_complete", DelayCompleteAction
     end
   end
 

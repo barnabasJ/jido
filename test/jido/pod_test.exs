@@ -81,7 +81,7 @@ defmodule JidoTest.PodTest do
 
     assert %Node{activation: :eager, module: WorkerAgent} = ExamplePod.topology().nodes.planner
 
-    assert Enum.any?(ExamplePod.plugin_instances(), fn instance ->
+    assert Enum.any?(Jido.Dsl.Agent.Info.plugin_instances(ExamplePod), fn instance ->
              instance.module == Plugin and instance.path == :pod
            end)
   end
@@ -95,7 +95,7 @@ defmodule JidoTest.PodTest do
   end
 
   test "default_slices can replace the reserved pod plugin" do
-    assert Enum.any?(CustomPluginPod.plugin_instances(), fn instance ->
+    assert Enum.any?(Jido.Dsl.Agent.Info.plugin_instances(CustomPluginPod), fn instance ->
              instance.module == CustomPodPlugin and instance.path == :pod
            end)
 
@@ -121,7 +121,7 @@ defmodule JidoTest.PodTest do
     end
     """)
 
-    assert Enum.any?(pod_mod.plugin_instances(), fn instance ->
+    assert Enum.any?(Jido.Dsl.Agent.Info.plugin_instances(pod_mod), fn instance ->
              instance.module == UserPlugin and instance.path == :pod_test_user_plugin
            end)
   end

@@ -12,14 +12,9 @@ defmodule Jido.Dsl.Slice do
     * `capabilities do … end` — `capability :name` entries.
     * `requires do … end` — `requires :kind, :name` entries.
 
-  The `GenerateAccessors` transformer reads these sections and emits the
-  same compile-time accessors today's `Jido.Slice.__using__/1` macro
-  emits — `name/0`, `path/0`, `actions/0`, `signal_routes/0`,
-  `subscriptions/0`, `schedules/0`, `capabilities/0`, `requires/0`,
-  `schema/0`, `config_schema/0`, `manifest/0`, `plugin_spec/1`,
-  `__plugin_metadata__/0`, plus a `defoverridable` block over the
-  16-function override surface. `actions/0` is derived from
-  `signal_routes/0`.
+  Introspection happens through `Jido.Dsl.Slice.Info`, which reads each
+  field (and the derived `actions/1`) from the slice's Spark
+  `dsl_state`.
   """
 
   alias Jido.Slice.CapabilityEntry
@@ -159,6 +154,5 @@ defmodule Jido.Dsl.Slice do
       @capabilities_section,
       @requires_section
     ],
-    transformers: [Jido.Dsl.Slice.Transformers.GenerateAccessors],
     verifiers: [Jido.Dsl.Slice.Verifiers.HasSchemaAndRoutes]
 end

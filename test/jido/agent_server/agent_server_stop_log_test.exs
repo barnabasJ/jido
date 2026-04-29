@@ -29,8 +29,8 @@ defmodule JidoTest.AgentServerStopLogTest do
       name "test_agent"
     end
 
-    def signal_routes(_ctx) do
-      [{"stop_test", StopTestAction}]
+    signal_routes do
+      route "stop_test", StopTestAction
     end
   end
 

@@ -15,7 +15,7 @@ defmodule Jido.Persist.Transform do
 
   @doc """
   Called on hibernate. Receives the current slice value at
-  `agent.state[mod.path()]`. Returns the value to serialize. Side effects
+  `agent.state[Jido.Dsl.Slice.Info.path(mod)]`. Returns the value to serialize. Side effects
   (e.g., flushing a journal) run synchronously inside this function.
   """
   @callback externalize(slice_value :: term()) :: term()
@@ -23,7 +23,7 @@ defmodule Jido.Persist.Transform do
   @doc """
   Called on thaw. Receives whatever `externalize/1` returned at the previous
   hibernate (rehydrated by the storage adapter's decoder). Returns the full
-  slice value to place at `agent.state[mod.path()]`.
+  slice value to place at `agent.state[Jido.Dsl.Slice.Info.path(mod)]`.
   """
   @callback reinstate(stored_value :: term()) :: term()
 end

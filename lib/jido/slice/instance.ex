@@ -17,10 +17,10 @@ defmodule Jido.Slice.Instance do
   - `as` - Reserved for future multi-instance support (always `nil` in v1)
   - `config` - Resolved config map (validated through `config_schema/0` if
     declared by the slice; otherwise stored verbatim)
-  - `manifest` - The slice's `manifest/0` struct
-  - `path` - The slice's `path/0` (no derivation in v1)
+  - `path` - The slice's declared `path`
   """
 
+  alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias Jido.Plugin.Config
 
   @schema Zoi.struct(
@@ -31,7 +31,6 @@ defmodule Jido.Slice.Instance do
                 Zoi.atom(description: "Reserved for future multi-instance use; always nil in v1")
                 |> Zoi.optional(),
               config: Zoi.map(description: "Resolved configuration") |> Zoi.default(%{}),
-              manifest: Zoi.any(description: "The slice's manifest struct"),
               path: Zoi.atom(description: "The slice key in agent.state")
             },
             coerce: true
@@ -65,15 +64,13 @@ defmodule Jido.Slice.Instance do
   def new(declaration) do
     {module, overrides} = normalize_declaration(declaration)
 
-    manifest = module.manifest()
     resolved_config = Config.resolve_config!(module, overrides)
 
     %__MODULE__{
       module: module,
       as: nil,
       config: resolved_config,
-      manifest: manifest,
-      path: manifest.path
+      path: SliceInfo.path(module)
     }
   end
 
@@ -85,9 +82,10 @@ defmodule Jido.Slice.Instance do
   3-tuple format `Jido.Plugin.Routes.detect_conflicts/1` expects.
   """
   @spec expand_routes(t()) :: [tuple()]
-  def expand_routes(%__MODULE__{manifest: manifest}) do
-    routes = manifest.signal_routes || []
-    Enum.map(routes, &normalize_route/1)
+  def expand_routes(%__MODULE__{module: module}) do
+    module
+    |> SliceInfo.signal_routes()
+    |> Enum.map(&normalize_route/1)
   end
 
   defp normalize_route({path, target}), do: {path, target, []}

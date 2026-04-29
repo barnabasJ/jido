@@ -7,13 +7,15 @@ defmodule Jido.Discovery do
 
   ## Component Discovery
 
-  Discovery automatically finds and indexes:
+  Discovery walks every loaded application's modules and identifies Jido
+  components by their Spark host kind:
 
-  - **Actions** - Discrete units of work (`__action_metadata__/0`)
-  - **Sensors** - Event monitoring components (`__sensor_metadata__/0`)
-  - **Agents** - Autonomous workers (`__agent_metadata__/0`)
-  - **Plugins** - Reusable capability packs (`__plugin_metadata__/0`)
-  - **Demos** - Example implementations (`__jido_demo__/0`)
+  - **Actions** — `Spark.Dsl.is?(mod, Jido.Action)`
+  - **Sensors** — `Spark.Dsl.is?(mod, Jido.Sensor)`
+  - **Agents** — `Spark.Dsl.is?(mod, Jido.Agent)`
+  - **Plugins** — `Spark.Dsl.is?(mod, Jido.Plugin)`
+  - **Demos** — `__jido_demo__/0` marker (kept as a one-off; demos are
+    not yet a Spark host on their own)
 
   ## Component Metadata
 
@@ -61,6 +63,11 @@ defmodule Jido.Discovery do
   Reads are extremely fast (direct memory access) and never block.
   All processes can read concurrently without contention.
   """
+
+  alias Jido.Dsl.Action.Info, as: ActionInfo
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
+  alias Jido.Dsl.Plugin.Info, as: PluginInfo
+  alias Jido.Dsl.Sensor.Info, as: SensorInfo
 
   @catalog_key :jido_discovery_catalog
 
@@ -222,20 +229,27 @@ defmodule Jido.Discovery do
     %{
       last_updated: DateTime.utc_now(),
       components: %{
-        actions: discover_components(:__action_metadata__),
-        sensors: discover_components(:__sensor_metadata__),
-        agents: discover_components(:__agent_metadata__),
-        plugins: discover_components(:__plugin_metadata__),
-        demos: discover_components(:__jido_demo__)
+        actions: discover_spark_hosts(Jido.Action, &action_metadata/1),
+        sensors: discover_spark_hosts(Jido.Sensor, &sensor_metadata/1),
+        agents: discover_spark_hosts(Jido.Agent, &agent_metadata/1),
+        plugins: discover_spark_hosts(Jido.Plugin, &plugin_metadata/1),
+        demos: discover_demos()
       }
     }
   end
 
-  defp discover_components(metadata_fun) do
+  defp discover_spark_hosts(parent_dsl, metadata_fn) do
     loaded_applications()
     |> Enum.flat_map(&modules_for/1)
-    |> Enum.filter(&has_metadata_function?(&1, metadata_fun))
-    |> Enum.map(&build_metadata(&1, metadata_fun))
+    |> Enum.filter(&(Code.ensure_loaded?(&1) and Spark.Dsl.is?(&1, parent_dsl)))
+    |> Enum.map(metadata_fn)
+  end
+
+  defp discover_demos do
+    loaded_applications()
+    |> Enum.flat_map(&modules_for/1)
+    |> Enum.filter(&(Code.ensure_loaded?(&1) and function_exported?(&1, :__jido_demo__, 0)))
+    |> Enum.map(&demo_metadata/1)
   end
 
   defp loaded_applications do
@@ -250,16 +264,51 @@ defmodule Jido.Discovery do
     end
   end
 
-  defp has_metadata_function?(module, fun) do
-    Code.ensure_loaded?(module) and function_exported?(module, fun, 0)
+  defp action_metadata(module) do
+    base_metadata(module, %{
+      name: ActionInfo.name(module),
+      description: ActionInfo.description(module),
+      category: ActionInfo.category(module),
+      tags: ActionInfo.tags(module)
+    })
   end
 
-  defp build_metadata(module, metadata_fun) do
-    raw_metadata = apply(module, metadata_fun, [])
+  defp sensor_metadata(module) do
+    base_metadata(module, %{
+      name: SensorInfo.name(module),
+      description: SensorInfo.description(module),
+      schema: SensorInfo.schema(module)
+    })
+  end
 
-    metadata_map =
-      if Keyword.keyword?(raw_metadata), do: Map.new(raw_metadata), else: raw_metadata
+  defp agent_metadata(module) do
+    base_metadata(module, %{
+      name: AgentInfo.name(module),
+      description: AgentInfo.description(module),
+      category: AgentInfo.category(module),
+      tags: AgentInfo.tags(module),
+      vsn: AgentInfo.vsn(module),
+      actions: AgentInfo.actions(module),
+      schema: AgentInfo.schema(module)
+    })
+  end
 
+  defp plugin_metadata(module) do
+    base_metadata(module, %{
+      name: PluginInfo.name(module),
+      description: PluginInfo.description(module),
+      category: PluginInfo.category(module),
+      tags: PluginInfo.tags(module)
+    })
+  end
+
+  defp demo_metadata(module) do
+    raw = module.__jido_demo__()
+    metadata_map = if Keyword.keyword?(raw), do: Map.new(raw), else: raw
+    base_metadata(module, metadata_map)
+  end
+
+  defp base_metadata(module, metadata_map) do
     slug =
       module
       |> Atom.to_string()

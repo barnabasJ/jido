@@ -38,7 +38,7 @@ defmodule Jido.Action.Runtime do
   end
 
   defp do_validate_params(params, module) do
-    param_schema = module.schema()
+    param_schema = Jido.Dsl.Action.Info.schema(module)
     {known_params, unknown_params} = split_known_and_unknown(params, param_schema)
 
     param_schema
@@ -47,7 +47,7 @@ defmodule Jido.Action.Runtime do
   end
 
   defp do_validate_output(output, module) do
-    out_schema = module.output_schema()
+    out_schema = Jido.Dsl.Action.Info.output_schema(module)
     {known_output, unknown_output} = split_known_and_unknown(output, out_schema)
 
     out_schema

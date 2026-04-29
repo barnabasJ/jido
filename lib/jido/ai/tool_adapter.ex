@@ -22,7 +22,7 @@ defmodule Jido.AI.ToolAdapter do
       # With options
       tools = Jido.AI.ToolAdapter.from_actions(actions,
         prefix: "myapp_",
-        filter: fn mod -> mod.category() == :search end
+        filter: fn mod -> Jido.Dsl.Action.Info.category(mod) == :search end
       )
 
       # Use in LLM call
@@ -68,7 +68,7 @@ defmodule Jido.AI.ToolAdapter do
 
       # With filter
       tools = Jido.AI.ToolAdapter.from_actions(actions,
-        filter: fn mod -> mod.category() == :math end
+        filter: fn mod -> Jido.Dsl.Action.Info.category(mod) == :math end
       )
   """
   @spec from_actions([module()], keyword()) :: [ReqLLM.Tool.t()]
@@ -138,9 +138,9 @@ defmodule Jido.AI.ToolAdapter do
       Keyword.get_lazy(opts, :strict, fn -> infer_strict?(action_module) end)
 
     ReqLLM.Tool.new!(
-      name: apply_prefix(action_module.name(), prefix),
-      description: action_module.description(),
-      parameter_schema: build_json_schema(action_module.schema()),
+      name: apply_prefix(Jido.Dsl.Action.Info.name(action_module), prefix),
+      description: Jido.Dsl.Action.Info.description(action_module),
+      parameter_schema: build_json_schema(Jido.Dsl.Action.Info.schema(action_module)),
       callback: &noop_callback/1,
       strict: strict
     )
@@ -173,12 +173,12 @@ defmodule Jido.AI.ToolAdapter do
   def to_action_map(modules) when is_list(modules) do
     modules
     |> Enum.filter(&valid_action_module?/1)
-    |> Map.new(fn module -> {module.name(), module} end)
+    |> Map.new(fn module -> {Jido.Dsl.Action.Info.name(module), module} end)
   end
 
   def to_action_map(module) when is_atom(module) do
     if valid_action_module?(module) do
-      %{module.name() => module}
+      %{Jido.Dsl.Action.Info.name(module) => module}
     else
       %{}
     end
@@ -217,7 +217,9 @@ defmodule Jido.AI.ToolAdapter do
       when is_binary(tool_name) and is_list(action_modules) do
     prefix = Keyword.get(opts, :prefix)
 
-    case Enum.find(action_modules, fn mod -> apply_prefix(mod.name(), prefix) == tool_name end) do
+    case Enum.find(action_modules, fn mod ->
+           apply_prefix(Jido.Dsl.Action.Info.name(mod), prefix) == tool_name
+         end) do
       nil -> {:error, :not_found}
       module -> {:ok, module}
     end
@@ -247,15 +249,13 @@ defmodule Jido.AI.ToolAdapter do
   defp validate_action_module(module) do
     cond do
       not Code.ensure_loaded?(module) -> {:error, :not_loaded}
-      not function_exported?(module, :name, 0) -> {:error, :missing_name}
-      not function_exported?(module, :description, 0) -> {:error, :missing_description}
-      not function_exported?(module, :schema, 0) -> {:error, :missing_schema}
+      not Spark.Dsl.is?(module, Jido.Action) -> {:error, :not_an_action}
       true -> :ok
     end
   end
 
   defp valid_action_module?(module) when is_atom(module) do
-    Code.ensure_loaded?(module) and function_exported?(module, :name, 0)
+    Code.ensure_loaded?(module) and Spark.Dsl.is?(module, Jido.Action)
   end
 
   defp valid_action_module?(_), do: false

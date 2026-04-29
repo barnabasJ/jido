@@ -34,11 +34,9 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
              received_signals: [type: {:list, :any}, default: []]
     end
 
-    def signal_routes(_ctx) do
-      [
-        {"increment", TestActions.IncrementAction},
-        {"emit", EmitAction}
-      ]
+    signal_routes do
+      route "increment", TestActions.IncrementAction
+      route "emit", EmitAction
     end
   end
 

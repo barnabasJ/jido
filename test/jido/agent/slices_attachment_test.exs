@@ -1,6 +1,8 @@
 defmodule JidoTest.Agent.SlicesAttachmentTest do
   use ExUnit.Case, async: true
 
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
+
   # ===========================================================================
   # Fixtures: bare slices, plugins, non-slices
   # ===========================================================================
@@ -97,7 +99,7 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
       agent = AgentBareSlice.new()
 
       assert agent.state.simple == %{counter: 0, label: "default"}
-      assert SimpleSlice in AgentBareSlice.slices()
+      assert SimpleSlice in AgentInfo.slices(AgentBareSlice)
     end
 
     test "use Jido.Agent, slices: [{SomeSlice, key: value}] seeds the config into slice state" do
@@ -144,7 +146,8 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
       end
 
       route_paths =
-        AgentRoutedSlice.plugin_routes()
+        AgentRoutedSlice
+        |> AgentInfo.plugin_routes()
         |> Enum.map(fn {path, _action, _priority} -> path end)
 
       assert "absolute.path.one" in route_paths
@@ -162,7 +165,7 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
         end
       end
 
-      modules = AgentMultipleSlices.slices()
+      modules = AgentInfo.slices(AgentMultipleSlices)
       assert SimpleSlice in modules
       assert OtherSlice in modules
 
@@ -182,7 +185,7 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
         end
       end
 
-      assert :simple in AgentSliceCaps.capabilities()
+      assert :simple in AgentInfo.capabilities(AgentSliceCaps)
     end
   end
 
@@ -248,7 +251,7 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
   describe "slices: validation" do
     test "force-mounting a bare slice as :plugin raises a clear message" do
-      assert_raise RuntimeError, ~r/missing __jido_plugin__/, fn ->
+      assert_raise RuntimeError, ~r/is not a `use Jido.Plugin` module/, fn ->
         defmodule AgentRejectsBareAsPlugin do
           use Jido.Agent,
             extensions: [{SimpleSlice, [as: :plugin]}],
@@ -292,7 +295,7 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
         end
       end
 
-      modules = AgentDefaultSlices.slices()
+      modules = AgentInfo.slices(AgentDefaultSlices)
       assert Jido.Identity.Slice in modules
       assert Jido.Memory.Slice in modules
       assert Jido.Thread.Slice in modules
