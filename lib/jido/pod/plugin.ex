@@ -13,6 +13,14 @@ defmodule Jido.Pod.Plugin do
   via `use Jido.Pod`) is responsible for filling in `:topology` from its
   declared topology — usually by passing
   `state: %{pod: %{topology: ..., topology_version: ...}}` to `Jido.Agent.new/1`.
+
+  ## Host contribution
+
+  This plugin does not opt into `Jido.Slice.Extension` — its state is
+  seeded by `Jido.Pod.BeforeCompile` from the pod's topology, not by a
+  user-facing DSL block on the host. A `pod do … end` typed section on
+  the host module would be confusing because the host has no business
+  setting the pod's topology directly; the pod surface owns it.
   """
 
   alias Jido.Pod.Actions.Mutate, as: MutateAction

@@ -51,28 +51,44 @@ defmodule JidoTest.PodTest do
 
   defmodule ExamplePod do
     @moduledoc false
-    use Jido.Pod,
-      name: "example_pod",
-      topology: %{
+    use Jido.Pod
+
+    agent do
+      name "example_pod"
+    end
+
+    pod do
+      topology(%{
         planner: %{agent: WorkerAgent, manager: :planner_nodes, activation: :eager},
         reviewer: %{agent: WorkerAgent, manager: :reviewer_nodes}
-      }
+      })
+    end
   end
 
   defmodule EmptyPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "empty_pod"
+    use Jido.Pod
+
+    agent do
+      name "empty_pod"
+    end
   end
 
   defmodule CustomPluginPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "custom_plugin_pod",
-      topology: %{
+    use Jido.Pod
+
+    agent do
+      name "custom_plugin_pod"
+    end
+
+    pod do
+      plugin CustomPodPlugin
+
+      topology(%{
         worker: %{agent: WorkerAgent, manager: :worker_nodes}
-      },
-      default_slices: %{pod: CustomPodPlugin}
+      })
+    end
   end
 
   test "use Jido.Pod wraps an agent module with a canonical topology" do
@@ -115,9 +131,11 @@ defmodule JidoTest.PodTest do
       @moduledoc false
       alias #{inspect(UserPlugin)}, as: UserPlugin
 
-      use Jido.Pod,
-        name: #{inspect(pod_name)},
-        plugins: [UserPlugin]
+      use Jido.Pod, extensions: [UserPlugin]
+
+      agent do
+        name #{inspect(pod_name)}
+      end
     end
     """)
 
@@ -129,13 +147,19 @@ defmodule JidoTest.PodTest do
   test "disabling the reserved pod plugin raises at compile time" do
     message = ~r/Jido.Pod requires a pod plugin under pod/
 
-    assert_raise CompileError, message, fn ->
+    assert_raise Spark.Error.DslError, message, fn ->
       Code.compile_string("""
       defmodule JidoTest.PodDisabledPluginPod do
-        use Jido.Pod,
-          name: "disabled_pod",
-          topology: %{worker: %{agent: #{inspect(WorkerAgent)}, manager: :workers}},
-          default_slices: %{pod: false}
+        use Jido.Pod
+
+        agent do
+          name "disabled_pod"
+        end
+
+        pod do
+          plugin false
+          topology %{worker: %{agent: #{inspect(WorkerAgent)}, manager: :workers}}
+        end
       end
       """)
     end

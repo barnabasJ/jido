@@ -125,9 +125,15 @@ defmodule JidoExampleTest.NestedPodScaleTest do
 
   defmodule WorkerGroupPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "worker_group_pod",
-      topology: JidoExampleTest.NestedPodScaleTest.GroupTopologyBuilder.topology()
+    use Jido.Pod
+
+    agent do
+      name "worker_group_pod"
+    end
+
+    pod do
+      topology(JidoExampleTest.NestedPodScaleTest.GroupTopologyBuilder.topology())
+    end
   end
 
   defmodule RootTopologyBuilder do
@@ -188,9 +194,15 @@ defmodule JidoExampleTest.NestedPodScaleTest do
 
   defmodule RootHierarchyPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "root_hierarchy_pod",
-      topology: JidoExampleTest.NestedPodScaleTest.RootTopologyBuilder.topology()
+    use Jido.Pod
+
+    agent do
+      name "root_hierarchy_pod"
+    end
+
+    pod do
+      topology(JidoExampleTest.NestedPodScaleTest.RootTopologyBuilder.topology())
+    end
   end
 
   setup %{jido: jido} do

@@ -1,10 +1,9 @@
 defmodule Jido.Dsl.Agent.Verifiers.NoSectionNameCollisions do
   @moduledoc """
   Rejects two extensions contributing the same section name (per ADR
-  0023 §3). For task 0034 the registered extensions don't yet
-  contribute their own typed sections — they will once task 0035 lands.
-  This verifier exists so the host's section list is checked for
-  duplicates as soon as any extension does start adding sections.
+  0023 §3). Each `use Jido.Slice.Extension` slice contributes one
+  typed-section macro to the host; this verifier guards against two
+  slices accidentally claiming the same section name.
   """
 
   use Spark.Dsl.Verifier

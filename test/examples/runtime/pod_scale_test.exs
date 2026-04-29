@@ -179,9 +179,15 @@ defmodule JidoExampleTest.PodScaleTest do
 
   defmodule HierarchyShapedScalePod do
     @moduledoc false
-    use Jido.Pod,
-      name: "hierarchy_shaped_scale_pod",
-      topology: JidoExampleTest.PodScaleTest.TopologyBuilder.topology()
+    use Jido.Pod
+
+    agent do
+      name "hierarchy_shaped_scale_pod"
+    end
+
+    pod do
+      topology(JidoExampleTest.PodScaleTest.TopologyBuilder.topology())
+    end
   end
 
   setup %{jido: jido} do

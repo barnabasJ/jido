@@ -46,4 +46,6 @@ defmodule Jido.Identity.Slice do
   capabilities do
     capability :identity
   end
+
+  use Jido.Slice.Extension, host_section: :identity
 end

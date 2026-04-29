@@ -16,13 +16,20 @@ defmodule Jido.Pod.BusPlugin do
   ## Usage
 
       defmodule MyApp.Fulfillment do
-        use Jido.Pod,
-          name: "fulfillment",
-          plugins: [{Jido.Pod.BusPlugin, %{bus: :fulfillment_bus}}],
-          topology: %{
+        use Jido.Pod
+
+        agent do
+          name "fulfillment"
+        end
+
+        pod do
+          topology %{
             warehouse: %{module: MyApp.Warehouse, manager: :fulfillment_warehouse, activation: :eager},
             shipping:  %{module: MyApp.Shipping,  manager: :fulfillment_shipping,  activation: :eager}
           }
+        end
+
+        # Listed in `extensions: […]` to attach the bus plugin.
       end
 
   ## Routes
@@ -31,6 +38,12 @@ defmodule Jido.Pod.BusPlugin do
   are added to the agent's signal router **without** the slice's own prefix —
   see `Jido.Plugin.Routes.expand_routes/1`, which leaves `jido.*` routes
   unprefixed.
+
+  ## Host contribution
+
+  This plugin does not opt into `Jido.Slice.Extension` — its state is
+  seeded entirely from per-host `extensions:` config (`{Jido.Pod.BusPlugin,
+  %{bus: …}}`), and there is no per-host typed-section schema to surface.
   """
 
   alias Jido.Pod.BusPlugin.AutoSubscribeChild

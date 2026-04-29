@@ -15,11 +15,12 @@ defmodule Jido.Dsl.Agent do
   produces the internal `slices` / `plugins` / `middleware` lists
   agent introspection reads.
 
-  Per-extension typed sections (e.g. `memory do … end`, `slack do … end`)
-  arrive in task 0035 once `use Jido.Slice` / `use Jido.Plugin` /
-  `use Jido.Middleware` themselves register Spark sections. For task
-  0034 only, extension config is carried as a plain map on the
-  registration entry: `{Module, %{key: val}}`.
+  Modules in `extensions: […]` that opt into the contribution mechanism
+  via `use Jido.Slice.Extension, host_section: …` surface a typed
+  configuration block on the host (e.g. `memory do … end`,
+  `react do … end`); the `DiscoverExtensions` transformer wires the
+  contributed-section index into `dsl_state` and `WalkExtensions`
+  consumes it when building each slice instance.
   """
 
   alias Jido.Dsl.Agent.Route
@@ -101,6 +102,7 @@ defmodule Jido.Dsl.Agent do
       @schedules_section
     ],
     transformers: [
+      Jido.Dsl.Agent.Transformers.DiscoverExtensions,
       Jido.Dsl.Agent.Transformers.WalkExtensions,
       Jido.Dsl.Agent.Transformers.MergeSchemas,
       Jido.Dsl.Agent.Transformers.ExpandRoutes,

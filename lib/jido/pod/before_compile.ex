@@ -1,13 +1,23 @@
 defmodule Jido.Pod.BeforeCompile do
   @moduledoc false
 
-  # Emits the pod-wrapping `new/1` override AFTER `Jido.Dsl.Agent.Transformers.GenerateAccessors`
-  # has emitted the underlying `def new(opts)` and `defoverridable new: 1`. This
-  # is registered as `@before_compile Jido.Pod.BeforeCompile` from `Jido.Pod.__using__/1`
-  # so it runs after Spark's `__before_compile__`.
+  # Emits `topology/0`, `pod?/0`, and the pod-wrapping `new/1` override
+  # AFTER `Jido.Dsl.Agent.Transformers.GenerateAccessors` has emitted the
+  # underlying `def new(opts)` and `defoverridable new: 1`. The pod's
+  # canonical topology is read from Spark's persisted state — populated
+  # by `Jido.Dsl.Pod.Transformers.ResolveTopology` — so the value is in
+  # sync with the `pod do topology … end` declaration.
 
   defmacro __before_compile__(_env) do
     quote do
+      @doc "Returns the canonical topology for this pod agent."
+      @spec topology() :: Jido.Pod.Topology.t()
+      def topology, do: Spark.Dsl.Extension.get_persisted(__MODULE__, :resolved_topology)
+
+      @doc "Returns true for pod-wrapped agent modules."
+      @spec pod?() :: true
+      def pod?, do: true
+
       @doc """
       Pod-wrapped `new/1`. Seeds the `:pod` slice with the agent module's
       canonical topology before delegating to the base `Jido.Agent.new/1`.

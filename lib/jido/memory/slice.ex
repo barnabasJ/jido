@@ -71,4 +71,6 @@ defmodule Jido.Memory.Slice do
   capabilities do
     capability :memory
   end
+
+  use Jido.Slice.Extension, host_section: :memory
 end

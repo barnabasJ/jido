@@ -3,7 +3,27 @@ defmodule Jido.Pod do
   Pod wrapper macro and runtime helpers.
 
   A pod is just a `Jido.Agent` with a canonical topology and a singleton pod
-  slice mounted under the `:pod` slice key.
+  slice mounted under the `:pod` slice key:
+
+      defmodule MyApp.Fulfillment do
+        use Jido.Pod
+
+        agent do
+          name "fulfillment"
+        end
+
+        pod do
+          topology %{
+            warehouse: %{agent: MyApp.Warehouse, manager: :fulfillment_warehouse, activation: :eager},
+            shipping:  %{agent: MyApp.Shipping,  manager: :fulfillment_shipping,  activation: :eager}
+          }
+        end
+      end
+
+  The reserved pod plugin (`Jido.Pod.Plugin`) attaches automatically. To
+  swap in a custom pod plugin, pass `default_slices: %{pod: MyPodPlugin}`
+  to `use Jido.Pod`; the replacement must declare `path: :pod` and
+  advertise the `:pod` capability.
   """
 
   alias Jido.Agent
@@ -11,7 +31,6 @@ defmodule Jido.Pod do
   alias Jido.AgentServer
   alias Jido.AgentServer.State
   alias Jido.Plugin.Instance, as: PluginInstance
-  alias Jido.Pod.Definition
   alias Jido.Pod.Mutable
   alias Jido.Pod.Mutation
   alias Jido.Pod.Mutation.Report
@@ -56,48 +75,59 @@ defmodule Jido.Pod do
 
   @type mutation_report :: Report.t()
 
+  use Spark.Dsl,
+    default_extensions: [extensions: [Jido.Dsl.Pod]],
+    untyped_extensions?: false,
+    opt_schema: [
+      extensions: [
+        type: {:list, :any},
+        default: [],
+        doc: "Plugin / slice / middleware modules registered with this pod."
+      ],
+      jido: [
+        type: :atom,
+        doc: "Optional Jido instance module for resolving default slices at compile time."
+      ],
+      default_slices: [
+        type: :any,
+        doc:
+          "Override default slices: false to disable all, or %{path => false | Module | {Module, config}}. " <>
+            "`%{pod: ReplacementPlugin}` swaps in a custom pod plugin (must declare path: :pod " <>
+            "and capability :pod)."
+      ]
+    ]
+
   defmacro __using__(opts) do
-    name = Definition.expand_and_eval_literal_option(Keyword.fetch!(opts, :name), __CALLER__)
-    raw_topology = Keyword.get(opts, :topology, %{})
-    topology = Definition.resolve_topology!(name, raw_topology, __CALLER__)
+    env = __CALLER__
 
-    default_slices =
-      Definition.expand_and_eval_literal_option(Keyword.get(opts, :default_slices), __CALLER__)
-
-    {pod_plugins, remaining_default_slices} =
-      Definition.split_pod_plugins!(default_slices, __CALLER__)
-
-    user_plugins =
-      Definition.expand_and_eval_literal_option(Keyword.get(opts, :plugins, []), __CALLER__)
-
-    agent_opts =
+    user_extensions =
       opts
-      |> Keyword.delete(:topology)
-      |> Keyword.put(:plugins, pod_plugins ++ (user_plugins || []))
-      |> then(fn resolved_opts ->
-        if is_nil(remaining_default_slices) do
-          Keyword.delete(resolved_opts, :default_slices)
-        else
-          Keyword.put(resolved_opts, :default_slices, remaining_default_slices)
-        end
-      end)
+      |> Keyword.get(:extensions, [])
+      |> List.wrap()
 
-    quote location: :keep do
-      (unquote_splicing(Jido.Dsl.Agent.LegacyTranslator.quoted_agent_use(agent_opts)))
+    shadow_extensions =
+      user_extensions
+      |> Enum.flat_map(&Jido.Agent.__shadow_extensions__(&1, env))
+      |> Enum.uniq()
 
-      @pod_topology unquote(Macro.escape(topology))
+    new_opts =
+      if shadow_extensions == [] do
+        opts
+      else
+        Keyword.update(opts, :extensions, shadow_extensions, fn current ->
+          List.wrap(current) ++ shadow_extensions
+        end)
+      end
 
-      @doc "Returns the canonical topology for this pod agent."
-      @spec topology() :: Jido.Pod.Topology.t()
-      def topology, do: @pod_topology
+    super(new_opts)
+  end
 
-      @doc "Returns true for pod-wrapped agent modules."
-      @spec pod?() :: true
-      def pod?, do: true
+  @impl Spark.Dsl
+  def handle_opts(opts) do
+    agent_quote = Jido.Agent.handle_opts(opts)
 
-      # Pod's `new/1` override has to land AFTER the Spark transformers have
-      # emitted the base `def new(opts)` and `defoverridable new: 1`, so it
-      # plugs in via a second `@before_compile`. See `Jido.Pod.BeforeCompile`.
+    quote do
+      unquote(agent_quote)
       @before_compile Jido.Pod.BeforeCompile
     end
   end

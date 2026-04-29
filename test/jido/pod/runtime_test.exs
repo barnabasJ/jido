@@ -27,9 +27,14 @@ defmodule JidoTest.Pod.RuntimeTest do
 
   defmodule ReviewPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "runtime_review_pod",
-      topology:
+    use Jido.Pod
+
+    agent do
+      name "runtime_review_pod"
+    end
+
+    pod do
+      topology(
         Topology.new!(
           name: "runtime_review_pod",
           nodes: %{
@@ -50,27 +55,40 @@ defmodule JidoTest.Pod.RuntimeTest do
           },
           links: [{:owns, :planner, :reviewer}]
         )
+      )
+    end
   end
 
   defmodule HierarchicalReviewPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "hierarchical_runtime_review_pod",
-      topology: %{
+    use Jido.Pod
+
+    agent do
+      name "hierarchical_runtime_review_pod"
+    end
+
+    pod do
+      topology(%{
         nested: %{
           module: ReviewPod,
           manager: :pod_runtime_nested_pods,
           kind: :pod,
           activation: :eager
         }
-      }
+      })
+    end
   end
 
   defmodule LazyReviewPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "lazy_runtime_review_pod",
-      topology:
+    use Jido.Pod
+
+    agent do
+      name "lazy_runtime_review_pod"
+    end
+
+    pod do
+      topology(
         Topology.new!(
           name: "lazy_runtime_review_pod",
           nodes: %{
@@ -91,13 +109,20 @@ defmodule JidoTest.Pod.RuntimeTest do
           },
           links: [{:owns, :planner, :reviewer}]
         )
+      )
+    end
   end
 
   defmodule StringNamedReviewPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "string_named_runtime_review_pod",
-      topology:
+    use Jido.Pod
+
+    agent do
+      name "string_named_runtime_review_pod"
+    end
+
+    pod do
+      topology(
         Topology.new!(
           name: "string_named_runtime_review_pod",
           nodes: %{
@@ -118,13 +143,20 @@ defmodule JidoTest.Pod.RuntimeTest do
           },
           links: [{:owns, "planner", "reviewer"}]
         )
+      )
+    end
   end
 
   defmodule MixedNamedReviewPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "mixed_named_runtime_review_pod",
-      topology:
+    use Jido.Pod
+
+    agent do
+      name "mixed_named_runtime_review_pod"
+    end
+
+    pod do
+      topology(
         Topology.new!(
           name: "mixed_named_runtime_review_pod",
           nodes: %{
@@ -145,41 +177,60 @@ defmodule JidoTest.Pod.RuntimeTest do
           },
           links: [{:owns, :planner, "reviewer"}]
         )
+      )
+    end
   end
 
   defmodule RecursiveReviewPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "recursive_review_pod",
-      topology: %{
+    use Jido.Pod
+
+    agent do
+      name "recursive_review_pod"
+    end
+
+    pod do
+      topology(%{
         nested: %{
           module: __MODULE__,
           manager: :pod_runtime_recursive_pods,
           kind: :pod,
           activation: :eager
         }
-      }
+      })
+    end
   end
 
   defmodule AlternateReviewPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "alternate_review_pod",
-      topology: %{
+    use Jido.Pod
+
+    agent do
+      name "alternate_review_pod"
+    end
+
+    pod do
+      topology(%{
         editor: %{
           agent: PodWorker,
           manager: :pod_runtime_planner_members,
           activation: :eager,
           initial_state: %{role: "editor"}
         }
-      }
+      })
+    end
   end
 
   defmodule PartialFailurePod do
     @moduledoc false
-    use Jido.Pod,
-      name: "partial_failure_pod",
-      topology:
+    use Jido.Pod
+
+    agent do
+      name "partial_failure_pod"
+    end
+
+    pod do
+      topology(
         Jido.Pod.Topology.new!(
           name: "partial_failure_pod",
           nodes: %{
@@ -197,20 +248,28 @@ defmodule JidoTest.Pod.RuntimeTest do
           },
           links: [{:depends_on, :nested, :planner}]
         )
+      )
+    end
   end
 
   defmodule ManagerMismatchPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "manager_mismatch_pod",
-      topology: %{
+    use Jido.Pod
+
+    agent do
+      name "manager_mismatch_pod"
+    end
+
+    pod do
+      topology(%{
         nested: %{
           module: AlternateReviewPod,
           manager: :pod_runtime_nested_pods,
           kind: :pod,
           activation: :eager
         }
-      }
+      })
+    end
   end
 
   setup %{jido: jido} do

@@ -55,9 +55,14 @@ defmodule JidoExampleTest.PodRuntimeTest do
 
   defmodule ReviewPipelinePod do
     @moduledoc false
-    use Jido.Pod,
-      name: "review_pipeline",
-      topology:
+    use Jido.Pod
+
+    agent do
+      name "review_pipeline"
+    end
+
+    pod do
+      topology(
         Jido.Pod.Topology.new!(
           name: "review_pipeline",
           nodes: %{
@@ -93,6 +98,8 @@ defmodule JidoExampleTest.PodRuntimeTest do
             {:depends_on, :publisher, :reviewer}
           ]
         )
+      )
+    end
   end
 
   setup %{jido: jido} do

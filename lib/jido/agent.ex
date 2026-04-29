@@ -27,7 +27,7 @@ defmodule Jido.Agent do
   - `directives` are **external effects only** — they never modify agent state.
   - `cmd/2` is a **pure function** — given same inputs, always same outputs.
 
-  ## Defining an Agent Module (Spark DSL — task 0034)
+  ## Defining an Agent Module
 
   ```elixir
   defmodule MyAgent do
@@ -56,9 +56,12 @@ defmodule Jido.Agent do
   end
   ```
 
-  Per-extension typed sections (`memory do`, `slack do`, `retry do`) land in
-  task 0035; for now extension config is supplied via the registration entry:
-  `{Module, %{key: val}}`.
+  Each module listed in `extensions: […]` that opts into the contribution
+  mechanism (`use Jido.Slice.Extension, host_section: …`) surfaces a typed
+  configuration block on the host agent — e.g. `memory do … end`,
+  `react do … end`. Each contributed section's schema includes a
+  built-in `path:` field so the host can rename the slice's mount path
+  inline (`memory do path :short_term end`).
   """
 
   use Spark.Dsl,
@@ -80,6 +83,69 @@ defmodule Jido.Agent do
           "Override default slices: false to disable all, or %{path => false | Module | {Module, config}}."
       ]
     ]
+
+  defmacro __using__(opts) do
+    env = __CALLER__
+
+    user_extensions =
+      opts
+      |> Keyword.get(:extensions, [])
+      |> List.wrap()
+
+    shadow_extensions =
+      user_extensions
+      |> Enum.flat_map(&Jido.Agent.__shadow_extensions__(&1, env))
+      |> Enum.uniq()
+
+    new_opts =
+      if shadow_extensions == [] do
+        opts
+      else
+        Keyword.update(opts, :extensions, shadow_extensions, fn current ->
+          List.wrap(current) ++ shadow_extensions
+        end)
+      end
+
+    super(new_opts)
+  end
+
+  @doc false
+  @spec __shadow_extensions__(term(), Macro.Env.t()) :: [module()]
+  def __shadow_extensions__(entry, env) do
+    case __extract_module__(entry, env) do
+      nil ->
+        []
+
+      module ->
+        with {:module, _} <- Code.ensure_compiled(module),
+             true <- function_exported?(module, :__jido_host_extension_module__, 0),
+             shadow when is_atom(shadow) <- module.__jido_host_extension_module__(),
+             {:module, _} <- Code.ensure_compiled(shadow) do
+          [shadow]
+        else
+          _ -> []
+        end
+    end
+  end
+
+  defp __extract_module__({:__aliases__, _meta, _segments} = ast, env) do
+    case Macro.expand(ast, env) do
+      module when is_atom(module) -> module
+      _ -> nil
+    end
+  end
+
+  defp __extract_module__({entry, _opts}, env), do: __extract_module__(entry, env)
+  defp __extract_module__(module, _env) when is_atom(module), do: module
+  defp __extract_module__(_other, _env), do: nil
+
+  @doc false
+  @spec __spark_extension_module__?(term()) :: boolean()
+  def __spark_extension_module__?(module) when is_atom(module) do
+    Code.ensure_loaded?(module) and Spark.implements_behaviour?(module, Spark.Dsl.Extension)
+  end
+
+  def __spark_extension_module__?(_), do: false
 
   alias Jido.Agent
   alias Jido.Agent.Directive
@@ -209,83 +275,6 @@ defmodule Jido.Agent do
   @type agent_result :: {:ok, t()} | {:error, Error.t()}
   @type cmd_result :: {:ok, t(), [directive()]} | {:error, term()}
 
-  @agent_config_schema Zoi.object(
-                         %{
-                           name:
-                             Zoi.string(
-                               description:
-                                 "The name of the Agent. Must contain only letters, numbers, and underscores."
-                             )
-                             |> Zoi.refine({Jido.Util, :validate_name, []}),
-                           description:
-                             Zoi.string(description: "A description of what the Agent does.")
-                             |> Zoi.optional(),
-                           category:
-                             Zoi.string(description: "The category of the Agent.")
-                             |> Zoi.optional(),
-                           tags:
-                             Zoi.list(Zoi.string(), description: "Tags")
-                             |> Zoi.default([]),
-                           vsn:
-                             Zoi.string(description: "Version")
-                             |> Zoi.optional(),
-                           schema:
-                             Zoi.any(
-                               description:
-                                 "NimbleOptions or Zoi schema for validating the Agent's state."
-                             )
-                             |> Zoi.refine({Jido.Action.Schema, :validate_config_schema, []})
-                             |> Zoi.default([]),
-                           plugins:
-                             Zoi.list(Zoi.any(),
-                               description: "Plugin modules or {module, config} tuples"
-                             )
-                             |> Zoi.default([]),
-                           slices:
-                             Zoi.list(Zoi.any(),
-                               description: "Bare slice modules or {Module, config} tuples"
-                             )
-                             |> Zoi.default([]),
-                           middleware:
-                             Zoi.list(Zoi.any(),
-                               description:
-                                 "Middleware modules or {module, opts_map} tuples for the on_signal/4 chain"
-                             )
-                             |> Zoi.default([]),
-                           signal_routes:
-                             Zoi.list(Zoi.any(),
-                               description: "Compile-time signal route table."
-                             )
-                             |> Zoi.default([]),
-                           default_slices:
-                             Zoi.any(description: "Override default slices.")
-                             |> Zoi.optional(),
-                           schedules:
-                             Zoi.list(Zoi.any(),
-                               description: "Declarative cron schedules."
-                             )
-                             |> Zoi.default([]),
-                           jido:
-                             Zoi.atom(
-                               description:
-                                 "Jido instance module for resolving default plugins at compile time"
-                             )
-                             |> Zoi.optional(),
-                           path:
-                             Zoi.atom(
-                               description:
-                                 "Atom slice key where the agent's user-domain state lives. " <>
-                                   "Optional — required only when `schema:` is set."
-                             )
-                             |> Zoi.optional()
-                         },
-                         coerce: true
-                       )
-
-  @doc false
-  @spec config_schema() :: Zoi.schema()
-  def config_schema, do: @agent_config_schema
-
   @doc """
   Returns signal routes for this agent.
   """
@@ -311,7 +300,7 @@ defmodule Jido.Agent do
       opts
       |> Keyword.get(:extensions, [])
       |> List.wrap()
-      |> Enum.reject(&(&1 == Jido.Dsl.Agent))
+      |> Enum.reject(&__spark_extension_module__?/1)
 
     quote location: :keep do
       @behaviour Jido.Agent

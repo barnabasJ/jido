@@ -40,8 +40,11 @@ defmodule JidoExampleTest.MutablePodRuntimeTest do
 
   defmodule MutableReviewPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "example_mutable_review_pod"
+    use Jido.Pod
+
+    agent do
+      name "example_mutable_review_pod"
+    end
   end
 
   setup %{jido: jido} do

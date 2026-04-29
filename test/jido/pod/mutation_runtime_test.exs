@@ -60,9 +60,14 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
 
   defmodule ReviewPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "pod_mutation_review_pod",
-      topology:
+    use Jido.Pod
+
+    agent do
+      name "pod_mutation_review_pod"
+    end
+
+    pod do
+      topology(
         Topology.new!(
           name: "pod_mutation_review_pod",
           nodes: %{
@@ -81,16 +86,26 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
           },
           links: [{:owns, :planner, :reviewer}]
         )
+      )
+    end
   end
 
   defmodule AlternateReviewPod do
     @moduledoc false
-    use Jido.Pod, name: "pod_mutation_alternate_review_pod"
+    use Jido.Pod
+
+    agent do
+      name "pod_mutation_alternate_review_pod"
+    end
   end
 
   defmodule EmptyMutablePod do
     @moduledoc false
-    use Jido.Pod, name: "pod_mutation_empty_pod"
+    use Jido.Pod
+
+    agent do
+      name "pod_mutation_empty_pod"
+    end
   end
 
   defmodule ExpandPodAction do
@@ -127,10 +142,19 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
 
   defmodule SelfMutatingPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "pod_mutation_self_mutating_pod",
-      topology: %{},
-      signal_routes: [{"expand", ExpandPodAction}]
+    use Jido.Pod
+
+    agent do
+      name "pod_mutation_self_mutating_pod"
+    end
+
+    pod do
+      topology(%{})
+    end
+
+    signal_routes do
+      route "expand", ExpandPodAction
+    end
   end
 
   setup %{jido: jido} do

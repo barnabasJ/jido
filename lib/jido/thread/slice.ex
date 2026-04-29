@@ -54,6 +54,8 @@ defmodule Jido.Thread.Slice do
     capability :thread
   end
 
+  use Jido.Slice.Extension, host_section: :thread
+
   @behaviour Jido.Persist.Transform
 
   @impl Jido.Persist.Transform

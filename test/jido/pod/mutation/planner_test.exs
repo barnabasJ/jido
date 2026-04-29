@@ -16,7 +16,11 @@ defmodule JidoTest.Pod.Mutation.PlannerTest do
 
   defmodule NestedPod do
     @moduledoc false
-    use Jido.Pod, name: "mutation_planner_nested_pod"
+    use Jido.Pod
+
+    agent do
+      name "mutation_planner_nested_pod"
+    end
   end
 
   test "plans batched add mutations with mixed atom and string names" do

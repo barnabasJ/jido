@@ -43,9 +43,14 @@ defmodule JidoExampleTest.PartitionedPodRuntimeTest do
 
   defmodule WorkspacePod do
     @moduledoc false
-    use Jido.Pod,
-      name: "workspace_pod",
-      topology:
+    use Jido.Pod
+
+    agent do
+      name "workspace_pod"
+    end
+
+    pod do
+      topology(
         Topology.new!(
           name: "workspace_pod",
           nodes: %{
@@ -64,6 +69,8 @@ defmodule JidoExampleTest.PartitionedPodRuntimeTest do
           },
           links: [{:owns, :coordinator, :reviewer}]
         )
+      )
+    end
   end
 
   setup %{jido: jido} do

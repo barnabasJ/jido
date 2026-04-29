@@ -58,19 +58,26 @@ defmodule Jido.Slice.Instance do
   caller's overrides and validates against the slice's `config_schema/0` if
   one is declared.
 
+  When `overrides` carries the reserved `:__path_override__` key (set by
+  `Jido.Dsl.Agent.Transformers.WalkExtensions` from a contributed
+  section's `path:` field), the override replaces the slice's declared
+  `path/0` for this instance. The key is stripped before validation.
+
   Raises `ArgumentError` when the resolved config fails schema validation.
   """
   @spec new(module() | {module(), map() | keyword()}) :: t()
   def new(declaration) do
     {module, overrides} = normalize_declaration(declaration)
+    {path_override, overrides} = Map.pop(overrides, :__path_override__)
 
     resolved_config = Config.resolve_config!(module, overrides)
+    path = path_override || SliceInfo.path(module)
 
     %__MODULE__{
       module: module,
       as: nil,
       config: resolved_config,
-      path: SliceInfo.path(module)
+      path: path
     }
   end
 

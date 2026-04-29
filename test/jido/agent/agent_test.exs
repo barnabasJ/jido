@@ -357,11 +357,6 @@ defmodule JidoTest.AgentTest do
       schema = Agent.schema()
       assert schema
     end
-
-    test "Agent.config_schema/0 returns the agent config schema" do
-      schema = Agent.config_schema()
-      assert schema
-    end
   end
 
   describe "actions returning effects" do

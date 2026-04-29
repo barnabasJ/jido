@@ -1,0 +1,71 @@
+defmodule Jido.Dsl.ExtensionComposeTest do
+  @moduledoc """
+  Tests that multiple contributed sections compose cleanly on a single
+  host agent (each slice's `<host_section> do … end` block applies
+  independently).
+  """
+
+  use ExUnit.Case, async: true
+
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
+
+  defmodule MultiHost do
+    @moduledoc false
+    use Jido.Agent,
+      extensions: [Jido.Memory.Slice, Jido.Identity.Slice, Jido.Thread.Slice],
+      default_slices: false
+
+    agent do
+      name "multi_host"
+    end
+
+    memory do
+      path :short_term
+    end
+
+    identity do
+      path :who
+    end
+
+    thread do
+      path :history
+    end
+  end
+
+  describe "multiple contributions compose" do
+    test "all three contributed sections apply" do
+      instances = AgentInfo.slice_instances(MultiHost)
+
+      memory = Enum.find(instances, &(&1.module == Jido.Memory.Slice))
+      identity = Enum.find(instances, &(&1.module == Jido.Identity.Slice))
+      thread = Enum.find(instances, &(&1.module == Jido.Thread.Slice))
+
+      assert memory.path == :short_term
+      assert identity.path == :who
+      assert thread.path == :history
+    end
+  end
+
+  defmodule HostNoBlocks do
+    @moduledoc false
+    use Jido.Agent,
+      extensions: [Jido.Memory.Slice, Jido.Identity.Slice],
+      default_slices: false
+
+    agent do
+      name "host_no_blocks"
+    end
+  end
+
+  describe "extensions without contribution blocks" do
+    test "still produce slice instances at the slice's declared path" do
+      instances = AgentInfo.slice_instances(HostNoBlocks)
+
+      memory = Enum.find(instances, &(&1.module == Jido.Memory.Slice))
+      identity = Enum.find(instances, &(&1.module == Jido.Identity.Slice))
+
+      assert memory.path == :memory
+      assert identity.path == :identity
+    end
+  end
+end

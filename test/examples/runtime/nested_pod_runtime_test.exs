@@ -41,9 +41,14 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
 
   defmodule EditorialPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "editorial_pod",
-      topology:
+    use Jido.Pod
+
+    agent do
+      name "editorial_pod"
+    end
+
+    pod do
+      topology(
         Jido.Pod.Topology.new!(
           name: "editorial_pod",
           nodes: %{
@@ -62,13 +67,20 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
           },
           links: [{:owns, :editor, :publisher}]
         )
+      )
+    end
   end
 
   defmodule ProgramPod do
     @moduledoc false
-    use Jido.Pod,
-      name: "program_pod",
-      topology:
+    use Jido.Pod
+
+    agent do
+      name "program_pod"
+    end
+
+    pod do
+      topology(
         Jido.Pod.Topology.new!(
           name: "program_pod",
           nodes: %{
@@ -95,6 +107,8 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
             {:owns, :coordinator, :editorial}
           ]
         )
+      )
+    end
   end
 
   setup %{jido: jido} do

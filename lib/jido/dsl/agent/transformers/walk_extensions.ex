@@ -7,6 +7,13 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   `:slice_instances` / `:middleware_list` lists agent introspection
   reads.
 
+  Reads `:jido_contributed_sections` (persisted by
+  `Jido.Dsl.Agent.Transformers.DiscoverExtensions`) to look up each
+  extension's typed-section contribution; the user's block options
+  for that section are merged into the extension's config map and
+  the section's `:path` field becomes the slice instance's mount
+  path override.
+
   Order in `extensions: […]` becomes the middleware-chain order for any
   middleware halves contributed by plugins and bare-middleware modules
   (slice entries do not participate in the chain).
@@ -26,8 +33,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     user_extensions = Transformer.get_persisted(dsl_state, :jido_user_extensions, [])
     default_slice_list = resolve_default_slices(dsl_state)
 
-    classified =
-      Enum.map(user_extensions, &classify/1)
+    classified = Enum.map(user_extensions, &classify(&1, dsl_state))
 
     plugin_instances = collect(classified, :plugin)
     middleware_list = collect(classified, :middleware)
@@ -36,9 +42,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     default_slice_instances =
       Enum.map(default_slice_list, &SliceInstance.new/1)
 
-    slice_instances =
-      (default_slice_instances ++ slice_instances_from_user)
-      |> Enum.map(&apply_section_path_override(&1, dsl_state))
+    slice_instances = default_slice_instances ++ slice_instances_from_user
 
     plugin_specs = Enum.map(plugin_instances, &build_plugin_spec/1)
 
@@ -109,7 +113,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     end)
   end
 
-  defp classify(entry) do
+  defp classify(entry, dsl_state) do
     {module, opts, as_override} = normalize_entry(entry)
 
     ensure_module_loaded!(module)
@@ -122,17 +126,48 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
 
     case kind do
       :plugin ->
+        # Plugins do not contribute typed host sections in v1; pass raw
+        # opts through so `PluginInstance.new/1` can pop `:as` from the
+        # caller's keyword list.
         decl = build_decl(module, opts)
         {:plugin, PluginInstance.new(decl)}
 
       :slice ->
-        decl = build_decl(module, opts)
+        {mount_path, block_config} = read_contributed_block(module, dsl_state)
+        config = Map.merge(normalize_to_map(opts), block_config)
+        decl = slice_decl(module, config, mount_path)
         {:slice, SliceInstance.new(decl)}
 
       :middleware ->
         opts_map = if is_map(opts), do: opts, else: Map.new(opts)
         {:middleware, {module, opts_map}}
     end
+  end
+
+  defp read_contributed_block(module, dsl_state) do
+    contributed_sections =
+      Transformer.get_persisted(dsl_state, :jido_contributed_sections, %{})
+
+    case Map.get(contributed_sections, module) do
+      nil ->
+        {nil, %{}}
+
+      section_name ->
+        opts =
+          dsl_state
+          |> Map.get([section_name], Spark.Dsl.Extension.default_section_config())
+          |> Map.get(:opts)
+          |> Kernel.||([])
+          |> Map.new()
+
+        {Map.get(opts, :path), Map.delete(opts, :path)}
+    end
+  end
+
+  defp slice_decl(module, config, nil), do: build_decl(module, config)
+
+  defp slice_decl(module, config, mount_path) do
+    {module, Map.put(config, :__path_override__, mount_path)}
   end
 
   defp normalize_entry(module) when is_atom(module), do: {module, %{}, nil}
@@ -227,33 +262,6 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   defp build_decl(module, opts) when opts == [], do: module
   defp build_decl(module, opts), do: {module, opts}
 
-  @doc """
-  Resolves a slice instance's mount path, honoring a host-level
-  `path:` override declared inside the slice's contributed DSL section.
-
-  Pre-wired for the contribution mechanism in task 0041: when a slice
-  exports `__jido_host_section__/0` (returned by the
-  `Jido.Slice.Extension` macro that task 0041 introduces), the agent's
-  DSL state may contain that section with a `:path` option set by the
-  host (e.g. `memory do path :short_term end`). This helper reads that
-  override and applies it to the slice instance, falling back to the
-  slice's declared `path/0` when no override is present.
-
-  Slices without `__jido_host_section__/0` (the only kind today) are
-  returned unchanged.
-  """
-  @spec apply_section_path_override(SliceInstance.t(), map()) :: SliceInstance.t()
-  def apply_section_path_override(%SliceInstance{module: module} = instance, dsl_state) do
-    case section_path_override(module, dsl_state) do
-      nil -> instance
-      override when is_atom(override) -> %{instance | path: override}
-    end
-  end
-
-  defp section_path_override(module, dsl_state) do
-    if function_exported?(module, :__jido_host_section__, 0) do
-      section_name = module.__jido_host_section__()
-      Spark.Dsl.Transformer.get_option(dsl_state, [section_name], :path)
-    end
-  end
+  defp normalize_to_map(opts) when is_map(opts), do: opts
+  defp normalize_to_map(opts) when is_list(opts), do: Map.new(opts)
 end

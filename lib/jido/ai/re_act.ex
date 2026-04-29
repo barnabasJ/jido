@@ -123,6 +123,62 @@ defmodule Jido.AI.ReAct do
     route "ai.react.failed", Actions.Failed
   end
 
+  use Jido.Slice.Extension, host_section: :react
+
+  @doc false
+  def __jido_host_contribution__ do
+    base_path = Jido.Dsl.Slice.Info.path(__MODULE__)
+
+    %Spark.Dsl.Section{
+      name: :react,
+      describe: Jido.Dsl.Slice.Info.description(__MODULE__),
+      schema: [
+        path: [
+          type: :atom,
+          default: base_path,
+          doc:
+            "Slice mount path on this host. Defaults to `#{inspect(base_path)}`. " <>
+              "Override to rename the slice's slot in `agent.state`."
+        ],
+        model: [
+          type: :any,
+          doc: "Model spec accepted by `ReqLLM.Generation.generate_text/3`."
+        ],
+        tools: [
+          type: {:list, :atom},
+          default: [],
+          doc: "List of `Jido.Action` modules exposed to the model."
+        ],
+        system_prompt: [
+          type: :any,
+          doc: "System message text prepended to the conversation."
+        ],
+        max_iterations: [
+          type: :integer,
+          default: 10,
+          doc: "Cap on LLM calls per run."
+        ],
+        max_tokens: [
+          type: :integer,
+          default: 4096,
+          doc: "Default max tokens, folded into `:llm_opts`."
+        ],
+        temperature: [
+          type: :any,
+          default: 0.2,
+          doc: "Default temperature, folded into `:llm_opts`."
+        ],
+        llm_opts: [
+          type: :any,
+          default: [],
+          doc:
+            "Extra keyword list merged into per-call options " <>
+              "(last-write-wins over `:max_tokens` / `:temperature`)."
+        ]
+      ]
+    }
+  end
+
   @doc false
   # Folds the convenience keys `:max_tokens` and `:temperature` into
   # `:llm_opts` so the slice carries a single keyword list of per-call
