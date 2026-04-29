@@ -108,8 +108,8 @@ defmodule Jido.Dsl.PluginTest do
     defmodule PluginAgent do
       @moduledoc false
       use Jido.Agent,
-        default_slices: false,
-        extensions: [Jido.Dsl.PluginTest.FullPlugin]
+        extensions: [Jido.Dsl.PluginTest.FullPlugin],
+        default_slices: false
 
       agent do
         name "plugin_agent"
@@ -133,8 +133,8 @@ defmodule Jido.Dsl.PluginTest do
     test "extensions: [{Plugin, as: :slice}] force-mounts the plugin as a slice" do
       defmodule PluginAsSliceAgent do
         use Jido.Agent,
-          default_slices: false,
-          extensions: [{Jido.Dsl.PluginTest.FullPlugin, [as: :slice]}]
+          extensions: [{Jido.Dsl.PluginTest.FullPlugin, [as: :slice]}],
+          default_slices: false
 
         agent do
           name "plugin_as_slice_agent"

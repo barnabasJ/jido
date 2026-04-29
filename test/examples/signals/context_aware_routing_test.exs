@@ -23,11 +23,12 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
 
   defmodule ProcessAction do
     @moduledoc false
-    use Jido.Action,
-      name: "process",
-      schema: [
-        value: [type: :integer, default: 1]
-      ]
+    use Jido.Action
+
+    action do
+      name "process"
+      schema value: [type: :integer, default: 1]
+    end
 
     def run(%Jido.Signal{data: %{value: value}}, slice, _opts, _ctx) do
       current = Map.get(slice, :counter, 0)
@@ -37,11 +38,12 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
 
   defmodule MaintenanceAction do
     @moduledoc false
-    use Jido.Action,
-      name: "maintenance_handler",
-      schema: [
-        value: [type: :integer, default: 0]
-      ]
+    use Jido.Action
+
+    action do
+      name "maintenance_handler"
+      schema value: [type: :integer, default: 0]
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{message: "system in maintenance mode"}, []}
@@ -50,11 +52,12 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
 
   defmodule SetModeAction do
     @moduledoc false
-    use Jido.Action,
-      name: "set_mode",
-      schema: [
-        mode: [type: :atom, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "set_mode"
+      schema mode: [type: :atom, required: true]
+    end
 
     def run(%Jido.Signal{data: %{mode: mode}}, _slice, _opts, _ctx) do
       {:ok, %{mode: mode}, []}
@@ -63,11 +66,12 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
 
   defmodule AdminAction do
     @moduledoc false
-    use Jido.Action,
-      name: "admin_action",
-      schema: [
-        command: [type: :string, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "admin_action"
+      schema command: [type: :string, required: true]
+    end
 
     def run(%Jido.Signal{data: %{command: command}}, slice, _opts, _ctx) do
       log = Map.get(slice, :admin_log, [])
@@ -81,15 +85,19 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
 
   defmodule GatedAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "gated_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "gated_agent"
+      path :domain
+
+      schema(
         mode: [type: :atom, default: :normal],
         counter: [type: :integer, default: 0],
         message: [type: :string, default: nil],
         admin_log: [type: {:list, :string}, default: []]
-      ]
+      )
+    end
 
     def signal_routes(ctx) do
       base_routes = [
@@ -112,12 +120,13 @@ defmodule JidoExampleTest.ContextAwareRoutingTest do
 
   defmodule MinimalAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "minimal_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "minimal_agent"
+      path :domain
+      schema counter: [type: :integer, default: 0]
+    end
 
     def signal_routes(ctx) do
       [{"process", ProcessAction, 5}] ++

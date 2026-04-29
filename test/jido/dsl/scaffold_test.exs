@@ -1,34 +1,24 @@
 defmodule Jido.Dsl.ScaffoldTest do
   use ExUnit.Case, async: true
 
-  # The placeholders from task 0033 stay empty until the corresponding
-  # surface migration lands. Task 0034 fills `Jido.Dsl.Agent` and
-  # `Jido.Dsl.Instance`. Task 0035 fills `Jido.Dsl.Slice`,
-  # `Jido.Dsl.Plugin`, and `Jido.Dsl.Middleware`. Action / Sensor remain
-  # placeholders for task 0036.
-
-  @placeholder_modules [
-    Jido.Dsl.Action,
-    Jido.Dsl.Sensor
-  ]
+  # All `Jido.Dsl.*` extensions are now filled in. Task 0034 wired
+  # `Jido.Dsl.Agent` and `Jido.Dsl.Instance`. Task 0035 wired
+  # `Jido.Dsl.Slice`, `Jido.Dsl.Plugin`, and `Jido.Dsl.Middleware`.
+  # Task 0036 wired `Jido.Dsl.Action` and `Jido.Dsl.Sensor`.
 
   @migrated_modules [
     Jido.Dsl.Agent,
     Jido.Dsl.Instance,
     Jido.Dsl.Slice,
     Jido.Dsl.Plugin,
-    Jido.Dsl.Middleware
+    Jido.Dsl.Middleware,
+    Jido.Dsl.Action,
+    Jido.Dsl.Sensor
   ]
 
-  for module <- @placeholder_modules ++ @migrated_modules do
+  for module <- @migrated_modules do
     test "#{inspect(module)} is a Spark.Dsl.Extension" do
       assert Spark.implements_behaviour?(unquote(module), Spark.Dsl.Extension)
-    end
-  end
-
-  for module <- @placeholder_modules do
-    test "#{inspect(module)} has an empty section list (filled by later tasks)" do
-      assert unquote(module).sections() == []
     end
   end
 
@@ -62,5 +52,15 @@ defmodule Jido.Dsl.ScaffoldTest do
   test "Jido.Dsl.Middleware contributes the `middleware` section (task 0035)" do
     section_names = Enum.map(Jido.Dsl.Middleware.sections(), & &1.name)
     assert :middleware in section_names
+  end
+
+  test "Jido.Dsl.Action contributes the `action` section (task 0036)" do
+    section_names = Enum.map(Jido.Dsl.Action.sections(), & &1.name)
+    assert :action in section_names
+  end
+
+  test "Jido.Dsl.Sensor contributes the `sensor` section (task 0036)" do
+    section_names = Enum.map(Jido.Dsl.Sensor.sections(), & &1.name)
+    assert :sensor in section_names
   end
 end

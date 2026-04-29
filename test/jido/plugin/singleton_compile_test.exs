@@ -34,8 +34,8 @@ defmodule JidoTest.Plugin.SingletonCompileTest do
     test "agent with singleton plugin compiles successfully" do
       defmodule ValidSingletonAgent do
         use Jido.Agent,
-          default_slices: false,
-          extensions: [SingletonFixture]
+          extensions: [SingletonFixture],
+          default_slices: false
 
         agent do
           name "valid_singleton"
@@ -49,8 +49,8 @@ defmodule JidoTest.Plugin.SingletonCompileTest do
     test "agent with singleton and regular plugins compiles" do
       defmodule MixedPluginAgent do
         use Jido.Agent,
-          default_slices: false,
-          extensions: [SingletonFixture, RegularFixture]
+          extensions: [SingletonFixture, RegularFixture],
+          default_slices: false
 
         agent do
           name "mixed_plugins"
@@ -65,7 +65,7 @@ defmodule JidoTest.Plugin.SingletonCompileTest do
       assert_raise RuntimeError, ~r/Cannot alias singleton plugin/, fn ->
         defmodule AliasedSingletonAgent do
           use Jido.Agent,
-            extensions: [{SingletonFixture, as: :custom}]
+            extensions: [{SingletonFixture, [as: :custom]}]
 
           agent do
             name "aliased_singleton"
@@ -95,8 +95,8 @@ defmodule JidoTest.Plugin.SingletonCompileTest do
     test "regular (non-singleton) plugin can still be aliased" do
       defmodule AliasedRegularAgent do
         use Jido.Agent,
-          default_slices: false,
-          extensions: [{RegularFixture, as: :alias1}]
+          extensions: [{RegularFixture, [as: :alias1]}],
+          default_slices: false
 
         agent do
           name "aliased_regular"

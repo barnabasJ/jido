@@ -73,14 +73,22 @@ defmodule JidoTest.Thread.SliceTest do
 
   describe "agent integration" do
     defmodule AgentWithThread do
-      use Jido.Agent, name: "thread_slice_test_agent", path: :domain
+      use Jido.Agent
+
+      agent do
+        name "thread_slice_test_agent"
+        path :domain
+      end
     end
 
     defmodule AgentWithoutThread do
       use Jido.Agent,
-        name: "thread_slice_test_no_thread",
-        path: :domain,
         default_slices: %{thread: false}
+
+      agent do
+        name "thread_slice_test_no_thread"
+        path :domain
+      end
     end
 
     test "agent includes thread slice by default" do

@@ -6,10 +6,13 @@ defmodule Jido.Pod.Actions.MutateProgress do
   alias Jido.Pod.Mutation.Plan
   alias Jido.Pod.Mutation.Report
 
-  use Jido.Action,
-    name: "pod_mutate_progress",
-    path: :pod,
-    schema: []
+  use Jido.Action
+
+  action do
+    name "pod_mutate_progress"
+    path :pod
+    schema []
+  end
 
   def run(%Jido.Signal{type: type, data: data}, slice, _opts, _ctx) do
     name = Map.get(data, :tag)

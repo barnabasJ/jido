@@ -6,10 +6,13 @@ defmodule JidoTest.Middleware.PersisterTest do
 
   defmodule TestAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "persister_test_agent",
-      path: :app,
-      schema: [counter: [type: :integer, default: 0]]
+    use Jido.Agent
+
+    agent do
+      name "persister_test_agent"
+      path :app
+      schema counter: [type: :integer, default: 0]
+    end
   end
 
   defp signal(type) do

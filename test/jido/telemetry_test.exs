@@ -7,12 +7,13 @@ defmodule JidoTest.TelemetryTest do
 
   defmodule TestAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "telemetry_test_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "telemetry_test_agent"
+      path :domain
+      schema counter: [type: :integer, default: 0]
+    end
 
     def signal_routes(_ctx), do: []
   end

@@ -179,7 +179,8 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
     test "agent with default_slices: false gets no defaults" do
       defmodule AgentDisableDefaults do
-        use Jido.Agent, default_slices: false
+        use Jido.Agent,
+          default_slices: false
 
         agent do
           name "ds_agent_disable_defaults"
@@ -193,8 +194,8 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
     test "agent with slices still gets them when default_slices is false" do
       defmodule AgentUserSlicesOnly do
         use Jido.Agent,
-          default_slices: false,
-          extensions: [UserSlice]
+          extensions: [UserSlice],
+          default_slices: false
 
         agent do
           name "ds_agent_user_only"
@@ -213,7 +214,8 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
       end
 
       defmodule AgentWithJido do
-        use Jido.Agent, jido: FakeJido
+        use Jido.Agent,
+          jido: FakeJido
 
         agent do
           name "ds_agent_with_jido"
@@ -277,8 +279,8 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
       defmodule AgentMountOrder do
         use Jido.Agent,
-          jido: FakeJido4,
-          extensions: [UserSlice]
+          extensions: [UserSlice],
+          jido: FakeJido4
 
         agent do
           name "ds_agent_mount_order"

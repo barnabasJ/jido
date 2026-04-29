@@ -21,7 +21,12 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
 
   defmodule TickCountAction do
     @moduledoc false
-    use Jido.Action, name: "tick_count", schema: []
+    use Jido.Action
+
+    action do
+      name "tick_count"
+      schema []
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       slice = if is_map(slice), do: slice, else: %{}
@@ -32,7 +37,12 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
 
   defmodule RegisterCronAction do
     @moduledoc false
-    use Jido.Action, name: "register_cron", schema: []
+    use Jido.Action
+
+    action do
+      name "register_cron"
+      schema []
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       cron_expr = Map.get(params, :cron)
@@ -50,12 +60,13 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
 
   defmodule CronTickAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "cron_tick_agent",
-      path: :domain,
-      schema: [
-        tick_count: [type: :integer, default: 0]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "cron_tick_agent"
+      path :domain
+      schema tick_count: [type: :integer, default: 0]
+    end
 
     def signal_routes(_ctx) do
       [

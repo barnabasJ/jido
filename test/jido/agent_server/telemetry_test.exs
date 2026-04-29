@@ -11,7 +11,12 @@ defmodule JidoTest.AgentServer.TelemetryTest do
 
   defmodule EmitDirectiveAction do
     @moduledoc false
-    use Jido.Action, name: "emit_directive", schema: []
+    use Jido.Action
+
+    action do
+      name "emit_directive"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       signal = Signal.new!("test.emitted", %{}, source: "/test")
@@ -21,7 +26,12 @@ defmodule JidoTest.AgentServer.TelemetryTest do
 
   defmodule ScheduleDirectiveAction do
     @moduledoc false
-    use Jido.Action, name: "schedule_directive", schema: []
+    use Jido.Action
+
+    action do
+      name "schedule_directive"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, [%Directive.Schedule{delay_ms: 100, message: :tick}]}
@@ -30,12 +40,13 @@ defmodule JidoTest.AgentServer.TelemetryTest do
 
   defmodule TelemetryAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "telemetry_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "telemetry_agent"
+      path :domain
+      schema counter: [type: :integer, default: 0]
+    end
 
     def signal_routes(_ctx) do
       [

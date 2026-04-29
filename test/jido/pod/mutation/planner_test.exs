@@ -7,7 +7,13 @@ defmodule JidoTest.Pod.Mutation.PlannerTest do
 
   defmodule Worker do
     @moduledoc false
-    use Jido.Agent, name: "mutation_planner_worker", path: :domain, schema: []
+    use Jido.Agent
+
+    agent do
+      name "mutation_planner_worker"
+      path :domain
+      schema []
+    end
   end
 
   defmodule NestedPod do

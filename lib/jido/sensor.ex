@@ -11,12 +11,13 @@ defmodule Jido.Sensor do
   To define a new Sensor, use the `Jido.Sensor` behaviour in your module:
 
       defmodule MySensor do
-        use Jido.Sensor,
-          name: "my_sensor",
-          description: "Monitors a specific metric",
-          schema: Zoi.object(%{
-            metric: Zoi.string()
-          })
+        use Jido.Sensor
+
+        sensor do
+          name "my_sensor"
+          description "Monitors a specific metric"
+          schema Zoi.object(%{metric: Zoi.string()})
+        end
 
         @impl true
         def init(config, _context) do
@@ -59,7 +60,7 @@ defmodule Jido.Sensor do
   - `{:emit, signal}` - Emit a signal immediately
   """
 
-  alias Jido.Sensor.Spec
+  use Spark.Dsl, default_extensions: [extensions: [Jido.Dsl.Sensor]]
 
   @type sensor_directive ::
           {:schedule, pos_integer()}
@@ -144,97 +145,10 @@ defmodule Jido.Sensor do
   """
   @callback terminate(reason :: term(), state :: term()) :: :ok
 
-  @sensor_config_schema Zoi.object(
-                          %{
-                            name:
-                              Zoi.string(
-                                description:
-                                  "The name of the Sensor. Must contain only letters, numbers, and underscores."
-                              )
-                              |> Zoi.refine({Jido.Util, :validate_name, []}),
-                            description:
-                              Zoi.string(description: "A description of what the Sensor does.")
-                              |> Zoi.optional(),
-                            schema:
-                              Zoi.any(description: "Zoi schema for config validation.")
-                              |> Zoi.optional()
-                          },
-                          coerce: true
-                        )
-
-  @doc false
-  @spec config_schema() :: Zoi.schema()
-  def config_schema, do: @sensor_config_schema
-
-  defmacro __using__(opts) do
-    quote location: :keep do
+  @impl Spark.Dsl
+  def handle_opts(_opts) do
+    quote do
       @behaviour Jido.Sensor
-
-      alias Jido.Sensor
-      alias Jido.Sensor.Spec
-
-      @validated_opts (case Zoi.parse(Sensor.config_schema(), Map.new(unquote(opts))) do
-                         {:ok, validated} ->
-                           validated
-
-                         {:error, errors} ->
-                           message =
-                             "Invalid Sensor configuration for #{inspect(__MODULE__)}: #{inspect(errors)}"
-
-                           raise CompileError,
-                             description: message,
-                             file: __ENV__.file,
-                             line: __ENV__.line
-                       end)
-
-      @doc "Returns the sensor's name."
-      @spec name() :: String.t()
-      def name, do: @validated_opts.name
-
-      @doc "Returns the sensor's description."
-      @spec description() :: String.t() | nil
-      def description, do: @validated_opts[:description]
-
-      @doc "Returns the Zoi schema for sensor configuration."
-      @spec schema() :: Zoi.schema() | nil
-      def schema, do: @validated_opts[:schema]
-
-      @doc """
-      Returns the sensor specification.
-
-      The spec contains all metadata needed to configure and run the sensor.
-      """
-      @spec spec() :: Spec.t()
-      def spec do
-        Spec.new!(%{
-          module: __MODULE__,
-          name: name(),
-          description: description(),
-          schema: schema()
-        })
-      end
-
-      @doc """
-      Returns metadata for Jido.Discovery integration.
-
-      This function is used by `Jido.Discovery` to index sensors
-      for fast lookup and filtering.
-      """
-      @spec __sensor_metadata__() :: map()
-      def __sensor_metadata__ do
-        %{
-          name: name(),
-          description: description(),
-          schema: schema()
-        }
-      end
-
-      @doc false
-      @impl Jido.Sensor
-      @spec terminate(term(), term()) :: :ok
-      def terminate(_reason, _state), do: :ok
-
-      defoverridable terminate: 2, name: 0, description: 0, schema: 0
     end
   end
 end

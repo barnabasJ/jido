@@ -16,12 +16,13 @@ defmodule JidoTest.Pod.RuntimeTest do
 
   defmodule PodWorker do
     @moduledoc false
-    use Jido.Agent,
-      name: "pod_runtime_worker",
-      path: :domain,
-      schema: [
-        role: [type: :string, default: "worker"]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "pod_runtime_worker"
+      path :domain
+      schema role: [type: :string, default: "worker"]
+    end
   end
 
   defmodule ReviewPod do

@@ -34,11 +34,12 @@ defmodule JidoExampleTest.TracingTest do
 
   defmodule StartWorkflowAction do
     @moduledoc false
-    use Jido.Action,
-      name: "start_workflow",
-      schema: [
-        workflow_name: [type: :string, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "start_workflow"
+      schema workflow_name: [type: :string, required: true]
+    end
 
     def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
       event_signal =
@@ -54,11 +55,12 @@ defmodule JidoExampleTest.TracingTest do
 
   defmodule ProcessStepAction do
     @moduledoc false
-    use Jido.Action,
-      name: "process_step",
-      schema: [
-        step_number: [type: :integer, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "process_step"
+      schema step_number: [type: :integer, required: true]
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       current_step = Map.get(slice, :step, 0)
@@ -77,9 +79,12 @@ defmodule JidoExampleTest.TracingTest do
 
   defmodule CompleteWorkflowAction do
     @moduledoc false
-    use Jido.Action,
-      name: "complete_workflow",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "complete_workflow"
+      schema []
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       workflow = Map.get(slice, :workflow, "unknown")
@@ -101,14 +106,18 @@ defmodule JidoExampleTest.TracingTest do
 
   defmodule WorkflowAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "workflow_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "workflow_agent"
+      path :domain
+
+      schema(
         workflow: [type: :string, default: nil],
         step: [type: :integer, default: 0],
         status: [type: :atom, default: :idle]
-      ]
+      )
+    end
 
     def signal_routes(_ctx) do
       [

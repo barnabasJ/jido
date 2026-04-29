@@ -5,7 +5,12 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
   @moduletag capture_log: true
 
   defmodule TickAction do
-    use Jido.Action, name: "tick", schema: []
+    use Jido.Action
+
+    action do
+      name "tick"
+      schema []
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)

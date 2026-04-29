@@ -17,7 +17,13 @@ defmodule JidoTest.AgentServer.MiddlewarePipelineTest do
 
   defmodule InspectAction do
     @moduledoc false
-    use Jido.Action, name: "inspect", path: :app, schema: []
+    use Jido.Action
+
+    action do
+      name "inspect"
+      path :app
+      schema []
+    end
 
     def run(_signal, slice, _opts, ctx) do
       {:ok, %{slice | last_tags: ctx[:tags] || []}, []}
@@ -27,15 +33,16 @@ defmodule JidoTest.AgentServer.MiddlewarePipelineTest do
   defmodule MiddlewareAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "middleware_pipeline_agent",
-      path: :app,
-      schema: [
-        last_tags: [type: {:list, :any}, default: []]
-      ],
-      middleware: [
+      extensions: [
         {JidoTest.AgentServer.MiddlewarePipelineTest.TaggingMiddleware, %{tag: :outer}},
         {JidoTest.AgentServer.MiddlewarePipelineTest.TaggingMiddleware, %{tag: :inner}}
       ]
+
+    agent do
+      name "middleware_pipeline_agent"
+      path :app
+      schema last_tags: [type: {:list, :any}, default: []]
+    end
 
     def signal_routes(_ctx),
       do: [{"inspect", JidoTest.AgentServer.MiddlewarePipelineTest.InspectAction}]

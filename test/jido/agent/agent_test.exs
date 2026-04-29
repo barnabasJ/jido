@@ -460,10 +460,7 @@ defmodule JidoTest.AgentTest do
         ExUnit.CaptureIO.capture_io(:stderr, fn ->
           defmodule ConflictAgent do
             use Jido.Agent,
-              extensions: [
-                TestAgents.TestPluginWithRoutes,
-                TestAgents.TestPluginWithRoutes
-              ]
+              extensions: [TestAgents.TestPluginWithRoutes, TestAgents.TestPluginWithRoutes]
 
             agent do
               name "conflict_agent"

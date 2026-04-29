@@ -24,11 +24,12 @@ defmodule JidoExampleTest.SignalRoutingTest do
 
   defmodule IncrementAction do
     @moduledoc false
-    use Jido.Action,
-      name: "increment",
-      schema: [
-        amount: [type: :integer, default: 1]
-      ]
+    use Jido.Action
+
+    action do
+      name "increment"
+      schema amount: [type: :integer, default: 1]
+    end
 
     def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       current = Map.get(slice, :counter, 0)
@@ -38,11 +39,12 @@ defmodule JidoExampleTest.SignalRoutingTest do
 
   defmodule SetNameAction do
     @moduledoc false
-    use Jido.Action,
-      name: "set_name",
-      schema: [
-        name: [type: :string, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "set_name"
+      schema name: [type: :string, required: true]
+    end
 
     def run(%Jido.Signal{data: %{name: name}}, _slice, _opts, _ctx) do
       {:ok, %{name: name}, []}
@@ -51,12 +53,12 @@ defmodule JidoExampleTest.SignalRoutingTest do
 
   defmodule RecordEventAction do
     @moduledoc false
-    use Jido.Action,
-      name: "record_event",
-      schema: [
-        event_type: [type: :string, required: true],
-        payload: [type: :map, default: %{}]
-      ]
+    use Jido.Action
+
+    action do
+      name "record_event"
+      schema event_type: [type: :string, required: true], payload: [type: :map, default: %{}]
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       events = Map.get(slice, :events, [])
@@ -77,14 +79,18 @@ defmodule JidoExampleTest.SignalRoutingTest do
 
   defmodule RoutedAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "routed_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "routed_agent"
+      path :domain
+
+      schema(
         counter: [type: :integer, default: 0],
         name: [type: :string, default: ""],
         events: [type: {:list, :map}, default: []]
-      ]
+      )
+    end
 
     def signal_routes(_ctx) do
       [

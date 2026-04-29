@@ -11,10 +11,13 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
   defmodule TestSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "test_sensor",
-      description: "A sensor for testing plugin subscriptions",
-      schema:
+    use Jido.Sensor
+
+    sensor do
+      name "test_sensor"
+      description "A sensor for testing plugin subscriptions"
+
+      schema(
         Zoi.object(
           %{
             emit_on_init: Zoi.boolean() |> Zoi.default(false),
@@ -22,6 +25,8 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
           },
           coerce: true
         )
+      )
+    end
 
     @impl Jido.Sensor
     def init(config, context) do
@@ -65,16 +70,18 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
   defmodule SecondTestSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "second_test_sensor",
-      description: "A second sensor for multi-sensor tests",
-      schema:
-        Zoi.object(
-          %{
-            sensor_id: Zoi.string() |> Zoi.default("second")
-          },
+    use Jido.Sensor
+
+    sensor do
+      name "second_test_sensor"
+      description "A second sensor for multi-sensor tests"
+
+      schema(
+        Zoi.object(%{sensor_id: Zoi.string() |> Zoi.default("second")},
           coerce: true
         )
+      )
+    end
 
     @impl Jido.Sensor
     def init(config, context) do
@@ -100,21 +107,24 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
   defmodule SimpleAction do
     @moduledoc false
-    use Jido.Action,
-      name: "simple_action",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "simple_action"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
   end
 
   defmodule RecordSensorSignalAction do
     @moduledoc false
-    use Jido.Action,
-      name: "record_sensor_signal",
-      schema: [
-        value: [type: :any, required: true],
-        count: [type: :integer, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "record_sensor_signal"
+      schema value: [type: :any, required: true], count: [type: :integer, required: true]
+    end
 
     def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
       {:ok, %{last_sensor_value: params.value, last_sensor_count: params.count}, []}

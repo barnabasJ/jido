@@ -10,7 +10,12 @@ defmodule Jido.AgentServer.Actions.QueryChildren do
       jido.agent.query.children.error → %{reason: term}
   """
 
-  use Jido.Action, name: "agent_query_children", schema: []
+  use Jido.Action
+
+  action do
+    name "agent_query_children"
+    schema []
+  end
 
   alias Jido.Signal.Call
 

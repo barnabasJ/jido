@@ -8,18 +8,24 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
   defmodule TestAction do
     @moduledoc false
-    use Jido.Action,
-      name: "test_action",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "test_action"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
   end
 
   defmodule AnotherAction do
     @moduledoc false
-    use Jido.Action,
-      name: "another_action",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "another_action"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
   end
@@ -100,7 +106,8 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
   defmodule AgentWithPlugins do
     @moduledoc false
-    use Jido.Agent, extensions: [PluginWithRoutes, PluginWithoutRoutes]
+    use Jido.Agent,
+      extensions: [PluginWithRoutes, PluginWithoutRoutes]
 
     agent do
       name "agent_with_plugins"

@@ -30,14 +30,14 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
 
   defmodule FullAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "full_agent",
-      path: :domain,
-      description: "Agent with all three default slices for persistence testing",
-      schema: [
-        counter: [type: :integer, default: 0],
-        status: [type: :atom, default: :idle]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "full_agent"
+      path :domain
+      description "Agent with all three default slices for persistence testing"
+      schema counter: [type: :integer, default: 0], status: [type: :atom, default: :idle]
+    end
   end
 
   # ===========================================================================

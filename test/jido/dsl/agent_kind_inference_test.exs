@@ -42,7 +42,8 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
   describe "kind inference from markers" do
     defmodule PluginAgent do
       @moduledoc false
-      use Jido.Agent, extensions: [Jido.Dsl.AgentKindInferenceTest.SamplePlugin]
+      use Jido.Agent,
+        extensions: [Jido.Dsl.AgentKindInferenceTest.SamplePlugin]
 
       agent do
         name "plugin_agent"
@@ -58,7 +59,8 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
 
     defmodule SliceAgent do
       @moduledoc false
-      use Jido.Agent, extensions: [Jido.Dsl.AgentKindInferenceTest.SampleSlice]
+      use Jido.Agent,
+        extensions: [Jido.Dsl.AgentKindInferenceTest.SampleSlice]
 
       agent do
         name "slice_agent"
@@ -74,7 +76,8 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
 
     defmodule MiddlewareAgent do
       @moduledoc false
-      use Jido.Agent, extensions: [Jido.Dsl.AgentKindInferenceTest.SampleMiddleware]
+      use Jido.Agent,
+        extensions: [Jido.Dsl.AgentKindInferenceTest.SampleMiddleware]
 
       agent do
         name "middleware_agent"

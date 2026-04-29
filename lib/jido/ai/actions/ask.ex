@@ -18,19 +18,21 @@ defmodule Jido.AI.Actions.Ask do
   blocking ReqLLM call lives in the directive's executor.
   """
 
-  use Jido.Action,
-    name: "ai_ask",
-    path: :ai,
-    description: "Open a ReAct run on a Jido.AI.ReAct-equipped agent.",
-    schema: [
-      query: [type: :string, required: true],
-      request_id: [type: :string, required: true],
-      model: [type: :any, default: nil],
-      tools: [type: {:or, [{:list, :atom}, nil]}, default: nil],
-      system_prompt: [type: {:or, [:string, nil]}, default: nil],
-      max_iterations: [type: {:or, [:pos_integer, nil]}, default: nil],
-      llm_opts: [type: {:or, [:keyword_list, nil]}, default: nil]
-    ]
+  use Jido.Action
+
+  action do
+    name "ai_ask"
+    path :ai
+    description "Open a ReAct run on a Jido.AI.ReAct-equipped agent."
+
+    schema query: [type: :string, required: true],
+           request_id: [type: :string, required: true],
+           model: [type: :any, default: nil],
+           tools: [type: {:or, [{:list, :atom}, nil]}, default: nil],
+           system_prompt: [type: {:or, [:string, nil]}, default: nil],
+           max_iterations: [type: {:or, [:pos_integer, nil]}, default: nil],
+           llm_opts: [type: {:or, [:keyword_list, nil]}, default: nil]
+  end
 
   alias Jido.AI.Directive.LLMCall
   alias ReqLLM.Context

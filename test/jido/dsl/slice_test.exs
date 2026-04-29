@@ -217,8 +217,8 @@ defmodule Jido.Dsl.SliceTest do
     defmodule BareSliceAgent do
       @moduledoc false
       use Jido.Agent,
-        default_slices: false,
-        extensions: [Jido.Dsl.SliceTest.SchemaSlice]
+        extensions: [Jido.Dsl.SliceTest.SchemaSlice],
+        default_slices: false
 
       agent do
         name "bare_slice_agent"

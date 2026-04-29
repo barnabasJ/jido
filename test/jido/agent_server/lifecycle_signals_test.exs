@@ -5,10 +5,13 @@ defmodule JidoTest.AgentServer.LifecycleSignalsTest do
 
   defmodule LifecycleAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "lifecycle_signals_agent",
-      path: :domain,
-      schema: []
+    use Jido.Agent
+
+    agent do
+      name "lifecycle_signals_agent"
+      path :domain
+      schema []
+    end
 
     def signal_routes(_ctx), do: []
   end

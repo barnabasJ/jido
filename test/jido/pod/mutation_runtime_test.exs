@@ -17,12 +17,13 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
 
   defmodule PodWorker do
     @moduledoc false
-    use Jido.Agent,
-      name: "pod_mutation_worker",
-      path: :domain,
-      schema: [
-        role: [type: :string, default: "worker"]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "pod_mutation_worker"
+      path :domain
+      schema role: [type: :string, default: "worker"]
+    end
   end
 
   defmodule SlowStartingMiddleware do
@@ -50,10 +51,13 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
   defmodule SlowBootWorker do
     @moduledoc false
     use Jido.Agent,
-      name: "pod_mutation_slow_worker",
-      path: :domain,
-      schema: [],
-      middleware: [SlowStartingMiddleware]
+      extensions: [SlowStartingMiddleware]
+
+    agent do
+      name "pod_mutation_slow_worker"
+      path :domain
+      schema []
+    end
   end
 
   defmodule ReviewPod do
@@ -97,7 +101,13 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
     alias Jido.Pod
     alias Jido.Pod.Mutation
 
-    use Jido.Action, name: "expand_pod", path: :pod, schema: []
+    use Jido.Action
+
+    action do
+      name "expand_pod"
+      path :pod
+      schema []
+    end
 
     def run(_signal, _slice, _opts, ctx) do
       Pod.mutation_effects(

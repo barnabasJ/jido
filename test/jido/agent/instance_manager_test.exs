@@ -92,7 +92,12 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
   defmodule CronTickAction do
     @moduledoc false
-    use Jido.Action, name: "cron_tick", schema: []
+    use Jido.Action
+
+    action do
+      name "cron_tick"
+      schema []
+    end
 
     @impl true
     def run(_signal, slice, _opts, _ctx) do
@@ -103,7 +108,12 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
   defmodule RegisterCronAction do
     @moduledoc false
-    use Jido.Action, name: "register_cron", schema: []
+    use Jido.Action
+
+    action do
+      name "register_cron"
+      schema []
+    end
 
     @impl true
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
@@ -118,7 +128,12 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
   defmodule CancelCronAction do
     @moduledoc false
-    use Jido.Action, name: "cancel_cron", schema: []
+    use Jido.Action
+
+    action do
+      name "cancel_cron"
+      schema []
+    end
 
     @impl true
     def run(%Jido.Signal{data: %{job_id: job_id}}, slice, _opts, _ctx) do

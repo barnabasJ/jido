@@ -6,14 +6,18 @@ defmodule JidoTest.Integration.HibernateThawTest do
   alias Jido.Thread.Agent, as: ThreadAgent
 
   defmodule WorkflowAgent do
-    use Jido.Agent,
-      name: "workflow_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "workflow_agent"
+      path :domain
+
+      schema(
         step: [type: :integer, default: 0],
         status: [type: :atom, default: :pending],
         data: [type: :map, default: %{}]
-      ]
+      )
+    end
 
     @impl true
     def signal_routes(_ctx), do: []

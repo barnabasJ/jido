@@ -16,7 +16,12 @@ defmodule Jido.Pod.Actions.QueryNodes do
       jido.pod.query.nodes.error → %{reason: term}
   """
 
-  use Jido.Action, name: "pod_query_nodes", schema: []
+  use Jido.Action
+
+  action do
+    name "pod_query_nodes"
+    schema []
+  end
 
   alias Jido.Signal.Call
 

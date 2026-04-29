@@ -33,7 +33,12 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
 
   defmodule PluginTickAction do
     @moduledoc false
-    use Jido.Action, name: "plugin_tick", schema: []
+    use Jido.Action
+
+    action do
+      name "plugin_tick"
+      schema []
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
@@ -44,25 +49,32 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
 
   defmodule ScheduledPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "scheduler_integration_plugin",
-      path: :scheduler_integration_plugin,
-      actions: [PluginTickAction],
-      schedules: [
-        {"* * * * * * *", PluginTickAction}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "scheduler_integration_plugin"
+      path :scheduler_integration_plugin
+    end
+
+    actions do
+      action PluginTickAction
+    end
+
+    schedules do
+      schedule "* * * * * * *", PluginTickAction
+    end
   end
 
   defmodule PluginScheduledAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "scheduler_integration_plugin_agent",
-      path: :domain,
-      schema: [
-        tick_count: [type: :integer, default: 0],
-        ticks: [type: {:list, :any}, default: []]
-      ],
-      plugins: [ScheduledPlugin]
+      extensions: [ScheduledPlugin]
+
+    agent do
+      name "scheduler_integration_plugin_agent"
+      path :domain
+      schema tick_count: [type: :integer, default: 0], ticks: [type: {:list, :any}, default: []]
+    end
   end
 
   defp plugin_job_id do
@@ -71,12 +83,13 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
 
   defmodule RestoreCountingAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "scheduler_restore_counting_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "scheduler_restore_counting_agent"
+      path :domain
+      schema counter: [type: :integer, default: 0]
+    end
 
     @impl true
     def signal_routes(_ctx), do: []

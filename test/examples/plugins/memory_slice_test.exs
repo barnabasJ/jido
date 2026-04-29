@@ -27,12 +27,12 @@ defmodule JidoExampleTest.MemorySliceTest do
 
   defmodule UpdateWorldAction do
     @moduledoc false
-    use Jido.Action,
-      name: "update_world",
-      schema: [
-        key: [type: :atom, required: true],
-        value: [type: :any, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "update_world"
+      schema key: [type: :atom, required: true], value: [type: :any, required: true]
+    end
 
     def run(%Jido.Signal{data: %{key: key, value: value}}, slice, _opts, _ctx) do
       alias Jido.Memory
@@ -58,25 +58,27 @@ defmodule JidoExampleTest.MemorySliceTest do
 
   defmodule MemoryAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "memory_agent",
-      path: :domain,
-      description: "Agent with default memory slice",
-      schema: [
-        status: [type: :atom, default: :idle]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "memory_agent"
+      path :domain
+      description "Agent with default memory slice"
+      schema status: [type: :atom, default: :idle]
+    end
   end
 
   defmodule NoMemoryAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "no_memory_agent",
-      path: :domain,
-      description: "Agent with memory slice disabled",
-      default_slices: %{memory: false},
-      schema: [
-        value: [type: :integer, default: 0]
-      ]
+      default_slices: %{memory: false}
+
+    agent do
+      name "no_memory_agent"
+      path :domain
+      description "Agent with memory slice disabled"
+      schema value: [type: :integer, default: 0]
+    end
   end
 
   # ===========================================================================

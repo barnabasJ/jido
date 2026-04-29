@@ -44,14 +44,22 @@ defmodule JidoTest.Memory.SliceTest do
 
   describe "agent integration" do
     defmodule AgentWithMemory do
-      use Jido.Agent, name: "memory_slice_test_agent", path: :domain
+      use Jido.Agent
+
+      agent do
+        name "memory_slice_test_agent"
+        path :domain
+      end
     end
 
     defmodule AgentWithoutMemory do
       use Jido.Agent,
-        name: "memory_slice_test_no_memory",
-        path: :domain,
         default_slices: %{memory: false}
+
+      agent do
+        name "memory_slice_test_no_memory"
+        path :domain
+      end
     end
 
     test "agent includes memory slice by default" do

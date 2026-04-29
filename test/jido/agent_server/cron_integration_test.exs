@@ -12,7 +12,12 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
   defmodule CronCountAction do
     @moduledoc false
-    use Jido.Action, name: "cron_count", schema: []
+    use Jido.Action
+
+    action do
+      name "cron_count"
+      schema []
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
@@ -23,7 +28,12 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
   defmodule RegisterCronAction do
     @moduledoc false
-    use Jido.Action, name: "register_cron", schema: []
+    use Jido.Action
+
+    action do
+      name "register_cron"
+      schema []
+    end
 
     def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
       cron_expr = Map.get(params, :cron)
@@ -38,7 +48,12 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
   defmodule CancelCronAction do
     @moduledoc false
-    use Jido.Action, name: "cancel_cron", schema: []
+    use Jido.Action
+
+    action do
+      name "cancel_cron"
+      schema []
+    end
 
     def run(%Jido.Signal{data: %{job_id: job_id}}, _slice, _opts, _ctx) do
       {:ok, %{}, [Directive.cron_cancel(job_id)]}
@@ -47,13 +62,13 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
 
   defmodule CronTestAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "cron_test_agent",
-      path: :domain,
-      schema: [
-        tick_count: [type: :integer, default: 0],
-        ticks: [type: {:list, :any}, default: []]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "cron_test_agent"
+      path :domain
+      schema tick_count: [type: :integer, default: 0], ticks: [type: {:list, :any}, default: []]
+    end
 
     def signal_routes(_ctx) do
       [

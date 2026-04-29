@@ -36,11 +36,7 @@ defmodule Jido.Dsl.AgentExtensionsOrderTest do
   defmodule OrderedAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [
-        MiddlewareA,
-        MiddlewareB,
-        MiddlewareC
-      ]
+      extensions: [MiddlewareA, MiddlewareB, MiddlewareC]
 
     agent do
       name "ordered_agent"
@@ -55,11 +51,7 @@ defmodule Jido.Dsl.AgentExtensionsOrderTest do
   defmodule InterleavedAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [
-        MiddlewareA,
-        MiddlewareC,
-        MiddlewareB
-      ]
+      extensions: [MiddlewareA, MiddlewareC, MiddlewareB]
 
     agent do
       name "interleaved_agent"

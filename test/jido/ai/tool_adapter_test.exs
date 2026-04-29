@@ -5,10 +5,13 @@ defmodule Jido.AI.ToolAdapterTest do
 
   defmodule EmptySchemaAction do
     @moduledoc false
-    use Jido.Action,
-      name: "empty_action",
-      description: "An action with no parameters",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "empty_action"
+      description "An action with no parameters"
+      schema []
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
@@ -16,13 +19,17 @@ defmodule Jido.AI.ToolAdapterTest do
 
   defmodule ParamAction do
     @moduledoc false
-    use Jido.Action,
-      name: "param_action",
-      description: "An action with parameters",
-      schema: [
+    use Jido.Action
+
+    action do
+      name "param_action"
+      description "An action with parameters"
+
+      schema(
         query: [type: :string, required: true, doc: "Search query"],
         limit: [type: :integer, default: 10, doc: "Max results"]
-      ]
+      )
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
@@ -30,12 +37,13 @@ defmodule Jido.AI.ToolAdapterTest do
 
   defmodule StrictAction do
     @moduledoc false
-    use Jido.Action,
-      name: "strict_action",
-      description: "An action that explicitly opts into strict mode",
-      schema: [
-        value: [type: :string, required: true, doc: "A value"]
-      ]
+    use Jido.Action
+
+    action do
+      name "strict_action"
+      description "An action that explicitly opts into strict mode"
+      schema value: [type: :string, required: true, doc: "A value"]
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
@@ -45,14 +53,18 @@ defmodule Jido.AI.ToolAdapterTest do
 
   defmodule NestedSchemaAction do
     @moduledoc false
-    use Jido.Action,
-      name: "nested_action",
-      description: "An action with nested objects",
-      schema: [
+    use Jido.Action
+
+    action do
+      name "nested_action"
+      description "An action with nested objects"
+
+      schema(
         name: [type: :string, required: true, doc: "Name"],
         config: [type: :map, required: true, doc: "Configuration object"],
         items: [type: {:list, :map}, required: true, doc: "List of objects"]
-      ]
+      )
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
@@ -239,10 +251,13 @@ defmodule Jido.AI.ToolAdapterTest do
   describe "duplicate detection" do
     defmodule DuplicateNameAction do
       @moduledoc false
-      use Jido.Action,
-        name: "param_action",
-        description: "Same name as ParamAction",
-        schema: []
+      use Jido.Action
+
+      action do
+        name "param_action"
+        description "Same name as ParamAction"
+        schema []
+      end
 
       @impl true
       def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
@@ -257,10 +272,13 @@ defmodule Jido.AI.ToolAdapterTest do
     test "from_actions raises on duplicate names after prefix" do
       defmodule AAction do
         @moduledoc false
-        use Jido.Action,
-          name: "action",
-          description: "First action",
-          schema: []
+        use Jido.Action
+
+        action do
+          name "action"
+          description "First action"
+          schema []
+        end
 
         @impl true
         def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
@@ -268,10 +286,13 @@ defmodule Jido.AI.ToolAdapterTest do
 
       defmodule BAction do
         @moduledoc false
-        use Jido.Action,
-          name: "action",
-          description: "Second action with same name",
-          schema: []
+        use Jido.Action
+
+        action do
+          name "action"
+          description "Second action with same name"
+          schema []
+        end
 
         @impl true
         def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}

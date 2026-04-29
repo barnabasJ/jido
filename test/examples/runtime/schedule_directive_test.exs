@@ -25,12 +25,12 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
 
   defmodule StartTimerAction do
     @moduledoc false
-    use Jido.Action,
-      name: "start_timer",
-      schema: [
-        delay_ms: [type: :integer, default: 100],
-        timer_id: [type: :string, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "start_timer"
+      schema delay_ms: [type: :integer, default: 100], timer_id: [type: :string, required: true]
+    end
 
     def run(%Jido.Signal{data: %{delay_ms: delay_ms, timer_id: timer_id}}, _slice, _opts, _ctx) do
       tick_signal = Signal.new!("timer.tick", %{timer_id: timer_id}, source: "/timer")
@@ -46,11 +46,12 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
 
   defmodule HandleTickAction do
     @moduledoc false
-    use Jido.Action,
-      name: "handle_tick",
-      schema: [
-        timer_id: [type: :string, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "handle_tick"
+      schema timer_id: [type: :string, required: true]
+    end
 
     def run(%Jido.Signal{data: %{timer_id: timer_id}}, slice, _opts, _ctx) do
       tick_count = Map.get(slice, :tick_count, 0) + 1
@@ -60,12 +61,14 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
 
   defmodule StartRetryableAction do
     @moduledoc false
-    use Jido.Action,
-      name: "start_retryable",
-      schema: [
-        max_attempts: [type: :integer, default: 3],
-        retry_delay_ms: [type: :integer, default: 50]
-      ]
+    use Jido.Action
+
+    action do
+      name "start_retryable"
+
+      schema max_attempts: [type: :integer, default: 3],
+             retry_delay_ms: [type: :integer, default: 50]
+    end
 
     def run(%Jido.Signal{data: %{max_attempts: max, retry_delay_ms: delay}}, _slice, _opts, _ctx) do
       retry_signal = Signal.new!("retry.attempt", %{}, source: "/retry")
@@ -82,9 +85,12 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
 
   defmodule HandleRetryAction do
     @moduledoc false
-    use Jido.Action,
-      name: "handle_retry",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "handle_retry"
+      schema []
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       attempts = Map.get(slice, :attempts, 0) + 1
@@ -108,12 +114,14 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
 
   defmodule StartTimeoutAction do
     @moduledoc false
-    use Jido.Action,
-      name: "start_timeout",
-      schema: [
-        timeout_ms: [type: :integer, default: 200],
-        request_id: [type: :string, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "start_timeout"
+
+      schema timeout_ms: [type: :integer, default: 200],
+             request_id: [type: :string, required: true]
+    end
 
     def run(
           %Jido.Signal{data: %{timeout_ms: timeout_ms, request_id: request_id}},
@@ -135,12 +143,12 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
 
   defmodule HandleResponseAction do
     @moduledoc false
-    use Jido.Action,
-      name: "handle_response",
-      schema: [
-        request_id: [type: :string, required: true],
-        result: [type: :any, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "handle_response"
+      schema request_id: [type: :string, required: true], result: [type: :any, required: true]
+    end
 
     def run(%Jido.Signal{data: %{request_id: request_id, result: result}}, slice, _opts, _ctx) do
       pending = Map.get(slice, :pending_request)
@@ -155,11 +163,12 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
 
   defmodule HandleTimeoutAction do
     @moduledoc false
-    use Jido.Action,
-      name: "handle_timeout",
-      schema: [
-        request_id: [type: :string, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "handle_timeout"
+      schema request_id: [type: :string, required: true]
+    end
 
     def run(%Jido.Signal{data: %{request_id: request_id}}, slice, _opts, _ctx) do
       pending = Map.get(slice, :pending_request)
@@ -178,10 +187,13 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
 
   defmodule TimerAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "timer_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "timer_agent"
+      path :domain
+
+      schema(
         status: [type: :atom, default: :idle],
         timer_id: [type: :string, default: nil],
         tick_count: [type: :integer, default: 0],
@@ -193,7 +205,8 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
         request_id: [type: :string, default: nil],
         pending_request: [type: :string, default: nil],
         started_at: [type: :any, default: nil]
-      ]
+      )
+    end
 
     def signal_routes(_ctx) do
       [

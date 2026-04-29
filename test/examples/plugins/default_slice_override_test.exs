@@ -22,17 +22,22 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
 
   defmodule CustomThreadSlice do
     @moduledoc false
-    use Jido.Slice,
-      name: "custom_thread",
-      path: :thread,
-      actions: [],
-      singleton: true,
-      schema:
+    use Jido.Slice
+
+    slice do
+      name "custom_thread"
+      path :thread
+      singleton true
+
+      schema(
         Zoi.object(%{
           custom_initialized: Zoi.boolean() |> Zoi.default(true),
           max_entries: Zoi.integer() |> Zoi.default(500)
-        }),
-      description: "Custom replacement for the default thread slice."
+        })
+      )
+
+      description "Custom replacement for the default thread slice."
+    end
   end
 
   # ===========================================================================
@@ -41,61 +46,66 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
 
   defmodule DefaultAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "default_agent",
-      path: :domain,
-      description: "Plain agent — gets Thread.Slice automatically",
-      schema: [
-        status: [type: :atom, default: :idle]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "default_agent"
+      path :domain
+      description "Plain agent — gets Thread.Slice automatically"
+      schema status: [type: :atom, default: :idle]
+    end
   end
 
   defmodule OverriddenAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "overridden_agent",
-      path: :domain,
-      description: "Replaces Thread.Slice with CustomThreadSlice",
-      schema: [
-        status: [type: :atom, default: :idle]
-      ],
       default_slices: %{thread: CustomThreadSlice}
+
+    agent do
+      name "overridden_agent"
+      path :domain
+      description "Replaces Thread.Slice with CustomThreadSlice"
+      schema status: [type: :atom, default: :idle]
+    end
   end
 
   defmodule ConfiguredAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "configured_agent",
-      path: :domain,
-      description: "Replaces Thread.Slice with CustomThreadSlice + config",
-      schema: [
-        status: [type: :atom, default: :idle]
-      ],
       default_slices: %{thread: {CustomThreadSlice, %{max_entries: 50}}}
+
+    agent do
+      name "configured_agent"
+      path :domain
+      description "Replaces Thread.Slice with CustomThreadSlice + config"
+      schema status: [type: :atom, default: :idle]
+    end
   end
 
   defmodule DisabledAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "disabled_agent",
-      path: :domain,
-      description: "Disables only the thread default slice",
-      schema: [
-        status: [type: :atom, default: :idle]
-      ],
       default_slices: %{thread: false}
+
+    agent do
+      name "disabled_agent"
+      path :domain
+      description "Disables only the thread default slice"
+      schema status: [type: :atom, default: :idle]
+    end
   end
 
   defmodule BareAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "bare_agent",
-      path: :domain,
-      description: "Disables all default slices entirely",
-      schema: [
-        status: [type: :atom, default: :idle]
-      ],
       default_slices: false
+
+    agent do
+      name "bare_agent"
+      path :domain
+      description "Disables all default slices entirely"
+      schema status: [type: :atom, default: :idle]
+    end
   end
 
   # ===========================================================================

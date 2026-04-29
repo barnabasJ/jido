@@ -17,7 +17,11 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
 
   defmodule SetMultipleKeysAction do
     @moduledoc false
-    use Jido.Action, name: "set_multiple"
+    use Jido.Action
+
+    action do
+      name "set_multiple"
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       slice = slice || %{}
@@ -27,7 +31,11 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
 
   defmodule ObserveAction do
     @moduledoc false
-    use Jido.Action, name: "observe"
+    use Jido.Action
+
+    action do
+      name "observe"
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       slice = slice || %{}
@@ -45,10 +53,13 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
 
   defmodule AtomicityAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "atomicity_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "atomicity_agent"
+      path :domain
+
+      schema(
         cmd_ran: [type: :boolean, default: false],
         key_a: [type: :boolean, default: false],
         key_b: [type: :boolean, default: false],
@@ -57,7 +68,8 @@ defmodule JidoTest.AgentServer.MultiDirectiveAtomicityTest do
         saw_a: [type: :boolean, default: false],
         saw_b: [type: :boolean, default: false],
         saw_c: [type: :boolean, default: false]
-      ]
+      )
+    end
 
     def signal_routes(_ctx) do
       [

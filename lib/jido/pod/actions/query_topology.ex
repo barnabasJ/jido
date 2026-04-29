@@ -10,7 +10,12 @@ defmodule Jido.Pod.Actions.QueryTopology do
       jido.pod.query.topology.error → %{reason: term}
   """
 
-  use Jido.Action, name: "pod_query_topology", schema: []
+  use Jido.Action
+
+  action do
+    name "pod_query_topology"
+    schema []
+  end
 
   alias Jido.Signal.Call
 

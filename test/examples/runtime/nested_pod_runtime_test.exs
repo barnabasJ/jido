@@ -30,12 +30,13 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
 
   defmodule WorkflowWorkerAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "example_nested_pod_worker",
-      path: :domain,
-      schema: [
-        role: [type: :string, default: "worker"]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "example_nested_pod_worker"
+      path :domain
+      schema role: [type: :string, default: "worker"]
+    end
   end
 
   defmodule EditorialPod do

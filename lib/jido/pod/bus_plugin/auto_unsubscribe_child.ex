@@ -10,15 +10,17 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
   subscriptions don't accumulate across spawn/exit cycles.
   """
 
-  use Jido.Action,
-    name: "pod_auto_unsubscribe_child",
-    description: "Unsubscribe a pod child from the pod bus on child.exit.",
-    path: :pod_bus,
-    schema: [
-      tag: [type: :any, required: true],
-      pid: [type: :any, required: false],
-      reason: [type: :any, required: false]
-    ]
+  use Jido.Action
+
+  action do
+    name "pod_auto_unsubscribe_child"
+    description "Unsubscribe a pod child from the pod bus on child.exit."
+    path :pod_bus
+
+    schema tag: [type: :any, required: true],
+           pid: [type: :any, required: false],
+           reason: [type: :any, required: false]
+  end
 
   require Logger
 

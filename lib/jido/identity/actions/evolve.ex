@@ -7,14 +7,16 @@ defmodule Jido.Identity.Actions.Evolve do
   slice — see `Jido.Identity.Slice`.
   """
 
-  use Jido.Action,
-    name: "identity_evolve",
-    path: :identity,
-    description: "Evolve agent identity over simulated time",
-    schema: [
-      days: [type: :integer, default: 0, doc: "Days of simulated time to add"],
-      years: [type: :integer, default: 0, doc: "Years of simulated time to add"]
-    ]
+  use Jido.Action
+
+  action do
+    name "identity_evolve"
+    path :identity
+    description "Evolve agent identity over simulated time"
+
+    schema days: [type: :integer, default: 0, doc: "Days of simulated time to add"],
+           years: [type: :integer, default: 0, doc: "Years of simulated time to add"]
+  end
 
   def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
     identity = slice || Jido.Identity.new()

@@ -121,12 +121,18 @@ defmodule Jido.Igniter.Templates do
   def sensor_template(module, name, interval) do
     """
     defmodule #{module} do
-      use Jido.Sensor,
-        name: "#{name}",
-        description: "TODO: Add description",
-        schema: Zoi.object(%{
-          interval: Zoi.integer() |> Zoi.default(#{interval})
-        })
+      use Jido.Sensor
+
+      sensor do
+        name "#{name}"
+        description "TODO: Add description"
+
+        schema(
+          Zoi.object(%{
+            interval: Zoi.integer() |> Zoi.default(#{interval})
+          })
+        )
+      end
 
       @impl true
       def init(config, _context) do

@@ -23,12 +23,13 @@ defmodule JidoTest.AgentServerCoverageTest do
   # Simple test agent with defaults
   defmodule SimpleTestAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "simple_test_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "simple_test_agent"
+      path :domain
+      schema counter: [type: :integer, default: 0]
+    end
 
     def signal_routes(_ctx) do
       [{"increment", JidoTest.TestActions.IncrementAction}]
@@ -38,11 +39,12 @@ defmodule JidoTest.AgentServerCoverageTest do
   # Action that generates many directives for queue overflow testing
   defmodule ManyDirectivesAction do
     @moduledoc false
-    use Jido.Action,
-      name: "many_directives",
-      schema: [
-        count: [type: :integer, default: 10]
-      ]
+    use Jido.Action
+
+    action do
+      name "many_directives"
+      schema count: [type: :integer, default: 10]
+    end
 
     alias Jido.Agent.Directive
 
@@ -59,13 +61,13 @@ defmodule JidoTest.AgentServerCoverageTest do
 
   defmodule ManyDirectivesAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "many_directives_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0],
-        directive_count: [type: :integer, default: 0]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "many_directives_agent"
+      path :domain
+      schema counter: [type: :integer, default: 0], directive_count: [type: :integer, default: 0]
+    end
 
     def signal_routes(_ctx) do
       [{"many_directives", ManyDirectivesAction}]
@@ -75,7 +77,12 @@ defmodule JidoTest.AgentServerCoverageTest do
   # Actions for await_completion testing - defined before agent that uses them
   defmodule CompleteAction do
     @moduledoc false
-    use Jido.Action, name: "complete", schema: []
+    use Jido.Action
+
+    action do
+      name "complete"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{status: :completed, last_answer: "done!"}, []}
@@ -84,7 +91,12 @@ defmodule JidoTest.AgentServerCoverageTest do
 
   defmodule FailAction do
     @moduledoc false
-    use Jido.Action, name: "fail", schema: []
+    use Jido.Action
+
+    action do
+      name "fail"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{status: :failed, error: "something went wrong"}, []}
@@ -93,9 +105,12 @@ defmodule JidoTest.AgentServerCoverageTest do
 
   defmodule DelayCompleteAction do
     @moduledoc false
-    use Jido.Action,
-      name: "delay_complete",
-      schema: [delay_ms: [type: :integer, default: 50]]
+    use Jido.Action
+
+    action do
+      name "delay_complete"
+      schema delay_ms: [type: :integer, default: 50]
+    end
 
     def run(%Jido.Signal{data: %{delay_ms: delay}}, _slice, _opts, _ctx) do
       Process.sleep(delay)
@@ -106,14 +121,18 @@ defmodule JidoTest.AgentServerCoverageTest do
   # Agent for await_completion testing
   defmodule CompletionAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "completion_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "completion_agent"
+      path :domain
+
+      schema(
         status: [type: :atom, default: :pending],
         last_answer: [type: :any, default: nil],
         error: [type: :any, default: nil]
-      ]
+      )
+    end
 
     def signal_routes(_ctx) do
       [

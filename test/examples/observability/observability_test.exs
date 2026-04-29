@@ -85,11 +85,12 @@ defmodule JidoExampleTest.ObservabilityTest do
 
   defmodule ObservedWorkAction do
     @moduledoc false
-    use Jido.Action,
-      name: "observed_work",
-      schema: [
-        work_units: [type: :integer, default: 10]
-      ]
+    use Jido.Action
+
+    action do
+      name "observed_work"
+      schema work_units: [type: :integer, default: 10]
+    end
 
     def run(%Jido.Signal{data: params}, _slice, _opts, ctx) do
       agent_id = Map.get(ctx, :agent_id, "unknown")
@@ -108,11 +109,12 @@ defmodule JidoExampleTest.ObservabilityTest do
 
   defmodule ObservedAsyncAction do
     @moduledoc false
-    use Jido.Action,
-      name: "observed_async",
-      schema: [
-        delay_ms: [type: :integer, default: 10]
-      ]
+    use Jido.Action
+
+    action do
+      name "observed_async"
+      schema delay_ms: [type: :integer, default: 10]
+    end
 
     def run(%Jido.Signal{data: params}, _slice, _opts, ctx) do
       agent_id = Map.get(ctx, :agent_id, "unknown")
@@ -142,13 +144,15 @@ defmodule JidoExampleTest.ObservabilityTest do
 
   defmodule ObserveExampleAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "observe_example_agent",
-      path: :domain,
-      schema: [
-        last_result: [type: :integer, default: nil],
-        async_result: [type: :integer, default: nil]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "observe_example_agent"
+      path :domain
+
+      schema last_result: [type: :integer, default: nil],
+             async_result: [type: :integer, default: nil]
+    end
 
     def signal_routes(_ctx) do
       [

@@ -5,16 +5,18 @@ defmodule JidoTest.Sensor.TranslationTest do
 
   defmodule SimpleSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "simple_sensor",
-      description: "A simple test sensor that translates events to signals",
-      schema:
-        Zoi.object(
-          %{
-            prefix: Zoi.string() |> Zoi.default("test")
-          },
+    use Jido.Sensor
+
+    sensor do
+      name "simple_sensor"
+      description "A simple test sensor that translates events to signals"
+
+      schema(
+        Zoi.object(%{prefix: Zoi.string() |> Zoi.default("test")},
           coerce: true
         )
+      )
+    end
 
     @impl Jido.Sensor
     def init(config, context) do
@@ -51,9 +53,12 @@ defmodule JidoTest.Sensor.TranslationTest do
 
   defmodule SchedulingSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "scheduling_sensor",
-      description: "A sensor that uses scheduling directives"
+    use Jido.Sensor
+
+    sensor do
+      name "scheduling_sensor"
+      description "A sensor that uses scheduling directives"
+    end
 
     @impl Jido.Sensor
     def init(config, context) do
@@ -96,9 +101,12 @@ defmodule JidoTest.Sensor.TranslationTest do
 
   defmodule MinimalSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "minimal_sensor",
-      description: "A minimal sensor with no schema"
+    use Jido.Sensor
+
+    sensor do
+      name "minimal_sensor"
+      description "A minimal sensor with no schema"
+    end
 
     @impl Jido.Sensor
     def init(_config, _context) do

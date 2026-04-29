@@ -26,12 +26,12 @@ defmodule JidoExampleTest.ThreadSliceTest do
 
   defmodule RecordMessageAction do
     @moduledoc false
-    use Jido.Action,
-      name: "record_message",
-      schema: [
-        role: [type: :string, required: true],
-        content: [type: :string, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "record_message"
+      schema role: [type: :string, required: true], content: [type: :string, required: true]
+    end
 
     def run(%Jido.Signal{data: %{role: role, content: content}}, slice, _opts, _ctx) do
       thread =
@@ -49,9 +49,12 @@ defmodule JidoExampleTest.ThreadSliceTest do
 
   defmodule SummarizeAction do
     @moduledoc false
-    use Jido.Action,
-      name: "summarize",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "summarize"
+      schema []
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       thread = Map.get(slice, :thread)
@@ -72,14 +75,14 @@ defmodule JidoExampleTest.ThreadSliceTest do
 
   defmodule ChatAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "chat_agent",
-      path: :domain,
-      description: "Agent with default thread slice for conversation history",
-      schema: [
-        last_role: [type: :string, default: nil],
-        summary: [type: :string, default: nil]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "chat_agent"
+      path :domain
+      description "Agent with default thread slice for conversation history"
+      schema last_role: [type: :string, default: nil], summary: [type: :string, default: nil]
+    end
 
     def signal_routes(_ctx) do
       [
@@ -92,13 +95,14 @@ defmodule JidoExampleTest.ThreadSliceTest do
   defmodule StatelessAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "stateless_agent",
-      path: :domain,
-      description: "Agent with thread slice explicitly disabled",
-      default_slices: %{thread: false},
-      schema: [
-        value: [type: :integer, default: 0]
-      ]
+      default_slices: %{thread: false}
+
+    agent do
+      name "stateless_agent"
+      path :domain
+      description "Agent with thread slice explicitly disabled"
+      schema value: [type: :integer, default: 0]
+    end
   end
 
   # ===========================================================================

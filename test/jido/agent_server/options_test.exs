@@ -7,10 +7,13 @@ defmodule JidoTest.AgentServer.OptionsTest do
 
   defmodule ValidAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "valid_agent",
-      path: :domain,
-      schema: [value: [type: :integer, default: 0]]
+    use Jido.Agent
+
+    agent do
+      name "valid_agent"
+      path :domain
+      schema value: [type: :integer, default: 0]
+    end
   end
 
   describe "new/1 with keyword list" do

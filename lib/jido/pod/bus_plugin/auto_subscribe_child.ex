@@ -14,19 +14,21 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
   `state.children` — this action is purely additive.
   """
 
-  use Jido.Action,
-    name: "pod_auto_subscribe_child",
-    description: "Subscribe a pod child's pid to its signal_routes paths on the pod bus.",
-    path: :pod_bus,
-    schema: [
-      pid: [type: :any, required: true],
-      child_module: [type: :atom, required: true],
-      tag: [type: :any, required: true],
-      parent_id: [type: :string, required: false],
-      child_id: [type: :string, required: false],
-      child_partition: [type: :any, required: false],
-      meta: [type: :map, required: false]
-    ]
+  use Jido.Action
+
+  action do
+    name "pod_auto_subscribe_child"
+    description "Subscribe a pod child's pid to its signal_routes paths on the pod bus."
+    path :pod_bus
+
+    schema pid: [type: :any, required: true],
+           child_module: [type: :atom, required: true],
+           tag: [type: :any, required: true],
+           parent_id: [type: :string, required: false],
+           child_id: [type: :string, required: false],
+           child_partition: [type: :any, required: false],
+           meta: [type: :map, required: false]
+  end
 
   require Logger
 

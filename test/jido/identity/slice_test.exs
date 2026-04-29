@@ -44,14 +44,22 @@ defmodule JidoTest.Identity.SliceTest do
 
   describe "agent integration" do
     defmodule AgentWithIdentity do
-      use Jido.Agent, name: "identity_slice_test_agent", path: :domain
+      use Jido.Agent
+
+      agent do
+        name "identity_slice_test_agent"
+        path :domain
+      end
     end
 
     defmodule AgentWithoutIdentity do
       use Jido.Agent,
-        name: "identity_slice_test_no_identity",
-        path: :domain,
         default_slices: %{identity: false}
+
+      agent do
+        name "identity_slice_test_no_identity"
+        path :domain
+      end
     end
 
     test "agent includes identity slice by default" do

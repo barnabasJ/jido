@@ -23,7 +23,7 @@ defmodule Jido.Pod.Plugin do
 
   @capability :pod
 
-  use Jido.Slice
+  use Jido.Plugin
 
   slice do
     name "pod"

@@ -6,9 +6,12 @@ defmodule JidoTest.Plugin.RoutesTest do
 
   defmodule TestAction1 do
     @moduledoc false
-    use Jido.Action,
-      name: "test_action_1",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "test_action_1"
+      schema []
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
@@ -16,9 +19,12 @@ defmodule JidoTest.Plugin.RoutesTest do
 
   defmodule TestAction2 do
     @moduledoc false
-    use Jido.Action,
-      name: "test_action_2",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "test_action_2"
+      schema []
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
@@ -26,9 +32,12 @@ defmodule JidoTest.Plugin.RoutesTest do
 
   defmodule TestAction3 do
     @moduledoc false
-    use Jido.Action,
-      name: "test_action_3",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "test_action_3"
+      schema []
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}

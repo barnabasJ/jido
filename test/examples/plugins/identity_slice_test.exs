@@ -27,12 +27,14 @@ defmodule JidoExampleTest.IdentitySliceTest do
 
   defmodule CustomIdentitySlice do
     @moduledoc false
-    use Jido.Slice,
-      name: "custom_identity",
-      path: :identity,
-      actions: [],
-      singleton: true,
-      description: "Custom identity slice override."
+    use Jido.Slice
+
+    slice do
+      name "custom_identity"
+      path :identity
+      singleton true
+      description "Custom identity slice override."
+    end
   end
 
   # ===========================================================================
@@ -41,11 +43,14 @@ defmodule JidoExampleTest.IdentitySliceTest do
 
   defmodule WebCrawlerAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "web_crawler",
-      path: :domain,
-      description: "Agent with identity for capability-based routing",
-      schema: []
+    use Jido.Agent
+
+    agent do
+      name "web_crawler"
+      path :domain
+      description "Agent with identity for capability-based routing"
+      schema []
+    end
 
     def signal_routes(_ctx) do
       [
@@ -57,27 +62,27 @@ defmodule JidoExampleTest.IdentitySliceTest do
   defmodule PreConfiguredAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "pre_configured",
-      path: :domain,
-      description: "Agent with custom identity slice that overrides the default",
-      default_slices: %{
-        identity: CustomIdentitySlice
-      },
-      schema: [
-        status: [type: :atom, default: :idle]
-      ]
+      default_slices: %{identity: CustomIdentitySlice}
+
+    agent do
+      name "pre_configured"
+      path :domain
+      description "Agent with custom identity slice that overrides the default"
+      schema status: [type: :atom, default: :idle]
+    end
   end
 
   defmodule NoIdentityAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "no_identity",
-      path: :domain,
-      description: "Agent with identity slice disabled",
-      default_slices: %{identity: false},
-      schema: [
-        value: [type: :integer, default: 0]
-      ]
+      default_slices: %{identity: false}
+
+    agent do
+      name "no_identity"
+      path :domain
+      description "Agent with identity slice disabled"
+      schema value: [type: :integer, default: 0]
+    end
   end
 
   # ===========================================================================

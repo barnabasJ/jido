@@ -26,11 +26,12 @@ defmodule JidoExampleTest.PluginBasicsTest do
 
   defmodule AddNoteAction do
     @moduledoc false
-    use Jido.Action,
-      name: "add_note",
-      schema: [
-        text: [type: :string, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "add_note"
+      schema text: [type: :string, required: true]
+    end
 
     def run(%Jido.Signal{data: %{text: text}}, slice, _opts, _ctx) do
       notes = get_in(slice, [:notes, :entries]) || []
@@ -41,9 +42,12 @@ defmodule JidoExampleTest.PluginBasicsTest do
 
   defmodule ClearNotesAction do
     @moduledoc false
-    use Jido.Action,
-      name: "clear_notes",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "clear_notes"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{notes: %{entries: []}}, []}
@@ -56,19 +60,19 @@ defmodule JidoExampleTest.PluginBasicsTest do
 
   defmodule NotesPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "notes_plugin",
-      path: :notes,
-      actions: [
-        JidoExampleTest.PluginBasicsTest.AddNoteAction,
-        JidoExampleTest.PluginBasicsTest.ClearNotesAction
-      ],
-      description: "Manages a list of notes",
-      schema:
-        Zoi.object(%{
-          entries: Zoi.list(Zoi.any()) |> Zoi.default([])
-        }),
-      signal_patterns: ["notes.*"]
+    use Jido.Plugin
+
+    slice do
+      name "notes_plugin"
+      path :notes
+      description "Manages a list of notes"
+      schema Zoi.object(%{entries: Zoi.list(Zoi.any()) |> Zoi.default([])})
+    end
+
+    actions do
+      action JidoExampleTest.PluginBasicsTest.AddNoteAction
+      action JidoExampleTest.PluginBasicsTest.ClearNotesAction
+    end
 
     def mount(_agent, config) do
       label = Map.get(config, :label, "default")
@@ -90,17 +94,23 @@ defmodule JidoExampleTest.PluginBasicsTest do
   defmodule NotesAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "notes_agent",
-      path: :domain,
-      plugins: [JidoExampleTest.PluginBasicsTest.NotesPlugin]
+      extensions: [JidoExampleTest.PluginBasicsTest.NotesPlugin]
+
+    agent do
+      name "notes_agent"
+      path :domain
+    end
   end
 
   defmodule ConfiguredNotesAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "configured_notes_agent",
-      path: :domain,
-      plugins: [{JidoExampleTest.PluginBasicsTest.NotesPlugin, %{label: "work"}}]
+      extensions: [{JidoExampleTest.PluginBasicsTest.NotesPlugin, %{label: "work"}}]
+
+    agent do
+      name "configured_notes_agent"
+      path :domain
+    end
   end
 
   # ===========================================================================

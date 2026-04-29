@@ -7,16 +7,18 @@ defmodule JidoTest.Sensor.RuntimeTest do
 
   defmodule SimpleSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "simple_sensor",
-      description: "A simple test sensor",
-      schema:
-        Zoi.object(
-          %{
-            prefix: Zoi.string() |> Zoi.default("test")
-          },
+    use Jido.Sensor
+
+    sensor do
+      name "simple_sensor"
+      description "A simple test sensor"
+
+      schema(
+        Zoi.object(%{prefix: Zoi.string() |> Zoi.default("test")},
           coerce: true
         )
+      )
+    end
 
     @impl Jido.Sensor
     def init(config, context) do
@@ -53,16 +55,18 @@ defmodule JidoTest.Sensor.RuntimeTest do
 
   defmodule SchedulingSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "scheduling_sensor",
-      description: "A sensor that schedules ticks on init",
-      schema:
-        Zoi.object(
-          %{
-            interval: Zoi.integer() |> Zoi.default(100)
-          },
+    use Jido.Sensor
+
+    sensor do
+      name "scheduling_sensor"
+      description "A sensor that schedules ticks on init"
+
+      schema(
+        Zoi.object(%{interval: Zoi.integer() |> Zoi.default(100)},
           coerce: true
         )
+      )
+    end
 
     @impl Jido.Sensor
     def init(config, context) do
@@ -93,16 +97,18 @@ defmodule JidoTest.Sensor.RuntimeTest do
 
   defmodule CustomEventSchedulingSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "custom_event_sensor",
-      description: "A sensor that schedules custom events",
-      schema:
-        Zoi.object(
-          %{
-            interval: Zoi.integer() |> Zoi.default(50)
-          },
+    use Jido.Sensor
+
+    sensor do
+      name "custom_event_sensor"
+      description "A sensor that schedules custom events"
+
+      schema(
+        Zoi.object(%{interval: Zoi.integer() |> Zoi.default(50)},
           coerce: true
         )
+      )
+    end
 
     @impl Jido.Sensor
     def init(config, context) do
@@ -133,10 +139,13 @@ defmodule JidoTest.Sensor.RuntimeTest do
 
   defmodule MinimalSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "minimal_sensor",
-      description: "A minimal sensor with empty schema",
-      schema: Zoi.object(%{}, coerce: true)
+    use Jido.Sensor
+
+    sensor do
+      name "minimal_sensor"
+      description "A minimal sensor with empty schema"
+      schema Zoi.object(%{}, coerce: true)
+    end
 
     @impl Jido.Sensor
     def init(_config, _context) do
@@ -151,10 +160,13 @@ defmodule JidoTest.Sensor.RuntimeTest do
 
   defmodule FailingInitSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "failing_init_sensor",
-      description: "A sensor that fails to initialize",
-      schema: Zoi.object(%{}, coerce: true)
+    use Jido.Sensor
+
+    sensor do
+      name "failing_init_sensor"
+      description "A sensor that fails to initialize"
+      schema Zoi.object(%{}, coerce: true)
+    end
 
     @impl Jido.Sensor
     def init(_config, _context) do
@@ -189,16 +201,18 @@ defmodule JidoTest.Sensor.RuntimeTest do
 
   defmodule RequiredFieldSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "required_field_sensor",
-      description: "A sensor with required schema fields",
-      schema:
-        Zoi.object(
-          %{
-            required_field: Zoi.string()
-          },
+    use Jido.Sensor
+
+    sensor do
+      name "required_field_sensor"
+      description "A sensor with required schema fields"
+
+      schema(
+        Zoi.object(%{required_field: Zoi.string()},
           coerce: true
         )
+      )
+    end
 
     @impl Jido.Sensor
     def init(config, _context) do
@@ -213,16 +227,18 @@ defmodule JidoTest.Sensor.RuntimeTest do
 
   defmodule ReschedulingSensor do
     @moduledoc false
-    use Jido.Sensor,
-      name: "rescheduling_sensor",
-      description: "A sensor that reschedules itself",
-      schema:
-        Zoi.object(
-          %{
-            interval: Zoi.integer() |> Zoi.default(30)
-          },
+    use Jido.Sensor
+
+    sensor do
+      name "rescheduling_sensor"
+      description "A sensor that reschedules itself"
+
+      schema(
+        Zoi.object(%{interval: Zoi.integer() |> Zoi.default(30)},
           coerce: true
         )
+      )
+    end
 
     @impl Jido.Sensor
     def init(config, context) do

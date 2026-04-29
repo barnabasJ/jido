@@ -4,9 +4,12 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
   # Test action
   defmodule SimpleAction do
     @moduledoc false
-    use Jido.Action,
-      name: "simple_action",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "simple_action"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
   end

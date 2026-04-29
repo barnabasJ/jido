@@ -5,7 +5,7 @@ defmodule Jido.AI.ReActE2ETest do
 
   These exercise the real `ReqLLM.Generation.generate_text/3` path — no
   Mimic stubs — through the full slice composition pattern: a regular
-  `Jido.Agent` with `Jido.AI.ReAct` attached via `slices:`, started
+  `Jido.Agent` with `Jido.AI.ReAct` attached via `extensions:`, started
   under `Jido.AgentServer`, queried via `Jido.AI.ask_sync/3`. Requires a
   model running at the configured base URL.
 
@@ -17,75 +17,95 @@ defmodule Jido.AI.ReActE2ETest do
 
       mix test --include e2e
 
-  Configurable via env vars:
-
-    * `LMSTUDIO_BASE_URL` (default `http://localhost:1234/v1`)
-    * `LMSTUDIO_MODEL`    (default `google/gemma-4-26b-a4b`)
-    * `LMSTUDIO_API_KEY`  (default `lm-studio` — LM Studio ignores it)
+  The model identity (provider, id, base url) and api key are inlined as
+  literals to keep the agent's `extensions:` value `Macro.quoted_literal?`-
+  friendly. Adjust them to point at a different local model server if
+  needed.
   """
 
   use JidoTest.Case, async: false
 
-  alias Jido.AI.TestActions.{TestAdd, TestEcho}
-
   @moduletag :e2e
   @moduletag timeout: 120_000
 
+  # Spark's `use Jido.Agent, extensions: ...` macro requires a literal AST
+  # (`Macro.quoted_literal?`); `System.get_env/2` inside the literal
+  # defeats the check. Hardcode the LM Studio defaults here — match the
+  # `LMSTUDIO_*` env-var fallbacks the tests previously read.
+
   defmodule NoToolsAgent do
     @moduledoc false
+
     use Jido.Agent,
-      name: "react_e2e_no_tools",
-      path: :state,
-      slices: [
+      extensions: [
         {Jido.AI.ReAct,
-         model: %{
-           provider: :openai,
-           id: System.get_env("LMSTUDIO_MODEL", "google/gemma-4-26b-a4b"),
-           base_url: System.get_env("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
-         },
-         tools: [],
-         max_iterations: 3,
-         max_tokens: 256,
-         llm_opts: [api_key: System.get_env("LMSTUDIO_API_KEY", "lm-studio")]}
+         [
+           model: %{
+             provider: :openai,
+             id: "google/gemma-4-26b-a4b",
+             base_url: "http://localhost:1234/v1"
+           },
+           tools: [],
+           max_iterations: 3,
+           max_tokens: 256,
+           llm_opts: [api_key: "lm-studio"]
+         ]}
       ]
+
+    agent do
+      name "react_e2e_no_tools"
+      path :state
+    end
   end
 
   defmodule EchoAgent do
     @moduledoc false
+
     use Jido.Agent,
-      name: "react_e2e_echo",
-      path: :state,
-      slices: [
+      extensions: [
         {Jido.AI.ReAct,
-         model: %{
-           provider: :openai,
-           id: System.get_env("LMSTUDIO_MODEL", "google/gemma-4-26b-a4b"),
-           base_url: System.get_env("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
-         },
-         tools: [TestEcho],
-         max_iterations: 5,
-         max_tokens: 256,
-         llm_opts: [api_key: System.get_env("LMSTUDIO_API_KEY", "lm-studio")]}
+         [
+           model: %{
+             provider: :openai,
+             id: "google/gemma-4-26b-a4b",
+             base_url: "http://localhost:1234/v1"
+           },
+           tools: [Jido.AI.TestActions.TestEcho],
+           max_iterations: 5,
+           max_tokens: 256,
+           llm_opts: [api_key: "lm-studio"]
+         ]}
       ]
+
+    agent do
+      name "react_e2e_echo"
+      path :state
+    end
   end
 
   defmodule AddAgent do
     @moduledoc false
+
     use Jido.Agent,
-      name: "react_e2e_add",
-      path: :state,
-      slices: [
+      extensions: [
         {Jido.AI.ReAct,
-         model: %{
-           provider: :openai,
-           id: System.get_env("LMSTUDIO_MODEL", "google/gemma-4-26b-a4b"),
-           base_url: System.get_env("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
-         },
-         tools: [TestAdd],
-         max_iterations: 5,
-         max_tokens: 256,
-         llm_opts: [api_key: System.get_env("LMSTUDIO_API_KEY", "lm-studio")]}
+         [
+           model: %{
+             provider: :openai,
+             id: "google/gemma-4-26b-a4b",
+             base_url: "http://localhost:1234/v1"
+           },
+           tools: [Jido.AI.TestActions.TestAdd],
+           max_iterations: 5,
+           max_tokens: 256,
+           llm_opts: [api_key: "lm-studio"]
+         ]}
       ]
+
+    agent do
+      name "react_e2e_add"
+      path :state
+    end
   end
 
   test "produces a final answer for a simple question without tools", ctx do

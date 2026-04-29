@@ -43,14 +43,16 @@ defmodule Jido.Actions.Lifecycle do
         # Or invoke directly with params
         {Jido.Actions.Lifecycle.NotifyParent, %{signal_type: "child.done", payload: %{result: 42}}}
     """
-    use Jido.Action,
-      name: "notify_parent",
-      description: "Emit a signal back to the parent agent",
-      schema: [
-        signal_type: [type: :string, required: true, doc: "Signal type to emit to parent"],
-        payload: [type: :map, default: %{}, doc: "Signal payload data"],
-        source: [type: :string, default: "/child", doc: "Signal source path"]
-      ]
+    use Jido.Action
+
+    action do
+      name "notify_parent"
+      description "Emit a signal back to the parent agent"
+
+      schema signal_type: [type: :string, required: true, doc: "Signal type to emit to parent"],
+             payload: [type: :map, default: %{}, doc: "Signal payload data"],
+             source: [type: :string, default: "/child", doc: "Signal source path"]
+    end
 
     def run(
           %Jido.Signal{data: %{signal_type: type, payload: payload, source: source}},
@@ -93,20 +95,22 @@ defmodule Jido.Actions.Lifecycle do
           payload: %{data: result}
         }}
     """
-    use Jido.Action,
-      name: "notify_pid",
-      description: "Emit a signal to a specific process",
-      schema: [
-        target_pid: [type: :any, required: true, doc: "Target process PID"],
-        signal_type: [type: :string, required: true, doc: "Signal type to emit"],
-        payload: [type: :map, default: %{}, doc: "Signal payload data"],
-        source: [type: :string, default: "/agent", doc: "Signal source path"],
-        delivery_mode: [
-          type: {:in, [:async, :sync]},
-          default: :async,
-          doc: "Delivery mode"
-        ]
-      ]
+    use Jido.Action
+
+    action do
+      name "notify_pid"
+      description "Emit a signal to a specific process"
+
+      schema target_pid: [type: :any, required: true, doc: "Target process PID"],
+             signal_type: [type: :string, required: true, doc: "Signal type to emit"],
+             payload: [type: :map, default: %{}, doc: "Signal payload data"],
+             source: [type: :string, default: "/agent", doc: "Signal source path"],
+             delivery_mode: [
+               type: {:in, [:async, :sync]},
+               default: :async,
+               doc: "Delivery mode"
+             ]
+    end
 
     def run(
           %Jido.Signal{
@@ -156,22 +160,22 @@ defmodule Jido.Actions.Lifecycle do
           restart: :permanent
         }}
     """
-    @restart_policies Directive.valid_restart_policies()
+    use Jido.Action
 
-    use Jido.Action,
-      name: "spawn_child",
-      description: "Spawn a child agent with hierarchy tracking",
-      schema: [
-        agent_module: [type: :atom, required: true, doc: "Agent module to spawn"],
-        tag: [type: :atom, required: true, doc: "Tag for tracking this child"],
-        initial_state: [type: :map, default: %{}, doc: "Initial state for child"],
-        meta: [type: :map, default: %{}, doc: "Metadata to pass to child"],
-        restart: [
-          type: {:in, @restart_policies},
-          default: :transient,
-          doc: "Restart policy for the child"
-        ]
-      ]
+    action do
+      name "spawn_child"
+      description "Spawn a child agent with hierarchy tracking"
+
+      schema agent_module: [type: :atom, required: true, doc: "Agent module to spawn"],
+             tag: [type: :atom, required: true, doc: "Tag for tracking this child"],
+             initial_state: [type: :map, default: %{}, doc: "Initial state for child"],
+             meta: [type: :map, default: %{}, doc: "Metadata to pass to child"],
+             restart: [
+               type: {:in, Directive.valid_restart_policies()},
+               default: :transient,
+               doc: "Restart policy for the child"
+             ]
+    end
 
     def run(
           %Jido.Signal{
@@ -208,12 +212,14 @@ defmodule Jido.Actions.Lifecycle do
         # With custom reason
         {Jido.Actions.Lifecycle.StopSelf, %{reason: :work_complete}}
     """
-    use Jido.Action,
-      name: "stop_self",
-      description: "Request graceful termination of this agent",
-      schema: [
-        reason: [type: :any, default: :normal, doc: "Reason for stopping"]
-      ]
+    use Jido.Action
+
+    action do
+      name "stop_self"
+      description "Request graceful termination of this agent"
+
+      schema reason: [type: :any, default: :normal, doc: "Reason for stopping"]
+    end
 
     def run(%Jido.Signal{data: %{reason: reason}}, _slice, _opts, _ctx) do
       directive = Directive.stop(reason)
@@ -236,13 +242,15 @@ defmodule Jido.Actions.Lifecycle do
 
         {Jido.Actions.Lifecycle.StopChild, %{tag: :worker_1, reason: :shutdown}}
     """
-    use Jido.Action,
-      name: "stop_child",
-      description: "Request graceful termination of a child agent",
-      schema: [
-        tag: [type: :atom, required: true, doc: "Tag of child to stop"],
-        reason: [type: :any, default: :normal, doc: "Reason for stopping"]
-      ]
+    use Jido.Action
+
+    action do
+      name "stop_child"
+      description "Request graceful termination of a child agent"
+
+      schema tag: [type: :atom, required: true, doc: "Tag of child to stop"],
+             reason: [type: :any, default: :normal, doc: "Reason for stopping"]
+    end
 
     def run(%Jido.Signal{data: %{tag: tag, reason: reason}}, _slice, _opts, _ctx) do
       directive = Directive.stop_child(tag, reason)

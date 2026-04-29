@@ -111,7 +111,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
         {:slice, SliceInstance.new(decl)}
 
       :middleware ->
-        opts_map = if is_map(opts), do: opts, else: Map.new(opts || [])
+        opts_map = if is_map(opts), do: opts, else: Map.new(opts)
         {:middleware, {module, opts_map}}
     end
   end
@@ -141,10 +141,10 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   end
 
   defp ensure_module_loaded!(module) do
-    case Code.ensure_compiled(module) do
-      {:module, _} ->
-        :ok
-
+    with {:module, _} <- Code.ensure_compiled(module),
+         {:module, _} <- Code.ensure_loaded(module) do
+      :ok
+    else
       {:error, reason} ->
         raise CompileError,
           description: "Extension #{inspect(module)} could not be compiled: #{inspect(reason)}"
@@ -188,13 +188,6 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     if middleware?,
       do: :middleware,
       else: raise_override_mismatch(module, :middleware, "does not implement Jido.Middleware")
-  end
-
-  defp pick_kind(module, _, _, _, other) do
-    raise CompileError,
-      description:
-        "Invalid `as:` override for #{inspect(module)}: #{inspect(other)}. " <>
-          "Expected one of :plugin, :slice, :middleware."
   end
 
   defp raise_no_marker(module) do

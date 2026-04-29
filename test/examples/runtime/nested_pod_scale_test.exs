@@ -40,12 +40,13 @@ defmodule JidoExampleTest.NestedPodScaleTest do
 
   defmodule ScaleWorkerAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "example_nested_scale_worker",
-      path: :domain,
-      schema: [
-        role: [type: :string, default: "worker"]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "example_nested_scale_worker"
+      path :domain
+      schema role: [type: :string, default: "worker"]
+    end
   end
 
   defmodule GroupTopologyBuilder do

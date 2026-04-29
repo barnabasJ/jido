@@ -17,16 +17,18 @@ defmodule Jido.AI.Actions.ToolResult do
   ADR 0019: pure state mutation + directive emission. No I/O.
   """
 
-  use Jido.Action,
-    name: "ai_tool_result",
-    path: :ai,
-    description: "Process one tool result and fan-in to the next LLM turn.",
-    schema: [
-      tool_call_id: [type: :string, required: true],
-      name: [type: :string, required: true],
-      content: [type: :string, required: true],
-      request_id: [type: :string, required: true]
-    ]
+  use Jido.Action
+
+  action do
+    name "ai_tool_result"
+    path :ai
+    description "Process one tool result and fan-in to the next LLM turn."
+
+    schema tool_call_id: [type: :string, required: true],
+           name: [type: :string, required: true],
+           content: [type: :string, required: true],
+           request_id: [type: :string, required: true]
+  end
 
   alias Jido.AI.Directive.LLMCall
   alias Jido.AI.ReAct

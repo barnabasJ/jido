@@ -6,7 +6,8 @@ defmodule JidoTest.Plugin.FSMTest do
 
   defmodule DefaultFSMAgent do
     @moduledoc false
-    use Jido.Agent, extensions: [FSM]
+    use Jido.Agent,
+      extensions: [FSM]
 
     agent do
       name "fsm_default"

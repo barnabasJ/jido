@@ -11,14 +11,16 @@ defmodule Jido.AI.Actions.Failed do
   ADR 0019: pure state mutation. No directives, no I/O.
   """
 
-  use Jido.Action,
-    name: "ai_react_failed",
-    path: :ai,
-    description: "Settle the slice as :failed with the reason.",
-    schema: [
-      reason: [type: :any, required: true],
-      request_id: [type: :string, required: true]
-    ]
+  use Jido.Action
+
+  action do
+    name "ai_react_failed"
+    path :ai
+    description "Settle the slice as :failed with the reason."
+
+    schema reason: [type: :any, required: true],
+           request_id: [type: :string, required: true]
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{reason: reason, request_id: id}}, slice, _opts, _ctx) do

@@ -15,9 +15,7 @@ defmodule Jido.Exec.Validator do
   @doc """
   Validates that the given action module is valid and can be executed.
 
-  Checks that the module can be compiled and exports the `run/4` callback
-  (or the legacy `run/2` shape, which the `Jido.Action` `__before_compile__`
-  adapter wraps into `run/4`).
+  Checks that the module can be compiled and exports the `run/4` callback.
   """
   @spec validate_action(module()) :: :ok | {:error, Exception.t()}
   def validate_action(action) do

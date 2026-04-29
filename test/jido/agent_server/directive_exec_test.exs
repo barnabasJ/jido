@@ -8,11 +8,12 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
   defmodule EmitDirectiveAction do
     @moduledoc false
-    use Jido.Action,
-      name: "emit_directive",
-      schema: [
-        directive: [type: :any, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "emit_directive"
+      schema directive: [type: :any, required: true]
+    end
 
     def run(%Jido.Signal{data: %{directive: directive}}, slice, _opts, _ctx) do
       {:ok, slice || %{}, [directive]}
@@ -21,12 +22,13 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
   defmodule TestAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "directive_exec_test_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "directive_exec_test_agent"
+      path :domain
+      schema counter: [type: :integer, default: 0]
+    end
 
     def signal_routes(_ctx) do
       [
@@ -37,11 +39,12 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
   defmodule StopOnSignalAction do
     @moduledoc false
-    use Jido.Action,
-      name: "stop_on_signal",
-      schema: [
-        reason: [type: :any, default: :normal]
-      ]
+    use Jido.Action
+
+    action do
+      name "stop_on_signal"
+      schema reason: [type: :any, default: :normal]
+    end
 
     alias Jido.Agent.Directive
 
@@ -58,13 +61,13 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
   defmodule StopAwareAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "directive_exec_stop_aware_agent",
-      path: :domain,
-      schema: [
-        observer_pid: [type: :any, default: nil],
-        stop_reason: [type: :any, default: nil]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "directive_exec_stop_aware_agent"
+      path :domain
+      schema observer_pid: [type: :any, default: nil], stop_reason: [type: :any, default: nil]
+    end
 
     def signal_routes(_ctx) do
       [
@@ -81,34 +84,44 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
   defmodule RunInstructionSuccessAction do
     @moduledoc false
-    use Jido.Action,
-      name: "run_instruction_success",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "run_instruction_success"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{ran: true}, []}
   end
 
   defmodule RunInstructionFailureAction do
     @moduledoc false
-    use Jido.Action,
-      name: "run_instruction_failure",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "run_instruction_failure"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx), do: {:error, :boom}
   end
 
   defmodule CaptureResultAction do
     @moduledoc false
-    use Jido.Action,
-      name: "capture_result_action",
-      schema: [
+    use Jido.Action
+
+    action do
+      name "capture_result_action"
+
+      schema(
         status: [type: :atom, required: true],
         result: [type: :map, default: %{}],
         reason: [type: :any, default: nil],
         effects: [type: :any, default: []],
         instruction: [type: :any, default: nil],
         meta: [type: :map, default: %{}]
-      ]
+      )
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       slice = slice || %{}
@@ -125,16 +138,20 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
   defmodule CaptureResultEmitAction do
     @moduledoc false
-    use Jido.Action,
-      name: "capture_result_emit_action",
-      schema: [
+    use Jido.Action
+
+    action do
+      name "capture_result_emit_action"
+
+      schema(
         status: [type: :atom, required: true],
         result: [type: :map, default: %{}],
         reason: [type: :any, default: nil],
         effects: [type: :any, default: []],
         instruction: [type: :any, default: nil],
         meta: [type: :map, default: %{}]
-      ]
+      )
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       slice = slice || %{}
@@ -145,16 +162,20 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
   defmodule RunInstructionRoutedAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "run_instruction_routed_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "run_instruction_routed_agent"
+      path :domain
+
+      schema(
         captured_status: [type: :atom, default: nil],
         captured_result: [type: :map, default: %{}],
         captured_reason: [type: :any, default: nil],
         captured_meta: [type: :map, default: %{}],
         captured_emit: [type: :boolean, default: false]
-      ]
+      )
+    end
 
     def signal_routes(_ctx) do
       [

@@ -36,7 +36,7 @@ defmodule Jido.Pod.BusPlugin do
   alias Jido.Pod.BusPlugin.AutoSubscribeChild
   alias Jido.Pod.BusPlugin.AutoUnsubscribeChild
 
-  use Jido.Slice
+  use Jido.Plugin
 
   slice do
     name "pod_bus"

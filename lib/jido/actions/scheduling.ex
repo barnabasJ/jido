@@ -40,15 +40,17 @@ defmodule Jido.Actions.Scheduling do
           payload: %{attempt: 1}
         }}
     """
-    use Jido.Action,
-      name: "schedule_signal",
-      description: "Schedule a signal to be delivered after a delay",
-      schema: [
-        delay_ms: [type: :non_neg_integer, required: true, doc: "Delay in milliseconds"],
-        signal_type: [type: :string, required: true, doc: "Signal type to schedule"],
-        payload: [type: :map, default: %{}, doc: "Signal payload data"],
-        source: [type: :string, default: "/scheduler", doc: "Signal source path"]
-      ]
+    use Jido.Action
+
+    action do
+      name "schedule_signal"
+      description "Schedule a signal to be delivered after a delay"
+
+      schema delay_ms: [type: :non_neg_integer, required: true, doc: "Delay in milliseconds"],
+             signal_type: [type: :string, required: true, doc: "Signal type to schedule"],
+             payload: [type: :map, default: %{}, doc: "Signal payload data"],
+             source: [type: :string, default: "/scheduler", doc: "Signal source path"]
+    end
 
     def run(
           %Jido.Signal{
@@ -85,14 +87,16 @@ defmodule Jido.Actions.Scheduling do
           timeout_id: :work_deadline
         }}
     """
-    use Jido.Action,
-      name: "schedule_timeout",
-      description: "Schedule a timeout signal for deadline handling",
-      schema: [
-        timeout_ms: [type: :non_neg_integer, required: true, doc: "Timeout in milliseconds"],
-        timeout_id: [type: :any, default: :default, doc: "Identifier for this timeout"],
-        signal_type: [type: :string, default: "agent.timeout", doc: "Timeout signal type"]
-      ]
+    use Jido.Action
+
+    action do
+      name "schedule_timeout"
+      description "Schedule a timeout signal for deadline handling"
+
+      schema timeout_ms: [type: :non_neg_integer, required: true, doc: "Timeout in milliseconds"],
+             timeout_id: [type: :any, default: :default, doc: "Identifier for this timeout"],
+             signal_type: [type: :string, default: "agent.timeout", doc: "Timeout signal type"]
+    end
 
     def run(
           %Jido.Signal{data: %{timeout_ms: timeout, timeout_id: id, signal_type: type}},
@@ -137,16 +141,18 @@ defmodule Jido.Actions.Scheduling do
           timezone: "America/New_York"
         }}
     """
-    use Jido.Action,
-      name: "schedule_cron",
-      description: "Schedule a recurring signal using cron expression",
-      schema: [
-        cron: [type: :string, required: true, doc: "Cron expression"],
-        job_id: [type: :any, default: nil, doc: "Job identifier for cancellation"],
-        signal_type: [type: :string, required: true, doc: "Signal type to schedule"],
-        payload: [type: :map, default: %{}, doc: "Signal payload data"],
-        timezone: [type: :string, default: nil, doc: "Timezone for cron evaluation"]
-      ]
+    use Jido.Action
+
+    action do
+      name "schedule_cron"
+      description "Schedule a recurring signal using cron expression"
+
+      schema cron: [type: :string, required: true, doc: "Cron expression"],
+             job_id: [type: :any, default: nil, doc: "Job identifier for cancellation"],
+             signal_type: [type: :string, required: true, doc: "Signal type to schedule"],
+             payload: [type: :map, default: %{}, doc: "Signal payload data"],
+             timezone: [type: :string, default: nil, doc: "Timezone for cron evaluation"]
+    end
 
     def run(
           %Jido.Signal{
@@ -182,12 +188,14 @@ defmodule Jido.Actions.Scheduling do
 
         {Jido.Actions.Scheduling.CancelCron, %{job_id: :heartbeat}}
     """
-    use Jido.Action,
-      name: "cancel_cron",
-      description: "Cancel a scheduled cron job",
-      schema: [
-        job_id: [type: :any, required: true, doc: "Job identifier to cancel"]
-      ]
+    use Jido.Action
+
+    action do
+      name "cancel_cron"
+      description "Cancel a scheduled cron job"
+
+      schema job_id: [type: :any, required: true, doc: "Job identifier to cancel"]
+    end
 
     def run(%Jido.Signal{data: %{job_id: job_id}}, _slice, _opts, _ctx) do
       directive = Directive.cron_cancel(job_id)

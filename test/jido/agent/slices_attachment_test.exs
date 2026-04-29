@@ -72,8 +72,8 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "use Jido.Agent, slices: [SomeSlice] mounts the slice at its path() with seeded defaults" do
       defmodule AgentBareSlice do
         use Jido.Agent,
-          default_slices: false,
-          extensions: [SimpleSlice]
+          extensions: [SimpleSlice],
+          default_slices: false
 
         agent do
           name "bare_slice_agent"
@@ -90,8 +90,8 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "use Jido.Agent, slices: [{SomeSlice, key: value}] seeds the config into slice state" do
       defmodule AgentConfiguredSlice do
         use Jido.Agent,
-          default_slices: false,
-          extensions: [{SimpleSlice, %{counter: 42, label: "from_config"}}]
+          extensions: [{SimpleSlice, %{counter: 42, label: "from_config"}}],
+          default_slices: false
 
         agent do
           name "configured_slice_agent"
@@ -107,8 +107,8 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "slice config in keyword form is also accepted" do
       defmodule AgentKeywordSlice do
         use Jido.Agent,
-          default_slices: false,
-          extensions: [{SimpleSlice, [counter: 7]}]
+          extensions: [{SimpleSlice, [counter: 7]}],
+          default_slices: false
 
         agent do
           name "keyword_slice_agent"
@@ -124,8 +124,8 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "slice's signal_routes register at the agent with absolute paths (no prefix)" do
       defmodule AgentRoutedSlice do
         use Jido.Agent,
-          default_slices: false,
-          extensions: [RoutedSlice]
+          extensions: [RoutedSlice],
+          default_slices: false
 
         agent do
           name "routed_slice_agent"
@@ -144,8 +144,8 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "multiple bare slices compose at distinct paths" do
       defmodule AgentMultipleSlices do
         use Jido.Agent,
-          default_slices: false,
-          extensions: [SimpleSlice, OtherSlice]
+          extensions: [SimpleSlice, OtherSlice],
+          default_slices: false
 
         agent do
           name "multiple_slices_agent"
@@ -165,8 +165,8 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "slice capabilities are aggregated" do
       defmodule AgentSliceCaps do
         use Jido.Agent,
-          default_slices: false,
-          extensions: [SimpleSlice]
+          extensions: [SimpleSlice],
+          default_slices: false
 
         agent do
           name "slice_caps_agent"
@@ -188,8 +188,8 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
         ExUnit.CaptureIO.capture_io(:stderr, fn ->
           defmodule AgentPathConflict do
             use Jido.Agent,
-              default_slices: false,
-              extensions: [SimpleSlice]
+              extensions: [SimpleSlice],
+              default_slices: false
 
             agent do
               name "path_conflict_agent"
@@ -216,8 +216,8 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
         ExUnit.CaptureIO.capture_io(:stderr, fn ->
           defmodule AgentSliceConflict do
             use Jido.Agent,
-              default_slices: false,
-              extensions: [SimpleSlice, SimpleSliceDuplicate]
+              extensions: [SimpleSlice, SimpleSliceDuplicate],
+              default_slices: false
 
             agent do
               name "slice_conflict_agent"
@@ -239,8 +239,8 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
       assert_raise RuntimeError, ~r/missing __jido_plugin__/, fn ->
         defmodule AgentRejectsBareAsPlugin do
           use Jido.Agent,
-            default_slices: false,
-            extensions: [{SimpleSlice, [as: :plugin]}]
+            extensions: [{SimpleSlice, [as: :plugin]}],
+            default_slices: false
 
           agent do
             name "rejects_bare_as_plugin_agent"
@@ -256,8 +256,8 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
                    fn ->
                      defmodule AgentRejectsNonSlice do
                        use Jido.Agent,
-                         default_slices: false,
-                         extensions: [NotASlice]
+                         extensions: [NotASlice],
+                         default_slices: false
 
                        agent do
                          name "rejects_non_slice_agent"

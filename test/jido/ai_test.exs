@@ -13,25 +13,33 @@ defmodule Jido.AITest do
   defmodule MathAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "math",
-      path: :state,
-      slices: [
+      extensions: [
         {Jido.AI.ReAct,
-         model: "anthropic:claude-haiku-4-5-20251001",
-         tools: [Jido.AI.TestActions.TestAdd],
-         system_prompt: "You are precise.",
-         max_iterations: 4,
-         max_tokens: 256,
-         temperature: 0.0}
+         [
+           model: "anthropic:claude-haiku-4-5-20251001",
+           tools: [Jido.AI.TestActions.TestAdd],
+           system_prompt: "You are precise.",
+           max_iterations: 4,
+           max_tokens: 256,
+           temperature: 0.0
+         ]}
       ]
+
+    agent do
+      name "math"
+      path :state
+    end
   end
 
   defmodule TestFailingTool do
     @moduledoc false
-    use Jido.Action,
-      name: "test_failing",
-      description: "A tool that always returns {:error, _} — exercises the tool-error path.",
-      schema: [reason: [type: :string, default: "nope"]]
+    use Jido.Action
+
+    action do
+      name "test_failing"
+      description "A tool that always returns {:error, _} — exercises the tool-error path."
+      schema reason: [type: :string, default: "nope"]
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:error, "explosion"}
@@ -40,39 +48,50 @@ defmodule Jido.AITest do
   defmodule FailingAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "failing",
-      path: :state,
-      slices: [
+      extensions: [
         {Jido.AI.ReAct,
-         model: "anthropic:claude-haiku-4-5-20251001",
-         tools: [Jido.AITest.TestFailingTool],
-         system_prompt: "x",
-         max_iterations: 4}
+         [
+           model: "anthropic:claude-haiku-4-5-20251001",
+           tools: [Jido.AITest.TestFailingTool],
+           system_prompt: "x",
+           max_iterations: 4
+         ]}
       ]
+
+    agent do
+      name "failing"
+      path :state
+    end
   end
 
   defmodule TightAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "tight",
-      path: :state,
-      slices: [
+      extensions: [
         {Jido.AI.ReAct,
-         model: "anthropic:claude-haiku-4-5-20251001",
-         tools: [Jido.AI.TestActions.TestAdd],
-         system_prompt: "x",
-         max_iterations: 1}
+         [
+           model: "anthropic:claude-haiku-4-5-20251001",
+           tools: [Jido.AI.TestActions.TestAdd],
+           system_prompt: "x",
+           max_iterations: 1
+         ]}
       ]
+
+    agent do
+      name "tight"
+      path :state
+    end
   end
 
   defmodule NoModelAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "no_model",
-      path: :state,
-      slices: [
-        {Jido.AI.ReAct, tools: [Jido.AI.TestActions.TestAdd], max_iterations: 2}
-      ]
+      extensions: [{Jido.AI.ReAct, [tools: [Jido.AI.TestActions.TestAdd], max_iterations: 2]}]
+
+    agent do
+      name "no_model"
+      path :state
+    end
   end
 
   setup :set_mimic_global
@@ -414,14 +433,19 @@ defmodule Jido.AITest do
       defmodule SliceKeyAgent do
         @moduledoc false
         use Jido.Agent,
-          name: "slice_key",
-          path: :state,
-          slices: [
+          extensions: [
             {Jido.AI.ReAct,
-             model: "anthropic:claude-haiku-4-5-20251001",
-             tools: [],
-             llm_opts: [api_key: "key-from-slice"]}
+             [
+               model: "anthropic:claude-haiku-4-5-20251001",
+               tools: [],
+               llm_opts: [api_key: "key-from-slice"]
+             ]}
           ]
+
+        agent do
+          name "slice_key"
+          path :state
+        end
       end
 
       test_pid = self()
@@ -440,14 +464,19 @@ defmodule Jido.AITest do
       defmodule SliceKeyOverrideAgent do
         @moduledoc false
         use Jido.Agent,
-          name: "slice_key_override",
-          path: :state,
-          slices: [
+          extensions: [
             {Jido.AI.ReAct,
-             model: "anthropic:claude-haiku-4-5-20251001",
-             tools: [],
-             llm_opts: [api_key: "slice-default"]}
+             [
+               model: "anthropic:claude-haiku-4-5-20251001",
+               tools: [],
+               llm_opts: [api_key: "slice-default"]
+             ]}
           ]
+
+        agent do
+          name "slice_key_override"
+          path :state
+        end
       end
 
       test_pid = self()

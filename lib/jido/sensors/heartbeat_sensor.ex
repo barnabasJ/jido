@@ -15,10 +15,13 @@ defmodule Jido.Sensors.Heartbeat do
         config: %{interval: 1000, message: "alive"}
       )
   """
-  use Jido.Sensor,
-    name: "heartbeat",
-    description: "Emits heartbeat signals at configurable intervals",
-    schema:
+  use Jido.Sensor
+
+  sensor do
+    name "heartbeat"
+    description "Emits heartbeat signals at configurable intervals"
+
+    schema(
       Zoi.object(
         %{
           interval:
@@ -30,6 +33,8 @@ defmodule Jido.Sensors.Heartbeat do
         },
         coerce: true
       )
+    )
+  end
 
   @impl Jido.Sensor
   def init(config, context) do

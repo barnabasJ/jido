@@ -7,9 +7,12 @@ defmodule JidoTest.Plugin.SchedulesTest do
 
   defmodule RefreshTokenAction do
     @moduledoc false
-    use Jido.Action,
-      name: "refresh_token",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "refresh_token"
+      schema []
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
@@ -17,9 +20,12 @@ defmodule JidoTest.Plugin.SchedulesTest do
 
   defmodule DailyDigestAction do
     @moduledoc false
-    use Jido.Action,
-      name: "daily_digest",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "daily_digest"
+      schema []
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
@@ -27,9 +33,12 @@ defmodule JidoTest.Plugin.SchedulesTest do
 
   defmodule CleanupAction do
     @moduledoc false
-    use Jido.Action,
-      name: "cleanup",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "cleanup"
+      schema []
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}

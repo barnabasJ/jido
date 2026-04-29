@@ -74,23 +74,23 @@ defmodule Jido.Dsl.Agent.LegacyTranslator do
   end
 
   defp quoted_route({type, action}) do
-    {:route, [], [type, Macro.escape(action)]}
+    {:route, [], [type, action]}
   end
 
   defp quoted_route({type, action, priority}) when is_integer(priority) do
-    {:route, [], [type, Macro.escape(action), [priority: priority]]}
+    {:route, [], [type, action, [priority: priority]]}
   end
 
   defp quoted_route({type, match, action}) when is_function(match, 1) do
     quote do
-      route unquote(type), unquote(Macro.escape(action)), match: unquote(match)
+      route unquote(type), unquote(action), match: unquote(match)
     end
   end
 
   defp quoted_route({type, match, action, priority})
        when is_function(match, 1) and is_integer(priority) do
     quote do
-      route unquote(type), unquote(Macro.escape(action)),
+      route unquote(type), unquote(action),
         match: unquote(match),
         priority: unquote(priority)
     end

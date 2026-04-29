@@ -5,12 +5,24 @@ defmodule JidoTest.AgentServer.StopChildTest do
 
   defmodule ParentAgent do
     @moduledoc false
-    use Jido.Agent, name: "stop_child_parent_agent", path: :domain, schema: []
+    use Jido.Agent
+
+    agent do
+      name "stop_child_parent_agent"
+      path :domain
+      schema []
+    end
   end
 
   defmodule ChildAgent do
     @moduledoc false
-    use Jido.Agent, name: "stop_child_child_agent", path: :domain, schema: []
+    use Jido.Agent
+
+    agent do
+      name "stop_child_child_agent"
+      path :domain
+      schema []
+    end
   end
 
   test "stop_child/3 stops an adopted child with an atom tag", %{jido: jido} do

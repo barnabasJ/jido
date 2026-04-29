@@ -5,23 +5,29 @@ defmodule JidoTest.DiscoveryTest do
 
   defmodule TestAction do
     @moduledoc false
-    use Jido.Action,
-      name: "discovery_test_action",
-      description: "Test action for discovery",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "discovery_test_action"
+      description "Test action for discovery"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
   end
 
   defmodule TestAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "discovery_test_agent",
-      path: :domain,
-      description: "Test agent for discovery",
-      category: "test",
-      tags: ["discovery", "test"],
-      schema: []
+    use Jido.Agent
+
+    agent do
+      name "discovery_test_agent"
+      path :domain
+      description "Test agent for discovery"
+      category "test"
+      tags ["discovery", "test"]
+      schema []
+    end
   end
 
   setup do

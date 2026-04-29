@@ -32,12 +32,13 @@ defmodule JidoExampleTest.PartitionedPodRuntimeTest do
 
   defmodule TenantWorker do
     @moduledoc false
-    use Jido.Agent,
-      name: "example_partitioned_tenant_worker",
-      path: :domain,
-      schema: [
-        role: [type: :string, default: "worker"]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "example_partitioned_tenant_worker"
+      path :domain
+      schema role: [type: :string, default: "worker"]
+    end
   end
 
   defmodule WorkspacePod do

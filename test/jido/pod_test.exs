@@ -9,35 +9,47 @@ defmodule JidoTest.PodTest do
 
   defmodule WorkerAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "pod_test_worker",
-      path: :domain
+    use Jido.Agent
+
+    agent do
+      name "pod_test_worker"
+      path :domain
+    end
   end
 
   defmodule CustomPodPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "custom_pod",
-      path: :pod,
-      actions: [],
-      schema:
+    use Jido.Plugin
+
+    slice do
+      name "custom_pod"
+      path :pod
+
+      schema(
         Zoi.object(%{
           topology: Zoi.any() |> Zoi.optional(),
           topology_version: Zoi.integer() |> Zoi.default(1),
           metadata: Zoi.map() |> Zoi.default(%{})
-        }),
-      capabilities: [:pod],
-      singleton: true
+        })
+      )
+
+      singleton true
+    end
+
+    capabilities do
+      capability :pod
+    end
   end
 
   defmodule UserPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "pod_test_user_plugin",
-      path: :pod_test_user_plugin,
-      actions: [],
-      schema: Zoi.object(%{}),
-      capabilities: []
+    use Jido.Plugin
+
+    slice do
+      name "pod_test_user_plugin"
+      path :pod_test_user_plugin
+      schema Zoi.object(%{})
+    end
   end
 
   defmodule ExamplePod do

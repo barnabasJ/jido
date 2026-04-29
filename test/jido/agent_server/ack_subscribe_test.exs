@@ -5,7 +5,13 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
 
   defmodule WriteAction do
     @moduledoc false
-    use Jido.Action, name: "write", path: :app, schema: []
+    use Jido.Action
+
+    action do
+      name "write"
+      path :app
+      schema []
+    end
 
     def run(%Jido.Signal{data: %{value: v}}, slice, _opts, _ctx) do
       {:ok, %{slice | value: v, status: :written}, []}
@@ -14,7 +20,13 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
 
   defmodule FailingAction do
     @moduledoc false
-    use Jido.Action, name: "fail", path: :app, schema: []
+    use Jido.Action
+
+    action do
+      name "fail"
+      path :app
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       {:error, :intentional_action_failure}
@@ -23,13 +35,13 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
 
   defmodule TestAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "ack_subscribe_agent",
-      path: :app,
-      schema: [
-        value: [type: :integer, default: 0],
-        status: [type: :atom, default: :idle]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "ack_subscribe_agent"
+      path :app
+      schema value: [type: :integer, default: 0], status: [type: :atom, default: :idle]
+    end
 
     def signal_routes(_ctx) do
       [
@@ -41,7 +53,13 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
 
   defmodule FlakyAction do
     @moduledoc false
-    use Jido.Action, name: "flaky", path: :app, schema: []
+    use Jido.Action
+
+    action do
+      name "flaky"
+      path :app
+      schema []
+    end
 
     @counter_key {__MODULE__, :counter}
 
@@ -69,15 +87,13 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
   defmodule RetryingAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "retrying_agent",
-      path: :app,
-      schema: [
-        value: [type: :integer, default: 0],
-        status: [type: :atom, default: :idle]
-      ],
-      middleware: [
-        {Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}
-      ]
+      extensions: [{Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}]
+
+    agent do
+      name "retrying_agent"
+      path :app
+      schema value: [type: :integer, default: 0], status: [type: :atom, default: :idle]
+    end
 
     def signal_routes(_ctx) do
       [{"flaky", JidoTest.AgentServer.AckSubscribeTest.FlakyAction}]

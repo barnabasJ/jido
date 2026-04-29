@@ -21,11 +21,12 @@ defmodule JidoExampleTest.CounterAgentTest do
 
   defmodule IncrementAction do
     @moduledoc false
-    use Jido.Action,
-      name: "increment",
-      schema: [
-        amount: [type: :integer, default: 1]
-      ]
+    use Jido.Action
+
+    action do
+      name "increment"
+      schema amount: [type: :integer, default: 1]
+    end
 
     def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       current = Map.get(slice, :counter, 0)
@@ -35,11 +36,12 @@ defmodule JidoExampleTest.CounterAgentTest do
 
   defmodule DecrementAction do
     @moduledoc false
-    use Jido.Action,
-      name: "decrement",
-      schema: [
-        amount: [type: :integer, default: 1]
-      ]
+    use Jido.Action
+
+    action do
+      name "decrement"
+      schema amount: [type: :integer, default: 1]
+    end
 
     def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       current = Map.get(slice, :counter, 0)
@@ -49,9 +51,12 @@ defmodule JidoExampleTest.CounterAgentTest do
 
   defmodule ResetAction do
     @moduledoc false
-    use Jido.Action,
-      name: "reset",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "reset"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{counter: 0}, []}
@@ -64,14 +69,14 @@ defmodule JidoExampleTest.CounterAgentTest do
 
   defmodule CounterAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "counter_agent",
-      path: :domain,
-      description: "A simple counter demonstrating cmd/2 basics",
-      schema: [
-        counter: [type: :integer, default: 0],
-        name: [type: :string, default: "unnamed"]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "counter_agent"
+      path :domain
+      description "A simple counter demonstrating cmd/2 basics"
+      schema counter: [type: :integer, default: 0], name: [type: :string, default: "unnamed"]
+    end
   end
 
   # ===========================================================================

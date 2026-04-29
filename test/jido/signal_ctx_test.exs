@@ -63,7 +63,12 @@ defmodule JidoTest.SignalCtxTest do
   describe "ctx delivery into action.run/4" do
     defmodule TraceProbe do
       @moduledoc false
-      use Jido.Action, name: "trace_probe", schema: []
+      use Jido.Action
+
+      action do
+        name "trace_probe"
+        schema []
+      end
 
       @impl true
       def run(_signal, _slice, _opts, ctx) do

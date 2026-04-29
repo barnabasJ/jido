@@ -24,14 +24,18 @@ defmodule JidoExampleTest.SensorDemoTest do
   defmodule HandleQuoteAction do
     @moduledoc false
 
-    use Jido.Action,
-      name: "handle_quote",
-      schema: [
+    use Jido.Action
+
+    action do
+      name "handle_quote"
+
+      schema(
         quote: [type: :string, required: true],
         category: [type: :string, default: "general"],
         emit_count: [type: :integer, default: 0],
         sensor_id: [type: :string, default: "unknown"]
-      ]
+      )
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       current_quotes = Map.get(slice, :quotes, [])
@@ -54,13 +58,17 @@ defmodule JidoExampleTest.SensorDemoTest do
   defmodule HandleGitHubWebhookAction do
     @moduledoc false
 
-    use Jido.Action,
-      name: "handle_github_webhook",
-      schema: [
+    use Jido.Action
+
+    action do
+      name "handle_github_webhook"
+
+      schema(
         event: [type: :string, required: true],
         payload: [type: :map, default: %{}],
         received_at: [type: :any, required: false]
-      ]
+      )
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       current_events = Map.get(slice, :events, [])
@@ -82,13 +90,17 @@ defmodule JidoExampleTest.SensorDemoTest do
   defmodule HandleStripeWebhookAction do
     @moduledoc false
 
-    use Jido.Action,
-      name: "handle_stripe_webhook",
-      schema: [
+    use Jido.Action
+
+    action do
+      name "handle_stripe_webhook"
+
+      schema(
         event: [type: :string, required: true],
         payload: [type: :map, default: %{}],
         received_at: [type: :any, required: false]
-      ]
+      )
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       current_events = Map.get(slice, :events, [])
@@ -114,14 +126,18 @@ defmodule JidoExampleTest.SensorDemoTest do
   defmodule QuoteCollectorAgent do
     @moduledoc false
 
-    use Jido.Agent,
-      name: "quote_collector",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "quote_collector"
+      path :domain
+
+      schema(
         quotes: [type: {:list, :map}, default: []],
         events: [type: {:list, :map}, default: []],
         status: [type: :atom, default: :idle]
-      ]
+      )
+    end
 
     def signal_routes(_ctx) do
       [

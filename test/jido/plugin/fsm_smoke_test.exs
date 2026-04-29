@@ -14,7 +14,8 @@ defmodule Jido.Plugin.FSMSmokeTest do
 
   defmodule DefaultFSMAgent do
     @moduledoc false
-    use Jido.Agent, extensions: [FSM]
+    use Jido.Agent,
+      extensions: [FSM]
 
     agent do
       name "default_fsm_agent"

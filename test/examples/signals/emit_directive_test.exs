@@ -26,13 +26,17 @@ defmodule JidoExampleTest.EmitDirectiveTest do
 
   defmodule CreateOrderAction do
     @moduledoc false
-    use Jido.Action,
-      name: "create_order",
-      schema: [
+    use Jido.Action
+
+    action do
+      name "create_order"
+
+      schema(
         order_id: [type: :string, required: true],
         items: [type: {:list, :map}, default: []],
         total: [type: :integer, required: true]
-      ]
+      )
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       orders = Map.get(slice, :orders, [])
@@ -59,12 +63,14 @@ defmodule JidoExampleTest.EmitDirectiveTest do
 
   defmodule ProcessPaymentAction do
     @moduledoc false
-    use Jido.Action,
-      name: "process_payment",
-      schema: [
-        order_id: [type: :string, required: true],
-        payment_method: [type: :string, default: "card"]
-      ]
+    use Jido.Action
+
+    action do
+      name "process_payment"
+
+      schema order_id: [type: :string, required: true],
+             payment_method: [type: :string, default: "card"]
+    end
 
     def run(%Jido.Signal{data: params}, _slice, _opts, _ctx) do
       order_id = params.order_id
@@ -83,11 +89,12 @@ defmodule JidoExampleTest.EmitDirectiveTest do
 
   defmodule MultiEmitAction do
     @moduledoc false
-    use Jido.Action,
-      name: "multi_emit",
-      schema: [
-        event_count: [type: :integer, default: 3]
-      ]
+    use Jido.Action
+
+    action do
+      name "multi_emit"
+      schema event_count: [type: :integer, default: 3]
+    end
 
     def run(%Jido.Signal{data: %{event_count: count}}, _slice, _opts, _ctx) do
       emissions =
@@ -106,15 +113,19 @@ defmodule JidoExampleTest.EmitDirectiveTest do
 
   defmodule OrderAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "order_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "order_agent"
+      path :domain
+
+      schema(
         orders: [type: {:list, :map}, default: []],
         last_order_id: [type: :string, default: nil],
         last_payment: [type: :map, default: nil],
         emitted_count: [type: :integer, default: 0]
-      ]
+      )
+    end
 
     def signal_routes(_ctx) do
       [
@@ -127,11 +138,12 @@ defmodule JidoExampleTest.EmitDirectiveTest do
 
   defmodule InternalIncrementAction do
     @moduledoc false
-    use Jido.Action,
-      name: "internal_increment",
-      schema: [
-        amount: [type: :integer, default: 1]
-      ]
+    use Jido.Action
+
+    action do
+      name "internal_increment"
+      schema amount: [type: :integer, default: 1]
+    end
 
     def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       current = Map.get(slice, :count, 0)
@@ -150,12 +162,14 @@ defmodule JidoExampleTest.EmitDirectiveTest do
 
   defmodule InternalPrintCountAction do
     @moduledoc false
-    use Jido.Action,
-      name: "internal_print_count",
-      schema: [
-        previous_count: [type: :integer, required: true],
-        count: [type: :integer, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "internal_print_count"
+
+      schema previous_count: [type: :integer, required: true],
+             count: [type: :integer, required: true]
+    end
 
     def run(
           %Jido.Signal{data: %{previous_count: previous_count, count: count}},
@@ -172,14 +186,18 @@ defmodule JidoExampleTest.EmitDirectiveTest do
 
   defmodule InternalEmitAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "internal_emit_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "internal_emit_agent"
+      path :domain
+
+      schema(
         count: [type: :integer, default: 0],
         observer: [type: :any, default: nil],
         last_seen_count: [type: :integer, default: 0]
-      ]
+      )
+    end
 
     def signal_routes(_ctx) do
       [

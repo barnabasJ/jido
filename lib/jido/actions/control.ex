@@ -36,12 +36,14 @@ defmodule Jido.Actions.Control do
         # Standard cancellation route
         {"jido.agent.cancel", Jido.Actions.Control.Cancel}
     """
-    use Jido.Action,
-      name: "cancel",
-      description: "Handle cancellation requests",
-      schema: [
-        reason: [type: :any, default: :cancelled, doc: "Cancellation reason"]
-      ]
+    use Jido.Action
+
+    action do
+      name "cancel"
+      description "Handle cancellation requests"
+
+      schema reason: [type: :any, default: :cancelled, doc: "Cancellation reason"]
+    end
 
     def run(%Jido.Signal{data: %{reason: reason}}, _slice, _opts, _ctx) do
       {:ok, %{status: :failed, error: {:cancelled, reason}}, []}
@@ -62,10 +64,13 @@ defmodule Jido.Actions.Control do
         # Acknowledge but ignore certain signals
         {"system.ping", Jido.Actions.Control.Noop}
     """
-    use Jido.Action,
-      name: "noop",
-      description: "No-operation, acknowledges signal without changes",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "noop"
+      description "No-operation, acknowledges signal without changes"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, []}
@@ -96,15 +101,17 @@ defmodule Jido.Actions.Control do
           signal_type: "process.request"
         }}
     """
-    use Jido.Action,
-      name: "forward",
-      description: "Forward a signal to another agent",
-      schema: [
-        target_pid: [type: :any, required: true, doc: "Target process PID"],
-        signal_type: [type: :string, default: nil, doc: "New signal type (optional)"],
-        payload: [type: :map, default: nil, doc: "New payload (optional)"],
-        source: [type: :string, default: nil, doc: "New source (optional)"]
-      ]
+    use Jido.Action
+
+    action do
+      name "forward"
+      description "Forward a signal to another agent"
+
+      schema target_pid: [type: :any, required: true, doc: "Target process PID"],
+             signal_type: [type: :string, default: nil, doc: "New signal type (optional)"],
+             payload: [type: :map, default: nil, doc: "New payload (optional)"],
+             source: [type: :string, default: nil, doc: "New source (optional)"]
+    end
 
     def run(
           %Jido.Signal{
@@ -159,15 +166,17 @@ defmodule Jido.Actions.Control do
           payload: %{task_id: "123"}
         }}
     """
-    use Jido.Action,
-      name: "broadcast",
-      description: "Broadcast a signal via PubSub",
-      schema: [
-        topic: [type: :string, required: true, doc: "PubSub topic"],
-        signal_type: [type: :string, required: true, doc: "Signal type to broadcast"],
-        payload: [type: :map, default: %{}, doc: "Signal payload"],
-        source: [type: :string, default: "/broadcast", doc: "Signal source"]
-      ]
+    use Jido.Action
+
+    action do
+      name "broadcast"
+      description "Broadcast a signal via PubSub"
+
+      schema topic: [type: :string, required: true, doc: "PubSub topic"],
+             signal_type: [type: :string, required: true, doc: "Signal type to broadcast"],
+             payload: [type: :map, default: %{}, doc: "Signal payload"],
+             source: [type: :string, default: "/broadcast", doc: "Signal source"]
+    end
 
     def run(
           %Jido.Signal{
@@ -209,13 +218,15 @@ defmodule Jido.Actions.Control do
           payload: %{result: data}
         }}
     """
-    use Jido.Action,
-      name: "reply",
-      description: "Reply to the signal source",
-      schema: [
-        signal_type: [type: :string, required: true, doc: "Reply signal type"],
-        payload: [type: :map, default: %{}, doc: "Reply payload"]
-      ]
+    use Jido.Action
+
+    action do
+      name "reply"
+      description "Reply to the signal source"
+
+      schema signal_type: [type: :string, required: true, doc: "Reply signal type"],
+             payload: [type: :map, default: %{}, doc: "Reply payload"]
+    end
 
     def run(
           %Jido.Signal{data: %{signal_type: type, payload: payload}} = input,

@@ -6,13 +6,17 @@ end
 
 defmodule Jido.AI.TestActions.TestAdd do
   @moduledoc false
-  use Jido.Action,
-    name: "test_add",
-    description: "Adds two integers and returns their sum.",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "test_add"
+    description "Adds two integers and returns their sum."
+
+    schema(
       a: [type: :integer, required: true, doc: "First addend"],
       b: [type: :integer, required: true, doc: "Second addend"]
-    ]
+    )
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{a: a, b: b}}, _slice, _opts, _ctx),
@@ -21,13 +25,17 @@ end
 
 defmodule Jido.AI.TestActions.TestMultiply do
   @moduledoc false
-  use Jido.Action,
-    name: "test_multiply",
-    description: "Multiplies two integers and returns their product.",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "test_multiply"
+    description "Multiplies two integers and returns their product."
+
+    schema(
       a: [type: :integer, required: true, doc: "First factor"],
       b: [type: :integer, required: true, doc: "Second factor"]
-    ]
+    )
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{a: a, b: b}}, _slice, _opts, _ctx),
@@ -36,12 +44,13 @@ end
 
 defmodule Jido.AI.TestActions.TestEcho do
   @moduledoc false
-  use Jido.Action,
-    name: "test_echo",
-    description: "Echoes the input message back as the result.",
-    schema: [
-      message: [type: :string, required: true, doc: "The message to echo"]
-    ]
+  use Jido.Action
+
+  action do
+    name "test_echo"
+    description "Echoes the input message back as the result."
+    schema message: [type: :string, required: true, doc: "The message to echo"]
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{message: message}}, _slice, _opts, _ctx),
@@ -50,12 +59,13 @@ end
 
 defmodule Jido.AI.TestActions.TestFails do
   @moduledoc false
-  use Jido.Action,
-    name: "test_fails",
-    description: "Always returns an error — used to exercise tool-failure paths.",
-    schema: [
-      reason: [type: :string, default: "test_failure", doc: "Failure reason"]
-    ]
+  use Jido.Action
+
+  action do
+    name "test_fails"
+    description "Always returns an error — used to exercise tool-failure paths."
+    schema reason: [type: :string, default: "test_failure", doc: "Failure reason"]
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{reason: reason}}, _slice, _opts, _ctx),

@@ -11,23 +11,26 @@ defmodule JidoTest.PersistTest do
   alias JidoTest.PersistTest.TestAgent
 
   defmodule TestAgent do
-    use Jido.Agent,
-      name: "test_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0],
-        status: [type: :atom, default: :idle]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "test_agent"
+      path :domain
+      schema counter: [type: :integer, default: 0], status: [type: :atom, default: :idle]
+    end
 
     @impl true
     def signal_routes(_ctx), do: []
   end
 
   defmodule CustomAgent do
-    use Jido.Agent,
-      name: "custom_agent",
-      path: :domain,
-      schema: [value: [type: :string, default: ""]]
+    use Jido.Agent
+
+    agent do
+      name "custom_agent"
+      path :domain
+      schema value: [type: :string, default: ""]
+    end
 
     @impl true
     def signal_routes(_ctx), do: []
@@ -59,10 +62,13 @@ defmodule JidoTest.PersistTest do
   end
 
   defmodule RuntimeStateCheckpointAgent do
-    use Jido.Agent,
-      name: "runtime_state_checkpoint_agent",
-      path: :domain,
-      schema: [value: [type: :string, default: ""]]
+    use Jido.Agent
+
+    agent do
+      name "runtime_state_checkpoint_agent"
+      path :domain
+      schema value: [type: :string, default: ""]
+    end
 
     @impl true
     def signal_routes(_ctx), do: []
@@ -84,10 +90,13 @@ defmodule JidoTest.PersistTest do
   end
 
   defmodule RaisingCheckpointAgent do
-    use Jido.Agent,
-      name: "raising_checkpoint_agent",
-      path: :domain,
-      schema: [value: [type: :string, default: ""]]
+    use Jido.Agent
+
+    agent do
+      name "raising_checkpoint_agent"
+      path :domain
+      schema value: [type: :string, default: ""]
+    end
 
     @impl true
     def signal_routes(_ctx), do: []
@@ -99,10 +108,13 @@ defmodule JidoTest.PersistTest do
   end
 
   defmodule InvalidCheckpointStateAgent do
-    use Jido.Agent,
-      name: "invalid_checkpoint_state_agent",
-      path: :domain,
-      schema: [value: [type: :string, default: ""]]
+    use Jido.Agent
+
+    agent do
+      name "invalid_checkpoint_state_agent"
+      path :domain
+      schema value: [type: :string, default: ""]
+    end
 
     @impl true
     def signal_routes(_ctx), do: []
@@ -121,10 +133,13 @@ defmodule JidoTest.PersistTest do
   end
 
   defmodule RaisingRestoreAgent do
-    use Jido.Agent,
-      name: "raising_restore_agent",
-      path: :domain,
-      schema: [value: [type: :string, default: ""]]
+    use Jido.Agent
+
+    agent do
+      name "raising_restore_agent"
+      path :domain
+      schema value: [type: :string, default: ""]
+    end
 
     @impl true
     def signal_routes(_ctx), do: []
@@ -136,10 +151,13 @@ defmodule JidoTest.PersistTest do
   end
 
   defmodule LenientRestoreAgent do
-    use Jido.Agent,
-      name: "lenient_restore_agent",
-      path: :domain,
-      schema: [value: [type: :string, default: ""]]
+    use Jido.Agent
+
+    agent do
+      name "lenient_restore_agent"
+      path :domain
+      schema value: [type: :string, default: ""]
+    end
 
     @impl true
     def signal_routes(_ctx), do: []

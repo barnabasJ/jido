@@ -5,7 +5,13 @@ defmodule JidoTest.AgentServer.IdentitySignalsTest do
 
   defmodule WatcherAction do
     @moduledoc false
-    use Jido.Action, name: "identity_watcher", path: :app, schema: []
+    use Jido.Action
+
+    action do
+      name "identity_watcher"
+      path :app
+      schema []
+    end
 
     def run(%Jido.Signal{type: type, data: data}, slice, _opts, _ctx) do
       events = Map.get(slice, :identity_events, [])
@@ -15,12 +21,13 @@ defmodule JidoTest.AgentServer.IdentitySignalsTest do
 
   defmodule WatcherAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "identity_signals_agent",
-      path: :app,
-      schema: [
-        identity_events: [type: {:list, :any}, default: []]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "identity_signals_agent"
+      path :app
+      schema identity_events: [type: {:list, :any}, default: []]
+    end
 
     def signal_routes(_ctx) do
       [

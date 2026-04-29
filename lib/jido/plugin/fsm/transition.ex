@@ -8,13 +8,18 @@ defmodule Jido.Plugin.FSM.Transition do
   new state is in `slice.terminal_states`.
   """
 
-  use Jido.Action,
-    name: "fsm_transition",
-    path: :fsm,
-    schema:
+  use Jido.Action
+
+  action do
+    name "fsm_transition"
+    path :fsm
+
+    schema(
       Zoi.object(%{
         to: Zoi.string()
       })
+    )
+  end
 
   @impl true
   def run(%Jido.Signal{data: data}, slice, _opts, _ctx) do

@@ -64,8 +64,8 @@ defmodule Jido.Dsl.MiddlewareTest do
     defmodule MiddlewareAgent do
       @moduledoc false
       use Jido.Agent,
-        default_slices: false,
-        extensions: [Jido.Dsl.MiddlewareTest.MinimalMiddleware]
+        extensions: [Jido.Dsl.MiddlewareTest.MinimalMiddleware],
+        default_slices: false
 
       agent do
         name "middleware_agent"

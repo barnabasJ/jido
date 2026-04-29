@@ -140,8 +140,8 @@ defmodule JidoTest.SliceTest do
     defmodule SchemaAgent do
       @moduledoc false
       use Jido.Agent,
-        default_slices: false,
-        extensions: [JidoTest.SliceTest.SchemaSlice]
+        extensions: [JidoTest.SliceTest.SchemaSlice],
+        default_slices: false
 
       agent do
         name "schema_agent"
@@ -158,8 +158,8 @@ defmodule JidoTest.SliceTest do
       defmodule SchemaAgentConfigured do
         @moduledoc false
         use Jido.Agent,
-          default_slices: false,
-          extensions: [{JidoTest.SliceTest.SchemaSlice, %{counter: 42}}]
+          extensions: [{JidoTest.SliceTest.SchemaSlice, %{counter: 42}}],
+          default_slices: false
 
         agent do
           name "schema_agent_configured"

@@ -38,11 +38,12 @@ defmodule JidoExampleTest.ErrorHandlingTest do
 
   defmodule ValidateAction do
     @moduledoc false
-    use Jido.Action,
-      name: "validate",
-      schema: [
-        amount: [type: :integer, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "validate"
+      schema amount: [type: :integer, required: true]
+    end
 
     def run(%Jido.Signal{data: %{amount: amount}}, _slice, _opts, _ctx) do
       if amount > 0 do
@@ -55,11 +56,12 @@ defmodule JidoExampleTest.ErrorHandlingTest do
 
   defmodule RetryableAction do
     @moduledoc false
-    use Jido.Action,
-      name: "retryable",
-      schema: [
-        fail_count: [type: :integer, default: 0]
-      ]
+    use Jido.Action
+
+    action do
+      name "retryable"
+      schema fail_count: [type: :integer, default: 0]
+    end
 
     def run(%Jido.Signal{data: %{fail_count: fail_count}}, slice, _opts, _ctx) do
       attempts = Map.get(slice, :attempts, 0) + 1
@@ -74,9 +76,12 @@ defmodule JidoExampleTest.ErrorHandlingTest do
 
   defmodule RecoverAction do
     @moduledoc false
-    use Jido.Action,
-      name: "recover",
-      schema: []
+    use Jido.Action
+
+    action do
+      name "recover"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{status: :recovered, error: nil, error_context: nil}, []}
@@ -85,12 +90,14 @@ defmodule JidoExampleTest.ErrorHandlingTest do
 
   defmodule TrackErrorAction do
     @moduledoc false
-    use Jido.Action,
-      name: "track_error",
-      schema: [
-        error_message: [type: :string, required: true],
-        error_context: [type: :atom, default: :unknown]
-      ]
+    use Jido.Action
+
+    action do
+      name "track_error"
+
+      schema error_message: [type: :string, required: true],
+             error_context: [type: :atom, default: :unknown]
+    end
 
     def run(%Jido.Signal{data: %{error_message: message, error_context: ctx}}, slice, _opts, _ctx) do
       error = Jido.Error.execution_error(message)
@@ -106,11 +113,12 @@ defmodule JidoExampleTest.ErrorHandlingTest do
 
   defmodule BoundedRetryAction do
     @moduledoc false
-    use Jido.Action,
-      name: "bounded_retry",
-      schema: [
-        max_attempts: [type: :integer, default: 3]
-      ]
+    use Jido.Action
+
+    action do
+      name "bounded_retry"
+      schema max_attempts: [type: :integer, default: 3]
+    end
 
     def run(%Jido.Signal{data: %{max_attempts: max}}, slice, _opts, _ctx) do
       attempts = Map.get(slice, :attempts, 0) + 1
@@ -132,12 +140,12 @@ defmodule JidoExampleTest.ErrorHandlingTest do
 
   defmodule HandleRetryAction do
     @moduledoc false
-    use Jido.Action,
-      name: "handle_retry",
-      schema: [
-        max_attempts: [type: :integer, default: 3],
-        succeed_on: [type: :integer, default: 3]
-      ]
+    use Jido.Action
+
+    action do
+      name "handle_retry"
+      schema max_attempts: [type: :integer, default: 3], succeed_on: [type: :integer, default: 3]
+    end
 
     def run(%Jido.Signal{data: %{max_attempts: max, succeed_on: succeed_on}}, slice, _opts, _ctx) do
       attempts = Map.get(slice, :attempts, 0) + 1
@@ -186,10 +194,13 @@ defmodule JidoExampleTest.ErrorHandlingTest do
 
   defmodule ErrorHandlingAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "error_handling_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "error_handling_agent"
+      path :domain
+
+      schema(
         status: [type: :atom, default: :idle],
         validated: [type: :boolean, default: false],
         amount: [type: :integer, default: 0],
@@ -199,7 +210,8 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         result: [type: :any, default: nil],
         error: [type: :any, default: nil],
         error_context: [type: :atom, default: nil]
-      ]
+      )
+    end
 
     def signal_routes(_ctx) do
       [

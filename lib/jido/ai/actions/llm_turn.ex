@@ -25,14 +25,16 @@ defmodule Jido.AI.Actions.LLMTurn do
   ADR 0019: pure state mutation + directive emission. No I/O.
   """
 
-  use Jido.Action,
-    name: "ai_llm_turn",
-    path: :ai,
-    description: "Process a completed LLM turn and decide the next ReAct step.",
-    schema: [
-      turn: [type: :any, required: true],
-      request_id: [type: :string, required: true]
-    ]
+  use Jido.Action
+
+  action do
+    name "ai_llm_turn"
+    path :ai
+    description "Process a completed LLM turn and decide the next ReAct step."
+
+    schema turn: [type: :any, required: true],
+           request_id: [type: :string, required: true]
+  end
 
   alias Jido.AI.Directive.ToolExec
   alias Jido.AI.Turn

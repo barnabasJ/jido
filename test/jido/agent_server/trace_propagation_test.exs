@@ -9,7 +9,12 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
 
   defmodule EmitAction do
     @moduledoc false
-    use Jido.Action, name: "emit", schema: []
+    use Jido.Action
+
+    action do
+      name "emit"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       signal = Signal.new!("test.emitted", %{value: 42}, source: "/test")
@@ -19,13 +24,15 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
 
   defmodule TracedAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "traced_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0],
-        received_signals: [type: {:list, :any}, default: []]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "traced_agent"
+      path :domain
+
+      schema counter: [type: :integer, default: 0],
+             received_signals: [type: {:list, :any}, default: []]
+    end
 
     def signal_routes(_ctx) do
       [

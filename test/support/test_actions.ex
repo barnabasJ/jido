@@ -1,17 +1,23 @@
 defmodule JidoTest.PluginTestAction do
   @moduledoc false
-  use Jido.Action,
-    name: "plugin_test_action",
-    schema: []
+  use Jido.Action
+
+  action do
+    name "plugin_test_action"
+    schema []
+  end
 
   def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
 end
 
 defmodule JidoTest.PluginTestAnotherAction do
   @moduledoc false
-  use Jido.Action,
-    name: "plugin_test_another_action",
-    schema: [value: [type: :integer, default: 0]]
+  use Jido.Action
+
+  action do
+    name "plugin_test_another_action"
+    schema value: [type: :integer, default: 0]
+  end
 
   def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx),
     do: {:ok, %{value: value}, []}
@@ -27,18 +33,18 @@ defmodule JidoTest.TestActions do
   Shared test actions for Jido test suite.
   """
 
-  alias Jido.Action
   alias Jido.Agent.Directive
   alias Jido.Agent.SliceUpdate
 
   defmodule BasicAction do
     @moduledoc false
-    use Action,
-      name: "basic_action",
-      description: "A basic action for testing",
-      schema: [
-        value: [type: :integer, required: true]
-      ]
+    use Jido.Action
+
+    action do
+      name "basic_action"
+      description "A basic action for testing"
+      schema value: [type: :integer, required: true]
+    end
 
     def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx) do
       {:ok, %{value: value}, []}
@@ -47,9 +53,12 @@ defmodule JidoTest.TestActions do
 
   defmodule NoSchema do
     @moduledoc false
-    use Action,
-      name: "no_schema",
-      description: "Action with no schema"
+    use Jido.Action
+
+    action do
+      name "no_schema"
+      description "Action with no schema"
+    end
 
     def run(%Jido.Signal{data: %{value: value}}, _slice, _opts, _ctx),
       do: {:ok, %{result: value + 2}, []}
@@ -59,13 +68,13 @@ defmodule JidoTest.TestActions do
 
   defmodule Add do
     @moduledoc false
-    use Action,
-      name: "add",
-      description: "Adds amount to value",
-      schema: [
-        value: [type: :integer, required: true],
-        amount: [type: :integer, default: 1]
-      ]
+    use Jido.Action
+
+    action do
+      name "add"
+      description "Adds amount to value"
+      schema value: [type: :integer, required: true], amount: [type: :integer, default: 1]
+    end
 
     def run(%Jido.Signal{data: %{value: value, amount: amount}}, _slice, _opts, _ctx) do
       {:ok, %{value: value + amount}, []}
@@ -74,9 +83,12 @@ defmodule JidoTest.TestActions do
 
   defmodule EmitAction do
     @moduledoc false
-    use Action,
-      name: "emit_action",
-      description: "Action that returns an emit effect"
+    use Jido.Action
+
+    action do
+      name "emit_action"
+      description "Action that returns an emit effect"
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       signal = %{type: "test.emitted", data: %{value: 42}}
@@ -86,9 +98,12 @@ defmodule JidoTest.TestActions do
 
   defmodule MultiEffectAction do
     @moduledoc false
-    use Action,
-      name: "multi_effect_action",
-      description: "Action that returns multiple effects"
+    use Jido.Action
+
+    action do
+      name "multi_effect_action"
+      description "Action that returns multiple effects"
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       effects = [
@@ -102,10 +117,13 @@ defmodule JidoTest.TestActions do
 
   defmodule MultiSliceAction do
     @moduledoc false
-    use Action,
-      name: "multi_slice_action",
-      description: "Action that returns a SliceUpdate writing two slices in one turn",
-      path: :domain
+    use Jido.Action
+
+    action do
+      name "multi_slice_action"
+      description "Action that returns a SliceUpdate writing two slices in one turn"
+      path :domain
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       {:ok,
@@ -120,11 +138,12 @@ defmodule JidoTest.TestActions do
 
   defmodule IncrementAction do
     @moduledoc "Action that increments the :counter state field"
-    use Action,
-      name: "increment",
-      schema: [
-        amount: [type: :integer, default: 1]
-      ]
+    use Jido.Action
+
+    action do
+      name "increment"
+      schema amount: [type: :integer, default: 1]
+    end
 
     def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       slice = if is_map(slice), do: slice, else: %{}
@@ -135,11 +154,12 @@ defmodule JidoTest.TestActions do
 
   defmodule DecrementAction do
     @moduledoc "Action that decrements the :counter state field"
-    use Action,
-      name: "decrement",
-      schema: [
-        amount: [type: :integer, default: 1]
-      ]
+    use Jido.Action
+
+    action do
+      name "decrement"
+      schema amount: [type: :integer, default: 1]
+    end
 
     def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
       slice = if is_map(slice), do: slice, else: %{}
@@ -150,11 +170,12 @@ defmodule JidoTest.TestActions do
 
   defmodule RecordAction do
     @moduledoc "Action that appends params to the :messages state field"
-    use Action,
-      name: "record",
-      schema: [
-        message: [type: :any, required: false]
-      ]
+    use Jido.Action
+
+    action do
+      name "record"
+      schema message: [type: :any, required: false]
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       messages = Map.get(slice, :messages, [])
@@ -165,11 +186,12 @@ defmodule JidoTest.TestActions do
 
   defmodule SlowAction do
     @moduledoc "Action that sleeps for a configurable delay"
-    use Action,
-      name: "slow",
-      schema: [
-        delay_ms: [type: :integer, default: 100]
-      ]
+    use Jido.Action
+
+    action do
+      name "slow"
+      schema delay_ms: [type: :integer, default: 100]
+    end
 
     def run(%Jido.Signal{data: %{delay_ms: delay}}, _slice, _opts, _ctx) do
       Process.sleep(delay)
@@ -179,11 +201,12 @@ defmodule JidoTest.TestActions do
 
   defmodule FailingAction do
     @moduledoc "Action that always fails with a configurable error message"
-    use Action,
-      name: "failing",
-      schema: [
-        reason: [type: :string, default: "intentional failure"]
-      ]
+    use Jido.Action
+
+    action do
+      name "failing"
+      schema reason: [type: :string, default: "intentional failure"]
+    end
 
     def run(%Jido.Signal{data: %{reason: reason}}, _slice, _opts, _ctx) do
       {:error, reason}

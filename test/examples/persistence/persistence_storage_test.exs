@@ -26,15 +26,19 @@ defmodule JidoExampleTest.PersistenceStorageTest do
 
   defmodule PersistableAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "persistable_agent",
-      path: :domain,
-      description: "An agent demonstrating persistence with ETS storage",
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "persistable_agent"
+      path :domain
+      description "An agent demonstrating persistence with ETS storage"
+
+      schema(
         counter: [type: :integer, default: 0],
         status: [type: :atom, default: :idle],
         notes: [type: {:list, :string}, default: []]
-      ]
+      )
+    end
   end
 
   # ===========================================================================

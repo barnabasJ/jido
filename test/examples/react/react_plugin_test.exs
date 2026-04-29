@@ -66,20 +66,26 @@ defmodule JidoExampleTest.ReactPluginTest do
   ## Plugin skeleton (pseudocode)
 
       defmodule Jido.Plugin.ReAct do
-        use Jido.Plugin,
-          name: "react",
-          path: :react,
-          schema: [
-            messages: [type: {:list, :map}, default: []],
-            step: [type: :atom, default: :idle],
-            max_iterations: [type: :integer, default: 10],
-            iteration: [type: :integer, default: 0]
-          ],
-          actions: [
-            ReAct.StartQuery,
-            ReAct.LLMEmitted,
-            ReAct.ToolCompleted
-          ]
+        use Jido.Plugin
+
+        slice do
+          name "react"
+          path :react
+          schema(
+            [
+              messages: [type: {:list, :map}, default: []],
+              step: [type: :atom, default: :idle],
+              max_iterations: [type: :integer, default: 10],
+              iteration: [type: :integer, default: 0]
+            ]
+          )
+        end
+
+        actions do
+          action ReAct.StartQuery
+          action ReAct.LLMEmitted
+          action ReAct.ToolCompleted
+        end
 
         def signal_routes(_config) do
           [
@@ -96,16 +102,18 @@ defmodule JidoExampleTest.ReactPluginTest do
 
       defmodule MyReActAgent do
         use Jido.Agent,
-          name: "react_agent",
-
-          path: :domain,
-          plugins:    [Jido.Plugin.ReAct],
-          middleware: [
+          extensions: [
             Jido.Middleware.Logger,
-            {Jido.Middleware.Retry, on: ["tool.result"], max: 3, backoff: :exp},
-            {MyApp.Middleware.LoopTimeout, budget: 30_000},
-            Jido.Middleware.LogErrors
+            {Jido.Middleware.Retry, [on: ["tool.result"], max: 3, backoff: :exp]},
+            {MyApp.Middleware.LoopTimeout, [budget: 30000]},
+            Jido.Middleware.LogErrors,
+            Jido.Plugin.ReAct
           ]
+
+        agent do
+          name "react_agent"
+          path :domain
+        end
       end
 
   ## Test walkthrough (pseudocode — becomes real asserts post-0011)

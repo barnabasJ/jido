@@ -12,12 +12,13 @@ defmodule JidoTest.InstanceTest do
   end
 
   defmodule RedisTestAgent do
-    use Jido.Agent,
-      name: "redis_test_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "redis_test_agent"
+      path :domain
+      schema counter: [type: :integer, default: 0]
+    end
 
     @impl true
     def signal_routes(_ctx), do: []

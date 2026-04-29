@@ -22,7 +22,12 @@ defmodule JidoTest.Signal.CallTest do
 
   defmodule EchoAction do
     @moduledoc false
-    use Jido.Action, name: "echo_action", schema: []
+    use Jido.Action
+
+    action do
+      name "echo_action"
+      schema []
+    end
 
     @impl true
     def run(signal, _slice, _opts, _ctx) do
@@ -33,7 +38,12 @@ defmodule JidoTest.Signal.CallTest do
 
   defmodule SilentAction do
     @moduledoc false
-    use Jido.Action, name: "silent_action", schema: []
+    use Jido.Action
+
+    action do
+      name "silent_action"
+      schema []
+    end
 
     @impl true
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
@@ -41,10 +51,13 @@ defmodule JidoTest.Signal.CallTest do
 
   defmodule CallTestAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "call_test_agent",
-      path: :domain,
-      schema: []
+    use Jido.Agent
+
+    agent do
+      name "call_test_agent"
+      path :domain
+      schema []
+    end
 
     def signal_routes(_ctx) do
       [

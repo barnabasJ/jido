@@ -8,7 +8,12 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
 
   defmodule TickAction do
     @moduledoc false
-    use Jido.Action, name: "cron_count", schema: []
+    use Jido.Action
+
+    action do
+      name "cron_count"
+      schema []
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
@@ -19,7 +24,12 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
 
   defmodule RegisterCronAction do
     @moduledoc false
-    use Jido.Action, name: "register_cron", schema: []
+    use Jido.Action
+
+    action do
+      name "register_cron"
+      schema []
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       cron_expr = Map.get(params, :cron)
@@ -34,7 +44,12 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
 
   defmodule CancelCronAction do
     @moduledoc false
-    use Jido.Action, name: "cancel_cron", schema: []
+    use Jido.Action
+
+    action do
+      name "cancel_cron"
+      schema []
+    end
 
     def run(%Jido.Signal{data: %{job_id: job_id}}, slice, _opts, _ctx) do
       {:ok, slice, [Directive.cron_cancel(job_id)]}

@@ -29,9 +29,12 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
 
   defmodule EmitDirectiveAction do
     @moduledoc false
-    use Jido.Action,
-      name: "emit_directive",
-      schema: [directive: [type: :any, required: true]]
+    use Jido.Action
+
+    action do
+      name "emit_directive"
+      schema directive: [type: :any, required: true]
+    end
 
     def run(%Jido.Signal{data: %{directive: directive}}, slice, _opts, _ctx) do
       {:ok, slice || %{}, [directive]}
@@ -40,12 +43,13 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
 
   defmodule HarnessAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "directive_strict_harness",
-      path: :domain,
-      schema: [
-        observed: [type: :any, default: nil]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "directive_strict_harness"
+      path :domain
+      schema observed: [type: :any, default: nil]
+    end
 
     def signal_routes(_ctx) do
       [{"test.directive", EmitDirectiveAction}]
@@ -54,22 +58,31 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
 
   defmodule SuccessAction do
     @moduledoc false
-    use Jido.Action, name: "strict_success"
+    use Jido.Action
+
+    action do
+      name "strict_success"
+    end
+
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{ran: true}, []}
   end
 
   defmodule CaptureAction do
     @moduledoc false
-    use Jido.Action,
-      name: "strict_capture",
-      schema: [
+    use Jido.Action
+
+    action do
+      name "strict_capture"
+
+      schema(
         status: [type: :atom, required: true],
         result: [type: :map, default: %{}],
         reason: [type: :any, default: nil],
         effects: [type: :any, default: []],
         instruction: [type: :any, default: nil],
         meta: [type: :map, default: %{}]
-      ]
+      )
+    end
 
     def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
       slice = slice || %{}
@@ -79,10 +92,13 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
 
   defmodule RoutedAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "strict_routed_agent",
-      path: :domain,
-      schema: [captured: [type: :atom, default: nil]]
+    use Jido.Agent
+
+    agent do
+      name "strict_routed_agent"
+      path :domain
+      schema captured: [type: :atom, default: nil]
+    end
 
     def signal_routes(_ctx) do
       [

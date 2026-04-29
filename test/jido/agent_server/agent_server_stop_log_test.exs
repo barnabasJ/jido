@@ -9,7 +9,12 @@ defmodule JidoTest.AgentServerStopLogTest do
 
   defmodule StopTestAction do
     @moduledoc false
-    use Jido.Action, name: "stop_test", schema: []
+    use Jido.Action
+
+    action do
+      name "stop_test"
+      schema []
+    end
 
     def run(_signal, _slice, _opts, _ctx) do
       {:ok, %{}, [%Directive.Stop{reason: :normal}]}
@@ -18,7 +23,13 @@ defmodule JidoTest.AgentServerStopLogTest do
 
   defmodule TestAgent do
     @moduledoc false
-    use Jido.Agent, name: "test_agent", path: :domain, schema: []
+    use Jido.Agent
+
+    agent do
+      name "test_agent"
+      path :domain
+      schema []
+    end
 
     def signal_routes(_ctx) do
       [{"stop_test", StopTestAction}]

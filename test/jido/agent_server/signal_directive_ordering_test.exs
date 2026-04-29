@@ -19,7 +19,11 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
 
   defmodule Step1Action do
     @moduledoc false
-    use Jido.Action, name: "step1"
+    use Jido.Action
+
+    action do
+      name "step1"
+    end
 
     alias Jido.Agent.Directive
     alias Jido.Signal
@@ -38,7 +42,11 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
 
   defmodule SetFollowupKeyAction do
     @moduledoc false
-    use Jido.Action, name: "set_followup_key"
+    use Jido.Action
+
+    action do
+      name "set_followup_key"
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       slice = slice || %{}
@@ -48,7 +56,11 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
 
   defmodule Step2Action do
     @moduledoc false
-    use Jido.Action, name: "step2"
+    use Jido.Action
+
+    action do
+      name "step2"
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       slice = slice || %{}
@@ -60,14 +72,18 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
 
   defmodule OrderingAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "ordering_agent",
-      path: :domain,
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "ordering_agent"
+      path :domain
+
+      schema(
         step1_cmd_ran: [type: :boolean, default: false],
         step1_followup_ran: [type: :boolean, default: false],
         step2_saw_cmd_ran: [type: :boolean, default: false]
-      ]
+      )
+    end
 
     def signal_routes(_ctx) do
       [

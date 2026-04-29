@@ -12,7 +12,12 @@ defmodule JidoTest.AgentPoolTest do
 
   defmodule GetCountAction do
     @moduledoc false
-    use Jido.Action, name: "get_count", schema: []
+    use Jido.Action
+
+    action do
+      name "get_count"
+      schema []
+    end
 
     def run(_signal, slice, _opts, _ctx) do
       {:ok, Map.put(slice, :last_count, Map.get(slice, :counter, 0)), []}
@@ -21,13 +26,13 @@ defmodule JidoTest.AgentPoolTest do
 
   defmodule PoolTestAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "pool_test_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0],
-        last_count: [type: :integer, default: 0]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "pool_test_agent"
+      path :domain
+      schema counter: [type: :integer, default: 0], last_count: [type: :integer, default: 0]
+    end
 
     def signal_routes(_ctx) do
       [

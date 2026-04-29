@@ -29,12 +29,13 @@ defmodule JidoExampleTest.MutablePodRuntimeTest do
 
   defmodule ReviewWorkerAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "example_mutable_pod_review_worker",
-      path: :domain,
-      schema: [
-        role: [type: :string, default: "worker"]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "example_mutable_pod_review_worker"
+      path :domain
+      schema role: [type: :string, default: "worker"]
+    end
   end
 
   defmodule MutableReviewPod do
