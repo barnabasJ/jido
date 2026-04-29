@@ -9,8 +9,6 @@ defmodule JidoTest.AgentServer.StopChildTest do
 
     agent do
       name "stop_child_parent_agent"
-      path :domain
-      schema []
     end
   end
 
@@ -20,8 +18,6 @@ defmodule JidoTest.AgentServer.StopChildTest do
 
     agent do
       name "stop_child_child_agent"
-      path :domain
-      schema []
     end
   end
 

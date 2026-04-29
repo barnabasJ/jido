@@ -33,7 +33,7 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
         unquote(quoted_basic_accessors())
         unquote(quoted_plugin_accessors())
         unquote(quoted_plugin_config_accessors())
-        unquote(quoted_new_function())
+        unquote(quoted_new_function(state))
         unquote(quoted_cmd_function())
         unquote(quoted_utility_functions())
         unquote(quoted_callbacks_and_overridables())
@@ -113,8 +113,11 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
       @spec vsn() :: String.t() | nil
       def vsn, do: @validated_opts[:vsn]
 
-      @doc "Returns the atom slice key where the agent's user-domain state lives."
-      @spec path() :: atom()
+      @doc """
+      Returns the atom slice key where the agent's user-domain state lives,
+      or `nil` for a pure composition agent that has no own slice.
+      """
+      @spec path() :: atom() | nil
       def path, do: @validated_opts.path
 
       @doc "Returns the merged schema (base + plugin schemas)."
@@ -252,7 +255,9 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
     end
   end
 
-  defp quoted_new_function do
+  defp quoted_new_function(state) do
+    own_path = state.validated_opts.path
+
     quote do
       @doc "Creates a new agent with optional initial state."
       @spec new(keyword() | map()) :: Jido.Agent.t()
@@ -282,24 +287,8 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
         }
       end
 
-      defp __build_initial_state__(opts) do
-        user_state = __wrap_user_state__(opts[:state] || %{})
-
-        own_path = path()
-        own_user = Map.get(user_state, own_path, %{})
-        own_slice = Jido.Agent.__seed_own_slice__(@validated_opts[:schema], own_user)
-
-        plugin_slices = __seed_slice_states__(@plugin_instances, user_state)
-        bare_slice_states = __seed_slice_states__(@slice_instances, user_state)
-
-        known_slice_paths = [own_path | @plugin_paths ++ @slice_paths]
-        leftover = Map.drop(user_state, known_slice_paths)
-
-        leftover
-        |> Map.merge(plugin_slices)
-        |> Map.merge(bare_slice_states)
-        |> Map.put(own_path, own_slice)
-      end
+      unquote(quoted_build_initial_state(own_path))
+      unquote(quoted_wrap_user_state(own_path))
 
       defp __seed_slice_states__(instances, user_state) do
         Enum.reduce(instances, %{}, fn instance, acc ->
@@ -309,9 +298,59 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
           Map.put(acc, instance.path, slice)
         end)
       end
+    end
+  end
 
+  defp quoted_build_initial_state(nil) do
+    quote do
+      defp __build_initial_state__(opts) do
+        user_state = __wrap_user_state__(opts[:state] || %{})
+
+        plugin_slices = __seed_slice_states__(@plugin_instances, user_state)
+        bare_slice_states = __seed_slice_states__(@slice_instances, user_state)
+
+        known_slice_paths = @plugin_paths ++ @slice_paths
+        leftover = Map.drop(user_state, known_slice_paths)
+
+        leftover
+        |> Map.merge(plugin_slices)
+        |> Map.merge(bare_slice_states)
+      end
+    end
+  end
+
+  defp quoted_build_initial_state(own_path) when is_atom(own_path) do
+    quote do
+      defp __build_initial_state__(opts) do
+        user_state = __wrap_user_state__(opts[:state] || %{})
+
+        plugin_slices = __seed_slice_states__(@plugin_instances, user_state)
+        bare_slice_states = __seed_slice_states__(@slice_instances, user_state)
+
+        known_slice_paths = [unquote(own_path) | @plugin_paths ++ @slice_paths]
+        leftover = Map.drop(user_state, known_slice_paths)
+
+        own_user = Map.get(user_state, unquote(own_path), %{})
+        own_slice = Jido.Agent.__seed_own_slice__(@validated_opts[:schema], own_user)
+
+        leftover
+        |> Map.merge(plugin_slices)
+        |> Map.merge(bare_slice_states)
+        |> Map.put(unquote(own_path), own_slice)
+      end
+    end
+  end
+
+  defp quoted_wrap_user_state(nil) do
+    quote do
+      defp __wrap_user_state__(%{} = user_state), do: user_state
+    end
+  end
+
+  defp quoted_wrap_user_state(own_path) when is_atom(own_path) do
+    quote do
       defp __wrap_user_state__(%{} = user_state) do
-        known_slices = [path() | @plugin_paths ++ @slice_paths]
+        known_slices = [unquote(own_path) | @plugin_paths ++ @slice_paths]
 
         cond do
           map_size(user_state) == 0 ->
@@ -321,7 +360,7 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
             user_state
 
           true ->
-            %{path() => user_state}
+            %{unquote(own_path) => user_state}
         end
       end
     end

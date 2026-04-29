@@ -54,7 +54,6 @@ defmodule Jido.AI.ReActE2ETest do
 
     agent do
       name "react_e2e_no_tools"
-      path :state
     end
   end
 
@@ -79,7 +78,6 @@ defmodule Jido.AI.ReActE2ETest do
 
     agent do
       name "react_e2e_echo"
-      path :state
     end
   end
 
@@ -104,7 +102,6 @@ defmodule Jido.AI.ReActE2ETest do
 
     agent do
       name "react_e2e_add"
-      path :state
     end
   end
 

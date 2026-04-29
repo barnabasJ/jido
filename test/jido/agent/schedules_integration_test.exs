@@ -82,7 +82,6 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
 
             agent do
               name "spec_agent_#{unique}"
-              path :domain
             end
 
             schedules do

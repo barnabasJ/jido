@@ -55,8 +55,6 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
 
     agent do
       name "pod_mutation_slow_worker"
-      path :domain
-      schema []
     end
   end
 

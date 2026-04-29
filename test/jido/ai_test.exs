@@ -27,7 +27,6 @@ defmodule Jido.AITest do
 
     agent do
       name "math"
-      path :state
     end
   end
 
@@ -60,7 +59,6 @@ defmodule Jido.AITest do
 
     agent do
       name "failing"
-      path :state
     end
   end
 
@@ -79,7 +77,6 @@ defmodule Jido.AITest do
 
     agent do
       name "tight"
-      path :state
     end
   end
 
@@ -90,7 +87,6 @@ defmodule Jido.AITest do
 
     agent do
       name "no_model"
-      path :state
     end
   end
 
@@ -444,7 +440,6 @@ defmodule Jido.AITest do
 
         agent do
           name "slice_key"
-          path :state
         end
       end
 
@@ -475,7 +470,6 @@ defmodule Jido.AITest do
 
         agent do
           name "slice_key_override"
-          path :state
         end
       end
 

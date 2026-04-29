@@ -39,7 +39,6 @@ defmodule JidoTest.Identity.SliceTest do
 
       agent do
         name "identity_slice_test_agent"
-        path :domain
       end
     end
 
@@ -49,7 +48,6 @@ defmodule JidoTest.Identity.SliceTest do
 
       agent do
         name "identity_slice_test_no_identity"
-        path :domain
       end
     end
 

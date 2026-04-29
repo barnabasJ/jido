@@ -74,7 +74,6 @@ defmodule Jido.Pod do
       opts
       |> Keyword.delete(:topology)
       |> Keyword.put(:plugins, pod_plugins ++ (user_plugins || []))
-      |> Keyword.put_new(:path, :app)
       |> then(fn resolved_opts ->
         if is_nil(remaining_default_slices) do
           Keyword.delete(resolved_opts, :default_slices)

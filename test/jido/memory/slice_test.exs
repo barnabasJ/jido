@@ -39,7 +39,6 @@ defmodule JidoTest.Memory.SliceTest do
 
       agent do
         name "memory_slice_test_agent"
-        path :domain
       end
     end
 
@@ -49,7 +48,6 @@ defmodule JidoTest.Memory.SliceTest do
 
       agent do
         name "memory_slice_test_no_memory"
-        path :domain
       end
     end
 

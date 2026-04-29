@@ -43,7 +43,6 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
 
       agent do
         name "plugin_agent"
-        path :domain
       end
     end
 
@@ -60,7 +59,6 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
 
       agent do
         name "slice_agent"
-        path :domain
       end
     end
 
@@ -77,7 +75,6 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
 
       agent do
         name "middleware_agent"
-        path :domain
       end
     end
 
@@ -96,7 +93,6 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
 
       agent do
         name "override_to_slice_agent"
-        path :domain
       end
     end
 
@@ -115,7 +111,6 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
 
           agent do
             name "bad_override"
-            path :domain
           end
         end
       end
@@ -132,7 +127,6 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
 
           agent do
             name "bad_middleware_override"
-            path :domain
           end
         end
       end
@@ -152,7 +146,6 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
 
                        agent do
                          name "bad_agent"
-                         path :domain
                        end
                      end
                    end
@@ -166,7 +159,6 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
 
       agent do
         name "overridable_agent"
-        path :domain
       end
 
       def signal_routes, do: [{"override.fired", JidoTest.PluginTestAction}]

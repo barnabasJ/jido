@@ -1129,7 +1129,6 @@ defmodule JidoTest.AgentServerTest do
 
       agent do
         name "agent_with_scheduled_plugin"
-        path :domain
       end
     end
 

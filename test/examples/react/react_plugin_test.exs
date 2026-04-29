@@ -106,7 +106,6 @@ defmodule JidoExampleTest.ReactPluginTest do
 
         agent do
           name "react_agent"
-          path :domain
         end
       end
 

@@ -27,8 +27,6 @@ defmodule JidoTest.AgentServerStopLogTest do
 
     agent do
       name "test_agent"
-      path :domain
-      schema []
     end
 
     def signal_routes(_ctx) do

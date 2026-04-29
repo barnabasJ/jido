@@ -69,7 +69,6 @@ defmodule Jido.Dsl.MiddlewareTest do
 
       agent do
         name "middleware_agent"
-        path :domain
       end
     end
 
@@ -99,7 +98,6 @@ defmodule Jido.Dsl.MiddlewareTest do
 
           agent do
             name "bad_middleware_agent"
-            path :domain
           end
         end
       end

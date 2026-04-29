@@ -11,7 +11,6 @@ defmodule JidoTest.Plugin.FSMTest do
 
     agent do
       name "fsm_default"
-      path :app
     end
   end
 
@@ -34,7 +33,6 @@ defmodule JidoTest.Plugin.FSMTest do
 
     agent do
       name "fsm_configured"
-      path :app
     end
   end
 

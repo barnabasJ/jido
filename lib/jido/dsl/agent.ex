@@ -40,13 +40,16 @@ defmodule Jido.Dsl.Agent do
       vsn: [type: :string],
       path: [
         type: :atom,
-        required: true,
-        doc: "Atom slice key where the agent's user-domain state lives."
+        doc:
+          "Atom slice key where the agent's user-domain state lives. " <>
+            "Required when `schema:` is set; omit both for a pure composition agent."
       ],
       schema: [
         type: :any,
         default: [],
-        doc: "Zoi or NimbleOptions schema for the agent's slice state."
+        doc:
+          "Zoi or NimbleOptions schema for the agent's slice state. " <>
+            "Required when `path:` is set; omit both for a pure composition agent."
       ]
     ]
   }
@@ -105,6 +108,7 @@ defmodule Jido.Dsl.Agent do
       Jido.Dsl.Agent.Transformers.GenerateAccessors
     ],
     verifiers: [
+      Jido.Dsl.Agent.Verifiers.PathSchemaPair,
       Jido.Dsl.Agent.Verifiers.UniquePaths,
       Jido.Dsl.Agent.Verifiers.NoRouteConflicts,
       Jido.Dsl.Agent.Verifiers.NoSectionNameCollisions

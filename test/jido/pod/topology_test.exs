@@ -10,7 +10,6 @@ defmodule JidoTest.Pod.TopologyTest do
 
     agent do
       name "pod_topology_worker"
-      path :domain
     end
   end
 

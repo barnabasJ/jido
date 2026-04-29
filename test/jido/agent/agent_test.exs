@@ -11,7 +11,6 @@ defmodule JidoTest.AgentTest do
 
     agent do
       name "configured_routes_agent"
-      path :domain
     end
 
     signal_routes do
@@ -25,7 +24,6 @@ defmodule JidoTest.AgentTest do
 
     agent do
       name "extending_routes_agent"
-      path :domain
     end
 
     signal_routes do
@@ -40,7 +38,6 @@ defmodule JidoTest.AgentTest do
 
     agent do
       name "legacy_routes_agent"
-      path :domain
     end
 
     def signal_routes do
@@ -464,7 +461,6 @@ defmodule JidoTest.AgentTest do
 
             agent do
               name "conflict_agent"
-              path :domain
             end
           end
         end)

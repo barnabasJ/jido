@@ -216,7 +216,6 @@ defmodule Jido.Dsl.SliceTest do
 
       agent do
         name "bare_slice_agent"
-        path :app
       end
     end
 
@@ -239,7 +238,6 @@ defmodule Jido.Dsl.SliceTest do
 
           agent do
             name "bare_as_plugin_agent"
-            path :domain
           end
         end
       end

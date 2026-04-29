@@ -22,11 +22,9 @@ defmodule JidoTest.DiscoveryTest do
 
     agent do
       name "discovery_test_agent"
-      path :domain
       description "Test agent for discovery"
       category "test"
       tags ["discovery", "test"]
-      schema []
     end
   end
 

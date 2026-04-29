@@ -14,7 +14,6 @@ defmodule JidoTest.TestAgents do
 
     agent do
       name "minimal_agent"
-      path :domain
     end
 
     def signal_routes(_ctx), do: []
@@ -145,7 +144,6 @@ defmodule JidoTest.TestAgents do
 
     agent do
       name "agent_with_plugin_routes"
-      path :domain
     end
 
     def signal_routes(_ctx), do: []
@@ -161,7 +159,6 @@ defmodule JidoTest.TestAgents do
 
     agent do
       name "agent_multi_instance"
-      path :domain
     end
 
     def signal_routes(_ctx), do: []

@@ -77,7 +77,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
         agent do
           name "bare_slice_agent"
-          path :domain
         end
       end
 
@@ -95,7 +94,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
         agent do
           name "configured_slice_agent"
-          path :domain
         end
       end
 
@@ -112,7 +110,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
         agent do
           name "keyword_slice_agent"
-          path :domain
         end
       end
 
@@ -129,7 +126,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
         agent do
           name "routed_slice_agent"
-          path :domain
         end
       end
 
@@ -149,7 +145,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
         agent do
           name "multiple_slices_agent"
-          path :domain
         end
       end
 
@@ -170,7 +165,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
         agent do
           name "slice_caps_agent"
-          path :domain
         end
       end
 
@@ -221,7 +215,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
             agent do
               name "slice_conflict_agent"
-              path :domain
             end
           end
         end)
@@ -244,7 +237,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
           agent do
             name "rejects_bare_as_plugin_agent"
-            path :domain
           end
         end
       end
@@ -261,7 +253,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
                        agent do
                          name "rejects_non_slice_agent"
-                         path :domain
                        end
                      end
                    end
@@ -279,7 +270,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
         agent do
           name "default_slices_agent"
-          path :domain
         end
       end
 

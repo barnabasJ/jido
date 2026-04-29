@@ -11,8 +11,6 @@ defmodule JidoTest.Pod.Mutation.PlannerTest do
 
     agent do
       name "mutation_planner_worker"
-      path :domain
-      schema []
     end
   end
 

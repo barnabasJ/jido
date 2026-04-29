@@ -215,7 +215,15 @@ The host's `signal_routes` and `schedules` sections don't depend on
   - `path` set, `schema` not set → `CompileError`.
   - `schema` set, `path` not set → `CompileError`.
   - Both set → compiles (existing happy path).
-- `test/jido/dsl/extension_path_override_test.exs` — covers:
+- `test/jido/dsl/extension_path_override_test.exs` — task 0038 ships
+  the read-side hook only (the contribution mechanism it plugs into is
+  task 0041). The 0038 test exercises
+  `Jido.Dsl.Agent.Transformers.WalkExtensions.apply_section_path_override/2`
+  via a stub slice that exports `__jido_host_section__/0` and a
+  hand-built `dsl_state` map, locking the override-resolution contract
+  without requiring 0041's `Jido.Slice.Extension` macro.
+
+  The full user-facing scenarios are **deferred to task 0041**:
   - `memory do path :short_term end` mounts `Jido.Memory.Slice` at
     `:short_term`.
   - Path-overridden slice is still routed correctly (its

@@ -68,7 +68,6 @@ defmodule JidoTest.Thread.SliceTest do
 
       agent do
         name "thread_slice_test_agent"
-        path :domain
       end
     end
 
@@ -78,7 +77,6 @@ defmodule JidoTest.Thread.SliceTest do
 
       agent do
         name "thread_slice_test_no_thread"
-        path :domain
       end
     end
 

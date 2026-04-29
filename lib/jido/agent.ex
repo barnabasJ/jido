@@ -274,8 +274,10 @@ defmodule Jido.Agent do
                            path:
                              Zoi.atom(
                                description:
-                                 "Required atom slice key where the agent's user-domain state lives."
+                                 "Atom slice key where the agent's user-domain state lives. " <>
+                                   "Optional — required only when `schema:` is set."
                              )
+                             |> Zoi.optional()
                          },
                          coerce: true
                        )

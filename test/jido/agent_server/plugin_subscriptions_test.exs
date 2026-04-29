@@ -227,7 +227,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
     agent do
       name "agent_with_sensor_plugin"
-      path :domain
     end
   end
 
@@ -272,7 +271,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
     agent do
       name "agent_with_static_sub_plugin"
-      path :domain
     end
   end
 
@@ -283,7 +281,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
     agent do
       name "agent_with_multi_sensor_plugin"
-      path :domain
     end
   end
 
@@ -294,7 +291,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
     agent do
       name "agent_with_no_subs_plugin"
-      path :domain
     end
   end
 
@@ -307,7 +303,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
     agent do
       name "agent_with_plugin_without_callback"
-      path :domain
     end
   end
 
@@ -321,7 +316,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
     agent do
       name "agent_with_multiple_plugins"
-      path :domain
     end
   end
 

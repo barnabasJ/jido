@@ -144,7 +144,6 @@ defmodule JidoTest.SliceTest do
 
       agent do
         name "schema_agent"
-        path :app
       end
     end
 
@@ -162,7 +161,6 @@ defmodule JidoTest.SliceTest do
 
         agent do
           name "schema_agent_configured"
-          path :app
         end
       end
 

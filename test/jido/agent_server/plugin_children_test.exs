@@ -90,7 +90,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
 
     agent do
       name "no_child_agent"
-      path :domain
     end
   end
 
@@ -102,7 +101,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
 
     agent do
       name "single_child_agent"
-      path :domain
     end
   end
 
@@ -116,7 +114,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
 
     agent do
       name "configured_child_agent"
-      path :domain
     end
   end
 
@@ -128,7 +125,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
 
     agent do
       name "multi_child_agent"
-      path :domain
     end
   end
 
@@ -140,7 +136,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
 
     agent do
       name "invalid_child_agent"
-      path :domain
     end
   end
 

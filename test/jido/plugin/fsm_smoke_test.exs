@@ -19,7 +19,6 @@ defmodule Jido.Plugin.FSMSmokeTest do
 
     agent do
       name "default_fsm_agent"
-      path :app
     end
   end
 
@@ -42,7 +41,6 @@ defmodule Jido.Plugin.FSMSmokeTest do
 
     agent do
       name "configured_fsm_agent"
-      path :app
     end
   end
 

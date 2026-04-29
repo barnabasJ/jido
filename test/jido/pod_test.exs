@@ -13,7 +13,6 @@ defmodule JidoTest.PodTest do
 
     agent do
       name "pod_test_worker"
-      path :domain
     end
   end
 

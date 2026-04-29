@@ -61,7 +61,6 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
     agent do
       name "agent_with_routes"
-      path :domain
     end
 
     def signal_routes(_ctx) do
@@ -78,7 +77,6 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
     agent do
       name "agent_with_configured_routes"
-      path :domain
     end
 
     signal_routes do
@@ -92,7 +90,6 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
     agent do
       name "agent_without_routes"
-      path :domain
     end
   end
 
@@ -103,7 +100,6 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
     agent do
       name "agent_with_plugins"
-      path :domain
     end
   end
 

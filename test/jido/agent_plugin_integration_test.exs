@@ -188,7 +188,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     agent do
       name "single_skill_agent"
-      path :domain
     end
   end
 
@@ -203,7 +202,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     agent do
       name "multi_skill_agent"
-      path :domain
     end
   end
 
@@ -218,7 +216,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     agent do
       name "configured_skill_agent"
-      path :domain
     end
   end
 
@@ -249,7 +246,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     agent do
       name "three_skill_agent"
-      path :domain
     end
   end
 
@@ -261,7 +257,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     agent do
       name "minimal_skill_agent"
-      path :domain
     end
   end
 
@@ -516,7 +511,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
         agent do
           name "no_skill_agent"
-          path :domain
         end
       end
 
@@ -621,7 +615,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
       agent do
         name "capability_agent"
-        path :domain
       end
     end
 
@@ -658,7 +651,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
         agent do
           name "aliased_cap_agent"
-          path :domain
         end
       end
 
@@ -683,7 +675,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
         agent do
           name "multi_instance_cap_agent"
-          path :domain
         end
       end
 
@@ -706,7 +697,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
         agent do
           name "multi_instance_cap_agent2"
-          path :domain
         end
       end
 
@@ -873,7 +863,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
         agent do
           name "dup_agent"
-          path :domain
         end
       end
 
@@ -919,7 +908,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
         agent do
           name "shared_action_agent"
-          path :domain
         end
       end
 
@@ -972,7 +960,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
       agent do
         name "multi_slack_agent"
-        path :domain
       end
     end
 
@@ -988,7 +975,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
       agent do
         name "mixed_instance_agent"
-        path :domain
       end
     end
 
@@ -1081,7 +1067,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
             agent do
               name "duplicate_no_as"
-              path :domain
             end
           end
         end)
@@ -1101,7 +1086,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
             agent do
               name "duplicate_same_as"
-              path :domain
             end
           end
         end)
@@ -1120,7 +1104,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
         agent do
           name "different_as_agent"
-          path :domain
         end
       end
 

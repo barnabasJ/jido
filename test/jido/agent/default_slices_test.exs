@@ -146,7 +146,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
         agent do
           name "ds_agent_no_defaults"
-          path :domain
         end
       end
 
@@ -165,7 +164,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
         agent do
           name "ds_agent_disable_defaults"
-          path :domain
         end
       end
 
@@ -180,7 +178,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
         agent do
           name "ds_agent_user_only"
-          path :domain
         end
       end
 
@@ -200,7 +197,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
         agent do
           name "ds_agent_with_jido"
-          path :domain
         end
       end
 
@@ -221,7 +217,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
         agent do
           name "ds_agent_jido_override"
-          path :domain
         end
       end
 
@@ -242,7 +237,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
         agent do
           name "ds_agent_replacement"
-          path :domain
         end
       end
 
@@ -265,7 +259,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
         agent do
           name "ds_agent_mount_order"
-          path :domain
         end
       end
 

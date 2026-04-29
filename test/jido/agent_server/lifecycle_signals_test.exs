@@ -9,8 +9,6 @@ defmodule JidoTest.AgentServer.LifecycleSignalsTest do
 
     agent do
       name "lifecycle_signals_agent"
-      path :domain
-      schema []
     end
 
     def signal_routes(_ctx), do: []

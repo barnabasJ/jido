@@ -55,8 +55,6 @@ defmodule JidoTest.Signal.CallTest do
 
     agent do
       name "call_test_agent"
-      path :domain
-      schema []
     end
 
     def signal_routes(_ctx) do

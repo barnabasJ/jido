@@ -109,7 +109,6 @@ defmodule Jido.Dsl.PluginTest do
 
       agent do
         name "plugin_agent"
-        path :domain
       end
     end
 
@@ -134,7 +133,6 @@ defmodule Jido.Dsl.PluginTest do
 
         agent do
           name "plugin_as_slice_agent"
-          path :domain
         end
       end
 

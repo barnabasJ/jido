@@ -93,7 +93,6 @@ defmodule JidoExampleTest.PluginBasicsTest do
 
     agent do
       name "notes_agent"
-      path :domain
     end
   end
 
@@ -104,7 +103,6 @@ defmodule JidoExampleTest.PluginBasicsTest do
 
     agent do
       name "configured_notes_agent"
-      path :domain
     end
   end
 

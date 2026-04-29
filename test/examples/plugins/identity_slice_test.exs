@@ -46,9 +46,7 @@ defmodule JidoExampleTest.IdentitySliceTest do
 
     agent do
       name "web_crawler"
-      path :domain
       description "Agent with identity for capability-based routing"
-      schema []
     end
 
     def signal_routes(_ctx) do

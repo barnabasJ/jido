@@ -101,7 +101,6 @@ defmodule Jido.Dsl.AgentTest do
 
       agent do
         name "route_agent"
-        path :domain
       end
 
       signal_routes do
@@ -124,22 +123,41 @@ defmodule Jido.Dsl.AgentTest do
           use Jido.Agent
 
           agent do
-            path :domain
           end
         end
       end
     end
 
-    test "missing required `path` raises" do
-      assert_raise Spark.Error.DslError, fn ->
-        defmodule MissingPath do
-          use Jido.Agent
+    test "schema without path warns at compile time" do
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          defmodule SchemaNoPath do
+            use Jido.Agent
 
-          agent do
-            name "no_path"
+            agent do
+              name "schema_no_path"
+              schema counter: [type: :integer, default: 0]
+            end
           end
-        end
-      end
+        end)
+
+      assert stderr =~ ~r/`schema:` is set.*but `path:` is not/
+    end
+
+    test "path without schema warns at compile time" do
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          defmodule PathNoSchema do
+            use Jido.Agent
+
+            agent do
+              name "path_no_schema"
+              path :domain
+            end
+          end
+        end)
+
+      assert stderr =~ ~r/`path: :domain` is set.*but `schema:` is not/
     end
   end
 end

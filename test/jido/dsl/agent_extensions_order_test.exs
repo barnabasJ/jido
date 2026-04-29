@@ -40,7 +40,6 @@ defmodule Jido.Dsl.AgentExtensionsOrderTest do
 
     agent do
       name "ordered_agent"
-      path :domain
     end
   end
 
@@ -55,7 +54,6 @@ defmodule Jido.Dsl.AgentExtensionsOrderTest do
 
     agent do
       name "interleaved_agent"
-      path :domain
     end
   end
 

@@ -32,7 +32,9 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     default_slice_instances =
       Enum.map(default_slice_list, &SliceInstance.new/1)
 
-    slice_instances = default_slice_instances ++ slice_instances_from_user
+    slice_instances =
+      (default_slice_instances ++ slice_instances_from_user)
+      |> Enum.map(&apply_section_path_override(&1, dsl_state))
 
     plugin_specs =
       Enum.map(plugin_instances, fn instance ->
@@ -207,4 +209,34 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   defp build_decl(module, opts) when opts == %{}, do: module
   defp build_decl(module, opts) when opts == [], do: module
   defp build_decl(module, opts), do: {module, opts}
+
+  @doc """
+  Resolves a slice instance's mount path, honoring a host-level
+  `path:` override declared inside the slice's contributed DSL section.
+
+  Pre-wired for the contribution mechanism in task 0041: when a slice
+  exports `__jido_host_section__/0` (returned by the
+  `Jido.Slice.Extension` macro that task 0041 introduces), the agent's
+  DSL state may contain that section with a `:path` option set by the
+  host (e.g. `memory do path :short_term end`). This helper reads that
+  override and applies it to the slice instance, falling back to the
+  slice's declared `path/0` when no override is present.
+
+  Slices without `__jido_host_section__/0` (the only kind today) are
+  returned unchanged.
+  """
+  @spec apply_section_path_override(SliceInstance.t(), map()) :: SliceInstance.t()
+  def apply_section_path_override(%SliceInstance{module: module} = instance, dsl_state) do
+    case section_path_override(module, dsl_state) do
+      nil -> instance
+      override when is_atom(override) -> %{instance | path: override}
+    end
+  end
+
+  defp section_path_override(module, dsl_state) do
+    if function_exported?(module, :__jido_host_section__, 0) do
+      section_name = module.__jido_host_section__()
+      Spark.Dsl.Transformer.get_option(dsl_state, [section_name], :path)
+    end
+  end
 end
