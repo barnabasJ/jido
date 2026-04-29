@@ -379,16 +379,26 @@ defmodule Jido.Agent do
         if map_size(merged_input) == 0, do: nil, else: merged_input
 
       schema ->
-        case Zoi.parse(schema, merged_input) do
-          {:ok, validated} ->
-            validated
+        seed_plugin_slice_from_schema(plugin_module, schema, merged_input)
+    end
+  end
 
-          {:error, errors} ->
-            raise Jido.Agent.SliceValidationError,
-              path: plugin_module.path(),
-              module: plugin_module,
-              errors: errors
-        end
+  defp seed_plugin_slice_from_schema(plugin_module, schema, merged_input) do
+    case Zoi.parse(schema, merged_input) do
+      {:ok, validated} ->
+        validated
+
+      {:error, _errors} when map_size(merged_input) == 0 ->
+        # Schema has required fields without defaults and the user supplied
+        # nothing — preserve the lazy-init contract: the slice starts as nil
+        # and an action (typically `Ensure`) materializes it on demand.
+        nil
+
+      {:error, errors} ->
+        raise Jido.Agent.SliceValidationError,
+          path: plugin_module.path(),
+          module: plugin_module,
+          errors: errors
     end
   end
 

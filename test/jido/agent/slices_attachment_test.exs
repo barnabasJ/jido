@@ -19,6 +19,10 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
              })
     end
 
+    signal_routes do
+      route "simple.noop", JidoTest.PluginTestAction
+    end
+
     capabilities do
       capability :simple
     end
@@ -47,6 +51,11 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     slice do
       name "other_slice"
       path :other
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "other.noop", JidoTest.PluginTestAction
     end
   end
 
@@ -57,6 +66,11 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     slice do
       name "bare_plugin"
       path :bare_plugin
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "bare_plugin.noop", JidoTest.PluginTestAction
     end
   end
 
@@ -203,6 +217,11 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
         slice do
           name "simple_dup"
           path :simple
+          schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+        end
+
+        signal_routes do
+          route "simple_dup.noop", JidoTest.PluginTestAction
         end
       end
 

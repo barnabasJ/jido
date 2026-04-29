@@ -2,6 +2,7 @@ defmodule JidoTest.Identity.SliceTest do
   use ExUnit.Case, async: true
 
   alias Jido.Identity
+  alias Jido.Identity.Actions
   alias Jido.Identity.Slice, as: IdentitySlice
 
   describe "slice metadata" do
@@ -17,12 +18,30 @@ defmodule JidoTest.Identity.SliceTest do
       assert :identity in IdentitySlice.capabilities()
     end
 
-    test "has no actions" do
-      assert IdentitySlice.actions() == []
+    test "exposes Identity.Actions.{Ensure,Evolve,UpdateProfile} via actions/0" do
+      action_set = MapSet.new(IdentitySlice.actions())
+
+      assert MapSet.equal?(
+               action_set,
+               MapSet.new([Actions.Ensure, Actions.Evolve, Actions.UpdateProfile])
+             )
     end
 
-    test "schema is nil (no auto-initialization)" do
-      assert IdentitySlice.schema() == nil
+    test "schema is bound to Jido.Identity.schema/0" do
+      assert IdentitySlice.schema() == Identity.schema()
+    end
+
+    test "exposes one signal route per action" do
+      route_types =
+        IdentitySlice.signal_routes()
+        |> Enum.map(fn
+          {type, _action} -> type
+          {type, _action, _opts} -> type
+        end)
+
+      assert "jido.identity.ensure" in route_types
+      assert "jido.identity.evolve" in route_types
+      assert "jido.identity.update_profile" in route_types
     end
   end
 
@@ -56,7 +75,7 @@ defmodule JidoTest.Identity.SliceTest do
       assert Jido.Identity.Slice in modules
     end
 
-    test "agent.state[:identity] starts nil (no auto-init)" do
+    test "agent.state[:identity] starts nil (lazy init)" do
       agent = AgentWithIdentity.new()
       assert Map.get(agent.state, :identity) == nil
     end
@@ -70,6 +89,18 @@ defmodule JidoTest.Identity.SliceTest do
       agent = AgentWithIdentity.new()
       agent = Identity.Agent.ensure(agent)
       assert %Identity{} = Identity.Agent.get(agent)
+    end
+
+    test "UpdateProfile action mutates agent.state.identity" do
+      agent = AgentWithIdentity.new()
+
+      {:ok, agent, []} =
+        AgentWithIdentity.cmd(
+          agent,
+          {Actions.UpdateProfile, %{profile: %{nickname: "Sam"}}}
+        )
+
+      assert agent.state.identity.profile[:nickname] == "Sam"
     end
   end
 end

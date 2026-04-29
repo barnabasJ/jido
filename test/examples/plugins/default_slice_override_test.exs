@@ -37,6 +37,10 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
 
       description "Custom replacement for the default thread slice."
     end
+
+    signal_routes do
+      route "custom_thread.noop", JidoTest.PluginTestAction
+    end
   end
 
   # ===========================================================================

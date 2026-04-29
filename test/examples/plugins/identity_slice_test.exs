@@ -33,6 +33,11 @@ defmodule JidoExampleTest.IdentitySliceTest do
       name "custom_identity"
       path :identity
       description "Custom identity slice override."
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "custom_identity.noop", JidoTest.PluginTestAction
     end
   end
 

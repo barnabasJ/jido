@@ -1,10 +1,19 @@
 defmodule Jido.Identity.Slice do
   @moduledoc """
-  Default slice for identity state management.
+  Identity slice — owns the `:identity` key in agent state, mounted as a
+  `%Jido.Identity{}` self-model.
 
-  Owns the `:identity` slice key in agent state. The slice does not
-  initialize an identity by default — identities are created on demand via
-  `Jido.Identity.Agent.ensure/2`.
+  ## State shape
+
+  Bound to `Jido.Identity.schema/0`. The slice starts as `nil` (lazy-init);
+  the first inbound `jido.identity.*` signal materializes a fresh
+  `%Jido.Identity{}` via the relevant action.
+
+  ## Routes
+
+      route "jido.identity.ensure",         Actions.Ensure
+      route "jido.identity.evolve",         Actions.Evolve
+      route "jido.identity.update_profile", Actions.UpdateProfile
 
   ## Default slice
 
@@ -14,20 +23,24 @@ defmodule Jido.Identity.Slice do
       use Jido.Agent,
         name: "minimal",
         default_slices: %{identity: false}
-
-  ## State Key
-
-  The identity is stored at `agent.state.identity` as a `Jido.Identity`
-  struct. Access helpers are provided by `Jido.Identity.Agent` and related
-  modules.
   """
+
+  alias Jido.Identity
+  alias Jido.Identity.Actions
 
   use Jido.Slice
 
   slice do
     name "identity"
     path :identity
-    description "Identity state management for agent self-model."
+    description "Identity self-model for agent (lifecycle facts, profile)."
+    schema Identity.schema()
+  end
+
+  signal_routes do
+    route "jido.identity.ensure", Actions.Ensure
+    route "jido.identity.evolve", Actions.Evolve
+    route "jido.identity.update_profile", Actions.UpdateProfile
   end
 
   capabilities do

@@ -46,6 +46,10 @@ defmodule Jido.Thread do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for Thread."
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
+
   @doc "Create a new empty thread"
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
@@ -78,6 +82,23 @@ defmodule Jido.Thread do
         rev: thread.rev + length(prepared_entries),
         updated_at: now,
         stats: %{thread.stats | entry_count: thread.stats.entry_count + length(prepared_entries)}
+    }
+  end
+
+  @doc """
+  Reset the thread to an empty state, preserving identity (`id`,
+  `metadata`) and bumping the revision.
+  """
+  @spec clear(t()) :: t()
+  def clear(%__MODULE__{} = thread) do
+    now = System.system_time(:millisecond)
+
+    %{
+      thread
+      | entries: [],
+        rev: thread.rev + 1,
+        updated_at: now,
+        stats: %{thread.stats | entry_count: 0}
     }
   end
 

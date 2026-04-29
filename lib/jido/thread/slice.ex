@@ -1,10 +1,26 @@
 defmodule Jido.Thread.Slice do
   @moduledoc """
-  Default slice for thread state management.
+  Thread slice — owns the `:thread` key in agent state, mounted as a
+  `%Jido.Thread{}` append-only conversation log.
 
-  Owns the `:thread` slice key in agent state. The slice does not initialize
-  a thread by default — threads are attached on demand via
-  `Jido.Thread.Agent.ensure/2`.
+  ## State shape
+
+  Bound to `Jido.Thread.schema/0`. The slice starts as `nil` (lazy-init);
+  the first inbound `jido.thread.*` signal materializes a fresh
+  `%Jido.Thread{}` via the relevant action.
+
+  ## Routes
+
+      route "jido.thread.ensure", Actions.Ensure
+      route "jido.thread.append", Actions.Append
+      route "jido.thread.clear",  Actions.Clear
+
+  ## Persistence
+
+  This slice implements `Jido.Persist.Transform` to externalize the thread
+  to its small pointer (`%{id, rev}`) on checkpoint. `reinstate/1` is a
+  passthrough — actual rehydration happens via the existing
+  `Jido.Persist.thaw/3` path.
 
   ## Default slice
 
@@ -14,29 +30,24 @@ defmodule Jido.Thread.Slice do
       use Jido.Agent,
         name: "minimal",
         default_slices: %{thread: false}
-
-  ## State Key
-
-  The thread is stored at `agent.state.thread` as a `Jido.Thread` struct.
-  Access helpers are provided by `Jido.Thread.Agent`.
-
-  ## Persistence
-
-  When `Jido.Middleware.Persister` is attached, `externalize/1` strips a
-  `Jido.Thread` down to the small pointer (`%{id, rev}`) that is written to
-  the checkpoint. `reinstate/1` is a passthrough today — actual rehydration
-  happens via the existing `Jido.Persist.thaw/3` path, which is collapsed
-  into the middleware in a later commit.
   """
 
   alias Jido.Thread
+  alias Jido.Thread.Actions
 
   use Jido.Slice
 
   slice do
     name "thread"
     path :thread
-    description "Thread state management for agent conversation history."
+    description "Append-only conversation history thread for the agent."
+    schema Thread.schema()
+  end
+
+  signal_routes do
+    route "jido.thread.ensure", Actions.Ensure
+    route "jido.thread.append", Actions.Append
+    route "jido.thread.clear", Actions.Clear
   end
 
   capabilities do

@@ -2,6 +2,7 @@ defmodule JidoTest.Thread.SliceTest do
   use ExUnit.Case, async: true
 
   alias Jido.Thread
+  alias Jido.Thread.Actions
   alias Jido.Thread.Slice, as: ThreadSlice
 
   describe "slice metadata" do
@@ -17,12 +18,30 @@ defmodule JidoTest.Thread.SliceTest do
       assert :thread in ThreadSlice.capabilities()
     end
 
-    test "has no actions" do
-      assert ThreadSlice.actions() == []
+    test "exposes Thread.Actions.{Ensure,Append,Clear} via actions/0" do
+      action_set = MapSet.new(ThreadSlice.actions())
+
+      assert MapSet.equal?(
+               action_set,
+               MapSet.new([Actions.Ensure, Actions.Append, Actions.Clear])
+             )
     end
 
-    test "schema is nil (no auto-initialization)" do
-      assert ThreadSlice.schema() == nil
+    test "schema is bound to Jido.Thread.schema/0" do
+      assert ThreadSlice.schema() == Thread.schema()
+    end
+
+    test "exposes one signal route per action" do
+      route_types =
+        ThreadSlice.signal_routes()
+        |> Enum.map(fn
+          {type, _action} -> type
+          {type, _action, _opts} -> type
+        end)
+
+      assert "jido.thread.ensure" in route_types
+      assert "jido.thread.append" in route_types
+      assert "jido.thread.clear" in route_types
     end
   end
 
@@ -85,7 +104,7 @@ defmodule JidoTest.Thread.SliceTest do
       assert Jido.Thread.Slice in modules
     end
 
-    test "agent.state[:thread] starts nil (no auto-init)" do
+    test "agent.state[:thread] starts nil (lazy init)" do
       agent = AgentWithThread.new()
       assert Map.get(agent.state, :thread) == nil
     end
@@ -99,6 +118,18 @@ defmodule JidoTest.Thread.SliceTest do
       agent = AgentWithThread.new()
       agent = Thread.Agent.ensure(agent)
       assert %Thread{} = Thread.Agent.get(agent)
+    end
+
+    test "Append action mutates agent.state.thread" do
+      agent = AgentWithThread.new()
+
+      {:ok, agent, []} =
+        AgentWithThread.cmd(
+          agent,
+          {Actions.Append, %{entry: %{kind: :message, payload: %{text: "hi"}}}}
+        )
+
+      assert Thread.entry_count(agent.state.thread) == 1
     end
   end
 end

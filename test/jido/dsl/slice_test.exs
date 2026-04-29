@@ -16,6 +16,11 @@ defmodule Jido.Dsl.SliceTest do
     slice do
       name "minimal"
       path :minimal
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "minimal.noop", JidoTest.PluginTestAction
     end
   end
 
@@ -56,16 +61,20 @@ defmodule Jido.Dsl.SliceTest do
       path :schema_only
       schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
     end
+
+    signal_routes do
+      route "schema_only.noop", JidoTest.PluginTestAction
+    end
   end
 
   describe "slice section accessors" do
-    test "minimal slice exposes name, path, and zero-defaults for everything else" do
+    test "minimal slice exposes name, path, schema, and a single route" do
       assert MinimalSlice.name() == "minimal"
       assert MinimalSlice.path() == :minimal
-      assert MinimalSlice.actions() == []
+      assert MinimalSlice.actions() == [JidoTest.PluginTestAction]
       assert MinimalSlice.tags() == []
       assert MinimalSlice.capabilities() == []
-      assert MinimalSlice.signal_routes() == []
+      assert MinimalSlice.signal_routes() == [{"minimal.noop", JidoTest.PluginTestAction}]
       assert MinimalSlice.subscriptions() == []
       assert MinimalSlice.schedules() == []
       assert MinimalSlice.requires() == []
@@ -73,7 +82,7 @@ defmodule Jido.Dsl.SliceTest do
       assert MinimalSlice.category() == nil
       assert MinimalSlice.vsn() == nil
       assert MinimalSlice.otp_app() == nil
-      assert MinimalSlice.schema() == nil
+      assert is_struct(MinimalSlice.schema())
       assert MinimalSlice.config_schema() == nil
     end
 
@@ -134,8 +143,8 @@ defmodule Jido.Dsl.SliceTest do
       assert {:ok, %{counter: 0}} = Zoi.parse(schema, %{})
     end
 
-    test "schema/0 returns nil when no schema is declared" do
-      assert MinimalSlice.schema() == nil
+    test "schema/0 returns the slice's declared schema struct" do
+      assert is_struct(MinimalSlice.schema())
     end
   end
 
@@ -147,6 +156,11 @@ defmodule Jido.Dsl.SliceTest do
       slice do
         name "overriding"
         path :overriding
+        schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+      end
+
+      signal_routes do
+        route "overriding.noop", JidoTest.PluginTestAction
       end
 
       def name, do: "overridden_name"

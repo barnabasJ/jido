@@ -159,5 +159,6 @@ defmodule Jido.Dsl.Slice do
       @capabilities_section,
       @requires_section
     ],
-    transformers: [Jido.Dsl.Slice.Transformers.GenerateAccessors]
+    transformers: [Jido.Dsl.Slice.Transformers.GenerateAccessors],
+    verifiers: [Jido.Dsl.Slice.Verifiers.HasSchemaAndRoutes]
 end

@@ -115,6 +115,7 @@ defmodule JidoTest.TestAgents do
     slice do
       name "test_routes_plugin"
       path :test_routes
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 
     signal_routes do
@@ -130,6 +131,7 @@ defmodule JidoTest.TestAgents do
     slice do
       name "priority_plugin"
       path :priority
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 
     signal_routes do
@@ -140,7 +142,8 @@ defmodule JidoTest.TestAgents do
   defmodule AgentWithPluginRoutes do
     @moduledoc false
     use Jido.Agent,
-      extensions: [JidoTest.TestAgents.TestPluginWithRoutes]
+      extensions: [JidoTest.TestAgents.TestPluginWithRoutes],
+      default_slices: false
 
     agent do
       name "agent_with_plugin_routes"
@@ -155,7 +158,8 @@ defmodule JidoTest.TestAgents do
       extensions: [
         {JidoTest.TestAgents.TestPluginWithRoutes, [as: :support]},
         {JidoTest.TestAgents.TestPluginWithRoutes, [as: :sales]}
-      ]
+      ],
+      default_slices: false
 
     agent do
       name "agent_multi_instance"

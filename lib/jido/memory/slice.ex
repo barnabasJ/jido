@@ -1,10 +1,32 @@
 defmodule Jido.Memory.Slice do
   @moduledoc """
-  Default slice for memory state management.
+  Memory slice — owns the `:memory` key in agent state, mounted as a
+  `%Jido.Memory{}` value with named map / list spaces.
 
-  Owns the `:memory` slice key in agent state. The slice does not initialize
-  memory by default — memory is created on demand via
-  `Jido.Memory.Agent.ensure/2`.
+  ## State shape
+
+  Bound to `Jido.Memory.schema/0`. The slice starts as `nil` (lazy-init);
+  the first inbound `jido.memory.*` signal materializes a fresh
+  `%Jido.Memory{}` via the relevant action.
+
+  ## Routes
+
+  Each `jido.memory.*` signal type maps to a single action under
+  `Jido.Memory.Actions.*`:
+
+      # ensure / put / update / delete
+      route "jido.memory.ensure",            Actions.Ensure
+      route "jido.memory.put_space",         Actions.PutSpace
+      route "jido.memory.update_space",      Actions.UpdateSpace
+      route "jido.memory.ensure_space",      Actions.EnsureSpace
+      route "jido.memory.delete_space",      Actions.DeleteSpace
+
+      # map space ops
+      route "jido.memory.put_in_space",      Actions.PutInSpace
+      route "jido.memory.delete_from_space", Actions.DeleteFromSpace
+
+      # list space ops
+      route "jido.memory.append_to_space",   Actions.AppendToSpace
 
   ## Default slice
 
@@ -15,24 +37,35 @@ defmodule Jido.Memory.Slice do
         name: "minimal",
         default_slices: %{memory: false}
 
-  ## State Key
-
-  Memory is stored at `agent.state.memory` as a `Jido.Memory` struct. Access
-  helpers are provided by `Jido.Memory.Agent`.
-
   ## Persistence
 
   This bare-minimum default slice keeps memory in-process only and does not
-  externalize on checkpoint. If you need persistence, implement your own
-  memory slice that declares `@behaviour Jido.Persist.Transform`.
+  externalize on checkpoint. If you need a persistence transform, implement
+  your own slice that declares `@behaviour Jido.Persist.Transform` and
+  override `default_slices: %{memory: MyApp.MyMemorySlice}`.
   """
+
+  alias Jido.Memory
+  alias Jido.Memory.Actions
 
   use Jido.Slice
 
   slice do
     name "memory"
     path :memory
-    description "Memory state management for agent cognitive state."
+    description "Memory state for agent cognition — named map / list spaces."
+    schema Memory.schema()
+  end
+
+  signal_routes do
+    route "jido.memory.ensure", Actions.Ensure
+    route "jido.memory.put_space", Actions.PutSpace
+    route "jido.memory.update_space", Actions.UpdateSpace
+    route "jido.memory.ensure_space", Actions.EnsureSpace
+    route "jido.memory.delete_space", Actions.DeleteSpace
+    route "jido.memory.put_in_space", Actions.PutInSpace
+    route "jido.memory.delete_from_space", Actions.DeleteFromSpace
+    route "jido.memory.append_to_space", Actions.AppendToSpace
   end
 
   capabilities do

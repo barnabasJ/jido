@@ -89,6 +89,11 @@ defmodule Jido.Dsl.MiddlewareTest do
           slice do
             name "non_middleware"
             path :non_middleware
+            schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+          end
+
+          signal_routes do
+            route "non_middleware.noop", JidoTest.PluginTestAction
           end
         end
 

@@ -14,6 +14,11 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
     slice do
       name "sample_plugin"
       path :sample_plugin
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "sample_plugin.noop", JidoTest.PluginTestAction
     end
   end
 
@@ -24,6 +29,11 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
     slice do
       name "sample_slice"
       path :sample_slice
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "sample_slice.noop", JidoTest.PluginTestAction
     end
   end
 

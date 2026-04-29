@@ -24,6 +24,11 @@ defmodule Jido.Dsl.ExtensionPathOverrideTest do
       name "stub_contributing"
       path :stub
       description "Pretends to contribute a host DSL section."
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "stub_contributing.noop", JidoTest.PluginTestAction
     end
 
     @doc """
@@ -42,6 +47,11 @@ defmodule Jido.Dsl.ExtensionPathOverrideTest do
       name "stub_non_contributing"
       path :stub_no_section
       description "Does not contribute a host DSL section."
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "stub_non_contributing.noop", JidoTest.PluginTestAction
     end
   end
 

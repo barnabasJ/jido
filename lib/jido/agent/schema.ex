@@ -30,7 +30,7 @@ defmodule Jido.Agent.Schema do
     plugin_fields =
       plugin_specs
       |> Enum.filter(& &1.schema)
-      |> Enum.map(fn spec -> {spec.path, spec.schema} end)
+      |> Enum.map(fn spec -> {spec.path, plugin_field_schema(spec.schema)} end)
       |> Map.new()
 
     case base_schema do
@@ -44,6 +44,20 @@ defmodule Jido.Agent.Schema do
       base ->
         base_fields = extract_fields(base)
         Zoi.object(Map.merge(base_fields, plugin_fields))
+    end
+  end
+
+  # When a slice's schema cannot be initialized from `%{}` (e.g. it has
+  # required fields with no defaults, like Memory/Identity/Thread), the
+  # slice uses the lazy-nil pattern: the slice value starts as `nil` and
+  # the slice's `Ensure`-style action materializes it on demand. Mirror
+  # that contract in the merged agent schema by wrapping the slice's
+  # field in `Zoi.nullable/1` so state validation accepts the placeholder
+  # `nil` until the slice is initialized.
+  defp plugin_field_schema(schema) do
+    case Zoi.parse(schema, %{}) do
+      {:ok, _} -> schema
+      {:error, _} -> Zoi.nullable(schema)
     end
   end
 

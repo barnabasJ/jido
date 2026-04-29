@@ -1,27 +1,22 @@
 defmodule Jido.Memory.Agent do
   @moduledoc """
-  Helper for managing Memory in agent state.
+  Ergonomic helpers for reading and writing the `:memory` slice on an
+  `%Jido.Agent{}` value, without going through the signal pipeline.
 
-  Memory is stored at the reserved key `:memory` in `agent.state`.
-  This follows the same pattern as `:thread` for thread state.
-
-  Provides generic space operations only. Domain-specific wrappers
-  (world model, task lists, etc.) should be built in your own modules
-  on top of these primitives.
+  The canonical entry point for production code is the slice's signal
+  routes — `Jido.Memory.Slice` exposes `jido.memory.*` actions that are
+  invokable via `MyAgent.cmd(agent, {Action, params})`. These helpers are
+  thin adapters over `Jido.Memory`'s pure functions for tests and
+  REPL-style construction where building a full module-based agent is
+  overkill.
 
   ## Example
 
       alias Jido.Memory.Agent, as: MemoryAgent
 
-      # Ensure agent has memory
       agent = MemoryAgent.ensure(agent)
-
-      # Work with map spaces
       agent = MemoryAgent.put_in_space(agent, :world, :temperature, 22)
-      temp = MemoryAgent.get_in_space(agent, :world, :temperature)
-
-      # Work with list spaces
-      agent = MemoryAgent.append_to_space(agent, :tasks, %{id: "t1", text: "Check sensor"})
+      temp  = MemoryAgent.get_in_space(agent, :world, :temperature)
   """
 
   alias Jido.Agent
@@ -29,8 +24,6 @@ defmodule Jido.Memory.Agent do
   alias Jido.Memory.Space
 
   @key :memory
-
-  # --- Container Operations ---
 
   @doc "Returns the reserved key for memory storage."
   @spec key() :: atom()
@@ -51,8 +44,7 @@ defmodule Jido.Memory.Agent do
   @doc "Update memory using a function."
   @spec update(Agent.t(), (Memory.t() | nil -> Memory.t())) :: Agent.t()
   def update(%Agent{} = agent, fun) when is_function(fun, 1) do
-    current = get(agent)
-    put(agent, fun.(current))
+    put(agent, fun.(get(agent)))
   end
 
   @doc "Ensure agent has memory (initialize if missing)."
@@ -68,32 +60,17 @@ defmodule Jido.Memory.Agent do
   @spec has_memory?(Agent.t()) :: boolean()
   def has_memory?(%Agent{} = agent), do: get(agent) != nil
 
-  # --- Space Operations ---
-
   @doc "Get a space by name."
   @spec space(Agent.t(), atom()) :: Space.t() | nil
   def space(%Agent{} = agent, name) when is_atom(name) do
-    case get(agent) do
-      nil -> nil
-      memory -> Map.get(memory.spaces, name)
-    end
+    Memory.space(get(agent), name)
   end
 
   @doc "Put a space by name. Bumps container rev and updated_at."
   @spec put_space(Agent.t(), atom(), Space.t(), keyword()) :: Agent.t()
   def put_space(%Agent{} = agent, name, %Space{} = space, opts \\ []) when is_atom(name) do
     agent = ensure(agent)
-    memory = get(agent)
-    now = opts[:now] || System.system_time(:millisecond)
-
-    updated_memory = %{
-      memory
-      | spaces: Map.put(memory.spaces, name, space),
-        rev: memory.rev + 1,
-        updated_at: now
-    }
-
-    put(agent, updated_memory)
+    put(agent, Memory.put_space(get(agent), name, space, opts))
   end
 
   @doc "Update a space using a function. Bumps both space and container revisions."
@@ -101,62 +78,21 @@ defmodule Jido.Memory.Agent do
   def update_space(%Agent{} = agent, name, fun, opts \\ [])
       when is_atom(name) and is_function(fun, 1) do
     agent = ensure(agent)
-    memory = get(agent)
-
-    case Map.get(memory.spaces, name) do
-      nil ->
-        raise ArgumentError, "space #{inspect(name)} does not exist"
-
-      current_space ->
-        updated_space = fun.(current_space)
-        updated_space = %{updated_space | rev: updated_space.rev + 1}
-        now = opts[:now] || System.system_time(:millisecond)
-
-        updated_memory = %{
-          memory
-          | spaces: Map.put(memory.spaces, name, updated_space),
-            rev: memory.rev + 1,
-            updated_at: now
-        }
-
-        put(agent, updated_memory)
-    end
+    put(agent, Memory.update_space(get(agent), name, fun, opts))
   end
 
   @doc "Ensure a space exists with default data. Does not overwrite existing."
   @spec ensure_space(Agent.t(), atom(), map() | list()) :: Agent.t()
   def ensure_space(%Agent{} = agent, name, default_data) when is_atom(name) do
     agent = ensure(agent)
-
-    case space(agent, name) do
-      nil ->
-        new_space = %Space{data: default_data, rev: 0, metadata: %{}}
-        put_space(agent, name, new_space)
-
-      _existing ->
-        agent
-    end
+    put(agent, Memory.ensure_space(get(agent), name, default_data))
   end
 
   @doc "Delete a space. Raises on reserved spaces."
   @spec delete_space(Agent.t(), atom(), keyword()) :: Agent.t()
   def delete_space(%Agent{} = agent, name, opts \\ []) when is_atom(name) do
-    if name in Memory.reserved_spaces() do
-      raise ArgumentError, "cannot delete reserved space #{inspect(name)}"
-    end
-
     agent = ensure(agent)
-    memory = get(agent)
-    now = opts[:now] || System.system_time(:millisecond)
-
-    updated_memory = %{
-      memory
-      | spaces: Map.delete(memory.spaces, name),
-        rev: memory.rev + 1,
-        updated_at: now
-    }
-
-    put(agent, updated_memory)
+    put(agent, Memory.delete_space(get(agent), name, opts))
   end
 
   @doc "Get the full spaces map."
@@ -164,78 +100,40 @@ defmodule Jido.Memory.Agent do
   def spaces(%Agent{} = agent) do
     case get(agent) do
       nil -> nil
-      memory -> memory.spaces
+      %Memory{spaces: spaces} -> spaces
     end
   end
 
   @doc "Check if a space exists."
   @spec has_space?(Agent.t(), atom()) :: boolean()
   def has_space?(%Agent{} = agent, name) when is_atom(name) do
-    space(agent, name) != nil
+    Memory.has_space?(get(agent), name)
   end
-
-  # --- Map Space Operations ---
 
   @doc "Get a key from a map space."
   @spec get_in_space(Agent.t(), atom(), term(), term()) :: term()
   def get_in_space(%Agent{} = agent, space_name, key, default \\ nil) do
-    case space(agent, space_name) do
-      %Space{data: data} when is_map(data) -> Map.get(data, key, default)
-      nil -> default
-      _ -> raise ArgumentError, "space #{inspect(space_name)} is not a map space"
-    end
+    Memory.get_in_space(get(agent), space_name, key, default)
   end
 
   @doc "Put a key/value into a map space."
   @spec put_in_space(Agent.t(), atom(), term(), term()) :: Agent.t()
   def put_in_space(%Agent{} = agent, space_name, key, value) do
     agent = ensure(agent)
-    validate_map_space!(agent, space_name)
-
-    update_space(agent, space_name, fn space ->
-      %{space | data: Map.put(space.data, key, value)}
-    end)
+    put(agent, Memory.put_in_space(get(agent), space_name, key, value))
   end
 
   @doc "Delete a key from a map space."
   @spec delete_from_space(Agent.t(), atom(), term()) :: Agent.t()
   def delete_from_space(%Agent{} = agent, space_name, key) do
     agent = ensure(agent)
-    validate_map_space!(agent, space_name)
-
-    update_space(agent, space_name, fn space ->
-      %{space | data: Map.delete(space.data, key)}
-    end)
+    put(agent, Memory.delete_from_space(get(agent), space_name, key))
   end
-
-  # --- List Space Operations ---
 
   @doc "Append an item to a list space."
   @spec append_to_space(Agent.t(), atom(), term()) :: Agent.t()
   def append_to_space(%Agent{} = agent, space_name, item) do
     agent = ensure(agent)
-    validate_list_space!(agent, space_name)
-
-    update_space(agent, space_name, fn space ->
-      %{space | data: space.data ++ [item]}
-    end)
-  end
-
-  # --- Private Helpers ---
-
-  defp validate_map_space!(agent, space_name) do
-    case space(agent, space_name) do
-      %Space{data: data} when is_map(data) -> :ok
-      nil -> raise ArgumentError, "space #{inspect(space_name)} does not exist"
-      _ -> raise ArgumentError, "space #{inspect(space_name)} is not a map space"
-    end
-  end
-
-  defp validate_list_space!(agent, space_name) do
-    case space(agent, space_name) do
-      %Space{data: data} when is_list(data) -> :ok
-      nil -> raise ArgumentError, "space #{inspect(space_name)} does not exist"
-      _ -> raise ArgumentError, "space #{inspect(space_name)} is not a list space"
-    end
+    put(agent, Memory.append_to_space(get(agent), space_name, item))
   end
 end

@@ -10,6 +10,11 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
     slice do
       name "fake_memory"
       path :memory
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "fake_memory.noop", JidoTest.PluginTestAction
     end
   end
 
@@ -20,6 +25,11 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
     slice do
       name "fake_thread"
       path :thread
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "fake_thread.noop", JidoTest.PluginTestAction
     end
   end
 
@@ -30,6 +40,11 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
     slice do
       name "replacement_memory"
       path :memory
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "replacement_memory.noop", JidoTest.PluginTestAction
     end
   end
 
@@ -40,6 +55,11 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
     slice do
       name "user_slice"
       path :user_stuff
+      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+    end
+
+    signal_routes do
+      route "user_slice.noop", JidoTest.PluginTestAction
     end
   end
 

@@ -54,6 +54,11 @@ defmodule JidoTest.SliceTest do
       slice do
         name "minimal"
         path :minimal
+        schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
+      end
+
+      signal_routes do
+        route "minimal.noop", JidoTest.PluginTestAction
       end
     end
 
@@ -88,10 +93,10 @@ defmodule JidoTest.SliceTest do
     test "minimal slice exposes name and path" do
       assert MinimalSlice.name() == "minimal"
       assert MinimalSlice.path() == :minimal
-      assert MinimalSlice.actions() == []
+      assert MinimalSlice.actions() == [JidoTest.PluginTestAction]
       assert MinimalSlice.tags() == []
       assert MinimalSlice.capabilities() == []
-      assert MinimalSlice.signal_routes() == []
+      assert MinimalSlice.signal_routes() == [{"minimal.noop", JidoTest.PluginTestAction}]
     end
 
     test "full slice exposes every metadata field" do
@@ -133,6 +138,10 @@ defmodule JidoTest.SliceTest do
         name "schema"
         path :schema
         schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
+      end
+
+      signal_routes do
+        route "schema.noop", JidoTest.PluginTestAction
       end
     end
 

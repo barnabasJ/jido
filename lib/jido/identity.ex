@@ -27,6 +27,10 @@ defmodule Jido.Identity do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for Identity."
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
+
   @doc "Create a new identity"
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
@@ -54,6 +58,18 @@ defmodule Jido.Identity do
       | profile: Map.put(identity.profile, :age, current_age + age_increment)
     }
     |> bump(now: now)
+  end
+
+  @doc """
+  Merges `profile_updates` into the identity's profile and bumps the
+  revision. Existing keys in the profile are preserved when not present in
+  `profile_updates`.
+  """
+  @spec update_profile(t(), map(), keyword()) :: t()
+  def update_profile(%__MODULE__{} = identity, profile_updates, opts \\ [])
+      when is_map(profile_updates) do
+    %{identity | profile: Map.merge(identity.profile, profile_updates)}
+    |> bump(opts)
   end
 
   @doc "Return a public snapshot of the identity"
