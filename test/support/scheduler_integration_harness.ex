@@ -43,13 +43,15 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
 
   defmodule CronAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "scheduler_integration_agent",
-      path: :domain,
-      schema: [
-        tick_count: [type: :integer, default: 0],
-        ticks: [type: {:list, :any}, default: []]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "scheduler_integration_agent"
+      path :domain
+
+      schema tick_count: [type: :integer, default: 0],
+             ticks: [type: {:list, :any}, default: []]
+    end
 
     def signal_routes(_ctx) do
       [
@@ -62,16 +64,19 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
 
   defmodule ScheduledCronAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "scheduler_integration_scheduled_agent",
-      path: :domain,
-      schema: [
-        tick_count: [type: :integer, default: 0],
-        ticks: [type: {:list, :any}, default: []]
-      ],
-      schedules: [
-        {"* * * * * * *", "cron.tick", job_id: :scheduled_heartbeat}
-      ]
+    use Jido.Agent
+
+    agent do
+      name "scheduler_integration_scheduled_agent"
+      path :domain
+
+      schema tick_count: [type: :integer, default: 0],
+             ticks: [type: {:list, :any}, default: []]
+    end
+
+    schedules do
+      schedule "* * * * * * *", "cron.tick", job_id: :scheduled_heartbeat
+    end
 
     def signal_routes(_ctx) do
       [

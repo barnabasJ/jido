@@ -84,6 +84,11 @@ defmodule Jido do
     storage = Keyword.get(opts, :storage, {Jido.Storage.ETS, [table: :jido_storage]})
     default_slices = Keyword.get(opts, :default_slices, nil)
 
+    # Mirrors `Jido.Dsl.Instance` so the macro and the Spark extension share
+    # the same accessor surface. The extension is the documented contract;
+    # this macro is the runtime implementation that doesn't need Spark's full
+    # machinery (`use Jido` only takes kwargs — there's no `instance do … end`
+    # block to parse).
     quote location: :keep do
       @otp_app unquote(otp_app)
 

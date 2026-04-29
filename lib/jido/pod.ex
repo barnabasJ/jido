@@ -84,7 +84,7 @@ defmodule Jido.Pod do
       end)
 
     quote location: :keep do
-      use Jido.Agent, unquote(Macro.escape(agent_opts))
+      (unquote_splicing(Jido.Dsl.Agent.LegacyTranslator.quoted_agent_use(agent_opts)))
 
       @pod_topology unquote(Macro.escape(topology))
 
@@ -96,35 +96,10 @@ defmodule Jido.Pod do
       @spec pod?() :: true
       def pod?, do: true
 
-      defoverridable new: 1
-
-      @doc """
-      Pod-wrapped `new/1`. Seeds the `:pod` slice with the agent module's
-      canonical topology before delegating to the base `Jido.Agent.new/1`. User
-      state at `state: %{pod: %{...}}` shallow-overrides the topology fields.
-
-      No `\\\\ []` default — the parent `Jido.Agent`'s macro already declares
-      `def new(opts \\\\ [])`, so a `new/0` already exists and calls `new/1`.
-      Adding `\\\\ []` here would generate a *second* `new/0` clause behind
-      the parent's, which the compiler rightly flags as unreachable.
-      """
-      def new(opts) do
-        opts_map = if is_list(opts), do: Map.new(opts), else: opts
-        user_state = Map.get(opts_map, :state, %{})
-
-        pod_seed = %{topology: topology(), topology_version: topology().version}
-
-        existing_pod = Map.get(user_state, :pod, %{})
-        new_pod = Map.merge(pod_seed, existing_pod)
-        new_state = Map.put(user_state, :pod, new_pod)
-
-        opts_with_pod_state =
-          opts_map
-          |> Map.put(:state, new_state)
-          |> Map.to_list()
-
-        super(opts_with_pod_state)
-      end
+      # Pod's `new/1` override has to land AFTER the Spark transformers have
+      # emitted the base `def new(opts)` and `defoverridable new: 1`, so it
+      # plugs in via a second `@before_compile`. See `Jido.Pod.BeforeCompile`.
+      @before_compile Jido.Pod.BeforeCompile
     end
   end
 
