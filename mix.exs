@@ -124,7 +124,18 @@ defmodule Jido.MixProject do
           "guides/errors.md"
         ],
         Migration: [
-          "guides/migration.md"
+          "guides/migration.md",
+          "guides/migration-spark-dsl.md"
+        ],
+        "DSL Reference": [
+          "documentation/dsls/DSL-Jido.Dsl.Agent.md",
+          "documentation/dsls/DSL-Jido.Dsl.Slice.md",
+          "documentation/dsls/DSL-Jido.Dsl.Plugin.md",
+          "documentation/dsls/DSL-Jido.Dsl.Middleware.md",
+          "documentation/dsls/DSL-Jido.Dsl.Action.md",
+          "documentation/dsls/DSL-Jido.Dsl.Sensor.md",
+          "documentation/dsls/DSL-Jido.Dsl.Pod.md",
+          "documentation/dsls/DSL-Jido.Dsl.Instance.md"
         ],
         Project: [
           "CONTRIBUTING.md",
@@ -184,6 +195,17 @@ defmodule Jido.MixProject do
 
         # Migration
         {"guides/migration.md", title: "Migrating from 1.x"},
+        {"guides/migration-spark-dsl.md", title: "Migrating to the Spark DSL"},
+
+        # DSL Reference
+        {"documentation/dsls/DSL-Jido.Dsl.Agent.md", title: "Jido.Agent DSL"},
+        {"documentation/dsls/DSL-Jido.Dsl.Slice.md", title: "Jido.Slice DSL"},
+        {"documentation/dsls/DSL-Jido.Dsl.Plugin.md", title: "Jido.Plugin DSL"},
+        {"documentation/dsls/DSL-Jido.Dsl.Middleware.md", title: "Jido.Middleware DSL"},
+        {"documentation/dsls/DSL-Jido.Dsl.Action.md", title: "Jido.Action DSL"},
+        {"documentation/dsls/DSL-Jido.Dsl.Sensor.md", title: "Jido.Sensor DSL"},
+        {"documentation/dsls/DSL-Jido.Dsl.Pod.md", title: "Jido.Pod DSL"},
+        {"documentation/dsls/DSL-Jido.Dsl.Instance.md", title: "Jido instance DSL"},
 
         # Project
         {"CONTRIBUTING.md", title: "Contributing"},
@@ -448,6 +470,12 @@ defmodule Jido.MixProject do
 
       # Helper to run docs
       docs: "docs -f html --open",
+
+      # Regenerate Spark cheat sheets + .formatter.exs in one shot
+      "spark.docs": [
+        "spark.cheat_sheets --extensions Jido.Dsl.Agent,Jido.Dsl.Slice,Jido.Dsl.Plugin,Jido.Dsl.Middleware,Jido.Dsl.Action,Jido.Dsl.Sensor,Jido.Dsl.Instance,Jido.Dsl.Pod",
+        "spark.formatter --extensions Jido.Dsl.Agent,Jido.Dsl.Slice,Jido.Dsl.Plugin,Jido.Dsl.Middleware,Jido.Dsl.Action,Jido.Dsl.Sensor,Jido.Dsl.Instance,Jido.Dsl.Pod"
+      ],
 
       # Run to check the quality of your code
       q: ["quality"],

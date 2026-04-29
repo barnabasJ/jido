@@ -490,17 +490,21 @@ Called during hibernate to serialize the agent:
 
 ```elixir
 defmodule MyAgent do
-  use Jido.Agent,
-    name: "my_agent",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "my_agent"
+    path :state
+    schema [
       user_id: [type: :string, required: true],
       session_data: [type: :map, default: %{}],
       temp_cache: [type: :map, default: %{}]  # Don't persist this
     ]
+  end
 
   @impl true
   def checkpoint(agent, _ctx) do
-    thread = agent.state[:__thread__]
+    thread = agent.state[:thread]
 
     {:ok, %{
       version: 1,
@@ -1007,7 +1011,7 @@ re-registers them on thaw.
 This durability scope is intentionally narrow:
 
 - Dynamic `Directive.cron/3` registrations are persisted when storage is enabled
-- Declarative `schedules:` entries are recreated from code on start
+- Declarative `schedules do … end` entries are recreated from code on start
 - Plugin schedules are recreated from code on start
 - Missed cron ticks are not replayed during hibernate or downtime
 - `storage: nil` keeps dynamic cron registrations runtime-only
@@ -1016,21 +1020,25 @@ This durability scope is intentionally narrow:
 
 ```elixir
 defmodule MyApp.SessionAgent do
-  use Jido.Agent,
-    name: "session_agent",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "session_agent"
+    path :state
+    schema [
       user_id: [type: :string, required: true],
       cart: [type: {:list, :map}, default: []]
     ]
+  end
 
   @impl true
   def checkpoint(agent, _ctx) do
-    thread = agent.state[:__thread__]
+    thread = agent.state[:thread]
     {:ok, %{
       version: 1,
       agent_module: __MODULE__,
       id: agent.id,
-      state: Map.drop(agent.state, [:__thread__]),
+      state: Map.drop(agent.state, [:thread]),
       thread: thread && %{id: thread.id, rev: thread.rev}
     }}
   end

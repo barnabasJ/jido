@@ -9,12 +9,16 @@ defmodule Jido.Actions.Control do
 
   ## Usage
 
-      use Jido.Agent,
-        name: "my_agent",
-        signal_routes: [
-          {"jido.agent.cancel", Jido.Actions.Control.Cancel},
-          {"proxy.forward", Jido.Actions.Control.Forward}
-        ]
+      use Jido.Agent
+
+      agent do
+        name "my_agent"
+      end
+
+      signal_routes do
+        route "jido.agent.cancel", Jido.Actions.Control.Cancel
+        route "proxy.forward", Jido.Actions.Control.Forward
+      end
   """
 
   alias Jido.Agent.Directive
@@ -208,9 +212,15 @@ defmodule Jido.Actions.Control do
     ## Example
 
         # Handle a request and reply
-        use Jido.Agent,
-          name: "query_agent",
-          signal_routes: [{"query.request", MyQueryHandler}]
+        use Jido.Agent
+
+        agent do
+          name "query_agent"
+        end
+
+        signal_routes do
+          route "query.request", MyQueryHandler
+        end
 
         # In handler, use Reply action
         {Jido.Actions.Control.Reply, %{

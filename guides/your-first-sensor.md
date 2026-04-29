@@ -8,12 +8,15 @@ Here's a working sensor that emits a counter tick every second, connected to an 
 
 ```elixir
 defmodule TickSensor do
-  use Jido.Sensor,
-    name: "tick_sensor",
-    description: "Emits a tick signal at regular intervals",
-    schema: Zoi.object(%{
+  use Jido.Sensor
+
+  sensor do
+    name "tick_sensor"
+    description "Emits a tick signal at regular intervals"
+    schema Zoi.object(%{
       interval: Zoi.integer() |> Zoi.default(1000)
     }, coerce: true)
+  end
 
   @impl Jido.Sensor
   def init(config, _context) do
@@ -59,12 +62,15 @@ Sensors are pure modules that define two callbacks: `init/2` sets up initial sta
 
 ```elixir
 defmodule TickSensor do
-  use Jido.Sensor,
-    name: "tick_sensor",
-    description: "Emits a tick signal at regular intervals",
-    schema: Zoi.object(%{
+  use Jido.Sensor
+
+  sensor do
+    name "tick_sensor"
+    description "Emits a tick signal at regular intervals"
+    schema Zoi.object(%{
       interval: Zoi.integer() |> Zoi.default(1000)
     }, coerce: true)
+  end
 ```
 
 The `schema` validates configuration at startup using Zoi.
@@ -129,11 +135,15 @@ The agent receives signals with type `"jido.sensor.heartbeat"` every 5 seconds.
 
 ```elixir
 defmodule HandleTickAction do
-  use Jido.Action,
-    name: "handle_tick",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "handle_tick"
+    path :state
+    schema [
       count: [type: :integer, required: true]
     ]
+  end
 
   def run(params, context) do
     current = Map.get(context.state, :tick_count, 0)
@@ -142,13 +152,20 @@ defmodule HandleTickAction do
 end
 
 defmodule CounterAgent do
-  use Jido.Agent,
-    name: "counter",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "counter"
+    path :state
+    schema [
       tick_count: [type: :integer, default: 0],
       last_tick: [type: :integer, default: 0]
-    ],
-    signal_routes: [{"sensor.tick", HandleTickAction}]
+    ]
+  end
+
+  signal_routes do
+    route "sensor.tick", HandleTickAction
+  end
 end
 ```
 

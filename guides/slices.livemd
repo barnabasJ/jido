@@ -25,9 +25,10 @@ end
 ## Concept
 
 A *slice* is the declarative half of an agent: a flat key in `agent.state`,
-a state schema, a set of actions, and a route table mapping signal types to
-those actions. There are no callbacks — everything a slice does is in its
-`use Jido.Slice` block. Cross-cutting behaviour goes in
+a state schema, a set of routes mapping signal types to actions, plus
+optional schedules / subscriptions / capabilities / requires. The whole
+thing is described by sectioned `use Jido.Slice` DSL — there are no
+callbacks. Cross-cutting behaviour goes in
 [Middleware](middleware.livemd) or [Plugins](plugins.livemd) instead.
 
 See [ADR 0014](adr/0014-slice-middleware-plugin.md) §slice for the design
@@ -39,18 +40,14 @@ rationale, and [ADR 0019](adr/0019-actions-mutate-state-directives-do-side-effec
 The smallest useful slice: a counter with one action.
 
 ```elixir
-defmodule CounterSlice do
-  use Jido.Slice,
-    name: "counter",
-    path: :counter,
-    schema: Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
-end
-
 defmodule Counter.Increment do
-  use Jido.Action,
-    name: "counter_increment",
-    path: :counter,
-    schema: [by: [type: :integer, default: 1]]
+  use Jido.Action
+
+  action do
+    name "counter_increment"
+    path :counter
+    schema [by: [type: :integer, default: 1]]
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{by: by}}, slice, _opts, _ctx) do
@@ -58,15 +55,26 @@ defmodule Counter.Increment do
   end
 end
 
+defmodule CounterSlice do
+  use Jido.Slice
+
+  slice do
+    name "counter"
+    path :counter
+    schema Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
+  end
+
+  signal_routes do
+    route "counter.increment", Counter.Increment
+  end
+end
+
 defmodule CounterAgent do
-  use Jido.Agent,
-    name: "counter_agent",
-    path: :app,
-    default_slices: false,
-    plugins: [{CounterSlice, %{}}],
-    signal_routes: [
-      {"counter.increment", Counter.Increment}
-    ]
+  use Jido.Agent, extensions: [CounterSlice]
+
+  agent do
+    name "counter_agent"
+  end
 end
 
 agent = CounterAgent.new()
@@ -85,20 +93,28 @@ IO.inspect(agent.state.counter, label: "original is unchanged (immutable)")
 
 ## Variations
 
-### Required options — name and path
+### Required fields — `name` and `path`
 
-A slice without `name:` or `path:` fails at compile time. The validator runs
-inside the macro, so the error fires when you `defmodule`.
+A slice without `name` or `path` in its `slice do … end` section fails at
+compile time. The Spark verifier runs while the module compiles, so the
+error fires when you `defmodule`.
 
 ```elixir
 try do
   Code.compile_string("""
   defmodule TempBadSlice do
-    use Jido.Slice, path: :only_path
+    use Jido.Slice
+    slice do
+      path :only_path
+    end
+
+    signal_routes do
+      route "x", SomeAction
+    end
   end
   """)
 rescue
-  e in CompileError -> IO.inspect(e.description, label: "missing :name compile error")
+  e -> IO.inspect(Exception.message(e), label: "missing :name compile error")
 end
 ```
 
@@ -106,41 +122,59 @@ end
 try do
   Code.compile_string("""
   defmodule TempBadSlice2 do
-    use Jido.Slice, name: "only_name"
+    use Jido.Slice
+    slice do
+      name "only_name"
+    end
   end
   """)
 rescue
-  e in CompileError -> IO.inspect(e.description, label: "missing :path compile error")
+  e -> IO.inspect(Exception.message(e), label: "missing :path compile error")
 end
 ```
 
-### Slice metadata accessors
+### Slice metadata via `Jido.Dsl.Slice.Info`
 
-Every option you pass surfaces as a `0`-arity function. Useful for tooling
-(discovery, docs, dashboards) that wants to introspect what an agent provides
-without instantiating it.
+Every field surfaces through a per-DSL Info module. Useful for tooling
+(discovery, docs, dashboards) that wants to introspect what an agent
+provides without instantiating it.
 
 ```elixir
 defmodule FullSlice do
-  use Jido.Slice,
-    name: "full",
-    path: :full,
-    description: "demo slice with every metadata field",
-    category: "demo",
-    vsn: "0.1.0",
-    tags: ["a", "b"],
-    capabilities: [:speak, :listen],
-    requires: [{:config, :token}],
-    schema: Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
+  use Jido.Slice
+
+  slice do
+    name "full"
+    path :full
+    description "demo slice with every metadata field"
+    category "demo"
+    vsn "0.1.0"
+    tags ["a", "b"]
+    schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
+  end
+
+  signal_routes do
+    route "full.bump", Counter.Increment
+  end
+
+  capabilities do
+    capability :speak
+    capability :listen
+  end
+
+  requires do
+    requires :config, :token
+  end
 end
 
-IO.inspect(FullSlice.name(), label: "name/0")
-IO.inspect(FullSlice.path(), label: "path/0")
-IO.inspect(FullSlice.description(), label: "description/0")
-IO.inspect(FullSlice.tags(), label: "tags/0")
-IO.inspect(FullSlice.capabilities(), label: "capabilities/0")
-IO.inspect(FullSlice.requires(), label: "requires/0")
-IO.inspect(FullSlice.singleton?(), label: "singleton?/0")
+alias Jido.Dsl.Slice.Info
+
+IO.inspect(Info.name(FullSlice), label: "name")
+IO.inspect(Info.path(FullSlice), label: "path")
+IO.inspect(Info.description(FullSlice), label: "description")
+IO.inspect(Info.tags(FullSlice), label: "tags")
+IO.inspect(Info.capabilities(FullSlice), label: "capabilities")
+IO.inspect(Info.requires(FullSlice), label: "requires")
 ```
 
 ### Schema defaults seed slice state
@@ -151,18 +185,25 @@ truth.
 
 ```elixir
 defmodule SchemaSlice do
-  use Jido.Slice,
-    name: "schema",
-    path: :schema,
-    schema: Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
+  use Jido.Slice
+
+  slice do
+    name "schema"
+    path :schema
+    schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
+  end
+
+  signal_routes do
+    route "schema.bump", Counter.Increment
+  end
 end
 
 defmodule SchemaAgent do
-  use Jido.Agent,
-    name: "schema_agent",
-    path: :app,
-    default_slices: false,
-    plugins: [SchemaSlice]
+  use Jido.Agent, extensions: [SchemaSlice]
+
+  agent do
+    name "schema_agent"
+  end
 end
 
 agent = SchemaAgent.new()
@@ -176,53 +217,41 @@ shallow-merges over the schema defaults at `Agent.new/1` time.
 
 ```elixir
 defmodule SchemaAgentConfigured do
-  use Jido.Agent,
-    name: "schema_agent_configured",
-    path: :app,
-    default_slices: false,
-    plugins: [{SchemaSlice, %{counter: 42}}]
+  use Jido.Agent, extensions: [{SchemaSlice, %{counter: 42}}]
+
+  agent do
+    name "schema_agent_configured"
+  end
 end
 
 agent = SchemaAgentConfigured.new()
 IO.inspect(agent.state.schema, label: "schema slice with per-agent config override")
 ```
 
-### `signal_routes` map signal types to actions
+### `signal_routes do … end` maps signal types to actions
 
-Slices can register their own routes via the `signal_routes:` option. When
-the agent runs under `AgentServer`, an incoming signal whose `type` matches
-the route key is dispatched to the action — the same `cmd/2` reducer pattern,
-just driven by the signal pipeline instead of a direct call.
+Slices declare their own routes inside the `signal_routes do … end`
+section. When the agent runs under `AgentServer`, an incoming signal whose
+`type` matches a route is dispatched to that action — the same `cmd/2`
+reducer pattern, just driven by the signal pipeline instead of a direct
+call.
 
 ```elixir
 defmodule RoutingSlice do
-  use Jido.Slice,
-    name: "routing",
-    path: :routing,
-    schema: Zoi.object(%{tally: Zoi.integer() |> Zoi.default(0)}),
-    signal_routes: [
-      {"routing.bump", Counter.Increment}
-    ]
+  use Jido.Slice
+
+  slice do
+    name "routing"
+    path :routing
+    schema Zoi.object(%{tally: Zoi.integer() |> Zoi.default(0)})
+  end
+
+  signal_routes do
+    route "routing.bump", Counter.Increment
+  end
 end
 
-IO.inspect(RoutingSlice.signal_routes(), label: "signal_routes/0")
-```
-
-### `manifest/0` and `plugin_spec/1`
-
-Two surface fields the framework uses internally — `manifest/0` returns
-all compile-time metadata as a struct, and `plugin_spec/1` returns the
-runtime spec with optional per-agent config baked in. Useful when building
-discovery tools.
-
-```elixir
-manifest = FullSlice.manifest()
-IO.inspect(manifest.path, label: "manifest.path")
-IO.inspect(manifest.signal_routes, label: "manifest.signal_routes")
-
-spec = FullSlice.plugin_spec(%{enabled: false})
-IO.inspect(spec.path, label: "plugin_spec.path")
-IO.inspect(spec.config, label: "plugin_spec.config")
+IO.inspect(Info.signal_routes(RoutingSlice), label: "signal_routes from Info")
 ```
 
 ### Multi-slice writes via `%SliceUpdate{}`
@@ -234,16 +263,26 @@ hatch, not the default.
 
 ```elixir
 defmodule AuditSlice do
-  use Jido.Slice,
-    name: "audit",
-    path: :audit,
-    schema: Zoi.object(%{events: Zoi.list(Zoi.any()) |> Zoi.default([])})
+  use Jido.Slice
+
+  slice do
+    name "audit"
+    path :audit
+    schema Zoi.object(%{events: Zoi.list(Zoi.any()) |> Zoi.default([])})
+  end
+
+  signal_routes do
+    route "audit.note", Counter.Increment
+  end
 end
 
 defmodule Counter.IncrementAndAudit do
-  use Jido.Action,
-    name: "counter_increment_audit",
-    schema: [by: [type: :integer, default: 1]]
+  use Jido.Action
+
+  action do
+    name "counter_increment_audit"
+    schema [by: [type: :integer, default: 1]]
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{by: by}}, _slice, _opts, _ctx) do
@@ -259,11 +298,11 @@ defmodule Counter.IncrementAndAudit do
 end
 
 defmodule MultiSliceAgent do
-  use Jido.Agent,
-    name: "multi_slice_agent",
-    path: :app,
-    default_slices: false,
-    plugins: [CounterSlice, AuditSlice]
+  use Jido.Agent, extensions: [CounterSlice, AuditSlice]
+
+  agent do
+    name "multi_slice_agent"
+  end
 end
 
 agent = MultiSliceAgent.new()
@@ -276,28 +315,25 @@ IO.inspect(agent2.state.audit, label: "audit slice after multi-slice write")
 
 ### Composition — one signal hits two slices via routes
 
-When the routing table maps a signal to multiple actions (different routes
-for different signal types), or when one action returns a `SliceUpdate`,
-the agent stays the single owner of state. There is no event-bus
-fan-out — the dispatch table is declarative and explicit.
+When the routing table maps a signal to an action that returns a
+`SliceUpdate`, the agent stays the single owner of state. There is no
+event-bus fan-out — the dispatch table is declarative and explicit.
 
-Below: the `MultiSliceAgent` runs against an `AgentServer`, which routes a
-`"counter.increment"` signal to `Counter.Increment` (via the agent's own
-routes) and projects the post-pipeline state through a selector.
+Below: `MultiSliceAgent` runs against an `AgentServer`, which routes a
+`"counter.increment_and_audit"` signal to `Counter.IncrementAndAudit` and
+projects the post-pipeline state through a selector.
 
 ```elixir
 defmodule RoutedMultiSliceAgent do
-  use Jido.Agent,
-    name: "routed_multi_slice_agent",
-    path: :app,
-    default_slices: false,
-    plugins: [CounterSlice, AuditSlice]
+  use Jido.Agent, extensions: [CounterSlice, AuditSlice]
 
-  def signal_routes(_ctx) do
-    [
-      {"counter.increment", Counter.Increment},
-      {"counter.increment_and_audit", Counter.IncrementAndAudit}
-    ]
+  agent do
+    name "routed_multi_slice_agent"
+  end
+
+  signal_routes do
+    route "counter.increment", Counter.Increment
+    route "counter.increment_and_audit", Counter.IncrementAndAudit
   end
 end
 
@@ -321,7 +357,11 @@ agent comes back through the error branch.
 
 ```elixir
 defmodule Counter.Failing do
-  use Jido.Action, name: "counter_failing", schema: []
+  use Jido.Action
+
+  action do
+    name "counter_failing"
+  end
 
   @impl true
   def run(_signal, _slice, _opts, _ctx), do: {:error, :nope}
@@ -355,4 +395,3 @@ end
 
 - [Middleware](middleware.livemd) — wrapping the signal pipeline.
 - [Actions and directives](actions-and-directives.livemd) — the return shape and directive surface.
-- [Pods](pods.livemd) — slices that manage hierarchies of child agents.

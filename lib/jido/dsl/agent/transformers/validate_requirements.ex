@@ -1,8 +1,9 @@
 defmodule Jido.Dsl.Agent.Transformers.ValidateRequirements do
   @moduledoc """
-  Validates plugin requirements at compile time. Replaces the legacy
-  `Jido.Plugin.Requirements.validate_all_requirements/2` raise inside
-  `__quoted_compile_aggregates__/0`.
+  Validates plugin requirements at compile time. Walks every mounted
+  plugin/slice and checks that each `requires :kind, :name` entry is
+  satisfied by the host configuration; raises a Spark DSL error
+  otherwise.
   """
 
   use Spark.Dsl.Transformer

@@ -1,11 +1,12 @@
 defmodule Jido.Dsl.Agent.Transformers.ExpandRoutes do
   @moduledoc """
   Expands plugin / slice routes (with prefixing for plugins, absolute
-  paths for slices) and agent / plugin schedules. Persists everything
-  the legacy `__quoted_compile_aggregates__/0` block computed:
+  paths for slices) and agent / plugin schedules into the runtime
+  route_spec tuple shape and persists each expansion under its dsl_state
+  key:
 
     * `:expanded_signal_routes` — host-declared `signal_routes do … end`
-      flattened to legacy route_spec tuples.
+      flattened to route_spec tuples.
     * `:expanded_plugin_routes` and `:expanded_slice_routes` — per-instance
       route expansions.
     * `:expanded_plugin_schedules` and `:expanded_agent_schedules` — cron
@@ -48,7 +49,7 @@ defmodule Jido.Dsl.Agent.Transformers.ExpandRoutes do
 
     expanded_agent_schedules =
       dsl_state
-      |> agent_schedules_legacy_input()
+      |> agent_schedules_input()
       |> Jido.Agent.Schedules.expand_schedules(agent_name)
 
     agent_schedule_routes =
@@ -90,23 +91,23 @@ defmodule Jido.Dsl.Agent.Transformers.ExpandRoutes do
   defp build_signal_routes(dsl_state) do
     [:signal_routes]
     |> get_entities(dsl_state)
-    |> Enum.map(&route_to_legacy/1)
+    |> Enum.map(&route_to_route_spec/1)
   end
 
-  defp route_to_legacy(%Route{type: type, action: action, priority: priority, match: nil}) do
+  defp route_to_route_spec(%Route{type: type, action: action, priority: priority, match: nil}) do
     if priority == 0,
       do: {type, action},
       else: {type, action, priority}
   end
 
-  defp route_to_legacy(%Route{type: type, action: action, priority: priority, match: match})
+  defp route_to_route_spec(%Route{type: type, action: action, priority: priority, match: match})
        when is_function(match, 1) do
     if priority == 0,
       do: {type, match, action},
       else: {type, match, action, priority}
   end
 
-  defp agent_schedules_legacy_input(dsl_state) do
+  defp agent_schedules_input(dsl_state) do
     [:schedules]
     |> get_entities(dsl_state)
     |> Enum.map(fn %Schedule{} = s ->

@@ -10,13 +10,22 @@ defmodule Jido.Plugin.Requirements do
   ## Example
 
       defmodule MyApp.SlackPlugin do
-        use Jido.Plugin,
-          name: "slack",
-          requires: [
-            {:config, :token},
-            {:config, :channel},
-            {:app, :req}
-          ]
+        use Jido.Plugin
+
+        slice do
+          name "slack"
+          path :slack
+        end
+
+        signal_routes do
+          route "slack.send", MyApp.Actions.SlackSend
+        end
+
+        requires do
+          requires :config, :token
+          requires :config, :channel
+          requires :app, :req
+        end
       end
 
   If requirements are not met, agent compilation will fail with a descriptive error.

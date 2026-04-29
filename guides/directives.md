@@ -168,9 +168,12 @@ Here's a full example showing an action that processes an order and emits a sign
 
 ```elixir
 defmodule ProcessOrderAction do
-  use Jido.Action,
-    name: "process_order",
-    schema: [order_id: [type: :string, required: true]]
+  use Jido.Action
+
+  action do
+    name "process_order"
+    schema [order_id: [type: :string, required: true]]
+  end
 
   alias Jido.Agent.Directive
 

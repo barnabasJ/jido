@@ -78,13 +78,16 @@ exposes them to the LLM.
 
 ```elixir
 defmodule Demo.AI.Add do
-  use Jido.Action,
-    name: "add",
-    description: "Adds two integers and returns the sum.",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "add"
+    description "Adds two integers and returns the sum."
+    schema [
       a: [type: :integer, required: true, doc: "First addend"],
       b: [type: :integer, required: true, doc: "Second addend"]
     ]
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{a: a, b: b}}, _slice, _opts, _ctx),
@@ -92,13 +95,16 @@ defmodule Demo.AI.Add do
 end
 
 defmodule Demo.AI.Multiply do
-  use Jido.Action,
-    name: "multiply",
-    description: "Multiplies two integers and returns the product.",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "multiply"
+    description "Multiplies two integers and returns the product."
+    schema [
       a: [type: :integer, required: true, doc: "First factor"],
       b: [type: :integer, required: true, doc: "Second factor"]
     ]
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{a: a, b: b}}, _slice, _opts, _ctx),
@@ -150,21 +156,22 @@ api_key_opt =
   end
 
 defmodule LivebookAgent do
-  use Jido.Agent,
-    name: "livebook_ai",
-    path: :state,
-    slices: [
-      {Jido.AI.ReAct,
-       model: model_spec,
-       tools: [Demo.AI.Add, Demo.AI.Multiply],
-       system_prompt:
-         "You are a concise arithmetic assistant. " <>
-           "Use the `add` and `multiply` tools when calculations are needed, " <>
-           "then state the final answer. Keep the answer to one sentence.",
-       max_iterations: 5,
-       max_tokens: 512,
-       llm_opts: [api_key: api_key_opt]}
-    ]
+  use Jido.Agent, extensions: [Jido.AI.ReAct]
+
+  agent do
+    name "livebook_ai"
+  end
+
+  react do
+    model model_spec
+    tools [Demo.AI.Add, Demo.AI.Multiply]
+    system_prompt "You are a concise arithmetic assistant. " <>
+                    "Use the `add` and `multiply` tools when calculations are needed, " <>
+                    "then state the final answer. Keep the answer to one sentence."
+    max_iterations 5
+    max_tokens 512
+    llm_opts api_key: api_key_opt
+  end
 end
 
 :ok

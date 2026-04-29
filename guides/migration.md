@@ -308,15 +308,17 @@ end
 ### After (V2)
 
 ```elixir
-defmodule MyApp.Tools.SendEmail do
-  use Jido.Tool,
-    name: "send_email",
-    description: "Sends an email"
+defmodule MyApp.Actions.SendEmail do
+  use Jido.Action
 
-  @schema Zoi.struct(__MODULE__, %{
-    to: Zoi.string(description: "Recipient email"),
-    subject: Zoi.string(description: "Email subject")
-  })
+  action do
+    name "send_email"
+    description "Sends an email"
+    schema Zoi.object(%{
+      to: Zoi.string(description: "Recipient email"),
+      subject: Zoi.string(description: "Email subject")
+    })
+  end
 
   @impl true
   def run(params, _context) do
@@ -347,18 +349,17 @@ end
 
 ```elixir
 defmodule MyAgent do
-  use Jido.Agent,
-    name: "my_agent"
+  use Jido.Agent
 
-  @schema Zoi.struct(__MODULE__, %{
-    name: Zoi.string(description: "Agent name"),
-    count: Zoi.integer(default: 0),
-    tags: Zoi.list(Zoi.string()) |> Zoi.default([])
-  }, coerce: true)
-
-  @type t :: unquote(Zoi.type_spec(@schema))
-  @enforce_keys Zoi.Struct.enforce_keys(@schema)
-  defstruct Zoi.Struct.struct_fields(@schema)
+  agent do
+    name "my_agent"
+    path :state
+    schema Zoi.object(%{
+      name: Zoi.string(description: "Agent name"),
+      count: Zoi.integer() |> Zoi.default(0),
+      tags: Zoi.list(Zoi.string()) |> Zoi.default([])
+    }, coerce: true)
+  end
 end
 ```
 
@@ -454,10 +455,14 @@ updated. See [Orphans & Adoption](orphans.md) for the full lifecycle.
 ```elixir
 defmodule MyAgent do
   use Jido.Agent,
-    plugins: [
+    extensions: [
       MyApp.Plugins.WebSearch,
       MyApp.Plugins.DataAnalysis
     ]
+
+  agent do
+    name "my_agent"
+  end
 end
 ```
 
@@ -599,13 +604,13 @@ The migration recipes are below.
 
 | Old shape | New shape | Notes |
 |---|---|---|
-| `use Jido.Plugin, state_key: :x` | `use Jido.Plugin, path: :x` | Mechanical rename. |
+| `use Jido.Plugin, state_key: :x, …` | `use Jido.Plugin` + `slice do path :x end` | Move every option into the sectioned DSL. See [Migrating to the Spark DSL](migration-spark-dsl.md). |
 | `mount/2` callback | Schema defaults; per-agent config; or wrapper macro; or lifecycle action | See "`mount/2` retired — four replacement patterns" below. |
 | `handle_signal/2` callback | `on_signal/4` Middleware (before-next) | `next.(signal, ctx)` to pass through. |
 | `transform_result/3` callback | `on_signal/4` Middleware (after-next) | Walk directives returned from `next.(signal, ctx)`. |
 | `on_checkpoint/2` / `on_restore/2` | `Jido.Persist.Transform` behaviour (`externalize/1` / `reinstate/1`) | Persister middleware applies them automatically. |
-| Dynamic `signal_routes/1` callback | Static `signal_routes:` keyword | Branch inside the action if conditional logic is needed. |
-| `Jido.Agent.ScopedAction` | `use Jido.Action, path: :x` | Path-required on every action. |
+| Dynamic `signal_routes/1` callback | Static `signal_routes do route … end` section | Branch inside the action if conditional logic is needed. |
+| `Jido.Agent.ScopedAction` | `use Jido.Action` + `action do path :x end` | Path-required on every slice-scoped action. |
 | `Jido.Actions.Status.MarkCompleted` and friends | Inline a small action that writes `slice.status = :completed` | The convention isn't a framework concept anymore. |
 
 ### `mount/2` retired — four replacement patterns
@@ -613,7 +618,7 @@ The migration recipes are below.
 Pick whichever applies to your callback:
 
 1. **Nothing (`{:ok, nil}`)** — delete the callback. Schema defaults seed the slice automatically.
-2. **Echo per-agent config into the slice** — declare a `schema:` matching the config, and the per-agent `{Plugin, %{...}}` map merges in at `Jido.Agent.new/1`. Zero code.
+2. **Echo per-agent config into the slice** — declare a `schema` in the slice DSL matching the config, and the per-agent `{Plugin, %{...}}` map merges in at `Jido.Agent.new/1`. Zero code.
 3. **Compile-time derivation from agent module** — wrap `Jido.Agent.new/1` in a macro (see [`Jido.Pod`](../lib/jido/pod.ex)). The wrapper computes state from `__MODULE__`'s metadata before delegating.
 4. **Runtime-derived (rare)** — declare a Slice action routed on `jido.agent.lifecycle.starting`. The lifecycle signal fires inside `AgentServer.init/1` before any user signal.
 
@@ -651,7 +656,7 @@ in place of the slice value. The action's `path:` stays single-valued
 (its primary slice); secondary slices listed in `slices:` are explicitly
 bridged. See [Actions — Multi-slice returns](actions.md#multi-slice-returns).
 
-### `Jido.Agent.ScopedAction` folded in
+### Slice-scoped actions: declare `path:` in the action DSL
 
 ```elixir
 # Before
@@ -661,7 +666,12 @@ end
 
 # After
 defmodule MyAction do
-  use Jido.Action, path: :x
+  use Jido.Action
+
+  action do
+    name "my_action"
+    path :x
+  end
 end
 ```
 
@@ -671,7 +681,12 @@ Inline the convention in your own code:
 
 ```elixir
 defmodule MyApp.Actions.MarkCompleted do
-  use Jido.Action, name: "mark_completed", path: :work, schema: []
+  use Jido.Action
+
+  action do
+    name "mark_completed"
+    path :work
+  end
 
   def run(_signal, slice, _opts, _ctx) do
     {:ok, %{slice | status: :completed}}
@@ -940,6 +955,20 @@ If you were relying on Retry firing because an action emitted
 only on `{:error, _}` returns from the chain. To get
 logging-without-retry, emit the `%Error{}` from a different middleware
 on the success path (or use `Logger` directly).
+
+## Spark DSL migration (ADR 0023)
+
+Jido 2.x defines its agent / slice / plugin / middleware / action /
+sensor / pod / instance surfaces with a **Spark DSL**. Modules use a
+sectioned `agent do … end` / `slice do … end` etc. style instead of a
+flat `use Jido.X, name: "…", path: …, schema: …` keyword list. The
+extension list on `use Jido.Agent` is a single ordered
+`extensions: […]` keyword that classifies each entry by its DSL.
+
+For the keyword-form → DSL conversion recipe, see
+[Migrating to the Spark DSL](migration-spark-dsl.md). It walks one
+in-tree agent, one in-tree slice, and one in-tree plugin through the
+mechanical conversion plus the common pitfalls.
 
 ## Getting Help
 

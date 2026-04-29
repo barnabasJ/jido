@@ -51,10 +51,13 @@ synchronously, project a single field through the selector.
 
 ```elixir
 defmodule Counter.Inc do
-  use Jido.Action,
-    name: "counter_inc",
-    path: :app,
-    schema: [by: [type: :integer, default: 1]]
+  use Jido.Action
+
+  action do
+    name "counter_inc"
+    path :app
+    schema [by: [type: :integer, default: 1]]
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{by: by}}, slice, _opts, _ctx) do
@@ -64,16 +67,20 @@ defmodule Counter.Inc do
 end
 
 defmodule CounterAgent do
-  use Jido.Agent,
-    name: "ccas_counter",
-    path: :app,
-    default_slices: false,
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "ccas_counter"
+    path :app
+    schema [
       count: [type: :integer, default: 0],
       status: [type: :atom, default: :idle]
     ]
+  end
 
-  def signal_routes(_ctx), do: [{"counter.inc", Counter.Inc}]
+  signal_routes do
+    route "counter.inc", Counter.Inc
+  end
 end
 
 {:ok, pid} = Demo.Jido.start_agent(CounterAgent, id: "ccas-counter")
@@ -130,20 +137,27 @@ This is the [ADR 0018](adr/0018-tagged-tuple-return-shape.md) §3 contract.
 
 ```elixir
 defmodule Failing do
-  use Jido.Action, name: "ccas_failing", path: :app, schema: []
+  use Jido.Action
+
+  action do
+    name "ccas_failing"
+    path :app
+  end
 
   @impl true
   def run(_signal, _slice, _opts, _ctx), do: {:error, :intentional}
 end
 
 defmodule FailingAgent do
-  use Jido.Agent,
-    name: "ccas_failing_agent",
-    path: :app,
-    default_slices: false,
-    schema: []
+  use Jido.Agent
 
-  def signal_routes(_ctx), do: [{"fail", Failing}]
+  agent do
+    name "ccas_failing_agent"
+  end
+
+  signal_routes do
+    route "fail", Failing
+  end
 end
 
 {:ok, fpid} = Demo.Jido.start_agent(FailingAgent, id: "ccas-failing")
@@ -358,7 +372,12 @@ failure) just like a single-attempt call.
 
 ```elixir
 defmodule FlakyAction do
-  use Jido.Action, name: "ccas_flaky", path: :app, schema: []
+  use Jido.Action
+
+  action do
+    name "ccas_flaky"
+    path :app
+  end
 
   @counter_key {__MODULE__, :counter}
 
@@ -386,13 +405,17 @@ end
 
 defmodule RetryingAgent do
   use Jido.Agent,
-    name: "ccas_retrying",
-    path: :app,
-    default_slices: false,
-    schema: [status: [type: :atom, default: :idle]],
-    middleware: [{Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}]
+    extensions: [{Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}]
 
-  def signal_routes(_ctx), do: [{"flaky", FlakyAction}]
+  agent do
+    name "ccas_retrying"
+    path :app
+    schema [status: [type: :atom, default: :idle]]
+  end
+
+  signal_routes do
+    route "flaky", FlakyAction
+  end
 end
 
 FlakyAction.reset(:demo)

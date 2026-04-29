@@ -43,7 +43,7 @@ defmodule Jido.Dsl.Pod.Transformers.AttachPodPlugin do
     {:ok, dsl_state}
   end
 
-  # `pod do plugin SomePlugin end` takes precedence over the legacy
+  # `pod do plugin SomePlugin end` takes precedence over the
   # `default_slices: %{pod: ...}` keyword arg on `use Jido.Pod`.
   defp resolve_pod_plugin(plugin, default_slices_override) when not is_nil(plugin) do
     case plugin do

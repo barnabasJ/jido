@@ -20,9 +20,11 @@ defmodule Jido.Identity.Slice do
   This slice is automatically included as a default slice for all agents
   unless explicitly disabled:
 
-      use Jido.Agent,
-        name: "minimal",
-        default_slices: %{identity: false}
+      use Jido.Agent, default_slices: %{identity: false}
+
+      agent do
+        name "minimal"
+      end
   """
 
   alias Jido.Identity

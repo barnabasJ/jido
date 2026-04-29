@@ -4,7 +4,7 @@
 
 `Jido.Pod` is the simplest durable topology layer in core Jido: a pod is just an
 agent with a canonical topology snapshot and a reserved singleton plugin mounted
-under `:__pod__`.
+under `:pod`.
 
 If you are still choosing between `SpawnAgent`, `InstanceManager`, and `Pod`,
 start with [Choosing a Runtime Pattern](runtime-patterns.md).
@@ -24,26 +24,39 @@ Use the existing `Jido.Agent.InstanceManager` for the pod agent itself.
 
 ```elixir
 defmodule MyApp.OrderReviewPod do
-  use Jido.Pod,
-    name: "order_review",
-    topology: %{
-      planner: %{agent: MyApp.PlannerAgent, manager: :planner_members, activation: :eager},
-      reviewer: %{agent: MyApp.ReviewerAgent, manager: :reviewer_members, activation: :lazy}
-    },
-    schema: [
+  use Jido.Pod
+
+  agent do
+    name "order_review"
+    path :state
+    schema [
       phase: [type: :atom, default: :planning]
     ]
+  end
+
+  pod do
+    topology %{
+      planner: %{agent: MyApp.PlannerAgent, manager: :planner_members, activation: :eager},
+      reviewer: %{agent: MyApp.ReviewerAgent, manager: :reviewer_members, activation: :lazy}
+    }
+  end
 end
 ```
 
-This wraps `use Jido.Agent` and injects a singleton pod plugin under `:__pod__`.
+`use Jido.Pod` adds the agent / signal_routes / schedules sections from
+`Jido.Agent` plus a `pod do … end` section, and the reserved pod plugin
+attaches automatically under `:pod`.
 
-`topology:` may also be omitted to start with an empty named topology:
+The `pod do topology %{} end` block may be omitted to start with an empty
+named topology:
 
 ```elixir
 defmodule MyApp.EmptyReviewPod do
-  use Jido.Pod,
-    name: "empty_review"
+  use Jido.Pod
+
+  agent do
+    name "empty_review"
+  end
 end
 ```
 
@@ -70,16 +83,23 @@ This is the shortest end-to-end Pod story in core Jido:
 
 ```elixir
 defmodule MyApp.ReviewWorkerAgent do
-  use Jido.Agent,
-    name: "review_worker",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "review_worker"
+    path :state
+    schema [
       role: [type: :string, default: "worker"]
     ]
+  end
 end
 
 defmodule MyApp.ReviewPod do
-  use Jido.Pod,
-    name: "review_pod"
+  use Jido.Pod
+
+  agent do
+    name "review_pod"
+  end
 end
 
 children = [
@@ -127,7 +147,7 @@ children = [
 What this demonstrates:
 
 - the pod itself is one durable keyed runtime
-- topology is stored as ordinary pod state under `:__pod__`
+- topology is stored as ordinary pod state under `:pod`
 - eager members start during `get/3` or mutation reconciliation
 - lazy members stay defined but stopped until `ensure_node/3`
 - later reacquisition restores the same durable topology before reconcile
@@ -137,24 +157,30 @@ What this demonstrates:
 The default pod plugin is `Jido.Pod.Plugin`.
 
 - It is always singleton.
-- It uses the reserved state key `:__pod__`.
+- It uses the reserved state key `:pod`.
 - It persists the resolved topology snapshot as ordinary agent state.
 - It advertises the `:pod` capability.
 
-You can replace it through the normal `default_slices` override path:
+You can replace it through the `pod do plugin … end` override:
 
 ```elixir
 defmodule MyApp.CustomPod do
-  use Jido.Pod,
-    name: "custom_pod",
-    topology: %{
+  use Jido.Pod
+
+  agent do
+    name "custom_pod"
+  end
+
+  pod do
+    topology %{
       worker: %{agent: MyApp.WorkerAgent, manager: :workers}
-    },
-    default_slices: %{__pod__: MyApp.CustomPodPlugin}
+    }
+    plugin MyApp.CustomPodPlugin
+  end
 end
 ```
 
-Replacement plugins must keep the same `:__pod__` state key, be singleton, and
+Replacement plugins must keep the same `:pod` state key, be singleton, and
 advertise the `:pod` capability.
 
 ## Topology
@@ -329,7 +355,7 @@ This slice does **not** support:
 
 Mutation semantics are persistence-first:
 
-1. the new topology snapshot is written into `agent.state[:__pod__]`
+1. the new topology snapshot is written into `agent.state[:pod]`
 2. runtime stop/start work runs against that new topology
 3. the returned `%Jido.Pod.Mutation.Report{}` records `added`, `removed`,
    `started`, `stopped`, and `failures`
@@ -418,9 +444,9 @@ larger checkpoint payloads, those changes stay in the adapter package.
 
 What is persisted:
 
-- `agent.state[:__pod__].topology`
-- `agent.state[:__pod__].topology_version`
-- any pod-plugin metadata you keep under `:__pod__`
+- `agent.state[:pod].topology`
+- `agent.state[:pod].topology_version`
+- any pod-plugin metadata you keep under `:pod`
 
 What is **not** persisted as durable truth:
 
@@ -479,7 +505,7 @@ This first slice keeps the model deliberately small:
 - no standalone link mutation
 - no reparenting of surviving nodes
 
-The extension seam for later work is the `:__pod__` plugin state and the
+The extension seam for later work is the `:pod` plugin state and the
 canonical `%Jido.Pod.Topology{}` shape.
 
 ## See Also

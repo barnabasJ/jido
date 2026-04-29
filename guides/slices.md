@@ -1,13 +1,13 @@
 # Slices
 
-A **Slice** is a declarative bundle of agent-state schema, actions, signal
-routes, sensor subscriptions, and schedules. It is the pure-data tier of
-the Slice / Middleware / Plugin model.
+A **Slice** is a declarative bundle of agent-state schema, signal
+routes, sensor subscriptions, and schedules. It is the pure-data tier
+of the Slice / Middleware / Plugin model.
 
-A Slice owns one flat atom in `agent.state` (its `path:`). Actions belonging
-to that slice receive the slice value as their second argument and return a
-new full slice value. Slices have no lifecycle callbacks — a Slice is fully
-described by the keyword list passed to `use Jido.Slice`.
+A Slice owns one flat atom in `agent.state` (its `path:`). Actions
+belonging to that slice receive the slice value as their second argument
+and return a new full slice value. A Slice is fully described by the
+sectioned DSL its module declares — there are no lifecycle callbacks.
 
 If you need to wrap signal processing (audit, retry, persist, transform),
 that's the [Middleware](middleware.md) tier — not Slice. If you need both
@@ -17,42 +17,48 @@ in one module, use [`Jido.Plugin`](plugins.md) (a Slice + Middleware combo).
 
 ```elixir
 defmodule MyApp.ChatSlice do
-  use Jido.Slice,
-    name: "chat",
-    path: :chat,
-    actions: [MyApp.Actions.SendMessage, MyApp.Actions.ListHistory],
-    schema:
-      Zoi.object(%{
-        messages: Zoi.list(Zoi.any()) |> Zoi.default([]),
-        model: Zoi.string() |> Zoi.default("gpt-4")
-      }),
-    signal_routes: [
-      {"chat.send", MyApp.Actions.SendMessage},
-      {"chat.history", MyApp.Actions.ListHistory}
-    ]
+  use Jido.Slice
+
+  slice do
+    name "chat"
+    path :chat
+    schema Zoi.object(%{
+      messages: Zoi.list(Zoi.any()) |> Zoi.default([]),
+      model: Zoi.string() |> Zoi.default("gpt-4")
+    })
+  end
+
+  signal_routes do
+    route "chat.send", MyApp.Actions.SendMessage
+    route "chat.history", MyApp.Actions.ListHistory
+  end
 end
 ```
 
-That `use` block is the entire surface. There is no `mount/2`, no
-`handle_signal/2`, no `transform_result/3` — those callbacks were
-retired.
+That's the entire surface. The slice contributes its `signal_routes`,
+`schedules`, `subscriptions`, `capabilities`, and `requires` sections to
+any agent that lists it in `extensions: […]`.
 
-## Configuration fields
+## DSL sections
+
+| Section | Required | Purpose |
+|---|---|---|
+| `slice` | yes | Identity and base configuration. See fields below. |
+| `signal_routes` | yes | At least one `route "type", Action` entry. |
+| `subscriptions` | no | `subscription Sensor, %{config}` entries. |
+| `schedules` | no | `schedule "cron", Action` entries. |
+| `capabilities` | no | `capability :name` entries (used by Discovery). |
+| `requires` | no | `requires :kind, :name` dependencies — kinds are `:config`, `:app`, `:plugin`, `:slice`. |
+
+### `slice do … end` fields
 
 | Field | Required | Purpose |
 |---|---|---|
 | `name` | yes | Human identifier; appears in logs and Discovery. Letters, digits, underscores. |
 | `path` | yes | Atom key in `agent.state` where this slice lives. |
-| `actions` | no (default `[]`) | Action modules contributed by this slice. Each action that touches this slice should declare matching `path:`. |
-| `schema` | no | Zoi schema for the slice's state. Defaults from the schema seed `agent.state[path]` at `Jido.Agent.new/1`. |
-| `config_schema` | no | Zoi schema for per-agent configuration (the second tuple element in `{Plugin, %{...}}`). |
-| `signal_routes` | no | Static `signal_type → action` mappings. Compile-time only; no `signal_routes/1` callback. |
-| `subscriptions` | no | Sensor subscription tuples like `{SensorModule, config}`. |
-| `schedules` | no | Cron tuples like `{"*/5 * * * *", ActionModule}`. |
-| `capabilities` | no | Atom list advertising what the slice provides (used by Discovery). |
-| `requires` | no | Dependency tuples: `{:config, :token}`, `{:app, :req}`, `{:plugin, :http}`. |
+| `schema` | yes (with at least one route) | Zoi schema for the slice's state. Defaults seed `agent.state[path]` at `Jido.Agent.new/1`. |
+| `config_schema` | no | Zoi schema for per-agent configuration (the second tuple element in `{Slice, %{...}}`). |
 | `description`, `category`, `vsn`, `tags`, `otp_app` | no | Metadata. |
-| `singleton` | no (default `false`) | If `true`, the slice cannot be aliased via `as:` (raises at compile time). |
 
 ## Slice state and `agent.state[path]`
 
@@ -73,54 +79,43 @@ When the agent starts, each slice's state is seeded by:
 2. then the per-agent config map merged in (`{MyApp.ChatSlice, %{model: "gpt-5"}}`);
 3. then anything the caller passes as `state: %{chat: %{...}}` to `Jido.Agent.new/1`.
 
-The merge is **shallow** — there is no deep-merge. An action returns the full
-new slice value; partial-map returns are not interpreted (this changed in
-ADR 0014; see [the migration guide](migration.md) for the recipe).
+The merge is **shallow** — there is no deep-merge. An action returns the
+full new slice value; partial-map returns are not interpreted.
 
 ## Composing slices on an agent
 
-Declare bare slices on an agent via the `slices:` keyword. Bare slices
-register their `signal_routes/0` with absolute paths — no plugin-style
-prefixing. Plugins (`use Jido.Plugin` = Slice + Middleware) go in
-`plugins:` instead.
+Declare slices on an agent via the `extensions: […]` keyword. The
+compile-time walker classifies each entry by its DSL — slice modules
+contribute their `signal_routes`, `schedules`, etc. to the host. Plugins
+(`use Jido.Plugin` = Slice + Middleware) and bare middleware go in the
+same `extensions: …` list.
 
 ```elixir
 defmodule MyApp.Agent do
   use Jido.Agent,
-    name: "my_agent",
-    path: :app,
-    schema: [counter: [type: :integer, default: 0]],
-    slices: [
+    extensions: [
       MyApp.ChatSlice,
-      {MyApp.ChatSlice, model: "gpt-4o"},
       Jido.Thread.Slice
     ]
+
+  agent do
+    name "my_agent"
+    path :app
+    schema [counter: [type: :integer, default: 0]]
+  end
 end
 ```
-
-Bare slices are unaliased (single-instance) in v1; the `as:` field is
-reserved on `Jido.Slice.Instance` for a future multi-instance design but
-not wired today. For multi-instance support, use a `use Jido.Plugin`
-module under `plugins:` (the plugin machinery has full `as:` support).
 
 Path collisions raise at compile time:
 
 ```text
-** (CompileError) Duplicate slice paths: [:chat]
+** (Spark.Error.DslError) Duplicate slice paths: [:chat]
 ```
 
 ## Routing
 
-Routes declared on a slice are **merged** with the agent's own routes and
-prefixed by the slice's `route_prefix`:
-
-| Source | Path on the wire |
-|---|---|
-| Agent: `signal_routes: [{"work.start", Foo}]` | `"work.start"` |
-| Slice (`name: "chat"`): `signal_routes: [{"send", SendMessage}]` | `"chat.send"` |
-| Slice instance (`as: :support`): same | `"support.chat.send"` |
-
-The router is the unmodified [`Jido.Signal.Router`](signals.md). Priorities
+Routes declared on a slice merge with the agent's own routes. The
+router is the unmodified [`Jido.Signal.Router`](signals.md). Priorities
 follow the precedence agent (0) > slice (-10), so an agent's route wins on
 collision.
 
@@ -129,24 +124,27 @@ collision.
 When a Slice declares a `schema:`, slice state is parsed through Zoi at
 `Jido.Agent.new/1`. A failure raises `Jido.Agent.SliceValidationError` with the
 offending path, the schema's error report, and the slice module — which
-makes "I forgot a required field in plugin config" surface immediately at
+makes "I forgot a required field in slice config" surface immediately at
 boot, not in the middle of a signal. Schema-level `Zoi.transform/2` runs at
 parse time, useful for runtime-derived fields:
 
 ```elixir
-schema:
-  Zoi.object(%{
+slice do
+  name "fsm"
+  path :fsm
+  schema Zoi.object(%{
     state: Zoi.string() |> Zoi.optional(),
     initial_state: Zoi.string() |> Zoi.default("idle"),
     transitions: Zoi.map(Zoi.string(), Zoi.list(Zoi.string())),
     terminal_states: Zoi.list(Zoi.string()) |> Zoi.default([])
   })
   |> Zoi.transform({__MODULE__, :seed_runtime_fields, []})
+end
 ```
 
 `seed_runtime_fields/2` then derives `state` from `initial_state` if the
-caller didn't supply one. This pattern replaces the retired `mount/2`
-callback for the "compute starting state from config" case.
+caller didn't supply one — useful when the starting slice value depends
+on the config.
 
 ## When to reach for Middleware instead
 
@@ -157,11 +155,11 @@ A Slice is the wrong tool when:
 - you need to inject side effects around the action's return.
 
 Those belong in [Middleware](middleware.md). Use `Jido.Plugin` if a single
-module needs both — see [`Jido.Plugin.FSM`](../lib/jido/plugin/fsm.ex) for an
-in-tree example (a Slice that supplies an FSM transition action and route).
+module needs both. The `Jido.Plugin.FSM` module is the in-tree slice
+example (a slice that supplies FSM transition action and route).
 
 ## See also
 
 - [Middleware guide](middleware.md) — the wrap tier
-- [Plugins guide](plugins.md) — the combo tier and migration recipes
-- [Migration guide](migration.md) — pre-refactor → new shape
+- [Plugins guide](plugins.md) — the combo tier
+- [Migration: keyword form to Spark DSL](migration-spark-dsl.md) — recipes for older code

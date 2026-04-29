@@ -85,12 +85,15 @@ Workers fetch a single URL and report back to their parent:
 
 ```elixir
 defmodule FetchUrlAction do
-  use Jido.Action,
-    name: "fetch_url",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "fetch_url"
+    schema [
       url: [type: :string, required: true],
       request_id: [type: :string, required: true]
     ]
+  end
 
   alias Jido.Agent.Directive
   alias Jido.Signal
@@ -122,13 +125,20 @@ defmodule FetchUrlAction do
 end
 
 defmodule FetcherAgent do
-  use Jido.Agent,
-    name: "fetcher",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "fetcher"
+    path :state
+    schema [
       status: [type: :atom, default: :idle],
       last_fetch: [type: :string, default: nil]
-    ],
-    signal_routes: [{"fetch.request", FetchUrlAction}]
+    ]
+  end
+
+  signal_routes do
+    route "fetch.request", FetchUrlAction
+  end
 end
 ```
 
@@ -138,11 +148,14 @@ The coordinator spawns workers and aggregates results:
 
 ```elixir
 defmodule SpawnFetchersAction do
-  use Jido.Action,
-    name: "spawn_fetchers",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "spawn_fetchers"
+    schema [
       urls: [type: {:list, :string}, required: true]
     ]
+  end
 
   alias Jido.Agent.Directive
 
@@ -170,13 +183,16 @@ defmodule SpawnFetchersAction do
 end
 
 defmodule HandleChildStartedAction do
-  use Jido.Action,
-    name: "child_started",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "child_started"
+    schema [
       pid: [type: :any, required: true],
       tag: [type: :any, required: true],
       meta: [type: :map, default: %{}]
     ]
+  end
 
   alias Jido.Agent.Directive
   alias Jido.Signal
@@ -196,13 +212,16 @@ defmodule HandleChildStartedAction do
 end
 
 defmodule HandleFetchResultAction do
-  use Jido.Action,
-    name: "handle_result",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "handle_result"
+    schema [
       request_id: [type: :string, required: true],
       url: [type: :string, required: true],
       result: [type: :any, required: true]
     ]
+  end
 
   def run(%{request_id: request_id, url: url, result: result}, context) do
     pending = Map.get(context.state, :pending, %{})
@@ -232,18 +251,23 @@ defmodule HandleFetchResultAction do
 end
 
 defmodule CoordinatorAgent do
-  use Jido.Agent,
-    name: "coordinator",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "coordinator"
+    path :state
+    schema [
       pending: [type: :map, default: %{}],
       completed: [type: {:list, :map}, default: []],
       status: [type: :atom, default: :idle]
-    ],
-    signal_routes: [
-      {"fetch_urls", SpawnFetchersAction},
-      {"jido.agent.child.started", HandleChildStartedAction},
-      {"fetch.result", HandleFetchResultAction}
     ]
+  end
+
+  signal_routes do
+    route "fetch_urls", SpawnFetchersAction
+    route "jido.agent.child.started", HandleChildStartedAction
+    route "fetch.result", HandleFetchResultAction
+  end
 end
 ```
 
@@ -300,12 +324,15 @@ When a child crashes, the parent receives `jido.agent.child.exit`:
 
 ```elixir
 defmodule HandleChildExitAction do
-  use Jido.Action,
-    name: "handle_child_exit",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "handle_child_exit"
+    schema [
       tag: [type: :atom, required: true],
       reason: [type: :any, required: true]
     ]
+  end
 
   def run(%{tag: tag, reason: reason}, context) do
     pending = Map.get(context.state, :pending, %{})
@@ -332,12 +359,10 @@ defmodule HandleChildExitAction do
   end
 end
 
-# Add to coordinator routes
-def signal_routes(_ctx) do
-  [
-    # ... other routes
-    {"jido.agent.child.exit", HandleChildExitAction}
-  ]
+# Add to the coordinator's signal_routes section:
+signal_routes do
+  # ... other routes
+  route "jido.agent.child.exit", HandleChildExitAction
 end
 ```
 
@@ -371,9 +396,12 @@ Use `StopChild` directive to clean up:
 
 ```elixir
 defmodule CleanupWorkersAction do
-  use Jido.Action,
-    name: "cleanup",
-    schema: [tags: [type: {:list, :atom}, required: true]]
+  use Jido.Action
+
+  action do
+    name "cleanup"
+    schema [tags: [type: {:list, :atom}, required: true]]
+  end
 
   alias Jido.Agent.Directive
 
@@ -408,12 +436,15 @@ defmodule ParallelFetcher do
   # ============================================================================
 
   defmodule FetchAction do
-    use Jido.Action,
-      name: "fetch",
-      schema: [
+    use Jido.Action
+
+    action do
+      name "fetch"
+      schema [
         url: [type: :string, required: true],
         request_id: [type: :string, required: true]
       ]
+    end
 
     def run(%{url: url, request_id: request_id}, context) do
       result = do_fetch(url)
@@ -447,10 +478,17 @@ defmodule ParallelFetcher do
   end
 
   defmodule Worker do
-    use Jido.Agent,
-      name: "fetcher_worker",
-      schema: [status: [type: :atom, default: :idle]],
-      signal_routes: [{"fetch", FetchAction}]
+    use Jido.Agent
+
+    agent do
+      name "fetcher_worker"
+      path :state
+      schema [status: [type: :atom, default: :idle]]
+    end
+
+    signal_routes do
+      route "fetch", FetchAction
+    end
   end
 
   # ============================================================================
@@ -458,9 +496,12 @@ defmodule ParallelFetcher do
   # ============================================================================
 
   defmodule StartAction do
-    use Jido.Action,
-      name: "start",
-      schema: [urls: [type: {:list, :string}, required: true]]
+    use Jido.Action
+
+    action do
+      name "start"
+      schema [urls: [type: {:list, :string}, required: true]]
+    end
 
     def run(%{urls: urls}, _context) do
       pending =
@@ -481,9 +522,12 @@ defmodule ParallelFetcher do
   end
 
   defmodule ChildStartedAction do
-    use Jido.Action,
-      name: "child_started",
-      schema: [pid: [type: :any], meta: [type: :map, default: %{}]]
+    use Jido.Action
+
+    action do
+      name "child_started"
+      schema [pid: [type: :any], meta: [type: :map, default: %{}]]
+    end
 
     def run(%{pid: pid, meta: meta}, _context) do
       signal = Signal.new!("fetch", %{
@@ -496,13 +540,16 @@ defmodule ParallelFetcher do
   end
 
   defmodule ResultAction do
-    use Jido.Action,
-      name: "result",
-      schema: [
+    use Jido.Action
+
+    action do
+      name "result"
+      schema [
         request_id: [type: :string, required: true],
         url: [type: :string, required: true],
         result: [type: :any, required: true]
       ]
+    end
 
     def run(%{request_id: id, url: url, result: result}, context) do
       pending = Map.delete(context.state.pending, id)
@@ -516,18 +563,23 @@ defmodule ParallelFetcher do
   end
 
   defmodule Coordinator do
-    use Jido.Agent,
-      name: "fetcher_coordinator",
-      schema: [
+    use Jido.Agent
+
+    agent do
+      name "fetcher_coordinator"
+      path :state
+      schema [
         pending: [type: :map, default: %{}],
         results: [type: {:list, :map}, default: []],
         status: [type: :atom, default: :idle]
-      ],
-      signal_routes: [
-        {"start", StartAction},
-        {"jido.agent.child.started", ChildStartedAction},
-        {"fetch.result", ResultAction}
       ]
+    end
+
+    signal_routes do
+      route "start", StartAction
+      route "jido.agent.child.started", ChildStartedAction
+      route "fetch.result", ResultAction
+    end
   end
 
   # ============================================================================

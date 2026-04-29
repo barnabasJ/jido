@@ -63,23 +63,56 @@ defmodule MyApp.Audit do
 end
 ```
 
-Register it on an agent:
+Register it on an agent via `extensions: […]`:
 
 ```elixir
 defmodule MyApp.Agent do
   use Jido.Agent,
-    name: "my_agent",
-    path: :app,
-    middleware: [
+    extensions: [
       MyApp.Audit,
       {Jido.Middleware.Retry, %{max_attempts: 3, pattern: "work.**"}}
     ]
+
+  agent do
+    name "my_agent"
+    path :app
+    schema [...]
+  end
 end
 ```
 
 The chain composes outside-in. The first middleware listed wraps everything
 after it. So `[Audit, Retry]` means `Audit(Retry(action))` — `Audit` sees
 the *final* return after retries finished.
+
+## Typed `opts` — the optional `middleware do … end` section
+
+A middleware module can declare a `middleware do schema […] end`
+section to validate its per-registration `opts` map at compile time:
+
+```elixir
+defmodule MyApp.RateLimit do
+  use Jido.Middleware
+
+  middleware do
+    description "Token-bucket rate limiter"
+    schema [
+      bucket: [type: :atom, required: true],
+      per_second: [type: :integer, default: 10]
+    ]
+  end
+
+  @impl true
+  def on_signal(signal, ctx, opts, next) do
+    # opts is validated against the schema above; missing :bucket raises
+    # at agent compile time, not at first signal.
+    ...
+  end
+end
+```
+
+Most middleware do not need a configurable shape — leave the section out
+when there's nothing to validate.
 
 ## Common patterns
 
@@ -128,7 +161,7 @@ when the chain returns `%Directive.Error{}`. Configurable max attempts
 and an optional `Jido.Signal.Router` pattern to scope which signals retry.
 
 ```elixir
-middleware: [
+extensions: [
   {Jido.Middleware.Retry, %{max_attempts: 5, pattern: "work.**"}}
 ]
 ```
@@ -198,7 +231,7 @@ across the full pipeline: the selector reads the *post-pipeline* state.
 Middleware composes outside-in. Concretely:
 
 ```elixir
-middleware: [Retry, Persister, Audit]
+extensions: [Retry, Persister, Audit]
 ```
 
 is `Retry(Persister(Audit(action)))`. Retry sees the *final* result of
@@ -220,4 +253,4 @@ A reasonable default order, outermost first:
 - [`Jido.Middleware.Retry`](../lib/jido/middleware/retry.ex) — reference implementation (retry on `%Error{}`)
 - [Slices guide](slices.md) — the data tier
 - [Plugins guide](plugins.md) — when you need both
-- [Migration guide](migration.md) — pre-refactor → new shape
+- [Migration: keyword form to Spark DSL](migration-spark-dsl.md) — recipes for older code

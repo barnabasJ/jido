@@ -1109,22 +1109,6 @@ defmodule JidoTest.Agent.InstanceManagerTest do
   end
 
   describe "storage controls" do
-    test "legacy :persistence option raises actionable error" do
-      manager_name =
-        :"#{@manager_prefix}_legacy_persistence_#{:erlang.unique_integer([:positive])}"
-
-      assert_raise RuntimeError, ~r/no longer supports :persistence; use :storage/, fn ->
-        start_supervised!(
-          InstanceManager.child_spec(
-            name: manager_name,
-            agent: TestAgent,
-            persistence: {ETS, table: :legacy_persistence_should_fail},
-            agent_opts: [jido: JidoTest.InstanceManagerTestJido]
-          )
-        )
-      end
-    end
-
     test "storage: nil disables restore" do
       manager_name = :"#{@manager_prefix}_no_storage_#{:erlang.unique_integer([:positive])}"
 

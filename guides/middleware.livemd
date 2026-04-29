@@ -260,7 +260,12 @@ configured for the `"flaky"` pattern.
 
 ```elixir
 defmodule FlakyAction do
-  use Jido.Action, name: "flaky", path: :app, schema: []
+  use Jido.Action
+
+  action do
+    name "flaky"
+    path :app
+  end
 
   @counter_key {__MODULE__, :counter}
 
@@ -287,18 +292,22 @@ end
 
 defmodule RetryingAgent do
   use Jido.Agent,
-    name: "retrying_agent",
-    path: :app,
-    default_slices: false,
-    schema: [
-      value: [type: :integer, default: 0],
-      status: [type: :atom, default: :idle]
-    ],
-    middleware: [
+    extensions: [
       {Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}
     ]
 
-  def signal_routes(_ctx), do: [{"flaky", FlakyAction}]
+  agent do
+    name "retrying_agent"
+    path :app
+    schema [
+      value: [type: :integer, default: 0],
+      status: [type: :atom, default: :idle]
+    ]
+  end
+
+  signal_routes do
+    route "flaky", FlakyAction
+  end
 end
 
 FlakyAction.reset(:demo)

@@ -178,7 +178,12 @@ Design patterns for per-request isolation:
 ```elixir
 # Pattern 1: Stateless design - pass everything via signal
 defmodule SearchAction do
-  use Jido.Action, name: "search", schema: [query: [type: :string, required: true]]
+  use Jido.Action
+
+  action do
+    name "search"
+    schema [query: [type: :string, required: true]]
+  end
 
   def run(%{query: query}, context) do
     # Use cached connection from agent state
@@ -326,12 +331,15 @@ Complete example with a pool for HTTP requests:
 
 ```elixir
 defmodule MyApp.FetchAction do
-  use Jido.Action,
-    name: "fetch",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "fetch"
+    schema [
       url: [type: :string, required: true],
       timeout: [type: :integer, default: 5000]
     ]
+  end
 
   def run(%{url: url, timeout: timeout}, context) do
     # Use persistent HTTP client from agent state
@@ -351,13 +359,20 @@ defmodule MyApp.FetchAction do
 end
 
 defmodule MyApp.FetcherAgent do
-  use Jido.Agent,
-    name: "fetcher",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "fetcher"
+    path :state
+    schema [
       http_client: [type: :any, required: true],
       last_fetch: [type: :map, default: nil]
-    ],
-    signal_routes: [{"fetch", MyApp.FetchAction}]
+    ]
+  end
+
+  signal_routes do
+    route "fetch", MyApp.FetchAction
+  end
 end
 
 # Configuration
@@ -446,11 +461,15 @@ Pre-warm agents with expensive initialization:
 
 ```elixir
 defmodule MyApp.MLAgent do
-  use Jido.Agent,
-    name: "ml_agent",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "ml_agent"
+    path :state
+    schema [
       model: [type: :any, required: true]
     ]
+  end
 
   # Model loaded once at pool startup, reused across requests
 end

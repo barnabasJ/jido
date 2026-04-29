@@ -22,9 +22,10 @@ end
 ## Concept
 
 A *plugin* is the combo: `Jido.Slice` + `Jido.Middleware` in one module.
-`use Jido.Plugin, opts` expands to `use Jido.Slice, opts` plus
-`use Jido.Middleware`. You declare the slice surface (path, schema, actions)
-and optionally implement `on_signal/4` to wrap the pipeline.
+`use Jido.Plugin` exposes the full slice DSL surface plus the
+`Jido.Middleware` behaviour. You declare the slice surface (path, schema,
+routes) in DSL sections and optionally implement `on_signal/4` to wrap
+the pipeline.
 
 If you don't need middleware behaviour, prefer `use Jido.Slice` directly.
 Plugins exist for the cases where state and signal-pipeline behaviour are
@@ -32,25 +33,23 @@ genuinely paired — rate limiters with usage tracking, chat plugins that
 intercept token streams, circuit breakers with a state slice.
 
 See [ADR 0014](adr/0014-slice-middleware-plugin.md) §plugin for the design
-and [the prose guide](plugins.md) for migration recipes.
-
-> The Slice surface in ADR 0014 carries **no callbacks** — no `mount/2`,
-> no `on_checkpoint/2`, no dynamic `signal_routes/1`. Anything declared in
-> a `use Jido.Plugin` block is the full surface. The pre-refactor
-> `mount/2` callback retired; the migration recipes for the four
-> `mount/2` patterns live in [migration.md](migration.md).
+and [the prose guide](plugins.md) for usage details.
 
 ## Worked example — counter plugin
 
-A plugin that owns a `:counter` slice with two actions. The agent declares
-it via `plugins:` and gets the slice + actions wired in automatically.
+A plugin that owns a `:counter_plugin` slice with two actions. The agent
+declares it via `extensions:` and gets the slice + routes wired in
+automatically.
 
 ```elixir
 defmodule Counter.Increment do
-  use Jido.Action,
-    name: "counter_increment",
-    path: :counter_plugin,
-    schema: Zoi.object(%{amount: Zoi.integer() |> Zoi.default(1)})
+  use Jido.Action
+
+  action do
+    name "counter_increment"
+    path :counter_plugin
+    schema Zoi.object(%{amount: Zoi.integer() |> Zoi.default(1)})
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
@@ -61,10 +60,13 @@ defmodule Counter.Increment do
 end
 
 defmodule Counter.Decrement do
-  use Jido.Action,
-    name: "counter_decrement",
-    path: :counter_plugin,
-    schema: Zoi.object(%{amount: Zoi.integer() |> Zoi.default(1)})
+  use Jido.Action
+
+  action do
+    name "counter_decrement"
+    path :counter_plugin
+    schema Zoi.object(%{amount: Zoi.integer() |> Zoi.default(1)})
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{amount: amount}}, slice, _opts, _ctx) do
@@ -75,20 +77,27 @@ defmodule Counter.Decrement do
 end
 
 defmodule CounterPlugin do
-  use Jido.Plugin,
-    name: "counter_plugin",
-    path: :counter_plugin,
-    actions: [Counter.Increment, Counter.Decrement],
-    description: "A plugin for counting",
-    schema: Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
+  use Jido.Plugin
+
+  slice do
+    name "counter_plugin"
+    path :counter_plugin
+    description "A plugin for counting"
+    schema Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
+  end
+
+  signal_routes do
+    route "counter_plugin.increment", Counter.Increment
+    route "counter_plugin.decrement", Counter.Decrement
+  end
 end
 
 defmodule SinglePluginAgent do
-  use Jido.Agent,
-    name: "single_plugin_agent",
-    path: :domain,
-    default_slices: false,
-    plugins: [CounterPlugin]
+  use Jido.Agent, extensions: [CounterPlugin]
+
+  agent do
+    name "single_plugin_agent"
+  end
 end
 
 agent = SinglePluginAgent.new()
@@ -103,17 +112,17 @@ IO.inspect(agent3.state.counter_plugin, label: "after decrement")
 
 ## Variations
 
-### Plugin metadata accessors
+### Plugin metadata via `Jido.Dsl.Plugin.Info`
 
-The agent exposes 0-arity functions describing what its plugins
-contribute. Useful for tooling/discovery.
+Each plugin's metadata surfaces through the `Jido.Dsl.Plugin.Info` module
+(which delegates to `Jido.Dsl.Slice.Info`). Useful for tooling/discovery.
 
 ```elixir
-IO.inspect(SinglePluginAgent.plugins(), label: "plugins/0 — modules")
-IO.inspect(SinglePluginAgent.actions(), label: "actions/0 — aggregated from all plugins")
+alias Jido.Dsl.Plugin.Info, as: PluginInfo
 
-[spec] = SinglePluginAgent.plugin_specs()
-IO.inspect({spec.module, spec.path, spec.name}, label: "plugin_spec — {module, path, name}")
+IO.inspect(PluginInfo.name(CounterPlugin), label: "plugin name")
+IO.inspect(PluginInfo.path(CounterPlugin), label: "plugin path")
+IO.inspect(PluginInfo.signal_routes(CounterPlugin), label: "plugin signal_routes")
 ```
 
 ### Multi-plugin agents
@@ -123,10 +132,13 @@ stay isolated.
 
 ```elixir
 defmodule Greeter.Greet do
-  use Jido.Action,
-    name: "greet",
-    path: :greeter_plugin,
-    schema: Zoi.object(%{name: Zoi.string() |> Zoi.default("World")})
+  use Jido.Action
+
+  action do
+    name "greet"
+    path :greeter_plugin
+    schema Zoi.object(%{name: Zoi.string() |> Zoi.default("World")})
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{name: name}}, slice, _opts, _ctx) do
@@ -136,85 +148,129 @@ defmodule Greeter.Greet do
 end
 
 defmodule GreeterPlugin do
-  use Jido.Plugin,
-    name: "greeter_plugin",
-    path: :greeter_plugin,
-    actions: [Greeter.Greet],
-    schema: Zoi.object(%{last_greeting: Zoi.string() |> Zoi.optional()})
+  use Jido.Plugin
+
+  slice do
+    name "greeter_plugin"
+    path :greeter_plugin
+    schema Zoi.object(%{last_greeting: Zoi.string() |> Zoi.optional()})
+  end
+
+  signal_routes do
+    route "greeter.hello", Greeter.Greet
+  end
 end
 
 defmodule MultiPluginAgent do
-  use Jido.Agent,
-    name: "multi_plugin_agent",
-    path: :domain,
-    default_slices: false,
-    plugins: [CounterPlugin, GreeterPlugin]
+  use Jido.Agent, extensions: [CounterPlugin, GreeterPlugin]
+
+  agent do
+    name "multi_plugin_agent"
+  end
 end
 
 agent = MultiPluginAgent.new()
 IO.inspect({agent.state.counter_plugin, agent.state.greeter_plugin},
   label: "two distinct slice paths, two distinct seeded slices"
 )
-
-IO.inspect(MultiPluginAgent.plugins(), label: "plugins/0 — both modules")
-IO.inspect(MultiPluginAgent.actions(), label: "actions/0 — aggregated")
 ```
 
 ### Per-instance configuration via `{Plugin, config}`
 
 When an agent declares `{Plugin, %{...}}`, the config map merges over the
-plugin's schema defaults at `Agent.new/1` time. The result is what shows up
-under the slice path.
+plugin's schema defaults at `Agent.new/1` time. The result is what shows
+up under the slice path.
 
 ```elixir
 defmodule ConfigurablePlugin do
-  use Jido.Plugin,
-    name: "configurable_plugin",
-    path: :configurable,
-    description: "A plugin with config",
-    config_schema:
-      Zoi.object(%{
-        enabled: Zoi.boolean() |> Zoi.default(true),
-        max_retries: Zoi.integer() |> Zoi.default(3)
-      }),
-    schema: Zoi.object(%{status: Zoi.atom() |> Zoi.default(:ready)})
+  use Jido.Plugin
+
+  slice do
+    name "configurable_plugin"
+    path :configurable
+    description "A plugin with config"
+    config_schema Zoi.object(%{
+      enabled: Zoi.boolean() |> Zoi.default(true),
+      max_retries: Zoi.integer() |> Zoi.default(3)
+    })
+    schema Zoi.object(%{status: Zoi.atom() |> Zoi.default(:ready)})
+  end
+
+  signal_routes do
+    route "configurable.tick", Counter.Increment
+  end
 end
 
 defmodule ConfiguredAgent do
-  use Jido.Agent,
-    name: "configured_agent",
-    path: :domain,
-    default_slices: false,
-    plugins: [{ConfigurablePlugin, %{enabled: false, max_retries: 5}}]
+  use Jido.Agent, extensions: [{ConfigurablePlugin, %{enabled: false, max_retries: 5}}]
+
+  agent do
+    name "configured_agent"
+  end
 end
 
 agent = ConfiguredAgent.new()
 IO.inspect(agent.state.configurable, label: "config merged into slice on top of schema defaults")
+```
 
-# The agent module knows about the per-plugin config — useful for plugins
-# that need to read their config at action time:
-IO.inspect(ConfiguredAgent.plugin_config(ConfigurablePlugin),
-  label: "plugin_config/1 — read back the config map"
-)
+### Contributing a typed config block to the host
+
+A plugin can opt into the contribution mechanism — the host agent then
+gets a typed DSL block for the plugin's config:
+
+```elixir
+defmodule ContributingPlugin do
+  use Jido.Plugin
+  use Jido.Slice.Extension, host_section: :react
+
+  slice do
+    name "contributing_plugin"
+    path :react
+    config_schema Zoi.object(%{
+      max_iterations: Zoi.integer() |> Zoi.default(5)
+    })
+    schema Zoi.object(%{steps: Zoi.list(Zoi.any()) |> Zoi.default([])})
+  end
+
+  signal_routes do
+    route "react.start", Counter.Increment
+  end
+end
+
+defmodule ContributingAgent do
+  use Jido.Agent, extensions: [ContributingPlugin]
+
+  agent do
+    name "contributing_agent"
+  end
+
+  react do
+    max_iterations 7
+  end
+end
+
+agent = ContributingAgent.new()
+IO.inspect(agent.state.react, label: "react slice with contributed-section override")
 ```
 
 ### Mixed agent + plugin schemas
 
-The agent's own `schema:` lives at its declared `path:` — independent of any
-plugin. A plugin's slice lives at *its* `path:`. Both coexist; both seed
-defaults at `new/1` time.
+The agent's own `schema` lives at its declared `path` — independent of
+any plugin. A plugin's slice lives at *its* `path`. Both coexist; both
+seed defaults at `new/1` time.
 
 ```elixir
 defmodule MixedSchemaAgent do
-  use Jido.Agent,
-    name: "mixed_schema_agent",
-    path: :domain,
-    default_slices: false,
-    schema: [
+  use Jido.Agent, extensions: [CounterPlugin]
+
+  agent do
+    name "mixed_schema_agent"
+    path :domain
+    schema [
       base_counter: [type: :integer, default: 100],
       base_mode: [type: :atom, default: :initial]
-    ],
-    plugins: [CounterPlugin]
+    ]
+  end
 end
 
 agent = MixedSchemaAgent.new()
@@ -222,96 +278,47 @@ IO.inspect(agent.state.domain, label: "agent's own schema slice")
 IO.inspect(agent.state.counter_plugin, label: "plugin slice — independent path")
 ```
 
-### Default plugins — keep, replace, or disable
-
-The framework ships three singleton default plugins (Thread, Identity,
-Memory) that auto-mount on every agent. Three knobs to adjust:
-
-```elixir
-# Disable all defaults — used in every example so far:
-defmodule BareAgent do
-  use Jido.Agent, name: "bare", path: :domain, default_slices: false
-end
-
-IO.inspect(BareAgent.plugins(), label: "default_slices: false → no plugins")
-
-# Keep the defaults (no override):
-defmodule WithDefaultsAgent do
-  use Jido.Agent, name: "with_defaults", path: :domain
-end
-
-IO.inspect(WithDefaultsAgent.plugins(),
-  label: "no override — framework defaults attached"
-)
-
-# Selectively override a single default:
-defmodule OverriddenAgent do
-  use Jido.Agent,
-    name: "overridden",
-    path: :domain,
-    default_slices: %{thread: false}
-end
-
-IO.inspect(OverriddenAgent.plugins(),
-  label: "default_slices: %{thread: false} → identity + memory only"
-)
-```
-
 ### Plugin compile-time route conflicts
 
-If two plugins try to register the same path, the agent fails to compile.
-The same applies to the agent's own `path:` colliding with a plugin's path.
+If two slices try to register the same path, the agent fails to compile.
+The same applies to the agent's own `path` colliding with a plugin's path.
 Surfaces early: you find out at `mix compile`, not at runtime.
 
 ```elixir
 try do
   Code.compile_string("""
   defmodule TempCollideAgent do
-    use Jido.Agent,
-      name: "collide",
-      path: :counter_plugin,
-      default_slices: false,
-      plugins: [CounterPlugin]
+    use Jido.Agent, extensions: [CounterPlugin]
+    agent do
+      name "collide"
+      path :counter_plugin
+      schema [counter: [type: :integer, default: 0]]
+    end
   end
   """)
 rescue
-  e in CompileError -> IO.inspect(e.description, label: "compile error: agent path collides with plugin path")
+  e -> IO.inspect(Exception.message(e), label: "compile error: agent path collides with plugin path")
 end
 ```
 
 ### Routing plugin signals end-to-end
 
-Plugin actions become signal-routable through the agent's `signal_routes/1`
-callback. The plugin contributes the action; the agent declares the route.
+Plugin routes flow through the agent's signal pipeline automatically. The
+plugin contributes the route; the agent runs it under `AgentServer`.
 Below: an `AgentServer` round-trip that hits the counter plugin's
 increment action via signal.
 
 ```elixir
-defmodule RoutedCounterAgent do
-  use Jido.Agent,
-    name: "routed_counter_agent",
-    path: :domain,
-    default_slices: false,
-    plugins: [CounterPlugin]
-
-  def signal_routes(_ctx) do
-    [
-      {"counter.increment", Counter.Increment},
-      {"counter.decrement", Counter.Decrement}
-    ]
-  end
-end
-
-{:ok, pid} = Demo.Jido.start_agent(RoutedCounterAgent, id: "plugins-demo-routed")
+{:ok, pid} = Demo.Jido.start_agent(SinglePluginAgent, id: "plugins-demo-routed")
 :ok = Jido.AgentServer.await_ready(pid)
 
-inc = Jido.Signal.new!("counter.increment", %{amount: 4}, source: "/livebook")
+inc = Jido.Signal.new!("counter_plugin.increment", %{amount: 4}, source: "/livebook")
 {:ok, count} =
   Jido.AgentServer.call(pid, inc, fn s -> {:ok, s.agent.state.counter_plugin.count} end)
 
 IO.inspect(count, label: "count after one increment via signal")
 
-dec = Jido.Signal.new!("counter.decrement", %{amount: 1}, source: "/livebook")
+dec = Jido.Signal.new!("counter_plugin.decrement", %{amount: 1}, source: "/livebook")
 {:ok, count} =
   Jido.AgentServer.call(pid, dec, fn s -> {:ok, s.agent.state.counter_plugin.count} end)
 
@@ -321,8 +328,8 @@ IO.inspect(count, label: "count after decrement via signal")
 ### Plugin with middleware behaviour
 
 `use Jido.Plugin` also gives you the middleware behaviour. Implement
-`on_signal/4` and you get to wrap every signal — useful when the slice and
-the wrap belong together.
+`on_signal/4` and you get to wrap every signal — useful when the slice
+and the wrap belong together.
 
 Below: a plugin that owns a `:metrics` slice and a no-op `Tick` action,
 plus middleware that prints every signal type the chain handles. The
@@ -331,7 +338,12 @@ middleware runs even for system lifecycle signals (`lifecycle.starting`,
 
 ```elixir
 defmodule Metrics.Tick do
-  use Jido.Action, name: "metrics_tick", path: :metrics, schema: []
+  use Jido.Action
+
+  action do
+    name "metrics_tick"
+    path :metrics
+  end
 
   @impl true
   def run(_signal, slice, _opts, _ctx) do
@@ -341,11 +353,17 @@ defmodule Metrics.Tick do
 end
 
 defmodule MetricsPlugin do
-  use Jido.Plugin,
-    name: "metrics_plugin",
-    path: :metrics,
-    actions: [Metrics.Tick],
-    schema: Zoi.object(%{counted: Zoi.integer() |> Zoi.default(0)})
+  use Jido.Plugin
+
+  slice do
+    name "metrics_plugin"
+    path :metrics
+    schema Zoi.object(%{counted: Zoi.integer() |> Zoi.default(0)})
+  end
+
+  signal_routes do
+    route "metrics.tick", Metrics.Tick
+  end
 
   @impl Jido.Middleware
   def on_signal(signal, ctx, _opts, next) do
@@ -355,14 +373,11 @@ defmodule MetricsPlugin do
 end
 
 defmodule MetricsAgent do
-  use Jido.Agent,
-    name: "metrics_agent",
-    path: :domain,
-    default_slices: false,
-    plugins: [MetricsPlugin],
-    middleware: [MetricsPlugin]
+  use Jido.Agent, extensions: [MetricsPlugin]
 
-  def signal_routes(_ctx), do: [{"metrics.tick", Metrics.Tick}]
+  agent do
+    name "metrics_agent"
+  end
 end
 
 {:ok, m_pid} = Demo.Jido.start_agent(MetricsAgent, id: "plugins-demo-metrics")
@@ -375,11 +390,6 @@ tick = Jido.Signal.new!("metrics.tick", %{}, source: "/livebook")
 
 IO.inspect(counted, label: "metrics.counted after one tick (slice update from action)")
 ```
-
-> Note: A plugin module gets `use Jido.Plugin` to declare slice + middleware,
-> but to actually run as middleware the agent must list it in `middleware:`
-> too. The slice surface and the middleware chain are separate registrations
-> by design — plugin path is automatic, but middleware position is explicit.
 
 ## Cleanup
 

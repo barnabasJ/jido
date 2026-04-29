@@ -119,8 +119,11 @@ defmodule Jido.Util do
   ## Examples
 
       iex> defmodule ValidAction do
-      ...>   use Jido.Action,
-      ...>     name: "valid_action"
+      ...>   use Jido.Action
+      ...>
+      ...>   action do
+      ...>     name "valid_action"
+      ...>   end
       ...> end
       ...> Jido.Util.validate_actions([ValidAction])
       {:ok, [ValidAction]}

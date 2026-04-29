@@ -6,12 +6,16 @@ defmodule Jido.Actions.Scheduling do
 
   ## Usage
 
-      use Jido.Agent,
-        name: "timed_worker",
-        signal_routes: [
-          {"work.start", MyStartAction},  # Might schedule a timeout
-          {"work.timeout", MyTimeoutHandler}
-        ]
+      use Jido.Agent
+
+      agent do
+        name "timed_worker"
+      end
+
+      signal_routes do
+        route "work.start", MyStartAction       # Might schedule a timeout
+        route "work.timeout", MyTimeoutHandler
+      end
   """
 
   alias Jido.Agent.Directive

@@ -146,8 +146,6 @@ defmodule Jido.Agent.InstanceManager do
     name = Keyword.fetch!(opts, :name)
     registry_partitions = resolve_registry_partitions(opts)
 
-    ensure_legacy_persistence_not_set!(opts)
-
     jido = resolve_manager_jido(opts)
 
     # Store config in persistent_term for fast access
@@ -384,13 +382,6 @@ defmodule Jido.Agent.InstanceManager do
   # ---------------------------------------------------------------------------
   # Internal: Helpers
   # ---------------------------------------------------------------------------
-
-  defp ensure_legacy_persistence_not_set!(opts) do
-    if Keyword.has_key?(opts, :persistence) do
-      raise ArgumentError,
-            "Jido.Agent.InstanceManager no longer supports :persistence; use :storage (nil | StorageModule | {StorageModule, opts})"
-    end
-  end
 
   defp resolve_manager_jido(opts) do
     Keyword.get(opts, :jido) || Keyword.get(Keyword.get(opts, :agent_opts, []), :jido, Jido)

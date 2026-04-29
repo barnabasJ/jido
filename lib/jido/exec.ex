@@ -129,10 +129,13 @@ defmodule Jido.Exec do
 
       # Access action metadata in the action:
       # defmodule MyAction do
-      #   use Jido.Action,
-      #     name: "my_action",
-      #     description: "Example action",
-      #     vsn: "1.0.0"
+      #   use Jido.Action
+      #
+      #   action do
+      #     name "my_action"
+      #     description "Example action"
+      #     vsn "1.0.0"
+      #   end
       #
       #   def run(_signal, slice, _opts, ctx) do
       #     metadata = Map.get(ctx, :action_metadata)
@@ -627,11 +630,7 @@ defmodule Jido.Exec do
         handle_action_exception(e, __STACKTRACE__, action, opts)
     end
 
-    # Translate the legacy `(params, context)` shape into the new
-    # `(signal, slice, opts, ctx)` shape understood by `Jido.Action`.
-    #
-    # Translate the legacy `(action, params, context, opts)` Exec entry
-    # point into the `(signal, slice, opts, ctx)` shape that
+    # Build the `(signal, slice, opts, ctx)` argument tuple that
     # `Jido.Action.run/4` expects. Three sources of truth:
     #
     #   - `context[:signal]` is the wire signal handed in by the agent

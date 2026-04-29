@@ -35,12 +35,16 @@ At the core, Jido agents are immutable data structures with a single command fun
 
 ```elixir
 defmodule MyAgent do
-  use Jido.Agent,
-    name: "my_agent",
-    description: "My custom agent",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "my_agent"
+    description "My custom agent"
+    path :state
+    schema [
       count: [type: :integer, default: 0]
     ]
+  end
 end
 
 {agent, directives} = MyAgent.cmd(agent, action)
@@ -186,15 +190,20 @@ Supervisor.start_link(children, strategy: :one_for_one)
 
 ```elixir
 defmodule MyApp.CounterAgent do
-  use Jido.Agent,
-    name: "counter",
-    description: "A simple counter agent",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "counter"
+    description "A simple counter agent"
+    path :state
+    schema [
       count: [type: :integer, default: 0]
-    ],
-    signal_routes: [
-      {"increment", MyApp.Actions.Increment}
     ]
+  end
+
+  signal_routes do
+    route "increment", MyApp.Actions.Increment
+  end
 end
 ```
 
@@ -202,12 +211,16 @@ end
 
 ```elixir
 defmodule MyApp.Actions.Increment do
-  use Jido.Action,
-    name: "increment",
-    description: "Increments the counter by a given amount",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "increment"
+    description "Increments the counter by a given amount"
+    path :state
+    schema [
       amount: [type: :integer, default: 1]
     ]
+  end
 
   def run(params, context) do
     current = context.state[:count] || 0
@@ -226,7 +239,7 @@ agent = MyApp.CounterAgent.new()
 {agent, directives} = MyApp.CounterAgent.cmd(agent, {MyApp.Actions.Increment, %{amount: 5}})
 
 # Check the state
-agent.state.count
+agent.state.state.count
 # => 5
 ```
 

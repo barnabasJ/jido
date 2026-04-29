@@ -50,17 +50,23 @@ topology is empty at compile time — we'll grow it with `mutate_and_wait/3`.
 
 ```elixir
 defmodule WorkerAgent do
-  use Jido.Agent,
-    name: "pods_demo_worker",
-    path: :domain,
-    default_slices: false,
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "pods_demo_worker"
+    path :domain
+    schema [
       role: [type: :string, default: "worker"]
     ]
+  end
 end
 
 defmodule ReviewPod do
-  use Jido.Pod, name: "pods_demo_pod", default_slices: false
+  use Jido.Pod
+
+  agent do
+    name "pods_demo_pod"
+  end
 end
 ```
 

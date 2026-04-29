@@ -58,9 +58,13 @@ Sole exception: middleware may stage `ctx.agent` for I/O purposes.
 
 ```elixir
 defmodule MyAgent do
-  use Jido.Agent,
-    name: "my_agent",
-    schema: [count: [type: :integer, default: 0]]
+  use Jido.Agent
+
+  agent do
+    name "my_agent"
+    path :state
+    schema [count: [type: :integer, default: 0]]
+  end
 end
 
 agent = MyAgent.new()

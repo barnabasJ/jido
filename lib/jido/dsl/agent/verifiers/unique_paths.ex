@@ -1,8 +1,8 @@
 defmodule Jido.Dsl.Agent.Verifiers.UniquePaths do
   @moduledoc """
-  Replaces the legacy `Duplicate slice paths` raise inside
-  `__quoted_compile_instances__/0`. Asserts that the agent's own slice
-  path and every plugin / slice path are unique.
+  Asserts that the agent's own slice path and every plugin / slice path
+  are unique. Raises a `Spark.Error.DslError` listing the duplicated
+  paths at compile time.
   """
 
   use Spark.Dsl.Verifier

@@ -4,10 +4,10 @@ defmodule Jido.AgentServer.Signal.IdentityOrphaned do
   under `on_parent_death: :emit_orphan`.
 
   Delivered as `jido.agent.identity.orphaned` immediately after
-  `jido.agent.identity.parent_died`. The legacy `jido.agent.orphaned`
-  signal (`Jido.AgentServer.Signal.Orphaned`) continues to carry
-  flattened former-parent details for action-level routing; this signal
-  is the canonical identity-transition marker.
+  `jido.agent.identity.parent_died`. The `jido.agent.orphaned` signal
+  (`Jido.AgentServer.Signal.Orphaned`) carries flattened former-parent
+  details for action-level routing; this signal is the canonical
+  identity-transition marker.
 
   ## Fields
 

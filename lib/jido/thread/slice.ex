@@ -27,9 +27,11 @@ defmodule Jido.Thread.Slice do
   This slice is automatically included as a default slice for all agents
   unless explicitly disabled:
 
-      use Jido.Agent,
-        name: "minimal",
-        default_slices: %{thread: false}
+      use Jido.Agent, default_slices: %{thread: false}
+
+      agent do
+        name "minimal"
+      end
   """
 
   alias Jido.Thread

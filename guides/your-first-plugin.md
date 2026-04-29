@@ -4,20 +4,25 @@
 
 ## The Result
 
-Here's what you'll build—a `CounterPlugin` that tracks a counter in isolated state and routes signals to increment it:
+Here's what you'll build — a `CounterPlugin` that tracks a counter in
+isolated slice state and routes signals to increment it:
 
 ```elixir
 defmodule MyApp.CounterPlugin do
-  use Jido.Plugin,
-    name: "counter",
-    state_key: :counter,
-    actions: [MyApp.IncrementAction],
-    schema: Zoi.object(%{
+  use Jido.Plugin
+
+  slice do
+    name "counter"
+    path :counter
+    schema Zoi.object(%{
       value: Zoi.integer() |> Zoi.default(0),
       last_updated: Zoi.any() |> Zoi.optional()
-    }),
-    signal_patterns: ["counter.*"],
-    signal_routes: [{"counter.increment", MyApp.IncrementAction}]
+    })
+  end
+
+  signal_routes do
+    route "counter.increment", MyApp.IncrementAction
+  end
 end
 ```
 
@@ -25,9 +30,11 @@ Attach it to an agent:
 
 ```elixir
 defmodule MyApp.MyAgent do
-  use Jido.Agent,
-    name: "my_agent",
-    plugins: [MyApp.CounterPlugin]
+  use Jido.Agent, extensions: [MyApp.CounterPlugin]
+
+  agent do
+    name "my_agent"
+  end
 end
 ```
 
@@ -39,11 +46,11 @@ Send a signal:
 signal = Jido.Signal.new!("counter.increment", %{amount: 5}, source: "/app")
 {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-agent.state.__domain__.counter.value
+agent.state.counter.value
 #=> 5
 ```
 
-The plugin owns `agent.state.__domain__.counter`—isolated from other plugins.
+The plugin owns `agent.state.counter` — isolated from other plugins.
 
 ## Building It Step by Step
 
@@ -53,10 +60,13 @@ Actions do the actual work. This action increments a counter:
 
 ```elixir
 defmodule MyApp.IncrementAction do
-  use Jido.Action,
-    name: "increment",
-    path: :counter,
-    schema: Zoi.object(%{amount: Zoi.integer() |> Zoi.default(1)})
+  use Jido.Action
+
+  action do
+    name "increment"
+    path :counter
+    schema Zoi.object(%{amount: Zoi.integer() |> Zoi.default(1)})
+  end
 
   def run(%{amount: amount}, %{state: counter}) do
     current = counter[:value] || 0
@@ -71,7 +81,7 @@ defmodule MyApp.IncrementAction do
 end
 ```
 
-The action declares `path: :counter`, so its `state` is the counter slice
+The action declares `path :counter`, so its `state` is the counter slice
 itself (not the full agent state). It returns the new slice value — the
 framework writes that into `agent.state[:counter]` atomically.
 
@@ -81,57 +91,65 @@ Wrap the action in a plugin with state and routing:
 
 ```elixir
 defmodule MyApp.CounterPlugin do
-  use Jido.Plugin,
-    name: "counter",
-    state_key: :counter,
-    actions: [MyApp.IncrementAction],
-    schema: Zoi.object(%{
+  use Jido.Plugin
+
+  slice do
+    name "counter"
+    path :counter
+    schema Zoi.object(%{
       value: Zoi.integer() |> Zoi.default(0),
       last_updated: Zoi.any() |> Zoi.optional()
-    }),
-    signal_patterns: ["counter.*"],
-    signal_routes: [{"counter.increment", MyApp.IncrementAction}]
+    })
+  end
+
+  signal_routes do
+    route "counter.increment", MyApp.IncrementAction
+  end
 end
 ```
 
-**Required options:**
+**Required slice fields:**
 
-| Option | Description |
+| Field | Description |
 |--------|-------------|
 | `name` | Plugin name (letters, numbers, underscores) |
-| `state_key` | Atom key for plugin state in agent |
-| `actions` | List of action modules the plugin provides |
+| `path` | Atom slice key in `agent.state` |
 
-**Key optional options:**
+**Key optional fields:**
 
-| Option | Description |
+| Field | Description |
 |--------|-------------|
-| `schema` | Zoi schema for plugin state with defaults |
-| `signal_patterns` | Patterns this plugin handles (e.g., `"counter.*"`) |
-| `signal_routes` | Static signal route tuples (`{"type", Action}`) |
+| `schema` | Zoi schema for slice state with defaults |
+| `config_schema` | Zoi schema for per-agent configuration |
+| `signal_routes` section | Static `route "type", Action` entries |
+| `subscriptions` section | `subscription Sensor, %{}` entries |
+| `schedules` section | `schedule "cron", Action` entries |
 
 ### Step 3: Attach to an Agent
 
 ```elixir
 defmodule MyApp.MyAgent do
-  use Jido.Agent,
-    name: "my_agent",
-    plugins: [MyApp.CounterPlugin]
+  use Jido.Agent, extensions: [MyApp.CounterPlugin]
+
+  agent do
+    name "my_agent"
+  end
 end
 ```
 
-When the agent is created, the plugin's state is initialized under its `state_key`.
+When the agent is created, the plugin's slice is initialized under its
+`path:`.
 
 ## State Isolation
 
-Each plugin gets its own namespace in `agent.state`:
+Each plugin's slice is its own namespace in `agent.state`:
 
 ```elixir
 agent = MyApp.MyAgent.new()
 
 agent.state
 #=> %{
-#=>   counter: %{value: 0, last_updated: nil}  # CounterPlugin state
+#=>   counter: %{value: 0, last_updated: nil}  # CounterPlugin slice
 #=> }
 ```
 
@@ -139,12 +157,11 @@ With multiple plugins:
 
 ```elixir
 defmodule MyApp.MultiPluginAgent do
-  use Jido.Agent,
-    name: "multi_agent",
-    plugins: [
-      MyApp.CounterPlugin,
-      MyApp.ChatPlugin
-    ]
+  use Jido.Agent, extensions: [MyApp.CounterPlugin, MyApp.ChatPlugin]
+
+  agent do
+    name "multi_agent"
+  end
 end
 
 agent = MyApp.MultiPluginAgent.new()
@@ -156,28 +173,33 @@ agent.state
 #=> }
 ```
 
-Plugins can't accidentally overwrite each other's state.
+Slices can't accidentally overwrite each other.
 
 ## Signal Routing
 
-Declare signal routes at compile time with the `signal_routes:` option:
+Declare signal routes at compile time inside the plugin's
+`signal_routes do … end` section:
 
 ```elixir
-use Jido.Plugin,
-  name: "counter",
-  state_key: :counter,
-  actions: [MyApp.IncrementAction, MyApp.ResetAction],
-  signal_routes: [
-    {"counter.increment", MyApp.IncrementAction},
-    {"counter.reset", MyApp.ResetAction}
-  ]
-```
+defmodule MyApp.CounterPlugin do
+  use Jido.Plugin
 
-Use `signal_routes/1` only for dynamic routes that depend on config.
+  slice do
+    name "counter"
+    path :counter
+    schema ...
+  end
+
+  signal_routes do
+    route "counter.increment", MyApp.IncrementAction
+    route "counter.reset", MyApp.ResetAction
+  end
+end
+```
 
 When a signal arrives:
 
-1. Router finds a matching pattern
+1. Router finds a matching route
 2. The corresponding action runs via `cmd/2`
 3. State operations update `agent.state`
 
@@ -191,58 +213,88 @@ When a signal arrives:
 signal = Jido.Signal.new!("counter.increment", %{amount: 10}, source: "/app")
 {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-agent.state.__domain__.counter.value
+agent.state.counter.value
 #=> 10
 
 # Send another
 signal = Jido.Signal.new!("counter.increment", %{amount: 5}, source: "/app")
 {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-agent.state.__domain__.counter.value
+agent.state.counter.value
 #=> 15
 ```
 
-## Configuration
+## Per-Agent Configuration
 
-Pass per-agent configuration with the `{Plugin, config}` form:
+Plugins can declare a `config_schema` for per-agent configuration. The
+plain way is to pass a `{Plugin, config}` tuple:
 
 ```elixir
 defmodule MyApp.ConfigurablePlugin do
-  use Jido.Plugin,
-    name: "configurable",
-    state_key: :configurable,
-    actions: [MyApp.SomeAction],
-    config_schema: Zoi.object(%{
+  use Jido.Plugin
+
+  slice do
+    name "configurable"
+    path :configurable
+    config_schema Zoi.object(%{
       max_value: Zoi.integer() |> Zoi.default(100)
     })
+  end
+end
 
-  @impl Jido.Plugin
-  def mount(_agent, config) do
-    {:ok, %{initialized_at: DateTime.utc_now(), max: config[:max_value]}}
+defmodule MyApp.ConfiguredAgent do
+  use Jido.Agent, extensions: [{MyApp.ConfigurablePlugin, %{max_value: 500}}]
+
+  agent do
+    name "configured_agent"
+  end
+end
+
+agent = MyApp.ConfiguredAgent.new()
+agent.state.configurable.max_value
+#=> 500
+```
+
+## Contributing a typed config block to the host
+
+A nicer alternative — opt into the *contribution mechanism* and the
+plugin's config becomes a typed DSL block on the host agent itself:
+
+```elixir
+defmodule MyApp.ConfigurablePlugin do
+  use Jido.Plugin
+  use Jido.Slice.Extension, host_section: :configurable
+
+  slice do
+    name "configurable"
+    path :configurable
+    config_schema Zoi.object(%{
+      max_value: Zoi.integer() |> Zoi.default(100)
+    })
+  end
+end
+
+defmodule MyApp.ConfiguredAgent do
+  use Jido.Agent, extensions: [MyApp.ConfigurablePlugin]
+
+  agent do
+    name "configured_agent"
+  end
+
+  configurable do
+    max_value 500
+    path :tuned_config  # optionally rename the slice mount path on this host
   end
 end
 ```
 
-Attach with config:
-
-```elixir
-defmodule MyApp.ConfiguredAgent do
-  use Jido.Agent,
-    name: "configured_agent",
-    plugins: [
-      {MyApp.ConfigurablePlugin, %{max_value: 500}}
-    ]
-end
-
-agent = MyApp.ConfiguredAgent.new()
-agent.state.configurable.max
-#=> 500
-```
-
-The `mount/2` callback receives the config and can use it to initialize state.
+Now `agent.state.tuned_config.max_value == 500`, validated at compile
+time, and ExDoc renders the `configurable do … end` schema in the
+agent's reference page.
 
 ## Next Steps
 
 - [Plugins Reference](plugins.md) — Full API reference and lifecycle callbacks
 - [Signals & Routing](signals.md) — Signal patterns and routing rules
 - [Actions](actions.md) — How actions transform state and emit directives
+- [Migration: keyword form to Spark DSL](migration-spark-dsl.md) — Recipes for older code

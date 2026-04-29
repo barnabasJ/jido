@@ -1,9 +1,9 @@
 defmodule Jido.Dsl.Agent.Verifiers.NoRouteConflicts do
   @moduledoc """
-  Replaces the legacy `Jido.Plugin.Routes.detect_conflicts/1` raise
-  inside `__quoted_compile_aggregates__/0`. Reads the conflict-detection
-  result persisted by `Jido.Dsl.Agent.Transformers.ExpandRoutes` and
-  raises a Spark DSL error listing conflicts.
+  Reads the conflict-detection result persisted by
+  `Jido.Dsl.Agent.Transformers.ExpandRoutes` and raises a Spark DSL
+  error listing route conflicts between the agent's own routes and any
+  plugin / slice routes.
   """
 
   use Spark.Dsl.Verifier

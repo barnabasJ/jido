@@ -48,9 +48,14 @@ of “partitioned durable teams.”
 
 ```elixir
 defmodule MyApp.WorkspacePod do
-  use Jido.Pod,
-    name: "workspace",
-    topology: %{
+  use Jido.Pod
+
+  agent do
+    name "workspace"
+  end
+
+  pod do
+    topology %{
       coordinator: %{
         agent: MyApp.WorkerAgent,
         manager: :workspace_workers,
@@ -62,6 +67,7 @@ defmodule MyApp.WorkspacePod do
         activation: :lazy
       }
     }
+  end
 end
 ```
 

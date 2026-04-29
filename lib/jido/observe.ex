@@ -138,7 +138,7 @@ defmodule Jido.Observe do
       span_ctx = init_span_ctx(event_prefix, enriched_metadata, tracer_module)
       with_span_scoped(span_ctx, fun)
     else
-      with_span_legacy(event_prefix, metadata, fun)
+      with_span_unscoped(event_prefix, metadata, fun)
     end
   end
 
@@ -389,7 +389,7 @@ defmodule Jido.Observe do
     end
   end
 
-  defp with_span_legacy(event_prefix, metadata, fun) do
+  defp with_span_unscoped(event_prefix, metadata, fun) do
     span_ctx = start_span(event_prefix, metadata)
 
     try do

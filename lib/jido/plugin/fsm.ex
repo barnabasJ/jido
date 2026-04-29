@@ -24,9 +24,7 @@ defmodule Jido.Plugin.FSM do
   `Jido.Agent.new/1`:
 
       use Jido.Agent,
-        name: "my_agent",
-        path: :app,
-        plugins: [
+        extensions: [
           {Jido.Plugin.FSM, %{
             initial_state: "ready",
             transitions: %{
@@ -38,6 +36,12 @@ defmodule Jido.Plugin.FSM do
             terminal_states: ["done", "errored"]
           }}
         ]
+
+      agent do
+        name "my_agent"
+        path :app
+        schema []
+      end
 
   The default transition map mirrors the historical FSM strategy:
 

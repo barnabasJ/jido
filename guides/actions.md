@@ -10,14 +10,17 @@ An action receives validated params and context, then returns state updates and 
 
 ```elixir
 defmodule MyApp.Actions.CreateOrder do
-  use Jido.Action,
-    name: "create_order",
-    description: "Creates an order and emits a domain event",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "create_order"
+    description "Creates an order and emits a domain event"
+    schema [
       order_id: [type: :string, required: true],
       items: [type: {:list, :map}, default: []],
       total: [type: :integer, required: true]
     ]
+  end
 
   alias Jido.Agent.Directive
   alias Jido.Signal
@@ -124,9 +127,12 @@ Read current agent state from `context.state`:
 
 ```elixir
 defmodule IncrementAction do
-  use Jido.Action,
-    name: "increment",
-    schema: [amount: [type: :integer, default: 1]]
+  use Jido.Action
+
+  action do
+    name "increment"
+    schema [amount: [type: :integer, default: 1]]
+  end
 
   def run(%{amount: amount}, context) do
     current = Map.get(context.state, :counter, 0)
@@ -186,11 +192,16 @@ Directive.stop(:normal)                          # Stop self
 
 ```elixir
 defmodule MyAgent do
-  use Jido.Agent,
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "my_agent"
+    path :state
+    schema [
       counter: [type: :integer, default: 0],
       orders: [type: {:list, :map}, default: []]
     ]
+  end
 end
 
 # context.state = %{counter: 0, orders: []}
@@ -223,10 +234,13 @@ Actions own a single slice, declared via `path:`, and return the new value for t
 
 ```elixir
 defmodule MyApp.Actions.RecordOrder do
-  use Jido.Action,
-    name: "record_order",
-    path: :orders,
-    schema: [order: [type: :map, required: true]]
+  use Jido.Action
+
+  action do
+    name "record_order"
+    path :orders
+    schema [order: [type: :map, required: true]]
+  end
 
   alias Jido.Agent.SliceUpdate
 
@@ -250,16 +264,21 @@ Alternatives when this isn't the right tool: re-path the action so its primary s
 Schemas use NimbleOptions syntax:
 
 ```elixir
-use Jido.Action,
-  name: "process_order",
-  description: "Processes an order with validation",
-  schema: [
-    order_id: [type: :string, required: true],
-    amount: [type: :integer, default: 1],
-    priority: [type: {:in, [:low, :medium, :high]}, default: :medium],
-    metadata: [type: :map, default: %{}],
-    tags: [type: {:list, :string}, default: []]
-  ]
+defmodule MyApp.Actions.ProcessOrder do
+  use Jido.Action
+
+  action do
+    name "process_order"
+    description "Processes an order with validation"
+    schema [
+      order_id: [type: :string, required: true],
+      amount: [type: :integer, default: 1],
+      priority: [type: {:in, [:low, :medium, :high]}, default: :medium],
+      metadata: [type: :map, default: %{}],
+      tags: [type: {:list, :string}, default: []]
+    ]
+  end
+end
 ```
 
 Common schema options:

@@ -4,9 +4,9 @@ defmodule Jido.AgentServer.Signal.ParentDied do
 
   Delivered as `jido.agent.identity.parent_died` from the parent-`:DOWN`
   handler. Independent of the `on_parent_death` policy: `:continue` and
-  `:emit_orphan` agents see this signal as the identity transition; the
-  legacy `jido.agent.orphaned` signal (alongside, only on `:emit_orphan`)
-  carries former-parent details.
+  `:emit_orphan` agents see this signal as the identity transition;
+  the `jido.agent.orphaned` signal — only on `:emit_orphan` — carries
+  former-parent details alongside.
 
   ## Fields
 

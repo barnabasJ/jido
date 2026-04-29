@@ -3,8 +3,6 @@ defmodule Jido.Dsl.Agent.Transformers.MergeSchemas do
   Merges the agent's base schema (declared in `agent do schema …`) with
   the schemas of every plugin and bare-slice instance attached to the
   agent. Persists the merged schema as `:merged_schema`.
-
-  Replaces the inline schema-merge call from the legacy compile aggregates.
   """
 
   use Spark.Dsl.Transformer

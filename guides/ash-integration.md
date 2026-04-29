@@ -82,16 +82,21 @@ Wire Ash-generated actions into your Jido agent's signal routing:
 
 ```elixir
 defmodule MyApp.OrderAgent do
-  use Jido.Agent,
-    name: "order_processor",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "order_processor"
+    path :state
+    schema [
       current_order_id: [type: {:or, [:string, nil]}, default: nil]
-    ],
-    signal_routes: [
-      {"order.place", MyApp.Order.Jido.Place},
-      {"order.confirm", MyApp.Order.Jido.Confirm},
-      {"order.ship", MyApp.Order.Jido.Ship}
     ]
+  end
+
+  signal_routes do
+    route "order.place", MyApp.Order.Jido.Place
+    route "order.confirm", MyApp.Order.Jido.Confirm
+    route "order.ship", MyApp.Order.Jido.Ship
+  end
 end
 ```
 
@@ -228,17 +233,22 @@ end
 
 ```elixir
 defmodule MyApp.FulfillmentAgent do
-  use Jido.Agent,
-    name: "fulfillment",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "fulfillment"
+    path :state
+    schema [
       order_id: [type: :string, required: true],
       customer_email: [type: :string, required: true],
       step: [type: :atom, default: :pending]
-    ],
-    signal_routes: [
-      {"fulfillment.start", MyApp.Actions.BeginFulfillment},
-      {"fulfillment.complete", MyApp.Actions.CompleteFulfillment}
     ]
+  end
+
+  signal_routes do
+    route "fulfillment.start", MyApp.Actions.BeginFulfillment
+    route "fulfillment.complete", MyApp.Actions.CompleteFulfillment
+  end
 end
 ```
 

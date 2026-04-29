@@ -95,18 +95,24 @@ When a signal arrives at an agent, the `SignalRouter` determines which action to
 
 ### Agent Signal Routes
 
-Declare static routes at compile time with the `signal_routes:` option:
+Declare static routes at compile time inside the agent's
+`signal_routes do … end` section:
 
 ```elixir
 defmodule MyApp.CounterAgent do
-  use Jido.Agent,
-    name: "counter",
-    schema: [counter: [type: :integer, default: 0]],
-    signal_routes: [
-      {"increment", MyApp.Actions.Increment},
-      {"decrement", MyApp.Actions.Decrement},
-      {"reset", MyApp.Actions.Reset}
-    ]
+  use Jido.Agent
+
+  agent do
+    name "counter"
+    path :state
+    schema [counter: [type: :integer, default: 0]]
+  end
+
+  signal_routes do
+    route "increment", MyApp.Actions.Increment
+    route "decrement", MyApp.Actions.Decrement
+    route "reset", MyApp.Actions.Reset
+  end
 end
 ```
 
@@ -128,30 +134,32 @@ defmodule MyStrategy do
 end
 ```
 
-### Plugin Signal Patterns
+### Plugin / Slice Signal Routes
 
-Plugins use `signal_patterns` to declare which signals they handle:
+Plugins and slices declare their routes inside a `signal_routes do … end`
+section the same way agents do. The router matches the slice's routes
+the moment its module is registered via `extensions: […]`:
 
 ```elixir
 defmodule MyApp.ChatPlugin do
-  use Jido.Plugin,
-    name: "chat",
-    state_key: :chat,
-    actions: [MyApp.Actions.SendMessage, MyApp.Actions.ClearHistory],
-    signal_patterns: ["chat.*"],
-    signal_routes: [
-      {"chat.send", MyApp.Actions.SendMessage},
-      {"chat.clear", MyApp.Actions.ClearHistory}
-    ]
+  use Jido.Plugin
+
+  slice do
+    name "chat"
+    path :chat
+    schema Zoi.object(%{messages: Zoi.list(Zoi.any()) |> Zoi.default([])})
+  end
+
+  signal_routes do
+    route "chat.send", MyApp.Actions.SendMessage
+    route "chat.clear", MyApp.Actions.ClearHistory
+  end
 end
 ```
 
-Pattern matching:
+Pattern matching is supported on each `route "type"`:
 - `"chat.*"` — matches `chat.message`, `chat.clear`, etc.
 - `"chat.**"` — matches `chat.message`, `chat.room.join`, etc.
-
-For explicit route mappings, declare plugin `signal_routes:` in `use Jido.Plugin`.
-Keep plugin `signal_routes/1` callback for dynamic/conditional routing.
 
 ## Emitting Signals (Directive.Emit)
 
@@ -159,9 +167,12 @@ Actions emit signals using the `Directive.Emit` directive:
 
 ```elixir
 defmodule MyApp.Actions.ProcessOrder do
-  use Jido.Action,
-    name: "process_order",
-    schema: [order_id: [type: :integer, required: true]]
+  use Jido.Action
+
+  action do
+    name "process_order"
+    schema [order_id: [type: :integer, required: true]]
+  end
 
   alias Jido.Agent.Directive
   alias Jido.Signal
@@ -224,9 +235,12 @@ Directive.emit_to_parent(agent, signal)
 ```elixir
 # Define an action that responds to signals
 defmodule MyApp.Actions.Increment do
-  use Jido.Action,
-    name: "increment",
-    schema: [amount: [type: :integer, default: 1]]
+  use Jido.Action
+
+  action do
+    name "increment"
+    schema [amount: [type: :integer, default: 1]]
+  end
 
   def run(params, context) do
     current = Map.get(context.state, :counter, 0)
@@ -236,10 +250,17 @@ end
 
 # Define an agent with signal routes
 defmodule MyApp.CounterAgent do
-  use Jido.Agent,
-    name: "counter",
-    schema: [counter: [type: :integer, default: 0]],
-    signal_routes: [{"increment", MyApp.Actions.Increment}]
+  use Jido.Agent
+
+  agent do
+    name "counter"
+    path :state
+    schema [counter: [type: :integer, default: 0]]
+  end
+
+  signal_routes do
+    route "increment", MyApp.Actions.Increment
+  end
 end
 
 # Use it
@@ -248,7 +269,7 @@ end
 signal = Jido.Signal.new!("increment", %{amount: 10}, source: "/user")
 {:ok, agent} = Jido.AgentServer.call(pid, signal)
 
-agent.state.__domain__.counter
+agent.state.state.counter
 # => 10
 ```
 

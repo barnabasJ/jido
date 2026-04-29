@@ -54,9 +54,12 @@ when `jido.agent.cron.registered` arrives.
 
 ```elixir
 defmodule EmitDirective do
-  use Jido.Action,
-    name: "ccl_emit_directive",
-    schema: [directive: [type: :any, required: true]]
+  use Jido.Action
+
+  action do
+    name "ccl_emit_directive"
+    schema [directive: [type: :any, required: true]]
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{directive: directive}}, slice, _opts, _ctx) do
@@ -65,13 +68,15 @@ defmodule EmitDirective do
 end
 
 defmodule HarnessAgent do
-  use Jido.Agent,
-    name: "ccl_harness",
-    path: :app,
-    default_slices: false,
-    schema: []
+  use Jido.Agent
 
-  def signal_routes(_ctx), do: [{"emit", EmitDirective}]
+  agent do
+    name "ccl_harness"
+  end
+
+  signal_routes do
+    route "emit", EmitDirective
+  end
 end
 
 {:ok, pid} = Demo.Jido.start_agent(HarnessAgent, id: "ccl-cron-demo")
@@ -350,11 +355,11 @@ Children configure how they react to their parent's death via
 
 ```elixir
 defmodule OrphanReadyAgent do
-  use Jido.Agent,
-    name: "ccl_orphan_ready",
-    path: :app,
-    default_slices: false,
-    schema: []
+  use Jido.Agent
+
+  agent do
+    name "ccl_orphan_ready"
+  end
 end
 
 # Start a parent and a child configured to continue on parent death.

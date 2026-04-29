@@ -1,7 +1,7 @@
 # 0023. Spark DSL for `use` sites; slices / middleware / plugins are registerable extensions
 
-- Status: Proposed
-- Implementation: Pending
+- Status: Accepted
+- Implementation: Complete
 - Date: 2026-04-28
 - Related ADRs: [0014](0014-slice-middleware-plugin.md) (the Slice / Middleware / Plugin split), [0022](0022-llm-agents-inlined-jido-ai-namespace.md) (LLM agent surface that benefits most from per-extension DSL sections), [0019](0019-actions-mutate-state-directives-do-side-effects.md), [0021](0021-no-full-state-no-polling.md).
 - Implementation tasks: [0033](../tasks/0033-spark-dep-and-jido-dsl-scaffold.md), [0034](../tasks/0034-port-jido-agent-to-spark.md), [0035](../tasks/0035-port-slice-plugin-middleware-to-spark.md), [0036](../tasks/0036-port-action-and-sensor-to-spark.md), [0037](../tasks/0037-slice-dsl-cleanup.md), [0038](../tasks/0038-agent-dsl-optional-path-and-extension-path-override.md), [0039](../tasks/0039-slices-must-declare-schema-and-routes.md), [0040](../tasks/0040-use-spark-tooling-everywhere.md), [0041](../tasks/0041-extensions-contribute-dsl-sections.md), [0042](../tasks/0042-docs-and-cleanup.md).

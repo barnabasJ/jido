@@ -27,15 +27,18 @@ defmodule Jido.AI do
   ## Example
 
       defmodule MyApp.SupportAgent do
-        use Jido.Agent,
-          name: "support",
-          slices: [
-            {Jido.AI.ReAct,
-              model: "anthropic:claude-haiku-4-5-20251001",
-              tools: [MyApp.Actions.LookupOrder, MyApp.Actions.RefundOrder],
-              system_prompt: "You are a support agent.",
-              max_iterations: 5}
-          ]
+        use Jido.Agent, extensions: [Jido.AI.ReAct]
+
+        agent do
+          name "support"
+        end
+
+        react do
+          model "anthropic:claude-haiku-4-5-20251001"
+          tools [MyApp.Actions.LookupOrder, MyApp.Actions.RefundOrder]
+          system_prompt "You are a support agent."
+          max_iterations 5
+        end
       end
 
       {:ok, pid}  = Jido.AgentServer.start_link(agent_module: MyApp.SupportAgent)

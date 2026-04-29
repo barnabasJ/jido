@@ -45,10 +45,13 @@ to your shell, then run a signal through.
 
 ```elixir
 defmodule Counter.Inc do
-  use Jido.Action,
-    name: "obs_inc",
-    path: :app,
-    schema: [by: [type: :integer, default: 1]]
+  use Jido.Action
+
+  action do
+    name "obs_inc"
+    path :app
+    schema [by: [type: :integer, default: 1]]
+  end
 
   @impl true
   def run(%Jido.Signal{data: %{by: by}}, slice, _opts, _ctx) do
@@ -58,13 +61,17 @@ defmodule Counter.Inc do
 end
 
 defmodule CounterAgent do
-  use Jido.Agent,
-    name: "obs_counter",
-    path: :app,
-    default_slices: false,
-    schema: [count: [type: :integer, default: 0]]
+  use Jido.Agent
 
-  def signal_routes(_ctx), do: [{"counter.inc", Counter.Inc}]
+  agent do
+    name "obs_counter"
+    path :app
+    schema [count: [type: :integer, default: 0]]
+  end
+
+  signal_routes do
+    route "counter.inc", Counter.Inc
+  end
 end
 
 caller = self()
@@ -164,7 +171,12 @@ handler_id = "dir-#{System.unique_integer([:positive])}"
 
 # An action that emits an Emit directive.
 defmodule Emitter do
-  use Jido.Action, name: "obs_emitter", path: :app, schema: []
+  use Jido.Action
+
+  action do
+    name "obs_emitter"
+    path :app
+  end
 
   @impl true
   def run(_signal, slice, _opts, _ctx) do
@@ -175,9 +187,15 @@ defmodule Emitter do
 end
 
 defmodule EmitterAgent do
-  use Jido.Agent, name: "obs_emitter_agent", path: :app, default_slices: false, schema: []
+  use Jido.Agent
 
-  def signal_routes(_ctx), do: [{"emit.event", Emitter}]
+  agent do
+    name "obs_emitter_agent"
+  end
+
+  signal_routes do
+    route "emit.event", Emitter
+  end
 end
 
 {:ok, epid} = Demo.Jido.start_agent(EmitterAgent, id: "obs-emitter")
@@ -239,7 +257,12 @@ correlatable end-to-end.
 
 ```elixir
 defmodule TraceCapture do
-  use Jido.Action, name: "obs_trace_capture", path: :app, schema: []
+  use Jido.Action
+
+  action do
+    name "obs_trace_capture"
+    path :app
+  end
 
   @impl true
   def run(input_signal, slice, _opts, _ctx) do
@@ -250,9 +273,15 @@ defmodule TraceCapture do
 end
 
 defmodule TraceAgent do
-  use Jido.Agent, name: "obs_trace_agent", path: :app, default_slices: false, schema: []
+  use Jido.Agent
 
-  def signal_routes(_ctx), do: [{"trace.demo", TraceCapture}]
+  agent do
+    name "obs_trace_agent"
+  end
+
+  signal_routes do
+    route "trace.demo", TraceCapture
+  end
 end
 
 {:ok, tpid} = Demo.Jido.start_agent(TraceAgent, id: "obs-trace")

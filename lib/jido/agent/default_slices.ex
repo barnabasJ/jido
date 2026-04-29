@@ -25,27 +25,39 @@ defmodule Jido.Agent.DefaultSlices do
 
   ## Agent-Level Override
 
-  Agents use a map keyed by the default slice's `path` atom:
+  Agents use a map keyed by the default slice's `path` atom, passed as a
+  keyword on `use Jido.Agent`:
 
-      use Jido.Agent,
-        name: "my_agent",
-        default_slices: %{thread: false}
+      use Jido.Agent, default_slices: %{thread: false}
+
+      agent do
+        name "my_agent"
+      end
 
   To replace a default with a custom implementation:
 
-      use Jido.Agent,
-        name: "my_agent",
-        default_slices: %{thread: MyApp.CustomThreadSlice}
+      use Jido.Agent, default_slices: %{thread: MyApp.CustomThreadSlice}
+
+      agent do
+        name "my_agent"
+      end
 
   Or with configuration:
 
       use Jido.Agent,
-        name: "my_agent",
         default_slices: %{thread: {MyApp.CustomThreadSlice, %{max_entries: 100}}}
+
+      agent do
+        name "my_agent"
+      end
 
   Or disable all defaults:
 
-      use Jido.Agent, name: "bare", default_slices: false
+      use Jido.Agent, default_slices: false
+
+      agent do
+        name "bare"
+      end
   """
 
   @package_defaults [Jido.Thread.Slice, Jido.Identity.Slice, Jido.Memory.Slice]

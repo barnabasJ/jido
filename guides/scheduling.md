@@ -12,20 +12,26 @@ The simplest way to add recurring jobs is to declare them in your agent definiti
 
 ```elixir
 defmodule MyAgent do
-  use Jido.Agent,
-    name: "my_agent",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "my_agent"
+    path :state
+    schema [
       tick_count: [type: :integer, default: 0],
       last_cleanup: [type: :any, default: nil]
-    ],
-    schedules: [
-      {"*/5 * * * *", "heartbeat.tick", job_id: :heartbeat},
-      {"@daily", "cleanup.run", job_id: :cleanup, timezone: "America/New_York"}
-    ],
-    signal_routes: [
-      {"heartbeat.tick", HeartbeatAction},
-      {"cleanup.run", CleanupAction}
     ]
+  end
+
+  schedules do
+    schedule "*/5 * * * *", "heartbeat.tick", job_id: :heartbeat
+    schedule "@daily", "cleanup.run", job_id: :cleanup, timezone: "America/New_York"
+  end
+
+  signal_routes do
+    route "heartbeat.tick", HeartbeatAction
+    route "cleanup.run", CleanupAction
+  end
 end
 ```
 
@@ -34,16 +40,16 @@ Declarative schedules are registered automatically when the AgentServer starts. 
 ### Schedule Format
 
 ```elixir
-schedules: [
+schedules do
   # Minimal: cron expression + signal type
-  {"* * * * *", "my.signal"},
+  schedule "* * * * *", "my.signal"
 
   # With job ID (for cancellation/upsert)
-  {"*/5 * * * *", "heartbeat.tick", job_id: :heartbeat},
+  schedule "*/5 * * * *", "heartbeat.tick", job_id: :heartbeat
 
   # With timezone
-  {"@daily", "cleanup.run", job_id: :cleanup, timezone: "America/New_York"}
-]
+  schedule "@daily", "cleanup.run", job_id: :cleanup, timezone: "America/New_York"
+end
 ```
 
 Job IDs are automatically namespaced as `{:agent_schedule, agent_name, job_id}` to avoid collisions with plugin schedules and dynamic cron jobs.
@@ -52,7 +58,7 @@ Job IDs are automatically namespaced as `{:agent_schedule, agent_name, job_id}` 
 
 | Use case | Approach |
 |----------|----------|
-| Known at compile time, always runs | `schedules:` in agent definition |
+| Known at compile time, always runs | `schedules do … end` in agent definition |
 | Depends on runtime state or user input | `Directive.cron/3` in an action |
 | One-time delayed message | `Directive.schedule/2` in an action |
 
@@ -62,9 +68,12 @@ The `Schedule` directive sends a message back to your agent after a delay:
 
 ```elixir
 defmodule RetryAction do
-  use Jido.Action,
-    name: "retry",
-    schema: [attempt: [type: :integer, default: 1]]
+  use Jido.Action
+
+  action do
+    name "retry"
+    schema [attempt: [type: :integer, default: 1]]
+  end
 
   alias Jido.Agent.Directive
 
@@ -104,7 +113,11 @@ For schedules that depend on runtime state or user input, use the `Cron` directi
 
 ```elixir
 defmodule SetupCronAction do
-  use Jido.Action, name: "setup_cron", schema: []
+  use Jido.Action
+
+  action do
+    name "setup_cron"
+  end
 
   alias Jido.Agent.Directive
 
@@ -188,7 +201,11 @@ Use `CronCancel` to stop a recurring job by its `job_id`:
 
 ```elixir
 defmodule StopHeartbeatAction do
-  use Jido.Action, name: "stop_heartbeat", schema: []
+  use Jido.Action
+
+  action do
+    name "stop_heartbeat"
+  end
 
   alias Jido.Agent.Directive
 
@@ -211,7 +228,7 @@ agent is managed by `Jido.Agent.InstanceManager` **and** storage is enabled.
 In that mode, dynamic cron specs are persisted through `Jido.Persist` and
 re-registered on thaw.
 
-Only dynamic `Directive.cron/3` registrations are persisted. Declarative `schedules:` entries and plugin schedules are recreated from code when the `AgentServer` starts and remain runtime-only.
+Only dynamic `Directive.cron/3` registrations are persisted. Declarative `schedules do … end` entries and plugin schedules are recreated from code when the `AgentServer` starts and remain runtime-only.
 
 **What this means:**
 
@@ -260,7 +277,11 @@ Track processed work to avoid duplicates if you retry externally:
 
 ```elixir
 defmodule ProcessTickAction do
-  use Jido.Action, name: "process_tick", schema: []
+  use Jido.Action
+
+  action do
+    name "process_tick"
+  end
 
   def run(%{tick_id: tick_id}, context) do
     processed = Map.get(context.state, :processed_ticks, MapSet.new())
@@ -281,7 +302,11 @@ Track when work last ran to detect gaps:
 
 ```elixir
 defmodule DailyReportAction do
-  use Jido.Action, name: "daily_report", schema: []
+  use Jido.Action
+
+  action do
+    name "daily_report"
+  end
 
   def run(_params, context) do
     last_run = Map.get(context.state, :last_report_at)
@@ -315,23 +340,33 @@ Here's a complete agent that generates a daily report using declarative schedule
 
 ```elixir
 defmodule DailyReportAgent do
-  use Jido.Agent,
-    name: "daily_report_agent",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "daily_report_agent"
+    path :state
+    schema [
       last_report_at: [type: {:custom, DateTime, :from_iso8601, []}, default: nil],
       report_count: [type: :integer, default: 0]
-    ],
-    schedules: [
-      {"0 6 * * *", "report.generate",
-        job_id: :daily_report, timezone: "America/New_York"}
-    ],
-    signal_routes: [
-      {"report.generate", GenerateReportAction},
-      {"report.cancel", CancelReportAction}
     ]
+  end
+
+  schedules do
+    schedule "0 6 * * *", "report.generate",
+      job_id: :daily_report, timezone: "America/New_York"
+  end
+
+  signal_routes do
+    route "report.generate", GenerateReportAction
+    route "report.cancel", CancelReportAction
+  end
 
   defmodule GenerateReportAction do
-    use Jido.Action, name: "generate_report", schema: []
+    use Jido.Action
+
+    action do
+      name "generate_report"
+    end
 
     alias Jido.Agent.Directive
 
@@ -374,7 +409,11 @@ defmodule DailyReportAgent do
   end
 
   defmodule CancelReportAction do
-    use Jido.Action, name: "cancel_report", schema: []
+    use Jido.Action
+
+    action do
+      name "cancel_report"
+    end
 
     def run(_params, _context) do
       {:ok, %{}, [Directive.cron_cancel({:agent_schedule, "daily_report_agent", :daily_report})]}

@@ -33,9 +33,11 @@ defmodule Jido.Memory.Slice do
   This slice is automatically included as a default slice for all agents
   unless explicitly disabled:
 
-      use Jido.Agent,
-        name: "minimal",
-        default_slices: %{memory: false}
+      use Jido.Agent, default_slices: %{memory: false}
+
+      agent do
+        name "minimal"
+      end
 
   ## Persistence
 

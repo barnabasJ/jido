@@ -27,13 +27,16 @@ A sensor is a pure module implementing the `Jido.Sensor` behaviour. The `Jido.Se
 
 ```elixir
 defmodule MetricSensor do
-  use Jido.Sensor,
-    name: "metric_sensor",
-    description: "Monitors a specific metric",
-    schema: Zoi.object(%{
+  use Jido.Sensor
+
+  sensor do
+    name "metric_sensor"
+    description "Monitors a specific metric"
+    schema Zoi.object(%{
       metric: Zoi.string(),
       threshold: Zoi.integer() |> Zoi.default(100)
     }, coerce: true)
+  end
 
   @impl Jido.Sensor
   def init(config, _context) do
@@ -181,13 +184,16 @@ A sensor that polls an external API every 30 seconds:
 
 ```elixir
 defmodule ApiPollSensor do
-  use Jido.Sensor,
-    name: "api_poll",
-    description: "Polls an API endpoint at regular intervals",
-    schema: Zoi.object(%{
+  use Jido.Sensor
+
+  sensor do
+    name "api_poll"
+    description "Polls an API endpoint at regular intervals"
+    schema Zoi.object(%{
       url: Zoi.string(),
       interval: Zoi.integer() |> Zoi.default(30_000)
     }, coerce: true)
+  end
 
   @impl Jido.Sensor
   def init(config, _context) do
@@ -229,13 +235,16 @@ A sensor that subscribes to Phoenix.PubSub and forwards messages as signals:
 
 ```elixir
 defmodule PubSubSensor do
-  use Jido.Sensor,
-    name: "pubsub_sensor",
-    description: "Subscribes to Phoenix.PubSub topics",
-    schema: Zoi.object(%{
+  use Jido.Sensor
+
+  sensor do
+    name "pubsub_sensor"
+    description "Subscribes to Phoenix.PubSub topics"
+    schema Zoi.object(%{
       pubsub: Zoi.atom(),
       topic: Zoi.string()
     }, coerce: true)
+  end
 
   @impl Jido.Sensor
   def init(config, _context) do
@@ -281,9 +290,13 @@ Complete working example with an agent that reacts to sensor signals:
 ```elixir
 # The action that handles sensor signals
 defmodule HandleTickAction do
-  use Jido.Action,
-    name: "handle_tick",
-    schema: [count: [type: :integer, required: true]]
+  use Jido.Action
+
+  action do
+    name "handle_tick"
+    path :state
+    schema [count: [type: :integer, required: true]]
+  end
 
   def run(params, context) do
     current = Map.get(context.state, :tick_count, 0)
@@ -293,22 +306,32 @@ end
 
 # The agent with signal routing
 defmodule TickCounterAgent do
-  use Jido.Agent,
-    name: "tick_counter",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "tick_counter"
+    path :state
+    schema [
       tick_count: [type: :integer, default: 0],
       last_sensor_count: [type: :integer, default: 0]
-    ],
-    signal_routes: [{"sensor.tick", HandleTickAction}]
+    ]
+  end
+
+  signal_routes do
+    route "sensor.tick", HandleTickAction
+  end
 end
 
 # The sensor
 defmodule TickSensor do
-  use Jido.Sensor,
-    name: "tick_sensor",
-    schema: Zoi.object(%{
+  use Jido.Sensor
+
+  sensor do
+    name "tick_sensor"
+    schema Zoi.object(%{
       interval: Zoi.integer() |> Zoi.default(1000)
     }, coerce: true)
+  end
 
   @impl Jido.Sensor
   def init(config, _context) do

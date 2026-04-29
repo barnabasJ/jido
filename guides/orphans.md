@@ -102,15 +102,18 @@ Example:
 
 ```elixir
 defmodule HandleOrphanedAction do
-  use Jido.Action,
-    name: "handle_orphaned",
-    schema: [
+  use Jido.Action
+
+  action do
+    name "handle_orphaned"
+    schema [
       parent_id: [type: :string, required: true],
       parent_pid: [type: :any, required: true],
       tag: [type: :any, required: true],
       meta: [type: :map, default: %{}],
       reason: [type: :any, required: true]
     ]
+  end
 
   def run(params, context) do
     former_parent = Map.get(context.state, :__orphaned_from__)

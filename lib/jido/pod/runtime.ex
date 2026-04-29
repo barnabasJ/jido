@@ -135,9 +135,9 @@ defmodule Jido.Pod.Runtime do
     end
   end
 
-  # Map a mutation report into the legacy reconcile report shape so existing
-  # callers (notably Pod.get's `{:error, %{stage: :reconcile, ...}}` path)
-  # continue to work.
+  # Map a mutation report into the reconcile report shape that
+  # `Pod.get` callers consume (the `{:error, %{stage: :reconcile, ...}}`
+  # branch).
   defp reconcile_report(%Jido.Pod.Mutation.Report{} = mreport, requested) do
     requested = Enum.uniq(requested)
     completed = mreport.started || []

@@ -10,25 +10,31 @@ Agents are immutable data structures that hold state and respond to actions. The
 
 ```elixir
 defmodule MyAgent do
-  use Jido.Agent,
-    name: "my_agent",                        # Required - alphanumeric + underscores
-    description: "My custom agent",          # Optional
-    category: "example",                     # Optional
-    tags: ["demo"],                          # Default: []
-    vsn: "1.0.0",                            # Optional
-    schema: [                                # State schema (see below)
+  use Jido.Agent, extensions: [MyPlugin, MyBareSlice]
+
+  agent do
+    name "my_agent"                           # Required — alphanumeric + underscores
+    description "My custom agent"             # Optional
+    category "example"                        # Optional
+    tags ["demo"]                             # Default: []
+    vsn "1.0.0"                               # Optional
+    path :state                               # Slice key for the agent's domain state
+    schema [                                  # State schema (see below)
       status: [type: :atom, default: :idle],
       counter: [type: :integer, default: 0]
-    ],
-    strategy: Jido.Agent.Strategy.Direct,    # Default
-    plugins: [MyPlugin],                     # Default: []
-    slices: [MyBareSlice],                   # Default: []
-    default_slices: true,                    # Load built-in default slices (Default: true)
-    schedules: [                             # Declarative cron schedules (Default: [])
-      {"*/5 * * * *", "heartbeat.tick", job_id: :heartbeat}
     ]
+  end
+
+  schedules do
+    schedule "*/5 * * * *", "heartbeat.tick", job_id: :heartbeat
+  end
 end
 ```
+
+`extensions: […]` is a single ordered registration list. The compile-time
+walker inspects each module and routes it to the right slot — slices,
+plugins, or middleware — by behaviour. See [Plugins](plugins.md) and
+[Slices](slices.md) for the contributing module shapes.
 
 ## The `cmd/2` and `cmd/3` Contract
 
@@ -148,30 +154,35 @@ Use cases:
 
 ## Schema Options
 
-Agent state is validated against a schema. Two formats are supported:
+Agent state is validated against a schema declared inside the
+`agent do … end` section. Two formats are supported:
 
-### NimbleOptions (legacy, familiar)
+### NimbleOptions (familiar)
 
 ```elixir
-use Jido.Agent,
-  name: "my_agent",
-  schema: [
+agent do
+  name "my_agent"
+  path :state
+  schema [
     status: [type: :atom, default: :idle],
     counter: [type: :integer, default: 0],
     config: [type: {:map, :atom, :string}, default: %{}]
   ]
+end
 ```
 
-### Zoi (recommended for new code)
+### Zoi (recommended)
 
 ```elixir
-use Jido.Agent,
-  name: "my_agent",
-  schema: Zoi.object(%{
+agent do
+  name "my_agent"
+  path :state
+  schema Zoi.object(%{
     status: Zoi.atom() |> Zoi.default(:idle),
     counter: Zoi.integer() |> Zoi.default(0),
     config: Zoi.map() |> Zoi.default(%{})
   })
+end
 ```
 
 Both are handled transparently by the Agent module.

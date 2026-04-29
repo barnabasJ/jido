@@ -101,9 +101,12 @@ Use PubSub to broadcast agent state changes. Define an action that emits to PubS
 ```elixir
 # lib/my_app/actions/increment.ex
 defmodule MyApp.Actions.Increment do
-  use Jido.Action,
-    name: "increment",
-    schema: [amount: [type: :integer, default: 1]]
+  use Jido.Action
+
+  action do
+    name "increment"
+    schema [amount: [type: :integer, default: 1]]
+  end
 
   alias Jido.Agent.Directive
 
@@ -283,17 +286,22 @@ Here's a complete working example you can copy into a Phoenix app.
 ```elixir
 # lib/my_app/agents/counter_agent.ex
 defmodule MyApp.CounterAgent do
-  use Jido.Agent,
-    name: "counter",
-    description: "A counter with PubSub broadcasting",
-    schema: [
+  use Jido.Agent
+
+  agent do
+    name "counter"
+    description "A counter with PubSub broadcasting"
+    path :state
+    schema [
       count: [type: :integer, default: 0]
-    ],
-    signal_routes: [
-      {"counter.increment", MyApp.Actions.Increment},
-      {"counter.decrement", MyApp.Actions.Decrement},
-      {"counter.reset", MyApp.Actions.Reset}
     ]
+  end
+
+  signal_routes do
+    route "counter.increment", MyApp.Actions.Increment
+    route "counter.decrement", MyApp.Actions.Decrement
+    route "counter.reset", MyApp.Actions.Reset
+  end
 end
 ```
 
@@ -302,9 +310,12 @@ end
 ```elixir
 # lib/my_app/actions/counter_actions.ex
 defmodule MyApp.Actions.Increment do
-  use Jido.Action,
-    name: "increment",
-    schema: [amount: [type: :integer, default: 1]]
+  use Jido.Action
+
+  action do
+    name "increment"
+    schema [amount: [type: :integer, default: 1]]
+  end
 
   def run(%{amount: amount}, context) do
     {:ok, %{count: (context.state[:count] || 0) + amount}}
@@ -312,9 +323,12 @@ defmodule MyApp.Actions.Increment do
 end
 
 defmodule MyApp.Actions.Decrement do
-  use Jido.Action,
-    name: "decrement",
-    schema: [amount: [type: :integer, default: 1]]
+  use Jido.Action
+
+  action do
+    name "decrement"
+    schema [amount: [type: :integer, default: 1]]
+  end
 
   def run(%{amount: amount}, context) do
     {:ok, %{count: (context.state[:count] || 0) - amount}}
@@ -322,9 +336,11 @@ defmodule MyApp.Actions.Decrement do
 end
 
 defmodule MyApp.Actions.Reset do
-  use Jido.Action,
-    name: "reset",
-    schema: []
+  use Jido.Action
+
+  action do
+    name "reset"
+  end
 
   def run(_params, _context) do
     {:ok, %{count: 0}}

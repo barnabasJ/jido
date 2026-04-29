@@ -16,9 +16,13 @@ defmodule Jido.Plugin.Config do
 
       # In agent definition:
       use Jido.Agent,
-        plugins: [
+        extensions: [
           {MyApp.SlackPlugin, %{channel: "#support"}}  # Override channel
         ]
+
+      agent do
+        name "my_agent"
+      end
 
       # Resolved config:
       %{token: "default-token", channel: "#support"}
