@@ -10,11 +10,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
     slice do
       name "fake_memory"
       path :memory
-      singleton true
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
     end
   end
 
@@ -25,11 +20,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
     slice do
       name "fake_thread"
       path :thread
-      singleton true
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
     end
   end
 
@@ -40,11 +30,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
     slice do
       name "replacement_memory"
       path :memory
-      singleton true
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
     end
   end
 
@@ -55,10 +40,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
     slice do
       name "user_slice"
       path :user_stuff
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
     end
   end
 

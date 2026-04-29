@@ -34,10 +34,6 @@ defmodule Jido.Dsl.SliceTest do
       config_schema Zoi.object(%{enabled: Zoi.boolean() |> Zoi.default(true)})
     end
 
-    actions do
-      action JidoTest.PluginTestAction
-    end
-
     signal_routes do
       route "send", JidoTest.PluginTestAction
     end
@@ -73,7 +69,6 @@ defmodule Jido.Dsl.SliceTest do
       assert MinimalSlice.subscriptions() == []
       assert MinimalSlice.schedules() == []
       assert MinimalSlice.requires() == []
-      assert MinimalSlice.singleton?() == false
       assert MinimalSlice.description() == nil
       assert MinimalSlice.category() == nil
       assert MinimalSlice.vsn() == nil
@@ -107,7 +102,6 @@ defmodule Jido.Dsl.SliceTest do
       assert manifest.signal_routes == [{"send", JidoTest.PluginTestAction}]
       assert manifest.capabilities == [:speak]
       assert manifest.requires == [{:config, :token}]
-      assert manifest.singleton == false
     end
 
     test "plugin_spec/1 returns a Jido.Plugin.Spec with config merged" do

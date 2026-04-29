@@ -52,11 +52,6 @@ defmodule JidoTest.Plugin.RoutesTest do
       path :plugin_routes
     end
 
-    actions do
-      action TestAction1
-      action TestAction2
-    end
-
     signal_routes do
       route "post", TestAction1
       route "list", TestAction2
@@ -72,11 +67,6 @@ defmodule JidoTest.Plugin.RoutesTest do
       path :plugin_opts
     end
 
-    actions do
-      action TestAction1
-      action TestAction2
-    end
-
     signal_routes do
       route "post", TestAction1, priority: 5
       route "list", TestAction2, on_conflict: :replace
@@ -90,10 +80,6 @@ defmodule JidoTest.Plugin.RoutesTest do
     slice do
       name "plugin_no_routes"
       path :plugin_no_routes
-    end
-
-    actions do
-      action TestAction1
     end
   end
 
@@ -144,10 +130,6 @@ defmodule JidoTest.Plugin.RoutesTest do
         slice do
           name "custom_router"
           path :custom_router
-        end
-
-        actions do
-          action TestAction1
         end
 
         def signal_routes(_config) do

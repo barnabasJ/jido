@@ -144,10 +144,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
       path :with_sensor
     end
 
-    actions do
-      action JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction
-    end
-
     def subscriptions(_config, context) do
       [
         {JidoTest.AgentServer.PluginSubscriptionsTest.TestSensor,
@@ -163,10 +159,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     slice do
       name "plugin_with_multiple_sensors"
       path :multi_sensors
-    end
-
-    actions do
-      action JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction
     end
 
     def subscriptions(_config, context) do
@@ -188,10 +180,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
       path :no_subs
     end
 
-    actions do
-      action JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction
-    end
-
     def subscriptions(_config, _context) do
       []
     end
@@ -205,10 +193,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
       name "plugin_without_subscriptions_callback"
       path :no_callback
     end
-
-    actions do
-      action JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction
-    end
   end
 
   defmodule PluginWithRoutedSensor do
@@ -218,10 +202,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     slice do
       name "plugin_with_routed_sensor"
       path :routed_sensor
-    end
-
-    actions do
-      action JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction
     end
 
     def subscriptions(_config, context) do
@@ -277,10 +257,6 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
     slice do
       name "plugin_with_static_subscriptions"
       path :static_subs
-    end
-
-    actions do
-      action JidoTest.AgentServer.PluginSubscriptionsTest.SimpleAction
     end
 
     subscriptions do

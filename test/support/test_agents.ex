@@ -118,10 +118,6 @@ defmodule JidoTest.TestAgents do
       path :test_routes
     end
 
-    actions do
-      action JidoTest.PluginTestAction
-    end
-
     signal_routes do
       route "post", JidoTest.PluginTestAction
       route "list", JidoTest.PluginTestAction
@@ -135,10 +131,6 @@ defmodule JidoTest.TestAgents do
     slice do
       name "priority_plugin"
       path :priority
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
     end
 
     signal_routes do

@@ -11,10 +11,6 @@ defmodule JidoTest.Plugin.ConfigTest do
       name "no_otp_app"
       path :no_otp_app
     end
-
-    actions do
-      action JidoTest.PluginTestAction
-    end
   end
 
   defmodule PluginWithOtpApp do
@@ -25,10 +21,6 @@ defmodule JidoTest.Plugin.ConfigTest do
       name "with_otp_app"
       path :with_otp_app
       otp_app :jido
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
     end
   end
 
@@ -46,10 +38,6 @@ defmodule JidoTest.Plugin.ConfigTest do
                       channel: Zoi.string() |> Zoi.optional(),
                       timeout: Zoi.integer() |> Zoi.default(5000)
                     })
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
     end
   end
 

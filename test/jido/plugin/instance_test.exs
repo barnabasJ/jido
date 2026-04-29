@@ -12,10 +12,6 @@ defmodule JidoTest.Plugin.InstanceTest do
       path :test
       schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
     end
-
-    actions do
-      action JidoTest.PluginTestAction
-    end
   end
 
   defmodule SlackPlugin do
@@ -26,25 +22,6 @@ defmodule JidoTest.Plugin.InstanceTest do
       name "slack"
       path :slack
       schema Zoi.object(%{token: Zoi.string() |> Zoi.optional()})
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
-    end
-  end
-
-  defmodule SingletonPlugin do
-    @moduledoc false
-    use Jido.Plugin
-
-    slice do
-      name "singleton_plugin"
-      path :singleton_state
-      singleton true
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
     end
   end
 
@@ -169,38 +146,11 @@ defmodule JidoTest.Plugin.InstanceTest do
     end
   end
 
-  describe "singleton guardrail" do
-    test "singleton plugin can be created without alias" do
-      instance = Instance.new(SingletonPlugin)
-
-      assert instance.module == SingletonPlugin
-      assert instance.as == nil
-      assert instance.path == :singleton_state
-    end
-
-    test "singleton plugin with config map works (no alias)" do
-      instance = Instance.new({SingletonPlugin, %{custom: "value"}})
-
-      assert instance.module == SingletonPlugin
-      assert instance.as == nil
-      assert instance.config == %{custom: "value"}
-    end
-
-    test "singleton plugin raises when aliased with as:" do
-      assert_raise ArgumentError, ~r/Cannot alias singleton plugin/, fn ->
-        Instance.new({SingletonPlugin, as: :custom_alias})
-      end
-    end
-
-    test "singleton plugin raises with as: and config" do
-      assert_raise ArgumentError, ~r/Cannot alias singleton plugin/, fn ->
-        Instance.new({SingletonPlugin, as: :custom_alias, token: "abc"})
-      end
-    end
-
-    test "non-singleton plugin can still be aliased" do
+  describe "alias mechanics" do
+    test "plugin can be aliased with as:" do
       instance = Instance.new({SlackPlugin, as: :support})
       assert instance.as == :support
+      assert instance.path == :slack_support
     end
   end
 end

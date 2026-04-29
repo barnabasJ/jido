@@ -1,6 +1,6 @@
 defmodule Jido.Pod.Plugin do
   @moduledoc """
-  Default singleton slice for pod-wrapped agents.
+  Default slice for pod-wrapped agents.
 
   Owns the `:pod` slice key in agent state. Persists the resolved topology
   snapshot as ordinary slice state so existing `Persist` and `Storage`
@@ -28,7 +28,6 @@ defmodule Jido.Pod.Plugin do
   slice do
     name "pod"
     path :pod
-    singleton true
 
     schema Zoi.object(%{
              topology: Zoi.any(description: "Resolved pod topology.") |> Zoi.optional(),
@@ -57,13 +56,6 @@ defmodule Jido.Pod.Plugin do
                Zoi.map(description: "Pod-level runtime metadata owned by the slice.")
                |> Zoi.default(%{})
            })
-  end
-
-  actions do
-    action MutateAction
-    action MutateProgress
-    action QueryNodes
-    action QueryTopology
   end
 
   signal_routes do

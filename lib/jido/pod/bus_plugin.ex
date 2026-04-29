@@ -55,11 +55,6 @@ defmodule Jido.Pod.BusPlugin do
            })
   end
 
-  actions do
-    action AutoSubscribeChild
-    action AutoUnsubscribeChild
-  end
-
   signal_routes do
     route "jido.agent.child.started", AutoSubscribeChild
     route "jido.agent.child.exit", AutoUnsubscribeChild

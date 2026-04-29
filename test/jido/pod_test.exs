@@ -32,8 +32,6 @@ defmodule JidoTest.PodTest do
           metadata: Zoi.map() |> Zoi.default(%{})
         })
       )
-
-      singleton true
     end
 
     capabilities do
@@ -130,7 +128,7 @@ defmodule JidoTest.PodTest do
   end
 
   test "disabling the reserved pod plugin raises at compile time" do
-    message = ~r/Jido.Pod requires a singleton pod plugin under pod/
+    message = ~r/Jido.Pod requires a pod plugin under pod/
 
     assert_raise CompileError, message, fn ->
       Code.compile_string("""

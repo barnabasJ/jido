@@ -37,7 +37,6 @@ defmodule Jido.Dsl.ScaffoldTest do
   test "Jido.Dsl.Slice contributes the slice surface sections (task 0035)" do
     section_names = Enum.map(Jido.Dsl.Slice.sections(), & &1.name)
     assert :slice in section_names
-    assert :actions in section_names
     assert :signal_routes in section_names
     assert :subscriptions in section_names
     assert :schedules in section_names

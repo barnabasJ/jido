@@ -1,16 +1,15 @@
 defmodule Jido.Thread.Slice do
   @moduledoc """
-  Default singleton slice for thread state management.
+  Default slice for thread state management.
 
   Owns the `:thread` slice key in agent state. The slice does not initialize
   a thread by default — threads are attached on demand via
   `Jido.Thread.Agent.ensure/2`.
 
-  ## Singleton
+  ## Default slice
 
-  This slice is a singleton — it cannot be aliased or duplicated. It is
-  automatically included as a default slice for all agents unless explicitly
-  disabled:
+  This slice is automatically included as a default slice for all agents
+  unless explicitly disabled:
 
       use Jido.Agent,
         name: "minimal",
@@ -38,7 +37,6 @@ defmodule Jido.Thread.Slice do
     name "thread"
     path :thread
     description "Thread state management for agent conversation history."
-    singleton true
   end
 
   capabilities do

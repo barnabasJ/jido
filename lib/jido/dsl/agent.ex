@@ -106,7 +106,6 @@ defmodule Jido.Dsl.Agent do
     ],
     verifiers: [
       Jido.Dsl.Agent.Verifiers.UniquePaths,
-      Jido.Dsl.Agent.Verifiers.NoSingletonAlias,
       Jido.Dsl.Agent.Verifiers.NoRouteConflicts,
       Jido.Dsl.Agent.Verifiers.NoSectionNameCollisions
     ]

@@ -13,10 +13,6 @@ defmodule JidoTest.Identity.SliceTest do
       assert IdentitySlice.path() == :identity
     end
 
-    test "is singleton" do
-      assert IdentitySlice.singleton?() == true
-    end
-
     test "has identity capability" do
       assert :identity in IdentitySlice.capabilities()
     end
@@ -31,11 +27,6 @@ defmodule JidoTest.Identity.SliceTest do
   end
 
   describe "manifest" do
-    test "singleton is true in manifest" do
-      manifest = IdentitySlice.manifest()
-      assert manifest.singleton == true
-    end
-
     test "path is :identity in manifest" do
       manifest = IdentitySlice.manifest()
       assert manifest.path == :identity

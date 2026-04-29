@@ -79,10 +79,6 @@ defmodule Jido.Plugin.FSM do
            |> Zoi.transform({__MODULE__, :seed_runtime_fields, []})
   end
 
-  actions do
-    action Jido.Plugin.FSM.Transition
-  end
-
   signal_routes do
     route "jido.fsm.transition", Jido.Plugin.FSM.Transition
   end

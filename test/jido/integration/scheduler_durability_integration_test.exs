@@ -56,10 +56,6 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
       path :scheduler_integration_plugin
     end
 
-    actions do
-      action PluginTickAction
-    end
-
     schedules do
       schedule "* * * * * * *", PluginTickAction
     end

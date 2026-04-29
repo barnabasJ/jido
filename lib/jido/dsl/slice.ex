@@ -2,12 +2,10 @@ defmodule Jido.Dsl.Slice do
   @moduledoc """
   Spark DSL extension for `Jido.Slice`.
 
-  Defines seven host-owned sections:
+  Defines six host-owned sections:
 
     * `slice do … end` — slice identity (`name`, `path`, `description`,
-      `category`, `vsn`, `otp_app`, `schema`, `config_schema`, `tags`,
-      `singleton`).
-    * `actions do … end` — `action ModuleAction` entries.
+      `category`, `vsn`, `otp_app`, `schema`, `config_schema`, `tags`).
     * `signal_routes do … end` — `route "type", Action, opts` entries.
     * `subscriptions do … end` — `subscription Sensor, %{config}` entries.
     * `schedules do … end` — `schedule "cron", Action, %{data}` entries.
@@ -18,12 +16,12 @@ defmodule Jido.Dsl.Slice do
   same compile-time accessors today's `Jido.Slice.__using__/1` macro
   emits — `name/0`, `path/0`, `actions/0`, `signal_routes/0`,
   `subscriptions/0`, `schedules/0`, `capabilities/0`, `requires/0`,
-  `schema/0`, `config_schema/0`, `singleton?/0`, `manifest/0`,
-  `plugin_spec/1`, `__plugin_metadata__/0`, plus a `defoverridable`
-  block over the 17-function override surface.
+  `schema/0`, `config_schema/0`, `manifest/0`, `plugin_spec/1`,
+  `__plugin_metadata__/0`, plus a `defoverridable` block over the
+  16-function override surface. `actions/0` is derived from
+  `signal_routes/0`.
   """
 
-  alias Jido.Slice.ActionEntry
   alias Jido.Slice.CapabilityEntry
   alias Jido.Slice.RequiresEntry
   alias Jido.Slice.RouteEntry
@@ -56,24 +54,8 @@ defmodule Jido.Dsl.Slice do
         type: :any,
         doc: "Zoi schema for per-agent configuration."
       ],
-      tags: [type: {:list, :string}, default: []],
-      singleton: [type: :boolean, default: false]
+      tags: [type: {:list, :string}, default: []]
     ]
-  }
-
-  @action_entity %Spark.Dsl.Entity{
-    name: :action,
-    describe: "Declares an action module owned by this slice.",
-    target: ActionEntry,
-    args: [:module],
-    no_depend_modules: [:module],
-    schema: [module: [type: :atom, required: true]]
-  }
-
-  @actions_section %Spark.Dsl.Section{
-    name: :actions,
-    describe: "Action modules contributed by this slice.",
-    entities: [@action_entity]
   }
 
   @route %Spark.Dsl.Entity{
@@ -171,7 +153,6 @@ defmodule Jido.Dsl.Slice do
   use Spark.Dsl.Extension,
     sections: [
       @slice_section,
-      @actions_section,
       @signal_routes_section,
       @subscriptions_section,
       @schedules_section,

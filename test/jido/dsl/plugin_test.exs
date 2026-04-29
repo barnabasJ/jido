@@ -32,10 +32,6 @@ defmodule Jido.Dsl.PluginTest do
       schema Zoi.object(%{enabled: Zoi.boolean() |> Zoi.default(true)})
     end
 
-    actions do
-      action JidoTest.PluginTestAction
-    end
-
     signal_routes do
       route "plugin.fired", JidoTest.PluginTestAction
     end

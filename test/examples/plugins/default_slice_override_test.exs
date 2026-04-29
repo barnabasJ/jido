@@ -27,7 +27,6 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
     slice do
       name "custom_thread"
       path :thread
-      singleton true
 
       schema(
         Zoi.object(%{

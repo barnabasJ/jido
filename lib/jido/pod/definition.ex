@@ -82,7 +82,7 @@ defmodule Jido.Pod.Definition do
     if pod_plugins == [] do
       raise CompileError,
         description:
-          "Jido.Pod requires a singleton pod plugin under #{@pod_state_key}. " <>
+          "Jido.Pod requires a pod plugin under #{@pod_state_key}. " <>
             "Replace it with `default_slices: %{#{@pod_state_key}: YourPlugin}` instead of disabling it.",
         file: caller_env.file,
         line: caller_env.line
@@ -134,12 +134,6 @@ defmodule Jido.Pod.Definition do
       end
 
     cond do
-      not instance.manifest.singleton ->
-        raise CompileError,
-          description: "#{inspect(mod)} must be a singleton plugin to replace the pod plugin.",
-          file: caller_env.file,
-          line: caller_env.line
-
       instance.path != @pod_state_key ->
         raise CompileError,
           description:

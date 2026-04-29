@@ -39,10 +39,6 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
       path :router_plugin
     end
 
-    actions do
-      action JidoTest.AgentServer.SignalRouterTest.TestAction
-    end
-
     signal_routes do
       route "plugin.custom", JidoTest.AgentServer.SignalRouterTest.TestAction
       route "plugin.priority", JidoTest.AgentServer.SignalRouterTest.TestAction, priority: -20
@@ -56,10 +52,6 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
     slice do
       name "plugin_without_routes"
       path :no_route_plugin
-    end
-
-    actions do
-      action JidoTest.AgentServer.SignalRouterTest.TestAction
     end
   end
 

@@ -92,7 +92,6 @@ defmodule JidoTest.SliceTest do
       assert MinimalSlice.tags() == []
       assert MinimalSlice.capabilities() == []
       assert MinimalSlice.signal_routes() == []
-      assert MinimalSlice.singleton?() == false
     end
 
     test "full slice exposes every metadata field" do

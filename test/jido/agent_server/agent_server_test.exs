@@ -1117,10 +1117,6 @@ defmodule JidoTest.AgentServerTest do
         path :scheduled_plugin
       end
 
-      actions do
-        action ScheduledAction
-      end
-
       schedules do
         schedule "* * * * *", ScheduledAction
       end

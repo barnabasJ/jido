@@ -2,14 +2,15 @@ defmodule Jido.Dsl.Slice.Transformers.GenerateAccessors do
   @moduledoc """
   Final transformer in the slice DSL pipeline.
 
-  Reads the seven sections defined by `Jido.Dsl.Slice` and emits, into
+  Reads the six sections defined by `Jido.Dsl.Slice` and emits, into
   the user's slice / plugin module, the same compile-time accessor
   surface today's `Jido.Slice.__using__/1` macro emits — `name/0`,
   `path/0`, `actions/0`, `description/0`, `category/0`, `vsn/0`,
   `otp_app/0`, `schema/0`, `config_schema/0`, `tags/0`, `capabilities/0`,
-  `singleton?/0`, `requires/0`, `signal_routes/0`, `subscriptions/0`,
-  `schedules/0`, `manifest/0`, `plugin_spec/1`, `__plugin_metadata__/0`,
-  plus the 16-function `defoverridable` block.
+  `requires/0`, `signal_routes/0`, `subscriptions/0`, `schedules/0`,
+  `manifest/0`, `plugin_spec/1`, `__plugin_metadata__/0`, plus the
+  15-function `defoverridable` block. `actions/0` is derived from
+  `signal_routes/0` at compile time.
   """
 
   use Spark.Dsl.Transformer
@@ -46,7 +47,6 @@ defmodule Jido.Dsl.Slice.Transformers.GenerateAccessors do
       schema: Spark.Dsl.Extension.get_opt(dsl_state, [:slice], :schema),
       config_schema: Spark.Dsl.Extension.get_opt(dsl_state, [:slice], :config_schema),
       tags: Spark.Dsl.Extension.get_opt(dsl_state, [:slice], :tags) || [],
-      singleton: Spark.Dsl.Extension.get_opt(dsl_state, [:slice], :singleton) || false,
       actions: collect_actions(dsl_state),
       signal_routes: collect_signal_routes(dsl_state),
       subscriptions: collect_subscriptions(dsl_state),
@@ -58,8 +58,10 @@ defmodule Jido.Dsl.Slice.Transformers.GenerateAccessors do
 
   defp collect_actions(dsl_state) do
     dsl_state
-    |> Spark.Dsl.Extension.get_entities([:actions])
-    |> Enum.map(& &1.module)
+    |> Spark.Dsl.Extension.get_entities([:signal_routes])
+    |> Enum.map(& &1.action)
+    |> Enum.filter(&is_atom/1)
+    |> Enum.uniq()
   end
 
   defp collect_signal_routes(dsl_state) do
@@ -151,7 +153,6 @@ defmodule Jido.Dsl.Slice.Transformers.GenerateAccessors do
       @jido_slice_schema unquote(Macro.escape(state.schema))
       @jido_slice_config_schema unquote(Macro.escape(state.config_schema))
       @jido_slice_tags unquote(Macro.escape(state.tags))
-      @jido_slice_singleton unquote(state.singleton)
       @jido_slice_actions unquote(Macro.escape(state.actions))
       @jido_slice_signal_routes unquote(Macro.escape(state.signal_routes))
       @jido_slice_subscriptions unquote(Macro.escape(state.subscriptions))
@@ -198,10 +199,6 @@ defmodule Jido.Dsl.Slice.Transformers.GenerateAccessors do
       @doc "Returns the slice's tags."
       @spec tags() :: [String.t()]
       def tags, do: @jido_slice_tags
-
-      @doc "Returns whether this slice is a singleton."
-      @spec singleton?() :: boolean()
-      def singleton?, do: @jido_slice_singleton
     end
   end
 
@@ -257,8 +254,7 @@ defmodule Jido.Dsl.Slice.Transformers.GenerateAccessors do
           signal_routes: signal_routes(),
           subscriptions: subscriptions(),
           schedules: schedules(),
-          signal_patterns: [],
-          singleton: singleton?()
+          signal_patterns: []
         }
       end
 
@@ -311,7 +307,6 @@ defmodule Jido.Dsl.Slice.Transformers.GenerateAccessors do
                      config_schema: 0,
                      tags: 0,
                      capabilities: 0,
-                     singleton?: 0,
                      requires: 0,
                      signal_routes: 0,
                      subscriptions: 0,

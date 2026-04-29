@@ -1,16 +1,15 @@
 defmodule Jido.Identity.Slice do
   @moduledoc """
-  Default singleton slice for identity state management.
+  Default slice for identity state management.
 
   Owns the `:identity` slice key in agent state. The slice does not
   initialize an identity by default — identities are created on demand via
   `Jido.Identity.Agent.ensure/2`.
 
-  ## Singleton
+  ## Default slice
 
-  This slice is a singleton — it cannot be aliased or duplicated. It is
-  automatically included as a default slice for all agents unless explicitly
-  disabled:
+  This slice is automatically included as a default slice for all agents
+  unless explicitly disabled:
 
       use Jido.Agent,
         name: "minimal",
@@ -29,7 +28,6 @@ defmodule Jido.Identity.Slice do
     name "identity"
     path :identity
     description "Identity state management for agent self-model."
-    singleton true
   end
 
   capabilities do

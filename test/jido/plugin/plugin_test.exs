@@ -13,8 +13,8 @@ defmodule JidoTest.PluginTest do
       path :basic
     end
 
-    actions do
-      action JidoTest.PluginTestAction
+    signal_routes do
+      route "basic.do", JidoTest.PluginTestAction
     end
   end
 
@@ -31,11 +31,6 @@ defmodule JidoTest.PluginTest do
       schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
       config_schema Zoi.object(%{enabled: Zoi.boolean() |> Zoi.default(true)})
       tags ["test", "full"]
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
-      action JidoTest.PluginTestAnotherAction
     end
 
     capabilities do
@@ -58,21 +53,6 @@ defmodule JidoTest.PluginTest do
     end
   end
 
-  defmodule SingletonPlugin do
-    @moduledoc false
-    use Jido.Plugin
-
-    slice do
-      name "singleton_plugin"
-      path :singleton_state
-      singleton true
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
-    end
-  end
-
   describe "plugin definition with required fields" do
     test "defines a basic plugin with required fields" do
       assert BasicPlugin.name() == "basic_plugin"
@@ -89,7 +69,6 @@ defmodule JidoTest.PluginTest do
       assert BasicPlugin.tags() == []
       assert BasicPlugin.capabilities() == []
       assert BasicPlugin.requires() == []
-      assert BasicPlugin.signal_routes() == []
       assert BasicPlugin.schedules() == []
     end
   end
@@ -207,10 +186,6 @@ defmodule JidoTest.PluginTest do
           slice do
             path :missing
           end
-
-          actions do
-            action JidoTest.PluginTestAction
-          end
         end
       end
     end
@@ -222,10 +197,6 @@ defmodule JidoTest.PluginTest do
 
           slice do
             name "missing_path"
-          end
-
-          actions do
-            action JidoTest.PluginTestAction
           end
         end
       end
@@ -239,10 +210,6 @@ defmodule JidoTest.PluginTest do
           slice do
             name "invalid-name-with-dashes"
             path :invalid
-          end
-
-          actions do
-            action JidoTest.PluginTestAction
           end
         end
       end
@@ -266,7 +233,6 @@ defmodule JidoTest.PluginTest do
       assert manifest.tags == []
       assert manifest.capabilities == []
       assert manifest.requires == []
-      assert manifest.signal_routes == []
       assert manifest.schedules == []
     end
 
@@ -341,7 +307,7 @@ defmodule JidoTest.PluginTest do
     end
 
     test "signal_routes/0 returns correct values" do
-      assert BasicPlugin.signal_routes() == []
+      assert BasicPlugin.signal_routes() == [{"basic.do", JidoTest.PluginTestAction}]
 
       assert FullPlugin.signal_routes() == [
                {"post", JidoTest.PluginTestAction},
@@ -352,22 +318,6 @@ defmodule JidoTest.PluginTest do
     test "schedules/0 returns correct values" do
       assert BasicPlugin.schedules() == []
       assert FullPlugin.schedules() == [{"*/5 * * * *", JidoTest.PluginTestAction}]
-    end
-  end
-
-  describe "singleton option" do
-    test "singleton defaults to false for regular plugins" do
-      refute BasicPlugin.singleton?()
-      refute FullPlugin.singleton?()
-    end
-
-    test "singleton? returns true when configured" do
-      assert SingletonPlugin.singleton?()
-    end
-
-    test "singleton is included in manifest" do
-      assert SingletonPlugin.manifest().singleton == true
-      assert BasicPlugin.manifest().singleton == false
     end
   end
 end

@@ -13,10 +13,6 @@ defmodule JidoTest.Memory.SliceTest do
       assert MemorySlice.path() == :memory
     end
 
-    test "is singleton" do
-      assert MemorySlice.singleton?() == true
-    end
-
     test "has memory capability" do
       assert :memory in MemorySlice.capabilities()
     end
@@ -31,11 +27,6 @@ defmodule JidoTest.Memory.SliceTest do
   end
 
   describe "manifest" do
-    test "singleton is true in manifest" do
-      manifest = MemorySlice.manifest()
-      assert manifest.singleton == true
-    end
-
     test "path is :memory in manifest" do
       manifest = MemorySlice.manifest()
       assert manifest.path == :memory

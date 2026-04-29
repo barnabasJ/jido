@@ -27,11 +27,6 @@ defmodule Jido.Slice do
           })
         end
 
-        actions do
-          action MyApp.Actions.SendMessage
-          action MyApp.Actions.ListHistory
-        end
-
         signal_routes do
           route "chat.send", MyApp.Actions.SendMessage
           route "chat.history", MyApp.Actions.ListHistory
@@ -41,14 +36,15 @@ defmodule Jido.Slice do
   ## Sections
 
   - `slice do … end` — slice identity (`name`, `path`, `description`,
-    `category`, `vsn`, `otp_app`, `schema`, `config_schema`, `tags`,
-    `singleton`).
-  - `actions do … end` — `action ModuleAction` entries.
+    `category`, `vsn`, `otp_app`, `schema`, `config_schema`, `tags`).
   - `signal_routes do … end` — `route "type", Action, opts` entries.
   - `subscriptions do … end` — `subscription Sensor, %{config}` entries.
   - `schedules do … end` — `schedule "cron", Action, %{data}` entries.
   - `capabilities do … end` — `capability :name` entries.
   - `requires do … end` — `requires :kind, :name` entries.
+
+  `actions/0` is derived from the `signal_routes` table — there is no
+  separate `actions` section.
   """
 
   use Spark.Dsl, default_extensions: [extensions: [Jido.Dsl.Slice]]

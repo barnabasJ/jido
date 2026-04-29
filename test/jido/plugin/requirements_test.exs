@@ -12,10 +12,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
       name "no_requires"
       path :no_requires
     end
-
-    actions do
-      action JidoTest.PluginTestAction
-    end
   end
 
   defmodule PluginWithConfigRequires do
@@ -25,10 +21,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
     slice do
       name "config_requires"
       path :config_requires
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
     end
 
     requires do
@@ -46,10 +38,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
       path :app_requires
     end
 
-    actions do
-      action JidoTest.PluginTestAction
-    end
-
     requires do
       requires :app, :elixir
     end
@@ -62,10 +50,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
     slice do
       name "missing_app_requires"
       path :missing_app_requires
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
     end
 
     requires do
@@ -82,10 +66,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
       path :plugin_requires
     end
 
-    actions do
-      action JidoTest.PluginTestAction
-    end
-
     requires do
       requires :plugin, "no_requires"
     end
@@ -98,10 +78,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
     slice do
       name "mixed_requires"
       path :mixed_requires
-    end
-
-    actions do
-      action JidoTest.PluginTestAction
     end
 
     requires do

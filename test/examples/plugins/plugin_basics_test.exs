@@ -69,11 +69,6 @@ defmodule JidoExampleTest.PluginBasicsTest do
       schema Zoi.object(%{entries: Zoi.list(Zoi.any()) |> Zoi.default([])})
     end
 
-    actions do
-      action JidoExampleTest.PluginBasicsTest.AddNoteAction
-      action JidoExampleTest.PluginBasicsTest.ClearNotesAction
-    end
-
     def mount(_agent, config) do
       label = Map.get(config, :label, "default")
       {:ok, %{label: label}}

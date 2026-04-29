@@ -203,9 +203,9 @@ defmodule Jido.Plugin.Routes do
 
   defp expand_legacy_routes(manifest, prefix) do
     patterns = manifest.signal_patterns || []
-    actions = manifest.actions || []
+    action_modules = manifest.actions || []
 
-    for pattern <- patterns, action <- actions do
+    for pattern <- patterns, action <- action_modules do
       prefixed_pattern = prefix_path(prefix, pattern)
       {prefixed_pattern, action, []}
     end

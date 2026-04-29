@@ -53,11 +53,6 @@ defmodule JidoTest.Plugin.SchedulesTest do
       path :scheduled
     end
 
-    actions do
-      action RefreshTokenAction
-      action DailyDigestAction
-    end
-
     schedules do
       schedule "*/5 * * * *", RefreshTokenAction
       schedule "0 9 * * 1-5", DailyDigestAction, tz: "America/New_York"
@@ -73,10 +68,6 @@ defmodule JidoTest.Plugin.SchedulesTest do
       path :custom_signal
     end
 
-    actions do
-      action CleanupAction
-    end
-
     schedules do
       schedule "0 0 * * *", CleanupAction, signal: "maintenance.cleanup"
     end
@@ -89,10 +80,6 @@ defmodule JidoTest.Plugin.SchedulesTest do
     slice do
       name "no_schedules"
       path :no_schedules
-    end
-
-    actions do
-      action RefreshTokenAction
     end
   end
 

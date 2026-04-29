@@ -2093,9 +2093,9 @@ defmodule Jido.AgentServer do
     %{agent_module: agent_module, agent: agent, __signal_router__: router} = ctx
 
     case route_to_actions(router, signal) do
-      {:ok, actions} ->
+      {:ok, targets} ->
         action_arg =
-          case actions do
+          case targets do
             [single] -> single
             list when is_list(list) -> list
           end

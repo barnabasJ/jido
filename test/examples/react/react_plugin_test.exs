@@ -81,12 +81,6 @@ defmodule JidoExampleTest.ReactPluginTest do
           )
         end
 
-        actions do
-          action ReAct.StartQuery
-          action ReAct.LLMEmitted
-          action ReAct.ToolCompleted
-        end
-
         def signal_routes(_config) do
           [
             {"react.user_query", ReAct.StartQuery},

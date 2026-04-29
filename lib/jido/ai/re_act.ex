@@ -116,13 +116,6 @@ defmodule Jido.AI.ReAct do
                   |> Zoi.transform({__MODULE__, :__fold_llm_opts__, []})
   end
 
-  actions do
-    action Actions.Ask
-    action Actions.LLMTurn
-    action Actions.ToolResult
-    action Actions.Failed
-  end
-
   signal_routes do
     route "ai.react.ask", Actions.Ask
     route "ai.react.llm.completed", Actions.LLMTurn

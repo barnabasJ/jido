@@ -101,9 +101,9 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       schema Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
     end
 
-    actions do
-      action JidoTest.AgentPluginIntegrationTest.IncrementAction
-      action JidoTest.AgentPluginIntegrationTest.DecrementAction
+    signal_routes do
+      route "increment", JidoTest.AgentPluginIntegrationTest.IncrementAction
+      route "decrement", JidoTest.AgentPluginIntegrationTest.DecrementAction
     end
   end
 
@@ -118,8 +118,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       schema Zoi.object(%{last_greeting: Zoi.string() |> Zoi.optional()})
     end
 
-    actions do
-      action JidoTest.AgentPluginIntegrationTest.GreetAction
+    signal_routes do
+      route "greet", JidoTest.AgentPluginIntegrationTest.GreetAction
     end
   end
 
@@ -142,8 +142,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       schema Zoi.object(%{status: Zoi.atom() |> Zoi.default(:ready)})
     end
 
-    actions do
-      action JidoTest.AgentPluginIntegrationTest.SimpleAction
+    signal_routes do
+      route "configurable.run", JidoTest.AgentPluginIntegrationTest.SimpleAction
     end
   end
 
@@ -157,8 +157,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       schema Zoi.object(%{current_mode: Zoi.atom() |> Zoi.default(:normal)})
     end
 
-    actions do
-      action JidoTest.AgentPluginIntegrationTest.SetModeAction
+    signal_routes do
+      route "set_mode", JidoTest.AgentPluginIntegrationTest.SetModeAction
     end
   end
 
@@ -171,8 +171,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       path :minimal
     end
 
-    actions do
-      action JidoTest.AgentPluginIntegrationTest.SimpleAction
+    signal_routes do
+      route "minimal.run", JidoTest.AgentPluginIntegrationTest.SimpleAction
     end
   end
 
@@ -556,10 +556,11 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       assert capabilities == []
     end
 
-    test "signal_types/0 returns empty list for agents without routes" do
+    test "signal_types/0 reflects routes contributed by plugins" do
       signal_types = SinglePluginAgent.signal_types()
 
-      assert signal_types == []
+      assert "counter_plugin.increment" in signal_types
+      assert "counter_plugin.decrement" in signal_types
     end
   end
 
@@ -575,10 +576,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       slice do
         name "slack_cap"
         path :slack_cap
-      end
-
-      actions do
-        action JidoTest.AgentPluginIntegrationTest.SimpleAction
       end
 
       signal_routes do
@@ -599,10 +596,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
       slice do
         name "openai_cap"
         path :openai_cap
-      end
-
-      actions do
-        action JidoTest.AgentPluginIntegrationTest.SimpleAction
       end
 
       signal_routes do
@@ -867,9 +860,9 @@ defmodule JidoTest.AgentPluginIntegrationTest do
           path :dup
         end
 
-        actions do
-          action JidoTest.AgentPluginIntegrationTest.SimpleAction
-          action JidoTest.AgentPluginIntegrationTest.SimpleAction
+        signal_routes do
+          route "first", JidoTest.AgentPluginIntegrationTest.SimpleAction
+          route "second", JidoTest.AgentPluginIntegrationTest.SimpleAction
         end
       end
 
@@ -898,8 +891,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
           path :shared_a
         end
 
-        actions do
-          action JidoTest.AgentPluginIntegrationTest.SimpleAction
+        signal_routes do
+          route "shared_a.run", JidoTest.AgentPluginIntegrationTest.SimpleAction
         end
       end
 
@@ -911,8 +904,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
           path :shared_b
         end
 
-        actions do
-          action JidoTest.AgentPluginIntegrationTest.SimpleAction
+        signal_routes do
+          route "shared_b.run", JidoTest.AgentPluginIntegrationTest.SimpleAction
         end
       end
 
@@ -962,8 +955,8 @@ defmodule JidoTest.AgentPluginIntegrationTest do
                })
       end
 
-      actions do
-        action JidoTest.AgentPluginIntegrationTest.SimpleAction
+      signal_routes do
+        route "slack.send", JidoTest.AgentPluginIntegrationTest.SimpleAction
       end
     end
 

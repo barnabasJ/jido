@@ -1,16 +1,15 @@
 defmodule Jido.Memory.Slice do
   @moduledoc """
-  Default singleton slice for memory state management.
+  Default slice for memory state management.
 
   Owns the `:memory` slice key in agent state. The slice does not initialize
   memory by default — memory is created on demand via
   `Jido.Memory.Agent.ensure/2`.
 
-  ## Singleton
+  ## Default slice
 
-  This slice is a singleton — it cannot be aliased or duplicated. It is
-  automatically included as a default slice for all agents unless explicitly
-  disabled:
+  This slice is automatically included as a default slice for all agents
+  unless explicitly disabled:
 
       use Jido.Agent,
         name: "minimal",
@@ -34,7 +33,6 @@ defmodule Jido.Memory.Slice do
     name "memory"
     path :memory
     description "Memory state management for agent cognitive state."
-    singleton true
   end
 
   capabilities do

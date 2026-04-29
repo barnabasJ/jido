@@ -13,10 +13,6 @@ defmodule JidoTest.Thread.SliceTest do
       assert ThreadSlice.path() == :thread
     end
 
-    test "is singleton" do
-      assert ThreadSlice.singleton?() == true
-    end
-
     test "has thread capability" do
       assert :thread in ThreadSlice.capabilities()
     end
@@ -31,11 +27,6 @@ defmodule JidoTest.Thread.SliceTest do
   end
 
   describe "manifest" do
-    test "singleton is true in manifest" do
-      manifest = ThreadSlice.manifest()
-      assert manifest.singleton == true
-    end
-
     test "path is :thread in manifest" do
       manifest = ThreadSlice.manifest()
       assert manifest.path == :thread

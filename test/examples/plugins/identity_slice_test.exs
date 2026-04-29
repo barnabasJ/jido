@@ -3,7 +3,7 @@ defmodule JidoExampleTest.IdentitySliceTest do
   Example test demonstrating Identity as a default slice.
 
   This test shows:
-  - Every agent gets `Jido.Identity.Slice` automatically (default singleton slice)
+  - Every agent gets `Jido.Identity.Slice` automatically (default slice)
   - Using `Jido.Identity.Agent` and related helpers: `ensure/2`, profile management
   - Snapshot for sharing identity with other agents
   - Evolving identity over simulated time via `Jido.Identity.evolve/2` and the Evolve action
@@ -32,7 +32,6 @@ defmodule JidoExampleTest.IdentitySliceTest do
     slice do
       name "custom_identity"
       path :identity
-      singleton true
       description "Custom identity slice override."
     end
   end
@@ -89,7 +88,7 @@ defmodule JidoExampleTest.IdentitySliceTest do
   # TESTS: Default identity slice
   # ===========================================================================
 
-  describe "identity slice is a default singleton" do
+  describe "identity slice is a default slice" do
     test "new agent has no identity until initialized on demand" do
       agent = WebCrawlerAgent.new()
 

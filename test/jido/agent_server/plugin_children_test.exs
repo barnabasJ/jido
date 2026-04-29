@@ -23,10 +23,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
       name "no_child_plugin"
       path :no_child
     end
-
-    actions do
-      action JidoTest.AgentServer.PluginChildrenTest.SimpleAction
-    end
   end
 
   # Plugin that starts a single Agent as a child
@@ -37,10 +33,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     slice do
       name "single_child_plugin"
       path :single_child
-    end
-
-    actions do
-      action JidoTest.AgentServer.PluginChildrenTest.SimpleAction
     end
 
     def child_spec(config) do
@@ -63,10 +55,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
       path :multi_child
     end
 
-    actions do
-      action JidoTest.AgentServer.PluginChildrenTest.SimpleAction
-    end
-
     def child_spec(config) do
       count = config[:count] || 2
 
@@ -87,10 +75,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
     slice do
       name "invalid_child_spec_plugin"
       path :invalid_child
-    end
-
-    actions do
-      action JidoTest.AgentServer.PluginChildrenTest.SimpleAction
     end
 
     def child_spec(_config) do

@@ -15,10 +15,6 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
       name "sample_plugin"
       path :sample_plugin
     end
-
-    actions do
-      action JidoTest.PluginTestAction
-    end
   end
 
   defmodule SampleSlice do
