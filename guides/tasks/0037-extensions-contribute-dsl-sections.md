@@ -1,6 +1,6 @@
 ---
 name: Task 0037 — Slices / plugins / middleware contribute DSL sections to host agents (Ash-style extensions)
-description: Make `use Jido.Agent, extensions: [Jido.AI.ReAct, Jido.Memory.Slice]` unlock per-extension DSL blocks (`react do … end`, `memory do … end`) on the host agent. Each slice / plugin module declares the section it wants to contribute via the `Jido.Slice.Extension` macro (`use Jido.Slice.Extension, host_section: :react`); the macro auto-translates the slice's `config_schema/0` into a Spark section schema. Task 0034's `WalkExtensions` transformer reads the typed-block config out of the host's DSL state — there's no separate "merge contributed" transformer in this task. `Jido.AI.ReAct` is the canonical example and migrates as part of this task.
+description: Make `use Jido.Agent, extensions: [Jido.AI.ReAct, Jido.Memory.Slice]` unlock per-extension DSL blocks (`react do … end`, `memory do … end`) on the host agent. Each slice / plugin module declares the section it wants to contribute via the `Jido.Slice.Extension` macro (`use Jido.Slice.Extension, host_section: :react`); the macro auto-translates the slice's `config_schema/0` into a Spark section schema. Task 0034's `WalkExtensions` transformer reads the typed-block config out of the host's DSL state — there's no separate "merge contributed" transformer in this task. `Jido.AI.ReAct` is the canonical example and migrates as part of this task. **Also deletes every transitional helper left in tree from tasks 0033 – 0036**: `Jido.Dsl.Agent.LegacyTranslator`, the dead `@agent_config_schema` Zoi schema, and the `# task 0034 / 0035` qualifiers on moduledocs. After this commit the codebase reads as if Spark + the per-DSL info modules were the surface from day one.
 ---
 
 # Task 0037 — Slices contribute DSL sections to host agents
@@ -306,9 +306,69 @@ named `X` whose schema is auto-translated from its
   block filled in, asserts the resulting middleware-chain
   composition matches the keyword-list order.
 
-## Files to delete
+## Cleanup of legacy / migration helpers
 
-None.
+Tasks 0033 – 0036 left a few transitional helpers in tree so the
+pod surface kept compiling while the agent surface ported to Spark.
+With the contribution mechanism in place, every host module can
+declare its surface natively and we can delete the transitional
+pieces. **No legacy / migration helpers remain after this task.**
+
+### Migrate `lib/jido/pod.ex` to the sectioned DSL
+
+`Jido.Pod.__using__/1` currently reads its keyword opts and feeds
+them through `Jido.Dsl.Agent.LegacyTranslator.quoted_agent_use/1`,
+which converts the keyword form into the new sectioned blocks. That
+shim was scaffolding — once Pod itself uses the sectioned form
+directly (`use Jido.Pod` plus `pod do … end`, `agent do … end`,
+`signal_routes do … end`, etc.), the shim has no callers.
+
+Concretely:
+
+1. Make `Jido.Pod` a `Spark.Dsl` host (`use Spark.Dsl,
+   default_extensions: [extensions: [Jido.Dsl.Pod]]`) with its own
+   typed `pod do … end` section for `topology:` (and any other
+   pod-specific options). Re-export the agent / signal_routes /
+   schedules sections so the user writes a single sectioned module.
+2. Migrate every in-tree `use Jido.Pod, …` site (lib/ and test/) to
+   the sectioned form.
+3. Drop the `Jido.Pod.__using__/1` body's call to `LegacyTranslator`
+   and the `extensions: [...] = …` resolution; the Spark host gives
+   us all of that for free.
+
+### Files to delete
+
+- **`lib/jido/dsl/agent/legacy_translator.ex`** — only consumer was
+  `Jido.Pod.__using__/1`. Once Pod is on the sectioned DSL, this
+  module has no callers and is removed.
+- **`lib/jido/agent.ex` `@agent_config_schema` Zoi schema and
+  `config_schema/0`** (lines ~212 – 285) — the agent now declares
+  its surface via `Jido.Dsl.Agent`'s section schema; the standalone
+  Zoi schema and the `Jido.Agent.config_schema/0` accessor are dead.
+  `Spark.Dsl.Extension.get_opt/3` and the per-DSL info modules are
+  the only supported way to read agent metadata.
+
+### Stale doc references to remove
+
+- `lib/jido/agent.ex` moduledoc — remove the `(Spark DSL — task
+  0034)` qualifier on the example heading and the "Per-extension
+  typed sections … land in task 0035" paragraph; both are
+  transitional notes.
+- `lib/jido/dsl/agent.ex` moduledoc — remove the "Per-extension
+  typed sections (e.g. `memory do … end`, `slack do … end`) arrive
+  in task 0035 once `use Jido.Slice` / `use Jido.Plugin` /
+  `use Jido.Middleware` themselves register Spark sections" note.
+- `lib/jido/dsl/agent/verifiers/no_section_name_collisions.ex`
+  moduledoc — remove the "For task 0034 the registered extensions
+  don't yet contribute their own typed sections — they will once
+  task 0035 lands" note. By task 0037 they do.
+
+The verifier itself stays — it just now describes how it
+*currently* behaves, not what's coming.
+
+### Files to delete (summary)
+
+- `lib/jido/dsl/agent/legacy_translator.ex`
 
 ## Acceptance
 
@@ -318,6 +378,16 @@ None.
 - `mix dialyzer` clean.
 - `mix test` clean.
 - `mix test --include e2e` clean.
+- **No legacy / migration helpers remain.** `git grep` for the
+  following must return zero in `lib/`:
+
+      LegacyTranslator
+      legacy_translator
+      @agent_config_schema
+      Jido.Agent.config_schema(
+
+  Tree reads as if Spark + the per-DSL info modules were the
+  surface from day one — no transitional shims.
 
 The new tests cover:
 

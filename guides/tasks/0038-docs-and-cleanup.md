@@ -1,6 +1,6 @@
 ---
 name: Task 0038 — Docs, cheat sheets, migration guide; flip ADR 0023 status to Implemented
-description: Run `mix spark.cheat_sheets` to generate per-DSL reference pages under `documentation/dsls/`, wire those into `mix.exs`'s ExDoc config, refresh `guides/agents.md` / `guides/slices.md` / `guides/middleware.md` / `guides/plugins.md` / `guides/your-first-plugin.md` to use sectioned-DSL examples, write a `guides/migration-spark-dsl.md` that walks one in-tree agent and one in-tree slice through the keyword-form → DSL conversion, run `mix spark.formatter` to commit per-DSL `.formatter.exs` entries, and flip `Status: Proposed → Accepted; Implementation: Pending → Complete` in [ADR 0023](../adr/0023-spark-dsl-and-registerable-extensions.md). Final cleanup commit; tree green.
+description: Run `mix spark.cheat_sheets` to generate per-DSL reference pages under `documentation/dsls/`, wire those into `mix.exs`'s ExDoc config, refresh `guides/agents.md` / `guides/slices.md` / `guides/middleware.md` / `guides/plugins.md` / `guides/your-first-plugin.md` to use sectioned-DSL examples, write a `guides/migration-spark-dsl.md` that walks one in-tree agent and one in-tree slice through the keyword-form → DSL conversion, run `mix spark.formatter` to commit per-DSL `.formatter.exs` entries, and flip `Status: Proposed → Accepted; Implementation: Pending → Complete` in [ADR 0023](../adr/0023-spark-dsl-and-registerable-extensions.md). **Also strips the doc-side residue of the migration**: stale `task 003N` qualifiers in moduledocs, "legacy keyword form" mentions in guides and runtime errors, and any `# transitional / # legacy / # backwards compat` comments. After this commit the only remaining record of the migration journey lives in commit messages and the task / ADR files; the rest of the tree reads as a clean slate.
 ---
 
 # Task 0038 — Docs, cheat sheets, ADR status flip
@@ -190,12 +190,68 @@ A new guide that walks through:
 
 Length target: 400–600 lines including code blocks.
 
-## Files to delete
+## Cleanup of legacy / migration references in docs and tests
+
+Tasks 0033 – 0037 leave the **code** clean — task 0037 deletes the
+last of the transitional shims (LegacyTranslator, the dead
+`@agent_config_schema`, etc.). What survives in 0038 is the
+**doc-side** residue: stale `task 003N` qualifiers, "legacy keyword
+form" mentions, and any `# task 003N` comments that document the
+journey rather than the destination.
+
+After this task, the codebase reads as if Spark + the per-DSL info
+modules were the surface from day one. **No legacy keyword form
+documentation, no transitional `task 003N` callouts, no migration
+helpers.**
+
+### Strip transitional task references
+
+`git grep -nE "task 003[0-9]"` should return only the entries in
+`guides/tasks/` and `guides/adr/` (the canonical task / ADR docs).
+Strip every other occurrence — moduledoc qualifiers, code comments,
+`# see task 0034` cross-references — and rewrite the surrounding
+sentence so it reads as a stable description, not a migration log.
+Same treatment for any `# legacy`, `# transitional`, `# migration`,
+`# backwards compat`, or `# pre-0023` markers.
+
+### Drop migration-era hints from runtime errors
+
+Search for runtime errors / log messages that reference the legacy
+keyword form (`use Jido.X, name: …`). Rewrite each to describe only
+the sectioned form. Examples likely to surface: anything that
+suggests "did you mean `slices: [...]`" or "the plugin macro …" —
+all rewrite to the section equivalent.
+
+### `usage-rules.md`
+
+Verify zero remaining references to the keyword form. Same for
+`README.md` and the top-level `lib/jido.ex` / `lib/jido/agent.ex` /
+`lib/jido/slice.ex` / etc. moduledocs.
+
+### Re-audit info-module access path
+
+The codebase reads agent / slice / plugin / middleware / action /
+sensor metadata via the per-DSL info modules
+(`Spark.InfoGenerator`-generated). Run `git grep -nE
+"\.config_schema\(\)|\.spec\(\)\.config|@agent_config_schema|@\w+_config_schema"`
+and replace any direct attribute reads with the info-module call
+that supersedes them. The goal is one canonical path:
+**`Jido.Dsl.<Kind>.Info.<accessor>(module)`** for every DSL field
+read at runtime.
+
+If any direct accessor (e.g. `module.name()`, `module.path()`)
+remains as the documented path because it's part of the public API
+the runtime depends on, that's fine — keep it. The cleanup is
+about removing **redundant** legacy paths, not the public surface.
+
+### Files to delete
 
 - Any obsolete `guides/spark-cheat-sheet.md` placeholder (none today).
 - Any guide example that referenced retired `state_key:` or
   `default_plugins:` shapes that this round of refreshes also
   removes.
+- Any `# TODO(adr-0023)`, `# task 003N`, or "legacy keyword form"
+  comments that survived task 0037.
 
 ## Acceptance
 
@@ -212,6 +268,24 @@ Length target: 400–600 lines including code blocks.
   `migration-spark-dsl.md` compiles when copy-pasted into a fresh
   project test file.
 - ADR 0023 front matter is updated in the same commit.
+- **Codebase reads as a clean slate.** `git grep` for the following
+  in `lib/` and the non-`guides/tasks` `guides/` content must return
+  zero — the migration journey lives in commit messages and the
+  task files only:
+
+      task 003
+      LegacyTranslator
+      legacy keyword form
+      use Jido.Agent, name:
+      use Jido.Slice, name:
+      use Jido.Plugin, name:
+      use Jido.Middleware, name:
+      use Jido.Action, name:
+      use Jido.Sensor, name:
+      @\w+_config_schema
+
+  Surviving grep hits in `guides/tasks/` and `guides/adr/` are
+  expected (those are the canonical task / ADR records).
 
 ## Out of scope
 
