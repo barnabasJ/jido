@@ -4,7 +4,8 @@
 - Implementation: Pending
 - Date: 2026-04-28
 - Related ADRs: [0014](0014-slice-middleware-plugin.md) (the Slice / Middleware / Plugin split), [0022](0022-llm-agents-inlined-jido-ai-namespace.md) (LLM agent surface that benefits most from per-extension DSL sections), [0019](0019-actions-mutate-state-directives-do-side-effects.md), [0021](0021-no-full-state-no-polling.md).
-- Implementation tasks: [0033](../tasks/0033-spark-dep-and-jido-dsl-scaffold.md), [0034](../tasks/0034-port-jido-agent-to-spark.md), [0035](../tasks/0035-port-slice-plugin-middleware-to-spark.md), [0036](../tasks/0036-port-action-and-sensor-to-spark.md), [0037](../tasks/0037-extensions-contribute-dsl-sections.md), [0038](../tasks/0038-docs-and-cleanup.md).
+- Implementation tasks: [0033](../tasks/0033-spark-dep-and-jido-dsl-scaffold.md), [0034](../tasks/0034-port-jido-agent-to-spark.md), [0035](../tasks/0035-port-slice-plugin-middleware-to-spark.md), [0036](../tasks/0036-port-action-and-sensor-to-spark.md), [0037](../tasks/0037-slice-dsl-cleanup.md), [0038](../tasks/0038-agent-dsl-optional-path-and-extension-path-override.md), [0039](../tasks/0039-slices-must-declare-schema-and-routes.md), [0040](../tasks/0040-use-spark-tooling-everywhere.md), [0041](../tasks/0041-extensions-contribute-dsl-sections.md), [0042](../tasks/0042-docs-and-cleanup.md).
+- Related ADRs: [0024](0024-schema-language-consolidation.md) (open — runtime schema language consolidation; orthogonal to the DSL migration but shares the schema-validation territory).
 
 ## Context
 
@@ -284,10 +285,10 @@ keeps the old keyword shape alive. The framework is pre-1.0 ([ADR
 NO LEGACY ADAPTERS guidance), and Spark gives us a clean break we
 should take in one swing.
 
-The implementation lands across six commits ([tasks 0033–0038](
-../tasks/README.md)), with a deliberately red middle: tasks 0034–0037
-each leave the tree partially migrated, and only task 0038 (docs,
-cleanup, status flip) restores green.
+The implementation lands across ten commits ([tasks 0033–0042](
+../tasks/README.md)), with a deliberately red middle: tasks 0034–0035
+each leave the tree partially migrated; tasks 0036+ leave it green.
+Task 0042 (docs, cheat sheets, status flip) is the terminal commit.
 
 ### 6. Public API stability
 
@@ -349,14 +350,26 @@ or `MyAgent.signal_routes/0` keep passing.
   LEGACY ADAPTERS rule, we do not ship a keyword-list shim. We do
   ship a section in `guides/migration.md` walking through one or
   two real-world examples.
-- **Zoi vs `:nimble_options`.** Spark's section schemas use
-  `:nimble_options` (or its compatible relative). We keep Zoi where
-  Zoi already lives — the agent state schema, the action input /
-  output schemas, the slice state schema. The DSL boundary is the
-  one place we accept `nimble_options` syntax because that is what
-  Spark wants. The two coexist cleanly: Zoi validates **runtime
-  data**, `nimble_options` (via Spark) validates **compile-time DSL
-  options**.
+- **Four schema languages coexist at different layers.** Compile-time
+  DSL options validate through **Spark.Options** — a vendored fork
+  of NimbleOptions ([deps/spark/lib/spark/options/options.ex:113–132](
+  ../../deps/spark/lib/spark/options/options.ex)) with extra types
+  and a compile-time validator. Spark.Options is *not* the same as
+  the standalone `:nimble_options` dep. At runtime, action / slice /
+  agent state schemas use **Zoi** (the framework's struct generator
+  + Zod-shape validator); action input schemas can also be plain
+  **NimbleOptions** keyword lists; and `Jido.Action.Schema` accepts
+  a third shape — **JSON Schema maps** — as a passthrough format
+  used by LLM-tool exports (`schema_type/1` returns `:json_schema`;
+  no runtime validation, the schema is for the model only). All
+  three runtime shapes go through `Jido.Action.Schema.validate/2`
+  ([action/schema.ex:62–70](../../lib/jido/action/schema.ex)),
+  which dispatches by shape. The polyglot is intentional at the
+  layer boundaries — Spark.Options for compile-time DSL, Zoi for
+  runtime data + structs, NimbleOptions as one of three accepted
+  action-input shapes, JSON Schema as an LLM-tool passthrough.
+  Whether to consolidate runtime is captured in [ADR 0024](
+  0024-schema-language-consolidation.md) (open).
 - **Compile-time errors get clearer.** Spark's error messages cite
   the file/line of the offending DSL entity, which our raw `Zoi.parse`
   in `__quoted_compile_options__/1` does not. Authoring agents stops
@@ -400,14 +413,14 @@ or `MyAgent.signal_routes/0` keep passing.
 ## Follow-ups (out of this ADR's scope, captured for the tasks)
 
 - The `Jido.AI.ReAct` slice ([task 0030](../tasks/0030-llm-agent-slice-composition-refactor.md))
-  picks up its own `react do … end` section as part of [task 0037](
-  ../tasks/0037-extensions-contribute-dsl-sections.md).
+  picks up its own `react do … end` section as part of [task 0041](
+  ../tasks/0041-extensions-contribute-dsl-sections.md).
 - The migration guide entry lives in `guides/migration.md`; the
   generated cheat sheets live in `documentation/dsls/` (Spark's
   default output dir).
 - `mix spark.formatter --extensions Jido.Dsl.Agent,Jido.Dsl.Slice,…`
   runs in CI; the resulting `.formatter.exs` updates ship in [task
-  0038](../tasks/0038-docs-and-cleanup.md).
+  0042](../tasks/0042-docs-and-cleanup.md).
 - Igniter recipes (`mix jido.gen.agent`, `mix jido.gen.slice`) are
   out of scope here — Spark makes them straightforward to add later
   but they are not required for this ADR to land.

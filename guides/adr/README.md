@@ -54,3 +54,4 @@ SHAs that implemented the decision (or `—` if none yet).
 | [0016](0016-agent-server-ack-and-subscribe.md) | Waiting on agents: ack + subscribe on AgentServer | Proposed | Pending |
 | [0022](0022-llm-agents-inlined-jido-ai-namespace.md) | LLM agents inlined under `Jido.AI.*` on top of `req_llm`; signal-driven ReAct | Proposed | Pending |
 | [0023](0023-spark-dsl-and-registerable-extensions.md) | Spark DSL for `use` sites; slices / middleware / plugins are registerable extensions | Proposed | Pending |
+| [0024](0024-schema-language-consolidation.md) | Runtime schema language consolidation — Zoi / NimbleOptions / Spark.Options layout | Proposed | Pending — **decision open** |

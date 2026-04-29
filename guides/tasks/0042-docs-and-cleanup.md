@@ -1,18 +1,18 @@
 ---
-name: Task 0038 — Docs, cheat sheets, migration guide; flip ADR 0023 status to Implemented
+name: Task 0042 — Docs, cheat sheets, migration guide; flip ADR 0023 status to Implemented
 description: Run `mix spark.cheat_sheets` to generate per-DSL reference pages under `documentation/dsls/`, wire those into `mix.exs`'s ExDoc config, refresh `guides/agents.md` / `guides/slices.md` / `guides/middleware.md` / `guides/plugins.md` / `guides/your-first-plugin.md` to use sectioned-DSL examples, write a `guides/migration-spark-dsl.md` that walks one in-tree agent and one in-tree slice through the keyword-form → DSL conversion, run `mix spark.formatter` to commit per-DSL `.formatter.exs` entries, and flip `Status: Proposed → Accepted; Implementation: Pending → Complete` in [ADR 0023](../adr/0023-spark-dsl-and-registerable-extensions.md). **Also strips the doc-side residue of the migration**: stale `task 003N` qualifiers in moduledocs, "legacy keyword form" mentions in guides and runtime errors, and any `# transitional / # legacy / # backwards compat` comments. After this commit the only remaining record of the migration journey lives in commit messages and the task / ADR files; the rest of the tree reads as a clean slate.
 ---
 
-# Task 0038 — Docs, cheat sheets, ADR status flip
+# Task 0042 — Docs, cheat sheets, ADR status flip
 
 - Implements: [ADR 0023](../adr/0023-spark-dsl-and-registerable-extensions.md) Follow-ups.
-- Depends on: [task 0034](0034-port-jido-agent-to-spark.md), [task 0035](0035-port-slice-plugin-middleware-to-spark.md), [task 0036](0036-port-action-and-sensor-to-spark.md), [task 0037](0037-extensions-contribute-dsl-sections.md).
+- Depends on: [task 0034](0034-port-jido-agent-to-spark.md), [task 0035](0035-port-slice-plugin-middleware-to-spark.md), [task 0036](0036-port-action-and-sensor-to-spark.md), [task 0037](0037-slice-dsl-cleanup.md), [task 0038](0038-agent-dsl-optional-path-and-extension-path-override.md), [task 0039](0039-slices-must-declare-schema-and-routes.md), [task 0040](0040-use-spark-tooling-everywhere.md), [task 0041](0041-extensions-contribute-dsl-sections.md).
 - Blocks: nothing.
 - Leaves tree: **green**.
 
 ## Context
 
-Tasks 0033–0037 ship the Spark DSL migration end-to-end. Code is
+Tasks 0033–0041 ship the Spark DSL migration end-to-end. Code is
 clean; tests pass. What's left is the user-facing surface:
 
 1. **Generated DSL reference.** Spark ships `mix spark.cheat_sheets`
@@ -160,7 +160,7 @@ Add a row for ADR 0023 in the index, status `Accepted` /
 
 ### `guides/tasks/README.md`
 
-Add rows for tasks 0033–0038 with status, plus add the `0033 ←
+Add rows for tasks 0033–0042 with status, plus add the `0033 ←
 0034 ← 0035 ← 0036 ← 0037 ← 0038` chain to the dependency graph.
 
 ## Files to create
@@ -192,7 +192,7 @@ Length target: 400–600 lines including code blocks.
 
 ## Cleanup of legacy / migration references in docs and tests
 
-Tasks 0033 – 0037 leave the **code** clean — task 0037 deletes the
+Tasks 0033 – 0041 leave the **code** clean — task 0041 deletes the
 last of the transitional shims (LegacyTranslator, the dead
 `@agent_config_schema`, etc.). What survives in 0038 is the
 **doc-side** residue: stale `task 003N` qualifiers, "legacy keyword
@@ -251,7 +251,7 @@ about removing **redundant** legacy paths, not the public surface.
   `default_plugins:` shapes that this round of refreshes also
   removes.
 - Any `# TODO(adr-0023)`, `# task 003N`, or "legacy keyword form"
-  comments that survived task 0037.
+  comments that survived task 0041.
 
 ## Acceptance
 
