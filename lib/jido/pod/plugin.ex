@@ -21,50 +21,62 @@ defmodule Jido.Pod.Plugin do
   alias Jido.Pod.Actions.QueryTopology
   alias Jido.Pod.Topology
 
-  @path :pod
   @capability :pod
 
-  use Jido.Slice,
-    name: "pod",
-    path: @path,
-    actions: [MutateAction, MutateProgress, QueryNodes, QueryTopology],
-    signal_routes: [
-      {"mutate", MutateAction},
-      {"jido.pod.query.nodes", QueryNodes},
-      {"jido.pod.query.topology", QueryTopology},
-      {"jido.agent.child.started", MutateProgress},
-      {"jido.agent.child.exit", MutateProgress}
-    ],
-    schema:
-      Zoi.object(%{
-        topology: Zoi.any(description: "Resolved pod topology.") |> Zoi.optional(),
-        topology_version:
-          Zoi.integer(description: "Resolved topology version.") |> Zoi.default(1),
-        mutation:
-          Zoi.object(%{
-            id: Zoi.string(description: "In-flight mutation id.") |> Zoi.optional(),
-            status: Zoi.atom(description: "Mutation status.") |> Zoi.default(:idle),
-            plan: Zoi.any(description: "Mutation plan struct.") |> Zoi.optional(),
-            phase: Zoi.any(description: "State machine phase.") |> Zoi.default(:idle),
-            awaiting: Zoi.any(description: "Awaiting kind + names set.") |> Zoi.optional(),
-            report: Zoi.any(description: "Latest mutation report.") |> Zoi.optional(),
-            error: Zoi.any(description: "Latest mutation error/report.") |> Zoi.optional()
-          })
-          |> Zoi.default(%{
-            id: nil,
-            status: :idle,
-            plan: nil,
-            phase: :idle,
-            awaiting: nil,
-            report: nil,
-            error: nil
-          }),
-        metadata:
-          Zoi.map(description: "Pod-level runtime metadata owned by the slice.")
-          |> Zoi.default(%{})
-      }),
-    capabilities: [@capability],
-    singleton: true
+  use Jido.Slice
+
+  slice do
+    name "pod"
+    path :pod
+    singleton true
+
+    schema Zoi.object(%{
+             topology: Zoi.any(description: "Resolved pod topology.") |> Zoi.optional(),
+             topology_version:
+               Zoi.integer(description: "Resolved topology version.") |> Zoi.default(1),
+             mutation:
+               Zoi.object(%{
+                 id: Zoi.string(description: "In-flight mutation id.") |> Zoi.optional(),
+                 status: Zoi.atom(description: "Mutation status.") |> Zoi.default(:idle),
+                 plan: Zoi.any(description: "Mutation plan struct.") |> Zoi.optional(),
+                 phase: Zoi.any(description: "State machine phase.") |> Zoi.default(:idle),
+                 awaiting: Zoi.any(description: "Awaiting kind + names set.") |> Zoi.optional(),
+                 report: Zoi.any(description: "Latest mutation report.") |> Zoi.optional(),
+                 error: Zoi.any(description: "Latest mutation error/report.") |> Zoi.optional()
+               })
+               |> Zoi.default(%{
+                 id: nil,
+                 status: :idle,
+                 plan: nil,
+                 phase: :idle,
+                 awaiting: nil,
+                 report: nil,
+                 error: nil
+               }),
+             metadata:
+               Zoi.map(description: "Pod-level runtime metadata owned by the slice.")
+               |> Zoi.default(%{})
+           })
+  end
+
+  actions do
+    action MutateAction
+    action MutateProgress
+    action QueryNodes
+    action QueryTopology
+  end
+
+  signal_routes do
+    route "mutate", MutateAction
+    route "jido.pod.query.nodes", QueryNodes
+    route "jido.pod.query.topology", QueryTopology
+    route "jido.agent.child.started", MutateProgress
+    route "jido.agent.child.exit", MutateProgress
+  end
+
+  capabilities do
+    capability @capability
+  end
 
   @doc false
   @spec capability() :: atom()

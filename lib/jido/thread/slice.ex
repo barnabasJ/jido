@@ -32,13 +32,18 @@ defmodule Jido.Thread.Slice do
 
   alias Jido.Thread
 
-  use Jido.Slice,
-    name: "thread",
-    path: :thread,
-    actions: [],
-    singleton: true,
-    description: "Thread state management for agent conversation history.",
-    capabilities: [:thread]
+  use Jido.Slice
+
+  slice do
+    name "thread"
+    path :thread
+    description "Thread state management for agent conversation history."
+    singleton true
+  end
+
+  capabilities do
+    capability :thread
+  end
 
   @behaviour Jido.Persist.Transform
 

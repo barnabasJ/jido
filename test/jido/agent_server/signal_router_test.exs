@@ -26,30 +26,45 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
   defmodule PluginWithRoutes do
     @moduledoc false
-    use Jido.Plugin,
-      name: "plugin_with_routes",
-      path: :router_plugin,
-      actions: [JidoTest.AgentServer.SignalRouterTest.TestAction],
-      signal_routes: [
-        {"plugin.custom", JidoTest.AgentServer.SignalRouterTest.TestAction},
-        {"plugin.priority", JidoTest.AgentServer.SignalRouterTest.TestAction, -20}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "plugin_with_routes"
+      path :router_plugin
+    end
+
+    actions do
+      action JidoTest.AgentServer.SignalRouterTest.TestAction
+    end
+
+    signal_routes do
+      route "plugin.custom", JidoTest.AgentServer.SignalRouterTest.TestAction
+      route "plugin.priority", JidoTest.AgentServer.SignalRouterTest.TestAction, priority: -20
+    end
   end
 
   defmodule PluginWithoutRoutes do
     @moduledoc false
-    use Jido.Plugin,
-      name: "plugin_without_routes",
-      path: :no_route_plugin,
-      actions: [JidoTest.AgentServer.SignalRouterTest.TestAction]
+    use Jido.Plugin
+
+    slice do
+      name "plugin_without_routes"
+      path :no_route_plugin
+    end
+
+    actions do
+      action JidoTest.AgentServer.SignalRouterTest.TestAction
+    end
   end
 
   defmodule AgentWithRoutes do
     @moduledoc false
-    use Jido.Agent,
-      name: "agent_with_routes",
-      path: :domain,
-      schema: []
+    use Jido.Agent
+
+    agent do
+      name "agent_with_routes"
+      path :domain
+    end
 
     def signal_routes(_ctx) do
       [
@@ -61,28 +76,36 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
   defmodule AgentWithConfiguredRoutes do
     @moduledoc false
-    use Jido.Agent,
-      name: "agent_with_configured_routes",
-      path: :domain,
-      schema: [],
-      signal_routes: [{"agent.configured", JidoTest.AgentServer.SignalRouterTest.TestAction}]
+    use Jido.Agent
+
+    agent do
+      name "agent_with_configured_routes"
+      path :domain
+    end
+
+    signal_routes do
+      route "agent.configured", JidoTest.AgentServer.SignalRouterTest.TestAction
+    end
   end
 
   defmodule AgentWithoutRoutes do
     @moduledoc "Agent that does NOT export signal_routes/1"
-    use Jido.Agent,
-      name: "agent_without_routes",
-      path: :domain,
-      schema: []
+    use Jido.Agent
+
+    agent do
+      name "agent_without_routes"
+      path :domain
+    end
   end
 
   defmodule AgentWithPlugins do
     @moduledoc false
-    use Jido.Agent,
-      name: "agent_with_plugins",
-      path: :domain,
-      schema: [],
-      plugins: [PluginWithRoutes, PluginWithoutRoutes]
+    use Jido.Agent, extensions: [PluginWithRoutes, PluginWithoutRoutes]
+
+    agent do
+      name "agent_with_plugins"
+      path :domain
+    end
   end
 
   defp build_state(agent_module) do

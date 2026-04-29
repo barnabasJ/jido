@@ -80,14 +80,14 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
   # Simple test agent
   defmodule TestAgent do
-    use Jido.Agent,
-      name: "test_agent",
-      path: :domain,
-      description: "Test agent for instance manager tests",
-      schema: [
-        counter: [type: :integer, default: 0]
-      ],
-      actions: []
+    use Jido.Agent
+
+    agent do
+      name "test_agent"
+      description "Test agent for instance manager tests"
+      path :domain
+      schema counter: [type: :integer, default: 0]
+    end
   end
 
   defmodule CronTickAction do
@@ -128,12 +128,13 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
   defmodule DurableCronAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "durable_cron_agent",
-      path: :domain,
-      schema: [
-        tick_count: [type: :integer, default: 0]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "durable_cron_agent"
+      path :domain
+      schema tick_count: [type: :integer, default: 0]
+    end
 
     @impl true
     def signal_routes(_ctx) do
@@ -147,15 +148,17 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
   defmodule DeclarativeConflictAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "declarative_conflict_agent",
-      path: :domain,
-      schema: [
-        tick_count: [type: :integer, default: 0]
-      ],
-      schedules: [
-        {"* * * * *", "cron.tick", job_id: :declarative_conflict}
-      ]
+    use Jido.Agent
+
+    agent do
+      name "declarative_conflict_agent"
+      path :domain
+      schema tick_count: [type: :integer, default: 0]
+    end
+
+    schedules do
+      schedule "* * * * *", "cron.tick", job_id: :declarative_conflict
+    end
 
     @impl true
     def signal_routes(_ctx) do

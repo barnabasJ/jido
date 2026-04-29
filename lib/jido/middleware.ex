@@ -59,6 +59,8 @@ defmodule Jido.Middleware do
       end
   """
 
+  use Spark.Dsl, default_extensions: [extensions: [Jido.Dsl.Middleware]]
+
   @typep result :: {:ok, map(), [Jido.Agent.Directive.t()]} | {:error, map(), term()}
 
   @callback on_signal(
@@ -70,7 +72,8 @@ defmodule Jido.Middleware do
 
   @optional_callbacks on_signal: 4
 
-  defmacro __using__(_opts) do
+  @impl Spark.Dsl
+  def handle_opts(_opts) do
     quote do
       @behaviour Jido.Middleware
     end

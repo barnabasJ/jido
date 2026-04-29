@@ -14,18 +14,18 @@ defmodule Jido.Plugin.FSMSmokeTest do
 
   defmodule DefaultFSMAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "default_fsm_agent",
-      path: :app,
-      plugins: [FSM]
+    use Jido.Agent, extensions: [FSM]
+
+    agent do
+      name "default_fsm_agent"
+      path :app
+    end
   end
 
   defmodule ConfiguredFSMAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "configured_fsm_agent",
-      path: :app,
-      plugins: [
+      extensions: [
         {FSM,
          %{
            initial_state: "ready",
@@ -38,6 +38,11 @@ defmodule Jido.Plugin.FSMSmokeTest do
            terminal_states: ["done", "errored"]
          }}
       ]
+
+    agent do
+      name "configured_fsm_agent"
+      path :app
+    end
   end
 
   describe "agent boot" do

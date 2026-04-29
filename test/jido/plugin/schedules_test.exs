@@ -37,33 +37,54 @@ defmodule JidoTest.Plugin.SchedulesTest do
 
   defmodule PluginWithSchedules do
     @moduledoc false
-    use Jido.Plugin,
-      name: "scheduled_plugin",
-      path: :scheduled,
-      actions: [RefreshTokenAction, DailyDigestAction],
-      schedules: [
-        {"*/5 * * * *", RefreshTokenAction},
-        {"0 9 * * 1-5", DailyDigestAction, tz: "America/New_York"}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "scheduled_plugin"
+      path :scheduled
+    end
+
+    actions do
+      action RefreshTokenAction
+      action DailyDigestAction
+    end
+
+    schedules do
+      schedule "*/5 * * * *", RefreshTokenAction
+      schedule "0 9 * * 1-5", DailyDigestAction, tz: "America/New_York"
+    end
   end
 
   defmodule PluginWithCustomSignal do
     @moduledoc false
-    use Jido.Plugin,
-      name: "custom_signal_plugin",
-      path: :custom_signal,
-      actions: [CleanupAction],
-      schedules: [
-        {"0 0 * * *", CleanupAction, signal: "maintenance.cleanup"}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "custom_signal_plugin"
+      path :custom_signal
+    end
+
+    actions do
+      action CleanupAction
+    end
+
+    schedules do
+      schedule "0 0 * * *", CleanupAction, signal: "maintenance.cleanup"
+    end
   end
 
   defmodule PluginNoSchedules do
     @moduledoc false
-    use Jido.Plugin,
-      name: "no_schedules",
-      path: :no_schedules,
-      actions: [RefreshTokenAction]
+    use Jido.Plugin
+
+    slice do
+      name "no_schedules"
+      path :no_schedules
+    end
+
+    actions do
+      action RefreshTokenAction
+    end
   end
 
   describe "expand_schedules/1" do

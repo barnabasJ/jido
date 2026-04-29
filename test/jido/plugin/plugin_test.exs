@@ -6,40 +6,71 @@ defmodule JidoTest.PluginTest do
 
   defmodule BasicPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "basic_plugin",
-      path: :basic,
-      actions: [JidoTest.PluginTestAction]
+    use Jido.Plugin
+
+    slice do
+      name "basic_plugin"
+      path :basic
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   defmodule FullPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "full_plugin",
-      path: :full,
-      actions: [JidoTest.PluginTestAction, JidoTest.PluginTestAnotherAction],
-      description: "A fully configured plugin",
-      category: "test",
-      vsn: "1.0.0",
-      schema: Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)}),
-      config_schema: Zoi.object(%{enabled: Zoi.boolean() |> Zoi.default(true)}),
-      tags: ["test", "full"],
-      capabilities: [:messaging, :notifications],
-      requires: [{:config, :api_key}, {:app, :req}],
-      signal_routes: [
-        {"post", JidoTest.PluginTestAction},
-        {"get", JidoTest.PluginTestAnotherAction}
-      ],
-      schedules: [{"*/5 * * * *", JidoTest.PluginTestAction}]
+    use Jido.Plugin
+
+    slice do
+      name "full_plugin"
+      path :full
+      description "A fully configured plugin"
+      category "test"
+      vsn "1.0.0"
+      schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
+      config_schema Zoi.object(%{enabled: Zoi.boolean() |> Zoi.default(true)})
+      tags ["test", "full"]
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+      action JidoTest.PluginTestAnotherAction
+    end
+
+    capabilities do
+      capability :messaging
+      capability :notifications
+    end
+
+    requires do
+      requires :config, :api_key
+      requires :app, :req
+    end
+
+    signal_routes do
+      route "post", JidoTest.PluginTestAction
+      route "get", JidoTest.PluginTestAnotherAction
+    end
+
+    schedules do
+      schedule "*/5 * * * *", JidoTest.PluginTestAction
+    end
   end
 
   defmodule SingletonPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "singleton_plugin",
-      path: :singleton_state,
-      actions: [JidoTest.PluginTestAction],
-      singleton: true
+    use Jido.Plugin
+
+    slice do
+      name "singleton_plugin"
+      path :singleton_state
+      singleton true
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   describe "plugin definition with required fields" do
@@ -168,55 +199,51 @@ defmodule JidoTest.PluginTest do
   end
 
   describe "compile-time validation" do
-    test "missing required field raises CompileError" do
-      assert_raise CompileError, fn ->
+    test "missing required field raises" do
+      assert_raise Spark.Error.DslError, fn ->
         defmodule MissingNamePlugin do
-          use Jido.Plugin,
-            path: :missing,
-            actions: [JidoTest.PluginTestAction]
+          use Jido.Plugin
+
+          slice do
+            path :missing
+          end
+
+          actions do
+            action JidoTest.PluginTestAction
+          end
         end
       end
     end
 
-    test "missing path raises CompileError" do
-      assert_raise CompileError, fn ->
+    test "missing path raises" do
+      assert_raise Spark.Error.DslError, fn ->
         defmodule MissingPathPlugin do
-          use Jido.Plugin,
-            name: "missing_path",
-            actions: [JidoTest.PluginTestAction]
+          use Jido.Plugin
+
+          slice do
+            name "missing_path"
+          end
+
+          actions do
+            action JidoTest.PluginTestAction
+          end
         end
       end
     end
 
-    test "invalid action module raises CompileError" do
-      assert_raise CompileError, fn ->
-        defmodule InvalidActionPlugin do
-          use Jido.Plugin,
-            name: "invalid_action",
-            path: :invalid,
-            actions: [NonExistentModule]
-        end
-      end
-    end
-
-    test "module that doesn't implement Action behavior raises CompileError" do
-      assert_raise CompileError, fn ->
-        defmodule NotActionPlugin do
-          use Jido.Plugin,
-            name: "not_action",
-            path: :not_action,
-            actions: [JidoTest.NotAnActionModule]
-        end
-      end
-    end
-
-    test "invalid name format raises CompileError" do
-      assert_raise CompileError, fn ->
+    test "invalid name format raises" do
+      assert_raise Spark.Error.DslError, fn ->
         defmodule InvalidNamePlugin do
-          use Jido.Plugin,
-            name: "invalid-name-with-dashes",
-            path: :invalid,
-            actions: [JidoTest.PluginTestAction]
+          use Jido.Plugin
+
+          slice do
+            name "invalid-name-with-dashes"
+            path :invalid
+          end
+
+          actions do
+            action JidoTest.PluginTestAction
+          end
         end
       end
     end

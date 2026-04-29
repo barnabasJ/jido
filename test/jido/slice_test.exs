@@ -3,30 +3,43 @@ defmodule JidoTest.SliceTest do
 
   describe "compile-time validation" do
     test "raises CompileError when name is missing" do
-      assert_raise CompileError, ~r/required/i, fn ->
+      assert_raise Spark.Error.DslError, ~r/required :name option/, fn ->
         Code.compile_string("""
         defmodule JidoTest.SliceTest.NoName do
-          use Jido.Slice, path: :x
+          use Jido.Slice
+
+          slice do
+            path :x
+          end
         end
         """)
       end
     end
 
     test "raises CompileError when path is missing" do
-      assert_raise CompileError, ~r/required/i, fn ->
+      assert_raise Spark.Error.DslError, ~r/required :path option/, fn ->
         Code.compile_string("""
         defmodule JidoTest.SliceTest.NoPath do
-          use Jido.Slice, name: "no_path"
+          use Jido.Slice
+
+          slice do
+            name "no_path"
+          end
         end
         """)
       end
     end
 
     test "raises CompileError on invalid name" do
-      assert_raise CompileError, fn ->
+      assert_raise Spark.Error.DslError, fn ->
         Code.compile_string("""
         defmodule JidoTest.SliceTest.BadName do
-          use Jido.Slice, name: "has spaces", path: :x
+          use Jido.Slice
+
+          slice do
+            name "has spaces"
+            path :x
+          end
         end
         """)
       end
@@ -36,23 +49,40 @@ defmodule JidoTest.SliceTest do
   describe "accessors" do
     defmodule MinimalSlice do
       @moduledoc false
-      use Jido.Slice, name: "minimal", path: :minimal
+      use Jido.Slice
+
+      slice do
+        name "minimal"
+        path :minimal
+      end
     end
 
     defmodule FullSlice do
       @moduledoc false
-      use Jido.Slice,
-        name: "full",
-        path: :full,
-        description: "A test slice",
-        category: "test",
-        vsn: "0.1.0",
-        tags: ["a", "b"],
-        capabilities: [:speak],
-        requires: [{:config, :token}],
-        signal_routes: [{"send", JidoTest.PluginTestAction}],
-        schema: Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)}),
-        config_schema: Zoi.object(%{enabled: Zoi.boolean() |> Zoi.default(true)})
+      use Jido.Slice
+
+      slice do
+        name "full"
+        path :full
+        description "A test slice"
+        category "test"
+        vsn "0.1.0"
+        tags ["a", "b"]
+        schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
+        config_schema Zoi.object(%{enabled: Zoi.boolean() |> Zoi.default(true)})
+      end
+
+      capabilities do
+        capability :speak
+      end
+
+      requires do
+        requires :config, :token
+      end
+
+      signal_routes do
+        route "send", JidoTest.PluginTestAction
+      end
     end
 
     test "minimal slice exposes name and path" do
@@ -98,19 +128,25 @@ defmodule JidoTest.SliceTest do
   describe "schema defaults" do
     defmodule SchemaSlice do
       @moduledoc false
-      use Jido.Slice,
-        name: "schema",
-        path: :schema,
-        schema: Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
+      use Jido.Slice
+
+      slice do
+        name "schema"
+        path :schema
+        schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
+      end
     end
 
     defmodule SchemaAgent do
       @moduledoc false
       use Jido.Agent,
-        name: "schema_agent",
-        path: :app,
         default_slices: false,
-        plugins: [JidoTest.SliceTest.SchemaSlice]
+        extensions: [JidoTest.SliceTest.SchemaSlice]
+
+      agent do
+        name "schema_agent"
+        path :app
+      end
     end
 
     test "Agent.new/1 seeds slice state from the schema's defaults" do
@@ -122,10 +158,13 @@ defmodule JidoTest.SliceTest do
       defmodule SchemaAgentConfigured do
         @moduledoc false
         use Jido.Agent,
-          name: "schema_agent_configured",
-          path: :app,
           default_slices: false,
-          plugins: [{JidoTest.SliceTest.SchemaSlice, %{counter: 42}}]
+          extensions: [{JidoTest.SliceTest.SchemaSlice, %{counter: 42}}]
+
+        agent do
+          name "schema_agent_configured"
+          path :app
+        end
       end
 
       agent = SchemaAgentConfigured.new()

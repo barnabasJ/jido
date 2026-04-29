@@ -111,25 +111,39 @@ defmodule JidoTest.TestAgents do
 
   defmodule TestPluginWithRoutes do
     @moduledoc false
-    use Jido.Plugin,
-      name: "test_routes_plugin",
-      path: :test_routes,
-      actions: [JidoTest.PluginTestAction],
-      signal_routes: [
-        {"post", JidoTest.PluginTestAction},
-        {"list", JidoTest.PluginTestAction}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "test_routes_plugin"
+      path :test_routes
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
+
+    signal_routes do
+      route "post", JidoTest.PluginTestAction
+      route "list", JidoTest.PluginTestAction
+    end
   end
 
   defmodule TestPluginWithPriority do
     @moduledoc false
-    use Jido.Plugin,
-      name: "priority_plugin",
-      path: :priority,
-      actions: [JidoTest.PluginTestAction],
-      signal_routes: [
-        {"action", JidoTest.PluginTestAction, priority: 5}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "priority_plugin"
+      path :priority
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
+
+    signal_routes do
+      route "action", JidoTest.PluginTestAction, priority: 5
+    end
   end
 
   defmodule AgentWithPluginRoutes do

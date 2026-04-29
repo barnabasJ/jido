@@ -50,13 +50,15 @@ defmodule JidoTest.AgentServerTest do
 
   defmodule TestAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "test_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0],
-        messages: [type: {:list, :any}, default: []]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "test_agent"
+      path :domain
+
+      schema counter: [type: :integer, default: 0],
+             messages: [type: {:list, :any}, default: []]
+    end
 
     alias JidoTest.TestActions
 
@@ -224,13 +226,15 @@ defmodule JidoTest.AgentServerTest do
 
       defmodule InlineAgent do
         @moduledoc false
-        use Jido.Agent,
-          name: "inline_agent",
-          path: :domain,
-          schema: [
-            counter: [type: :integer, default: 0],
-            slow_done: [type: :boolean, default: false]
-          ]
+        use Jido.Agent
+
+        agent do
+          name "inline_agent"
+          path :domain
+
+          schema counter: [type: :integer, default: 0],
+                 slow_done: [type: :boolean, default: false]
+        end
 
         def signal_routes(_ctx) do
           [
@@ -286,13 +290,15 @@ defmodule JidoTest.AgentServerTest do
 
       defmodule BufferedSignalAgent do
         @moduledoc false
-        use Jido.Agent,
-          name: "buffered_signal_agent",
-          path: :domain,
-          schema: [
-            counter: [type: :integer, default: 0],
-            slow_done: [type: :boolean, default: false]
-          ]
+        use Jido.Agent
+
+        agent do
+          name "buffered_signal_agent"
+          path :domain
+
+          schema counter: [type: :integer, default: 0],
+                 slow_done: [type: :boolean, default: false]
+        end
 
         def signal_routes(_ctx) do
           [
@@ -643,12 +649,13 @@ defmodule JidoTest.AgentServerTest do
 
       defmodule ScheduleTrackingAgent do
         @moduledoc false
-        use Jido.Agent,
-          name: "schedule_tracking_agent",
-          path: :domain,
-          schema: [
-            pings: [type: :integer, default: 0]
-          ]
+        use Jido.Agent
+
+        agent do
+          name "schedule_tracking_agent"
+          path :domain
+          schema pings: [type: :integer, default: 0]
+        end
 
         def signal_routes(_ctx) do
           [
@@ -707,12 +714,13 @@ defmodule JidoTest.AgentServerTest do
 
       defmodule MultiScheduleAgent do
         @moduledoc false
-        use Jido.Agent,
-          name: "multi_schedule_agent",
-          path: :domain,
-          schema: [
-            events: [type: {:list, :any}, default: []]
-          ]
+        use Jido.Agent
+
+        agent do
+          name "multi_schedule_agent"
+          path :domain
+          schema events: [type: {:list, :any}, default: []]
+        end
 
         def signal_routes(_ctx) do
           [
@@ -764,12 +772,13 @@ defmodule JidoTest.AgentServerTest do
 
       defmodule WrapScheduleAgent do
         @moduledoc false
-        use Jido.Agent,
-          name: "wrap_schedule_agent",
-          path: :domain,
-          schema: [
-            received: [type: :any, default: nil]
-          ]
+        use Jido.Agent
+
+        agent do
+          name "wrap_schedule_agent"
+          path :domain
+          schema received: [type: :any, default: nil]
+        end
 
         def signal_routes(_ctx) do
           [
@@ -978,10 +987,13 @@ defmodule JidoTest.AgentServerTest do
 
       defmodule CounterAgent do
         @moduledoc false
-        use Jido.Agent,
-          name: "counter_agent",
-          path: :domain,
-          schema: [drain_count: [type: :integer, default: 0]]
+        use Jido.Agent
+
+        agent do
+          name "counter_agent"
+          path :domain
+          schema drain_count: [type: :integer, default: 0]
+        end
 
         def signal_routes(_ctx) do
           [{"slow", SlowAction2}]
@@ -1025,22 +1037,30 @@ defmodule JidoTest.AgentServerTest do
 
     defmodule ScheduledPlugin do
       @moduledoc false
-      use Jido.Plugin,
-        name: "scheduled_plugin",
-        path: :scheduled_plugin,
-        actions: [ScheduledAction],
-        schedules: [
-          {"* * * * *", ScheduledAction}
-        ]
+      use Jido.Plugin
+
+      slice do
+        name "scheduled_plugin"
+        path :scheduled_plugin
+      end
+
+      actions do
+        action ScheduledAction
+      end
+
+      schedules do
+        schedule "* * * * *", ScheduledAction
+      end
     end
 
     defmodule AgentWithScheduledPlugin do
       @moduledoc false
-      use Jido.Agent,
-        name: "agent_with_scheduled_plugin",
-        path: :domain,
-        schema: [],
-        plugins: [ScheduledPlugin]
+      use Jido.Agent, extensions: [ScheduledPlugin]
+
+      agent do
+        name "agent_with_scheduled_plugin"
+        path :domain
+      end
     end
 
     test "registers plugin schedules on startup", %{jido: jido} do

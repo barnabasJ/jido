@@ -14,19 +14,31 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
   # Plugin with no child_spec (default returns nil)
   defmodule NoChildPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "no_child_plugin",
-      path: :no_child,
-      actions: [JidoTest.AgentServer.PluginChildrenTest.SimpleAction]
+    use Jido.Plugin
+
+    slice do
+      name "no_child_plugin"
+      path :no_child
+    end
+
+    actions do
+      action JidoTest.AgentServer.PluginChildrenTest.SimpleAction
+    end
   end
 
   # Plugin that starts a single Agent as a child
   defmodule SingleChildPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "single_child_plugin",
-      path: :single_child,
-      actions: [JidoTest.AgentServer.PluginChildrenTest.SimpleAction]
+    use Jido.Plugin
+
+    slice do
+      name "single_child_plugin"
+      path :single_child
+    end
+
+    actions do
+      action JidoTest.AgentServer.PluginChildrenTest.SimpleAction
+    end
 
     def child_spec(config) do
       initial_value = config[:initial_value] || :default
@@ -41,10 +53,16 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
   # Plugin that starts multiple children
   defmodule MultiChildPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "multi_child_plugin",
-      path: :multi_child,
-      actions: [JidoTest.AgentServer.PluginChildrenTest.SimpleAction]
+    use Jido.Plugin
+
+    slice do
+      name "multi_child_plugin"
+      path :multi_child
+    end
+
+    actions do
+      action JidoTest.AgentServer.PluginChildrenTest.SimpleAction
+    end
 
     def child_spec(config) do
       count = config[:count] || 2
@@ -61,10 +79,16 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
   # Plugin with invalid child_spec (for error handling test)
   defmodule InvalidChildSpecPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "invalid_child_spec_plugin",
-      path: :invalid_child,
-      actions: [JidoTest.AgentServer.PluginChildrenTest.SimpleAction]
+    use Jido.Plugin
+
+    slice do
+      name "invalid_child_spec_plugin"
+      path :invalid_child
+    end
+
+    actions do
+      action JidoTest.AgentServer.PluginChildrenTest.SimpleAction
+    end
 
     def child_spec(_config) do
       :not_a_valid_child_spec
@@ -75,47 +99,62 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
   defmodule NoChildAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "no_child_agent",
-      path: :domain,
-      plugins: [JidoTest.AgentServer.PluginChildrenTest.NoChildPlugin]
+      extensions: [JidoTest.AgentServer.PluginChildrenTest.NoChildPlugin]
+
+    agent do
+      name "no_child_agent"
+      path :domain
+    end
   end
 
   # Agent with single child plugin
   defmodule SingleChildAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "single_child_agent",
-      path: :domain,
-      plugins: [JidoTest.AgentServer.PluginChildrenTest.SingleChildPlugin]
+      extensions: [JidoTest.AgentServer.PluginChildrenTest.SingleChildPlugin]
+
+    agent do
+      name "single_child_agent"
+      path :domain
+    end
   end
 
   # Agent with configured child plugin
   defmodule ConfiguredChildAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "configured_child_agent",
-      path: :domain,
-      plugins: [
+      extensions: [
         {JidoTest.AgentServer.PluginChildrenTest.SingleChildPlugin, %{initial_value: :custom}}
       ]
+
+    agent do
+      name "configured_child_agent"
+      path :domain
+    end
   end
 
   # Agent with multi child plugin
   defmodule MultiChildAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "multi_child_agent",
-      path: :domain,
-      plugins: [{JidoTest.AgentServer.PluginChildrenTest.MultiChildPlugin, %{count: 3}}]
+      extensions: [{JidoTest.AgentServer.PluginChildrenTest.MultiChildPlugin, %{count: 3}}]
+
+    agent do
+      name "multi_child_agent"
+      path :domain
+    end
   end
 
   # Agent with invalid child spec plugin
   defmodule InvalidChildAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "invalid_child_agent",
-      path: :domain,
-      plugins: [JidoTest.AgentServer.PluginChildrenTest.InvalidChildSpecPlugin]
+      extensions: [JidoTest.AgentServer.PluginChildrenTest.InvalidChildSpecPlugin]
+
+    agent do
+      name "invalid_child_agent"
+      path :domain
+    end
   end
 
   describe "child_spec/1 with no children" do

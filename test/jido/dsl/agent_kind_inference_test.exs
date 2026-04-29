@@ -9,18 +9,26 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
 
   defmodule SamplePlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "sample_plugin",
-      path: :sample_plugin,
-      actions: [JidoTest.PluginTestAction]
+    use Jido.Plugin
+
+    slice do
+      name "sample_plugin"
+      path :sample_plugin
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   defmodule SampleSlice do
     @moduledoc false
-    use Jido.Slice,
-      name: "sample_slice",
-      path: :sample_slice,
-      actions: []
+    use Jido.Slice
+
+    slice do
+      name "sample_slice"
+      path :sample_slice
+    end
   end
 
   defmodule SampleMiddleware do

@@ -5,29 +5,47 @@ defmodule JidoTest.Plugin.InstanceTest do
 
   defmodule TestPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "test_plugin",
-      path: :test,
-      actions: [JidoTest.PluginTestAction],
-      schema: Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
+    use Jido.Plugin
+
+    slice do
+      name "test_plugin"
+      path :test
+      schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   defmodule SlackPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "slack",
-      path: :slack,
-      actions: [JidoTest.PluginTestAction],
-      schema: Zoi.object(%{token: Zoi.string() |> Zoi.optional()})
+    use Jido.Plugin
+
+    slice do
+      name "slack"
+      path :slack
+      schema Zoi.object(%{token: Zoi.string() |> Zoi.optional()})
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   defmodule SingletonPlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "singleton_plugin",
-      path: :singleton_state,
-      actions: [JidoTest.PluginTestAction],
-      singleton: true
+    use Jido.Plugin
+
+    slice do
+      name "singleton_plugin"
+      path :singleton_state
+      singleton true
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   describe "new/1" do

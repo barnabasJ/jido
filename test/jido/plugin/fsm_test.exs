@@ -6,18 +6,18 @@ defmodule JidoTest.Plugin.FSMTest do
 
   defmodule DefaultFSMAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "fsm_default",
-      path: :app,
-      plugins: [FSM]
+    use Jido.Agent, extensions: [FSM]
+
+    agent do
+      name "fsm_default"
+      path :app
+    end
   end
 
   defmodule ConfiguredFSMAgent do
     @moduledoc false
     use Jido.Agent,
-      name: "fsm_configured",
-      path: :app,
-      plugins: [
+      extensions: [
         {FSM,
          %{
            initial_state: "ready",
@@ -30,6 +30,11 @@ defmodule JidoTest.Plugin.FSMTest do
            terminal_states: ["done", "errored"]
          }}
       ]
+
+    agent do
+      name "fsm_configured"
+      path :app
+    end
   end
 
   describe "Slice surface" do

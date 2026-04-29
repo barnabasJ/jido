@@ -28,11 +28,16 @@ defmodule Jido.Memory.Slice do
   memory slice that declares `@behaviour Jido.Persist.Transform`.
   """
 
-  use Jido.Slice,
-    name: "memory",
-    path: :memory,
-    actions: [],
-    singleton: true,
-    description: "Memory state management for agent cognitive state.",
-    capabilities: [:memory]
+  use Jido.Slice
+
+  slice do
+    name "memory"
+    path :memory
+    description "Memory state management for agent cognitive state."
+    singleton true
+  end
+
+  capabilities do
+    capability :memory
+  end
 end

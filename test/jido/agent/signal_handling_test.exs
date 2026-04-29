@@ -27,13 +27,15 @@ defmodule JidoTest.Agent.SignalHandlingTest do
   # Agent with actions for signal routing
   defmodule ActionBasedAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "action_based_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0],
-        messages: [type: {:list, :any}, default: []]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "action_based_agent"
+      path :domain
+
+      schema counter: [type: :integer, default: 0],
+             messages: [type: {:list, :any}, default: []]
+    end
 
     def signal_routes(_ctx) do
       [
@@ -48,13 +50,15 @@ defmodule JidoTest.Agent.SignalHandlingTest do
   # Agent with on_before_cmd hook for pre-processing
   defmodule PreProcessingAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "pre_processing_agent",
-      path: :domain,
-      schema: [
-        counter: [type: :integer, default: 0],
-        last_action_type: [type: :string, default: nil]
-      ]
+    use Jido.Agent
+
+    agent do
+      name "pre_processing_agent"
+      path :domain
+
+      schema counter: [type: :integer, default: 0],
+             last_action_type: [type: :string, default: nil]
+    end
 
     def signal_routes(_ctx) do
       [

@@ -7,45 +7,57 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
   defmodule SimpleSlice do
     @moduledoc false
-    use Jido.Slice,
-      name: "simple_slice",
-      path: :simple,
-      actions: [],
-      schema:
-        Zoi.object(%{
-          counter: Zoi.integer() |> Zoi.default(0),
-          label: Zoi.string() |> Zoi.default("default")
-        }),
-      capabilities: [:simple]
+    use Jido.Slice
+
+    slice do
+      name "simple_slice"
+      path :simple
+
+      schema Zoi.object(%{
+               counter: Zoi.integer() |> Zoi.default(0),
+               label: Zoi.string() |> Zoi.default("default")
+             })
+    end
+
+    capabilities do
+      capability :simple
+    end
   end
 
   defmodule RoutedSlice do
     @moduledoc false
-    use Jido.Slice,
-      name: "routed_slice",
-      path: :routed,
-      actions: [],
-      schema: Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)}),
-      signal_routes: [
-        {"absolute.path.one", JidoTest.PluginTestAction},
-        {"absolute.path.two", JidoTest.PluginTestAction}
-      ]
+    use Jido.Slice
+
+    slice do
+      name "routed_slice"
+      path :routed
+      schema Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
+    end
+
+    signal_routes do
+      route "absolute.path.one", JidoTest.PluginTestAction
+      route "absolute.path.two", JidoTest.PluginTestAction
+    end
   end
 
   defmodule OtherSlice do
     @moduledoc false
-    use Jido.Slice,
-      name: "other_slice",
-      path: :other,
-      actions: []
+    use Jido.Slice
+
+    slice do
+      name "other_slice"
+      path :other
+    end
   end
 
   defmodule BarePlugin do
     @moduledoc false
-    use Jido.Plugin,
-      name: "bare_plugin",
-      path: :bare_plugin,
-      actions: []
+    use Jido.Plugin
+
+    slice do
+      name "bare_plugin"
+      path :bare_plugin
+    end
   end
 
   defmodule NotASlice do
@@ -60,10 +72,13 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "use Jido.Agent, slices: [SomeSlice] mounts the slice at its path() with seeded defaults" do
       defmodule AgentBareSlice do
         use Jido.Agent,
-          name: "bare_slice_agent",
-          path: :domain,
           default_slices: false,
-          slices: [SimpleSlice]
+          extensions: [SimpleSlice]
+
+        agent do
+          name "bare_slice_agent"
+          path :domain
+        end
       end
 
       agent = AgentBareSlice.new()
@@ -75,10 +90,13 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "use Jido.Agent, slices: [{SomeSlice, key: value}] seeds the config into slice state" do
       defmodule AgentConfiguredSlice do
         use Jido.Agent,
-          name: "configured_slice_agent",
-          path: :domain,
           default_slices: false,
-          slices: [{SimpleSlice, %{counter: 42, label: "from_config"}}]
+          extensions: [{SimpleSlice, %{counter: 42, label: "from_config"}}]
+
+        agent do
+          name "configured_slice_agent"
+          path :domain
+        end
       end
 
       agent = AgentConfiguredSlice.new()
@@ -89,10 +107,13 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "slice config in keyword form is also accepted" do
       defmodule AgentKeywordSlice do
         use Jido.Agent,
-          name: "keyword_slice_agent",
-          path: :domain,
           default_slices: false,
-          slices: [{SimpleSlice, [counter: 7]}]
+          extensions: [{SimpleSlice, [counter: 7]}]
+
+        agent do
+          name "keyword_slice_agent"
+          path :domain
+        end
       end
 
       agent = AgentKeywordSlice.new()
@@ -103,10 +124,13 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "slice's signal_routes register at the agent with absolute paths (no prefix)" do
       defmodule AgentRoutedSlice do
         use Jido.Agent,
-          name: "routed_slice_agent",
-          path: :domain,
           default_slices: false,
-          slices: [RoutedSlice]
+          extensions: [RoutedSlice]
+
+        agent do
+          name "routed_slice_agent"
+          path :domain
+        end
       end
 
       route_paths =
@@ -120,10 +144,13 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "multiple bare slices compose at distinct paths" do
       defmodule AgentMultipleSlices do
         use Jido.Agent,
-          name: "multiple_slices_agent",
-          path: :domain,
           default_slices: false,
-          slices: [SimpleSlice, OtherSlice]
+          extensions: [SimpleSlice, OtherSlice]
+
+        agent do
+          name "multiple_slices_agent"
+          path :domain
+        end
       end
 
       modules = AgentMultipleSlices.slices()
@@ -138,10 +165,13 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     test "slice capabilities are aggregated" do
       defmodule AgentSliceCaps do
         use Jido.Agent,
-          name: "slice_caps_agent",
-          path: :domain,
           default_slices: false,
-          slices: [SimpleSlice]
+          extensions: [SimpleSlice]
+
+        agent do
+          name "slice_caps_agent"
+          path :domain
+        end
       end
 
       assert :simple in AgentSliceCaps.capabilities()
@@ -153,36 +183,50 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
   # ===========================================================================
 
   describe "path conflict detection" do
-    test "path collision between agent's path: and a slices: entry raises CompileError" do
-      assert_raise CompileError, ~r/Duplicate slice paths/, fn ->
-        defmodule AgentPathConflict do
-          use Jido.Agent,
-            name: "path_conflict_agent",
-            path: :simple,
-            default_slices: false,
-            slices: [SimpleSlice]
-        end
-      end
+    test "path collision between agent's path: and a slices: entry emits a warning" do
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          defmodule AgentPathConflict do
+            use Jido.Agent,
+              default_slices: false,
+              extensions: [SimpleSlice]
+
+            agent do
+              name "path_conflict_agent"
+              path :simple
+            end
+          end
+        end)
+
+      assert stderr =~ ~r/[Dd]uplicate.*paths/
     end
 
-    test "path collision between two slices: entries raises CompileError" do
+    test "path collision between two slices: entries emits a warning" do
       defmodule SimpleSliceDuplicate do
         @moduledoc false
-        use Jido.Slice,
-          name: "simple_dup",
-          path: :simple,
-          actions: []
-      end
+        use Jido.Slice
 
-      assert_raise CompileError, ~r/Duplicate slice paths/, fn ->
-        defmodule AgentSliceConflict do
-          use Jido.Agent,
-            name: "slice_conflict_agent",
-            path: :domain,
-            default_slices: false,
-            slices: [SimpleSlice, SimpleSliceDuplicate]
+        slice do
+          name "simple_dup"
+          path :simple
         end
       end
+
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          defmodule AgentSliceConflict do
+            use Jido.Agent,
+              default_slices: false,
+              extensions: [SimpleSlice, SimpleSliceDuplicate]
+
+            agent do
+              name "slice_conflict_agent"
+              path :domain
+            end
+          end
+        end)
+
+      assert stderr =~ ~r/[Dd]uplicate.*paths/
     end
   end
 
@@ -191,28 +235,36 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
   # ===========================================================================
 
   describe "slices: validation" do
-    test "putting a use Jido.Plugin module in slices: raises with a clear message" do
-      assert_raise CompileError, ~r/is a Plugin .*Plugins go in `plugins:`/s, fn ->
-        defmodule AgentRejectsPlugin do
+    test "force-mounting a bare slice as :plugin raises a clear message" do
+      assert_raise RuntimeError, ~r/missing __jido_plugin__/, fn ->
+        defmodule AgentRejectsBareAsPlugin do
           use Jido.Agent,
-            name: "rejects_plugin_agent",
-            path: :domain,
             default_slices: false,
-            slices: [BarePlugin]
+            extensions: [{SimpleSlice, [as: :plugin]}]
+
+          agent do
+            name "rejects_bare_as_plugin_agent"
+            path :domain
+          end
         end
       end
     end
 
-    test "putting a non-slice module in slices: raises with a clear message" do
-      assert_raise CompileError, ~r/is not a Jido\.Slice; do `use Jido\.Slice`/, fn ->
-        defmodule AgentRejectsNonSlice do
-          use Jido.Agent,
-            name: "rejects_non_slice_agent",
-            path: :domain,
-            default_slices: false,
-            slices: [NotASlice]
-        end
-      end
+    test "putting a non-slice module in extensions: raises with a clear message" do
+      assert_raise RuntimeError,
+                   ~r/is not a Jido\.Plugin, Jido\.Slice, or Jido\.Middleware/,
+                   fn ->
+                     defmodule AgentRejectsNonSlice do
+                       use Jido.Agent,
+                         default_slices: false,
+                         extensions: [NotASlice]
+
+                       agent do
+                         name "rejects_non_slice_agent"
+                         path :domain
+                       end
+                     end
+                   end
     end
   end
 
@@ -223,9 +275,12 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
   describe "renamed framework singletons" do
     test "Jido.Identity.Slice attaches via the default-slices path" do
       defmodule AgentDefaultSlices do
-        use Jido.Agent,
-          name: "default_slices_agent",
-          path: :domain
+        use Jido.Agent
+
+        agent do
+          name "default_slices_agent"
+          path :domain
+        end
       end
 
       modules = AgentDefaultSlices.slices()

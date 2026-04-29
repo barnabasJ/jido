@@ -5,34 +5,52 @@ defmodule JidoTest.Plugin.ConfigTest do
 
   defmodule PluginWithoutOtpApp do
     @moduledoc false
-    use Jido.Plugin,
-      name: "no_otp_app",
-      path: :no_otp_app,
-      actions: [JidoTest.PluginTestAction]
+    use Jido.Plugin
+
+    slice do
+      name "no_otp_app"
+      path :no_otp_app
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   defmodule PluginWithOtpApp do
     @moduledoc false
-    use Jido.Plugin,
-      name: "with_otp_app",
-      path: :with_otp_app,
-      otp_app: :jido,
-      actions: [JidoTest.PluginTestAction]
+    use Jido.Plugin
+
+    slice do
+      name "with_otp_app"
+      path :with_otp_app
+      otp_app :jido
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   defmodule PluginWithConfigSchema do
     @moduledoc false
-    use Jido.Plugin,
-      name: "with_schema",
-      path: :with_schema,
-      otp_app: :jido,
-      actions: [JidoTest.PluginTestAction],
-      config_schema:
-        Zoi.object(%{
-          token: Zoi.string(),
-          channel: Zoi.string() |> Zoi.optional(),
-          timeout: Zoi.integer() |> Zoi.default(5000)
-        })
+    use Jido.Plugin
+
+    slice do
+      name "with_schema"
+      path :with_schema
+      otp_app :jido
+
+      config_schema Zoi.object(%{
+                      token: Zoi.string(),
+                      channel: Zoi.string() |> Zoi.optional(),
+                      timeout: Zoi.integer() |> Zoi.default(5000)
+                    })
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   describe "resolve_config/2" do

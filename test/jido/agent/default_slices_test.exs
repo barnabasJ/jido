@@ -5,37 +5,61 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
   defmodule FakeMemorySlice do
     @moduledoc false
-    use Jido.Slice,
-      name: "fake_memory",
-      path: :memory,
-      actions: [JidoTest.PluginTestAction],
-      singleton: true
+    use Jido.Slice
+
+    slice do
+      name "fake_memory"
+      path :memory
+      singleton true
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   defmodule FakeThreadSlice do
     @moduledoc false
-    use Jido.Slice,
-      name: "fake_thread",
-      path: :thread,
-      actions: [JidoTest.PluginTestAction],
-      singleton: true
+    use Jido.Slice
+
+    slice do
+      name "fake_thread"
+      path :thread
+      singleton true
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   defmodule ReplacementMemorySlice do
     @moduledoc false
-    use Jido.Slice,
-      name: "replacement_memory",
-      path: :memory,
-      actions: [JidoTest.PluginTestAction],
-      singleton: true
+    use Jido.Slice
+
+    slice do
+      name "replacement_memory"
+      path :memory
+      singleton true
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   defmodule UserSlice do
     @moduledoc false
-    use Jido.Slice,
-      name: "user_slice",
-      path: :user_stuff,
-      actions: [JidoTest.PluginTestAction]
+    use Jido.Slice
+
+    slice do
+      name "user_slice"
+      path :user_stuff
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   describe "package_defaults/0" do
@@ -137,7 +161,12 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
   describe "agent macro integration" do
     test "agent with no default_slices option gets framework defaults" do
       defmodule AgentNoDefaults do
-        use Jido.Agent, name: "ds_agent_no_defaults", path: :domain
+        use Jido.Agent
+
+        agent do
+          name "ds_agent_no_defaults"
+          path :domain
+        end
       end
 
       instances = AgentNoDefaults.slice_instances()
@@ -150,10 +179,12 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
     test "agent with default_slices: false gets no defaults" do
       defmodule AgentDisableDefaults do
-        use Jido.Agent,
-          name: "ds_agent_disable_defaults",
-          path: :domain,
-          default_slices: false
+        use Jido.Agent, default_slices: false
+
+        agent do
+          name "ds_agent_disable_defaults"
+          path :domain
+        end
       end
 
       assert AgentDisableDefaults.slice_instances() == []
@@ -162,10 +193,13 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
     test "agent with slices still gets them when default_slices is false" do
       defmodule AgentUserSlicesOnly do
         use Jido.Agent,
-          name: "ds_agent_user_only",
-          path: :domain,
           default_slices: false,
-          slices: [UserSlice]
+          extensions: [UserSlice]
+
+        agent do
+          name "ds_agent_user_only"
+          path :domain
+        end
       end
 
       instances = AgentUserSlicesOnly.slice_instances()
@@ -179,10 +213,12 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
       end
 
       defmodule AgentWithJido do
-        use Jido.Agent,
-          name: "ds_agent_with_jido",
-          path: :domain,
-          jido: FakeJido
+        use Jido.Agent, jido: FakeJido
+
+        agent do
+          name "ds_agent_with_jido"
+          path :domain
+        end
       end
 
       instances = AgentWithJido.slice_instances()
@@ -197,10 +233,13 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
       defmodule AgentWithJidoOverride do
         use Jido.Agent,
-          name: "ds_agent_jido_override",
-          path: :domain,
           jido: FakeJido2,
           default_slices: %{thread: false}
+
+        agent do
+          name "ds_agent_jido_override"
+          path :domain
+        end
       end
 
       instances = AgentWithJidoOverride.slice_instances()
@@ -215,10 +254,13 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
       defmodule AgentWithReplacement do
         use Jido.Agent,
-          name: "ds_agent_replacement",
-          path: :domain,
           jido: FakeJido3,
           default_slices: %{memory: ReplacementMemorySlice}
+
+        agent do
+          name "ds_agent_replacement"
+          path :domain
+        end
       end
 
       instances = AgentWithReplacement.slice_instances()
@@ -235,10 +277,13 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
       defmodule AgentMountOrder do
         use Jido.Agent,
-          name: "ds_agent_mount_order",
-          path: :domain,
           jido: FakeJido4,
-          slices: [UserSlice]
+          extensions: [UserSlice]
+
+        agent do
+          name "ds_agent_mount_order"
+          path :domain
+        end
       end
 
       instances = AgentMountOrder.slice_instances()

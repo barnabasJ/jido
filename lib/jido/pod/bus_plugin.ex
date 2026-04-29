@@ -36,25 +36,38 @@ defmodule Jido.Pod.BusPlugin do
   alias Jido.Pod.BusPlugin.AutoSubscribeChild
   alias Jido.Pod.BusPlugin.AutoUnsubscribeChild
 
-  use Jido.Slice,
-    name: "pod_bus",
-    description: "Auto-subscribes pod children to a named signal bus.",
-    path: :pod_bus,
-    actions: [AutoSubscribeChild, AutoUnsubscribeChild],
-    signal_routes: [
-      {"jido.agent.child.started", AutoSubscribeChild},
-      {"jido.agent.child.exit", AutoUnsubscribeChild}
-    ],
-    schema:
-      Zoi.object(%{
-        bus:
-          Zoi.atom(description: "Name of the Jido.Signal.Bus to subscribe children on.")
-          |> Zoi.refine({__MODULE__, :validate_bus_atom, []}),
-        subscriptions:
-          Zoi.map(description: "Per-tag subscription-id lists, used for cleanup on child.exit.")
-          |> Zoi.default(%{})
-      }),
-    capabilities: [:bus_wiring]
+  use Jido.Slice
+
+  slice do
+    name "pod_bus"
+    description "Auto-subscribes pod children to a named signal bus."
+    path :pod_bus
+
+    schema Zoi.object(%{
+             bus:
+               Zoi.atom(description: "Name of the Jido.Signal.Bus to subscribe children on.")
+               |> Zoi.refine({__MODULE__, :validate_bus_atom, []}),
+             subscriptions:
+               Zoi.map(
+                 description: "Per-tag subscription-id lists, used for cleanup on child.exit."
+               )
+               |> Zoi.default(%{})
+           })
+  end
+
+  actions do
+    action AutoSubscribeChild
+    action AutoUnsubscribeChild
+  end
+
+  signal_routes do
+    route "jido.agent.child.started", AutoSubscribeChild
+    route "jido.agent.child.exit", AutoUnsubscribeChild
+  end
+
+  capabilities do
+    capability :bus_wiring
+  end
 
   @doc false
   @spec validate_bus_atom(atom(), keyword()) :: :ok | {:error, String.t()}

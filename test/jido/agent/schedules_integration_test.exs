@@ -14,13 +14,17 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
   end
 
   defmodule ScheduledAgent do
-    use Jido.Agent,
-      name: "scheduled_agent",
-      path: :domain,
-      schema: [tick_count: [type: :integer, default: 0]],
-      schedules: [
-        {"* * * * * * *", "agent.tick", job_id: :tick}
-      ]
+    use Jido.Agent
+
+    agent do
+      name "scheduled_agent"
+      path :domain
+      schema tick_count: [type: :integer, default: 0]
+    end
+
+    schedules do
+      schedule "* * * * * * *", "agent.tick", job_id: :tick
+    end
 
     def signal_routes(_ctx) do
       [{"agent.tick", TickAction}]
@@ -28,14 +32,18 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
   end
 
   defmodule MultiScheduleAgent do
-    use Jido.Agent,
-      name: "multi_schedule_agent",
-      path: :domain,
-      schema: [tick_count: [type: :integer, default: 0]],
-      schedules: [
-        {"* * * * *", "heartbeat.tick", job_id: :heartbeat},
-        {"@daily", "cleanup.run", job_id: :cleanup, timezone: "America/New_York"}
-      ]
+    use Jido.Agent
+
+    agent do
+      name "multi_schedule_agent"
+      path :domain
+      schema tick_count: [type: :integer, default: 0]
+    end
+
+    schedules do
+      schedule "* * * * *", "heartbeat.tick", job_id: :heartbeat
+      schedule "@daily", "cleanup.run", job_id: :cleanup, timezone: "America/New_York"
+    end
 
     def signal_routes(_ctx) do
       [{"heartbeat.tick", TickAction}, {"cleanup.run", TickAction}]
@@ -43,10 +51,13 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
   end
 
   defmodule NoScheduleAgent do
-    use Jido.Agent,
-      name: "no_schedule_agent",
-      path: :domain,
-      schema: [tick_count: [type: :integer, default: 0]]
+    use Jido.Agent
+
+    agent do
+      name "no_schedule_agent"
+      path :domain
+      schema tick_count: [type: :integer, default: 0]
+    end
   end
 
   describe "agent with schedules" do
@@ -62,13 +73,16 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
 
           Code.compile_string("""
           defmodule #{inspect(module)} do
-            use Jido.Agent,
-              name: "spec_agent_#{unique}",
-              path: :domain,
-              schema: [],
-              schedules: [
-                {"* * * * *", "agent.tick", job_id: :tick}
-              ]
+            use Jido.Agent
+
+            agent do
+              name "spec_agent_#{unique}"
+              path :domain
+            end
+
+            schedules do
+              schedule "* * * * *", "agent.tick", job_id: :tick
+            end
           end
           """)
         after

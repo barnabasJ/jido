@@ -36,34 +36,56 @@ defmodule JidoTest.Plugin.RoutesTest do
 
   defmodule PluginWithRoutes do
     @moduledoc false
-    use Jido.Plugin,
-      name: "plugin_with_routes",
-      path: :plugin_routes,
-      actions: [TestAction1, TestAction2],
-      signal_routes: [
-        {"post", TestAction1},
-        {"list", TestAction2}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "plugin_with_routes"
+      path :plugin_routes
+    end
+
+    actions do
+      action TestAction1
+      action TestAction2
+    end
+
+    signal_routes do
+      route "post", TestAction1
+      route "list", TestAction2
+    end
   end
 
   defmodule PluginWithRoutesAndOptions do
     @moduledoc false
-    use Jido.Plugin,
-      name: "plugin_with_opts",
-      path: :plugin_opts,
-      actions: [TestAction1, TestAction2],
-      signal_routes: [
-        {"post", TestAction1, priority: 5},
-        {"list", TestAction2, on_conflict: :replace}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "plugin_with_opts"
+      path :plugin_opts
+    end
+
+    actions do
+      action TestAction1
+      action TestAction2
+    end
+
+    signal_routes do
+      route "post", TestAction1, priority: 5
+      route "list", TestAction2, on_conflict: :replace
+    end
   end
 
   defmodule PluginNoRoutes do
     @moduledoc false
-    use Jido.Plugin,
-      name: "plugin_no_routes",
-      path: :plugin_no_routes,
-      actions: [TestAction1]
+    use Jido.Plugin
+
+    slice do
+      name "plugin_no_routes"
+      path :plugin_no_routes
+    end
+
+    actions do
+      action TestAction1
+    end
   end
 
   describe "expand_routes/1" do
@@ -108,11 +130,16 @@ defmodule JidoTest.Plugin.RoutesTest do
     test "returns empty when plugin has custom signal_routes/1 callback" do
       defmodule PluginWithCustomRouter do
         @moduledoc false
-        use Jido.Plugin,
-          name: "custom_router",
-          path: :custom_router,
-          actions: [TestAction1],
-          signal_patterns: ["ignored.*"]
+        use Jido.Plugin
+
+        slice do
+          name "custom_router"
+          path :custom_router
+        end
+
+        actions do
+          action TestAction1
+        end
 
         def signal_routes(_config) do
           [{"custom.route", TestAction1}]

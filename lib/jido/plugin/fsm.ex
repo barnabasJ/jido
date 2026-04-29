@@ -60,25 +60,32 @@ defmodule Jido.Plugin.FSM do
   }
   @default_terminal_states ["completed", "failed"]
 
-  use Jido.Slice,
-    name: "fsm",
-    path: :fsm,
-    actions: [Jido.Plugin.FSM.Transition],
-    signal_routes: [
-      {"jido.fsm.transition", Jido.Plugin.FSM.Transition}
-    ],
-    schema:
-      Zoi.object(%{
-        state: Zoi.string() |> Zoi.optional(),
-        history: Zoi.list(Zoi.any()) |> Zoi.default([]),
-        terminal?: Zoi.boolean() |> Zoi.optional(),
-        initial_state: Zoi.string() |> Zoi.default(@default_initial_state),
-        transitions:
-          Zoi.map(Zoi.string(), Zoi.list(Zoi.string()))
-          |> Zoi.default(@default_transitions),
-        terminal_states: Zoi.list(Zoi.string()) |> Zoi.default(@default_terminal_states)
-      })
-      |> Zoi.transform({__MODULE__, :seed_runtime_fields, []})
+  use Jido.Slice
+
+  slice do
+    name "fsm"
+    path :fsm
+
+    schema Zoi.object(%{
+             state: Zoi.string() |> Zoi.optional(),
+             history: Zoi.list(Zoi.any()) |> Zoi.default([]),
+             terminal?: Zoi.boolean() |> Zoi.optional(),
+             initial_state: Zoi.string() |> Zoi.default(@default_initial_state),
+             transitions:
+               Zoi.map(Zoi.string(), Zoi.list(Zoi.string()))
+               |> Zoi.default(@default_transitions),
+             terminal_states: Zoi.list(Zoi.string()) |> Zoi.default(@default_terminal_states)
+           })
+           |> Zoi.transform({__MODULE__, :seed_runtime_fields, []})
+  end
+
+  actions do
+    action Jido.Plugin.FSM.Transition
+  end
+
+  signal_routes do
+    route "jido.fsm.transition", Jido.Plugin.FSM.Transition
+  end
 
   @doc false
   def default_initial_state, do: @default_initial_state

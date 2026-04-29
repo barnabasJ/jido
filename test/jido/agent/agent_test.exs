@@ -7,32 +7,41 @@ defmodule JidoTest.AgentTest do
 
   defmodule ConfiguredRoutesAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "configured_routes_agent",
-      path: :domain,
-      schema: [],
-      signal_routes: [{"configured.route", JidoTest.TestActions.NoSchema}]
+    use Jido.Agent
+
+    agent do
+      name "configured_routes_agent"
+      path :domain
+    end
+
+    signal_routes do
+      route "configured.route", JidoTest.TestActions.NoSchema
+    end
   end
 
   defmodule ExtendingRoutesAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "extending_routes_agent",
-      path: :domain,
-      schema: [],
-      signal_routes: [{"base.route", JidoTest.TestActions.NoSchema}]
+    use Jido.Agent
 
-    def signal_routes(ctx) do
-      super(ctx) ++ [{"extended.route", JidoTest.TestActions.BasicAction}]
+    agent do
+      name "extending_routes_agent"
+      path :domain
+    end
+
+    signal_routes do
+      route "base.route", JidoTest.TestActions.NoSchema
+      route "extended.route", JidoTest.TestActions.BasicAction
     end
   end
 
   defmodule LegacyRoutesAgent do
     @moduledoc false
-    use Jido.Agent,
-      name: "legacy_routes_agent",
-      path: :domain,
-      schema: []
+    use Jido.Agent
+
+    agent do
+      name "legacy_routes_agent"
+      path :domain
+    end
 
     def signal_routes do
       [{"legacy.route", JidoTest.TestActions.NoSchema}]
@@ -446,18 +455,24 @@ defmodule JidoTest.AgentTest do
       assert {"sales.test_routes_plugin.list", JidoTest.PluginTestAction, -10} in routes
     end
 
-    test "compile-time conflict detection raises error for duplicate routes" do
-      assert_raise CompileError, ~r/Route conflict|Duplicate slice paths/, fn ->
-        defmodule ConflictAgent do
-          use Jido.Agent,
-            name: "conflict_agent",
-            path: :domain,
-            plugins: [
-              TestAgents.TestPluginWithRoutes,
-              TestAgents.TestPluginWithRoutes
-            ]
-        end
-      end
+    test "compile-time conflict detection emits a warning for duplicate routes" do
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          defmodule ConflictAgent do
+            use Jido.Agent,
+              extensions: [
+                TestAgents.TestPluginWithRoutes,
+                TestAgents.TestPluginWithRoutes
+              ]
+
+            agent do
+              name "conflict_agent"
+              path :domain
+            end
+          end
+        end)
+
+      assert stderr =~ ~r/Route conflict|Duplicate.*paths|same path/
     end
 
     test "no route conflict when plugins use different :as aliases" do

@@ -74,58 +74,61 @@ defmodule Jido.AI.ReAct do
 
   @cycle_warning "You already called the same tool(s) with identical parameters in the previous iteration and got the same results. Do NOT repeat the same calls. Either use the results you already have to form a final answer, or try a different approach."
 
-  @signal_routes [
-    {"ai.react.ask", Actions.Ask},
-    {"ai.react.llm.completed", Actions.LLMTurn},
-    {"ai.react.tool.completed", Actions.ToolResult},
-    {"ai.react.failed", Actions.Failed}
-  ]
+  use Jido.Slice
 
-  use Jido.Slice,
-    name: "ai",
-    path: :ai,
-    description: "ReAct reasoning slice attached via `slices:` on a Jido.Agent.",
-    actions: [
-      Actions.Ask,
-      Actions.LLMTurn,
-      Actions.ToolResult,
-      Actions.Failed
-    ],
-    schema:
-      Zoi.object(
-        %{
-          status: Zoi.atom() |> Zoi.default(:idle),
-          request_id: Zoi.any() |> Zoi.default(nil),
-          context: Zoi.any() |> Zoi.default(nil),
-          iteration: Zoi.integer() |> Zoi.default(0),
-          max_iterations: Zoi.integer() |> Zoi.default(10),
-          result: Zoi.any() |> Zoi.default(nil),
-          error: Zoi.any() |> Zoi.default(nil),
-          pending_tool_calls: Zoi.list(Zoi.any()) |> Zoi.default([]),
-          tool_results_received: Zoi.list(Zoi.any()) |> Zoi.default([]),
-          previous_tool_signature: Zoi.any() |> Zoi.default(nil),
-          model: Zoi.any() |> Zoi.default(nil),
-          tools: Zoi.list(Zoi.atom()) |> Zoi.default([]),
-          system_prompt: Zoi.any() |> Zoi.default(nil),
-          llm_opts: Zoi.any() |> Zoi.default([])
-        },
-        coerce: true
-      ),
-    config_schema:
-      Zoi.object(
-        %{
-          model: Zoi.any() |> Zoi.optional(),
-          tools: Zoi.list(Zoi.atom()) |> Zoi.default([]),
-          system_prompt: Zoi.any() |> Zoi.optional(),
-          max_iterations: Zoi.integer() |> Zoi.default(10),
-          max_tokens: Zoi.integer() |> Zoi.default(4096),
-          temperature: Zoi.any() |> Zoi.default(0.2),
-          llm_opts: Zoi.any() |> Zoi.default([])
-        },
-        coerce: true
-      )
-      |> Zoi.transform({__MODULE__, :__fold_llm_opts__, []}),
-    signal_routes: @signal_routes
+  slice do
+    name "ai"
+    path :ai
+    description "ReAct reasoning slice attached via `slices:` on a Jido.Agent."
+
+    schema Zoi.object(
+             %{
+               status: Zoi.atom() |> Zoi.default(:idle),
+               request_id: Zoi.any() |> Zoi.default(nil),
+               context: Zoi.any() |> Zoi.default(nil),
+               iteration: Zoi.integer() |> Zoi.default(0),
+               max_iterations: Zoi.integer() |> Zoi.default(10),
+               result: Zoi.any() |> Zoi.default(nil),
+               error: Zoi.any() |> Zoi.default(nil),
+               pending_tool_calls: Zoi.list(Zoi.any()) |> Zoi.default([]),
+               tool_results_received: Zoi.list(Zoi.any()) |> Zoi.default([]),
+               previous_tool_signature: Zoi.any() |> Zoi.default(nil),
+               model: Zoi.any() |> Zoi.default(nil),
+               tools: Zoi.list(Zoi.atom()) |> Zoi.default([]),
+               system_prompt: Zoi.any() |> Zoi.default(nil),
+               llm_opts: Zoi.any() |> Zoi.default([])
+             },
+             coerce: true
+           )
+
+    config_schema Zoi.object(
+                    %{
+                      model: Zoi.any() |> Zoi.optional(),
+                      tools: Zoi.list(Zoi.atom()) |> Zoi.default([]),
+                      system_prompt: Zoi.any() |> Zoi.optional(),
+                      max_iterations: Zoi.integer() |> Zoi.default(10),
+                      max_tokens: Zoi.integer() |> Zoi.default(4096),
+                      temperature: Zoi.any() |> Zoi.default(0.2),
+                      llm_opts: Zoi.any() |> Zoi.default([])
+                    },
+                    coerce: true
+                  )
+                  |> Zoi.transform({__MODULE__, :__fold_llm_opts__, []})
+  end
+
+  actions do
+    action Actions.Ask
+    action Actions.LLMTurn
+    action Actions.ToolResult
+    action Actions.Failed
+  end
+
+  signal_routes do
+    route "ai.react.ask", Actions.Ask
+    route "ai.react.llm.completed", Actions.LLMTurn
+    route "ai.react.tool.completed", Actions.ToolResult
+    route "ai.react.failed", Actions.Failed
+  end
 
   @doc false
   # Folds the convenience keys `:max_tokens` and `:temperature` into

@@ -23,11 +23,16 @@ defmodule Jido.Identity.Slice do
   modules.
   """
 
-  use Jido.Slice,
-    name: "identity",
-    path: :identity,
-    actions: [],
-    singleton: true,
-    description: "Identity state management for agent self-model.",
-    capabilities: [:identity]
+  use Jido.Slice
+
+  slice do
+    name "identity"
+    path :identity
+    description "Identity state management for agent self-model."
+    singleton true
+  end
+
+  capabilities do
+    capability :identity
+  end
 end

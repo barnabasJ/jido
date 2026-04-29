@@ -6,68 +6,109 @@ defmodule JidoTest.Plugin.RequirementsTest do
 
   defmodule PluginNoRequires do
     @moduledoc false
-    use Jido.Plugin,
-      name: "no_requires",
-      path: :no_requires,
-      actions: [JidoTest.PluginTestAction]
+    use Jido.Plugin
+
+    slice do
+      name "no_requires"
+      path :no_requires
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
   end
 
   defmodule PluginWithConfigRequires do
     @moduledoc false
-    use Jido.Plugin,
-      name: "config_requires",
-      path: :config_requires,
-      actions: [JidoTest.PluginTestAction],
-      requires: [
-        {:config, :token},
-        {:config, :channel}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "config_requires"
+      path :config_requires
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
+
+    requires do
+      requires :config, :token
+      requires :config, :channel
+    end
   end
 
   defmodule PluginWithAppRequires do
     @moduledoc false
-    use Jido.Plugin,
-      name: "app_requires",
-      path: :app_requires,
-      actions: [JidoTest.PluginTestAction],
-      requires: [
-        {:app, :elixir}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "app_requires"
+      path :app_requires
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
+
+    requires do
+      requires :app, :elixir
+    end
   end
 
   defmodule PluginWithMissingAppRequires do
     @moduledoc false
-    use Jido.Plugin,
-      name: "missing_app_requires",
-      path: :missing_app_requires,
-      actions: [JidoTest.PluginTestAction],
-      requires: [
-        {:app, :nonexistent_app_xyz}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "missing_app_requires"
+      path :missing_app_requires
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
+
+    requires do
+      requires :app, :nonexistent_app_xyz
+    end
   end
 
   defmodule PluginWithPluginRequires do
     @moduledoc false
-    use Jido.Plugin,
-      name: "plugin_requires",
-      path: :plugin_requires,
-      actions: [JidoTest.PluginTestAction],
-      requires: [
-        {:plugin, "no_requires"}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "plugin_requires"
+      path :plugin_requires
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
+
+    requires do
+      requires :plugin, "no_requires"
+    end
   end
 
   defmodule PluginWithMixedRequires do
     @moduledoc false
-    use Jido.Plugin,
-      name: "mixed_requires",
-      path: :mixed_requires,
-      actions: [JidoTest.PluginTestAction],
-      requires: [
-        {:config, :api_key},
-        {:app, :elixir},
-        {:plugin, "no_requires"}
-      ]
+    use Jido.Plugin
+
+    slice do
+      name "mixed_requires"
+      path :mixed_requires
+    end
+
+    actions do
+      action JidoTest.PluginTestAction
+    end
+
+    requires do
+      requires :config, :api_key
+      requires :app, :elixir
+      requires :plugin, "no_requires"
+    end
   end
 
   describe "validate_requirements/2" do
