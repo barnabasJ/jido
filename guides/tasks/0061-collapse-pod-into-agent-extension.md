@@ -252,23 +252,16 @@ Recommend **option 2** (generic auto-mount in `Jido.Slice.Extension`) because (a
 - Pod's `BusPlugin` (`lib/jido/pod/bus_plugin.ex`) — that's a separate plugin handling the bus subscription lifecycle. It already uses `use Jido.Plugin` and is mounted by the user, not by Pod's auto-attach. Untouched.
 - Per the "NO LEGACY ADAPTERS" rule (`guides/tasks/README.md`): no shim that accepts both `use Jido.Pod` and `use Jido.Agent, extensions: [Jido.Pod]`. Rewrite every callsite.
 
-## Adjacent capability gap (out of scope, flagged for follow-up)
+## Adjacent capability gap
 
-Task 0053 dropped `as: :alias` multi-instance plugin mounting (the old
-`extensions: [{SlackPlugin, as: :support}, {SlackPlugin, as: :sales}]`
-shape that produced two instances at `:slack_support` / `:slack_sales`
-with route prefixes `"support.slack"` / `"sales.slack"`). The new
+Task 0053 dropped `as: :alias` multi-instance plugin mounting; the new
 `slices do slice :slack_support, SlackPlugin; slice :slack_sales,
 SlackPlugin end` mounts at distinct paths fine, but the slice's
-`signal_routes` are absolute — both mounts contribute the same route
-strings and `NoRouteConflicts` raises at compile time. This is **not** a
-Pod-as-extension concern but it lives in the same neighbourhood and
-deserves its own task: add a per-mount route-prefix option to `slice
-:path, Module, route_prefix: "support"`, prefix the mounted slice's
-`signal_routes` accordingly, and update the route-conflict verifier to
-detect collisions across prefixed routes only. Today it's not used in
-`lib/` or any livebook, only in test fixtures (which 0053 deleted). Open
-a separate task before users hit it in their own code.
+`signal_routes` are absolute and `NoRouteConflicts` raises at compile
+time. The design intent is fan-out: when a signal arrives, fire the
+action once per matching mount with each mount's slice and config.
+Captured separately in [task 0062](0062-multi-instance-slice-mount-fan-out.md)
+since it's runtime-routing work that's orthogonal to Pod's DSL collapse.
 
 ## Risks
 
