@@ -101,6 +101,14 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 | [0050](0050-lift-framework-directives.md) | Lift framework directives to `lib/jido/directives/`; extract 9 inlined structs from `lib/jido/agent/directive.ex` into per-file modules; `Jido.Agent.Directive.*` → `Jido.Directives.*`. Pod and AI ReAct directives stay slice-scoped | **pending** | [ADR 0025](../adr/0025-extension-directory-layout.md) §2 |
 | [0051](0051-heartbeat-telemetry-config-cleanup.md) | Move `Jido.Sensors.Heartbeat` (test-only fixture) to `test/support/`; delete `Jido.Telemetry.Config` (9 `@deprecated` shims with zero callers) | **pending** | [ADR 0025](../adr/0025-extension-directory-layout.md) §5 |
 | [0052](0052-docs-and-cheat-sheets-refresh.md) | Final `mix spark.cheat_sheets` regen, refresh every guide / livebook / module-doc example for the new module names, write `guides/layout.md`, flip ADR 0025 status to Accepted / Complete, update `guides/tasks/README.md` | **pending** | [ADR 0025](../adr/0025-extension-directory-layout.md) Follow-ups |
+| [0053](0053-slices-as-agent-dsl-entity.md) | Lift slices into a first-class `slices do … end` agent DSL entity; agent owns the path-to-slice binding; slice modules drop `path`; actions stop redeclaring `path`; replace flat `extensions: [...]` with typed DSL block; `{Module, opts}` tuple form retired | **pending** | [ADR 0023](../adr/0023-spark-dsl-and-registerable-extensions.md) §1, [ADR 0025](../adr/0025-extension-directory-layout.md) §2 |
+| [0054](0054-dashboard-deps-and-scaffold.md) | Add `:phoenix`, `:phoenix_html`, `:phoenix_live_view` to mix.exs; create empty `Jido.Dashboard.*` module skeleton under `lib/jido/dashboard/`; supervise `Jido.Dashboard.Buffer` as a no-op child | **pending** | [ADR 0026](../adr/0026-redux-devtools-dashboard.md) §2 §3 |
+| [0055](0055-dashboard-buffer-ets-and-ringbuffer.md) | `Jido.Dashboard.Buffer`: ETS owner GenServer for `:jido_dashboard_signals` (ordered_set, key `{agent_id, seq}`, ring-evicted at 500/agent default), lock-free per-agent sequence via `:ets.update_counter/3`, PubSub broadcast on each insert; query API `record/1`, `list/2`, `get/2`, `clear/1`, `agents/0` | **pending** | [ADR 0027](../adr/0027-dashboard-capture-and-storage.md) §3 |
+| [0056](0056-dashboard-recorder-middleware.md) | `Jido.Dashboard.Middleware.Recorder` always installed in `Jido.Agent.DefaultPlugins` as the last entry; hot path `Application.get_env(:jido, {:dashboard, instance})` (~100–200 ns when off); on `:enabled`, capture `slice_after` + directives, truncate via `:erlang.external_size/1` (64 KB cap → `:truncated`), redact via `Jido.Observe.redact/2`, emit `[:jido, :dashboard, :signal, :recorded]`. Public `Jido.Dashboard` facade: `enable/1`, `disable/1`, `enabled?/1` | **pending** | [ADR 0027](../adr/0027-dashboard-capture-and-storage.md) §1 §2 §4 §5 |
+| [0057](0057-dashboard-presenter-safe-terms.md) | `Jido.Dashboard.Presenter`: walk arbitrary Elixir terms producing Jason-safe, bounded output; pids/refs/funs stringify; binaries truncate over byte cap; deep maps/lists collapse over depth cap; structs without `Jason.Encoder` flatten via `inspect/2`; `stream_data` property tests | **pending** | [ADR 0027](../adr/0027-dashboard-capture-and-storage.md) §2 |
+| [0058](0058-dashboard-router-and-liveviews.md) | `Jido.Dashboard.Router` macro (`jido_dashboard "/path"` Oban-Web style) + `Live.AgentList` (registry-discovered agents) + `Live.AgentDetail` (PubSub stream timeline + signal detail formatted by Presenter); inline CSS in `priv/static/jido_dashboard.css`; flips ADR 0026 to Implementation: Partial | **pending** | [ADR 0026](../adr/0026-redux-devtools-dashboard.md) §1 §3 |
+| [0059](0059-dashboard-dev-runner-preview-and-docs.md) | Dev-only `Jido.Dashboard.Endpoint` (gated on `Mix.env() == :dev`) + `mix jido.dashboard --port N --host …` task; `guides/dashboard.md` (mount, redaction, opt-in toggle, multi-node note, Claude Preview workflow); `guides/dashboard.livemd` (counter agent end-to-end demo); flips ADR 0026 status to Accepted / Implementation: Partial | **pending** | [ADR 0026](../adr/0026-redux-devtools-dashboard.md) §3 |
+| [0060](0060-example-showcase-app.md) | New `examples/jido_showcase/` Phoenix LiveView app with Home / Chat (LM Studio + `Jido.AI.ReAct` agent) / Pod / Multi-slice / Sensor / Dashboard pages; standalone `mix.exs` (path-deps `jido` + `req_llm`); esbuild + tailwind asset pipeline; `.claude/launch.json` for Claude Preview; one `:e2e` test asserting dashboard captures a chat turn's signals; flips ADR 0026 to Implementation: Complete | **pending** | [ADR 0026](../adr/0026-redux-devtools-dashboard.md) §6 |
 
 ## Dependencies
 
@@ -139,6 +147,14 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 0044 ← 0045 ← 0046 ← 0047 ← 0048 ← 0049 ← 0050   (ADR 0025 — extension directory layout reorg; renames + moves)
 0051                                              (independent — Heartbeat to test/support, Telemetry.Config deletion)
 0043, 0044, 0045, 0046, 0047, 0048, 0049, 0050, 0051 ← 0052   (terminal docs/cheat-sheets refresh; flips ADR 0025 status)
+
+0043 ← 0053                                        (ADR 0023/0025 — slices-as-DSL refactor lands after the misnamed-helpers cleanup)
+
+0054 ← 0055, 0057                                  (ADR 0026 — scaffold first; Buffer + Presenter are the leaves)
+0055, 0057 ← 0056                                  (ADR 0027 — Recorder middleware needs Buffer + Presenter)
+0056 ← 0058                                        (ADR 0026 — LiveViews need real captured rows)
+0058 ← 0059                                        (ADR 0026 — dev runner + guide land after the LiveViews work)
+0059 ← 0060                                        (ADR 0026 — showcase consumes the documented mount story)
 ```
 
 ## Related planning artifacts
