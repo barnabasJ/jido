@@ -79,7 +79,10 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
         Enum.reduce(instances, %{}, fn instance, acc ->
           user_for_slice = Map.get(user_state, instance.path) || %{}
           merged_input = Map.merge(instance.config || %{}, user_for_slice)
-          slice = Jido.Agent.__seed_plugin_slice__(instance.module, merged_input)
+
+          slice =
+            Jido.Agent.__seed_plugin_slice__(instance.module, merged_input, instance.path)
+
           Map.put(acc, instance.path, slice)
         end)
       end

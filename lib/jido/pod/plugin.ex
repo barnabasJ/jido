@@ -35,7 +35,6 @@ defmodule Jido.Pod.Plugin do
 
   slice do
     name "pod"
-    path :pod
 
     schema Zoi.object(%{
              topology: Zoi.any(description: "Resolved pod topology.") |> Zoi.optional(),

@@ -93,7 +93,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     slice do
       name "counter_plugin"
-      path :counter_plugin
       description "A plugin for counting"
       schema Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
     end
@@ -110,7 +109,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     slice do
       name "greeter_plugin"
-      path :greeter_plugin
       description "A plugin for greeting"
       schema Zoi.object(%{last_greeting: Zoi.string() |> Zoi.optional()})
     end
@@ -126,7 +124,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     slice do
       name "configurable_plugin"
-      path :configurable
       description "A plugin with config"
 
       config_schema(
@@ -150,7 +147,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     slice do
       name "mode_plugin"
-      path :mode_plugin
       schema Zoi.object(%{current_mode: Zoi.atom() |> Zoi.default(:normal)})
     end
 
@@ -165,7 +161,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
     slice do
       name "minimal_plugin"
-      path :minimal
     end
 
     signal_routes do
@@ -595,7 +590,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
       slice do
         name "slack_cap"
-        path :slack_cap
       end
 
       signal_routes do
@@ -615,7 +609,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
       slice do
         name "openai_cap"
-        path :openai_cap
       end
 
       signal_routes do
@@ -810,7 +803,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
         slice do
           name "dup_plugin"
-          path :dup
         end
 
         signal_routes do
@@ -844,7 +836,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
         slice do
           name "shared_a"
-          path :shared_a
         end
 
         signal_routes do
@@ -857,7 +848,6 @@ defmodule JidoTest.AgentPluginIntegrationTest do
 
         slice do
           name "shared_b"
-          path :shared_b
         end
 
         signal_routes do

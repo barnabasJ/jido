@@ -387,18 +387,19 @@ defmodule Jido.Agent do
   end
 
   @doc false
-  @spec __seed_plugin_slice__(module(), map()) :: term()
-  def __seed_plugin_slice__(plugin_module, %{} = merged_input) do
+  @spec __seed_plugin_slice__(module(), map(), atom()) :: term()
+  def __seed_plugin_slice__(plugin_module, %{} = merged_input, mount_path)
+      when is_atom(mount_path) do
     case Jido.Dsl.Slice.Info.schema(plugin_module) do
       nil ->
         if map_size(merged_input) == 0, do: nil, else: merged_input
 
       schema ->
-        seed_plugin_slice_from_schema(plugin_module, schema, merged_input)
+        seed_plugin_slice_from_schema(plugin_module, schema, merged_input, mount_path)
     end
   end
 
-  defp seed_plugin_slice_from_schema(plugin_module, schema, merged_input) do
+  defp seed_plugin_slice_from_schema(plugin_module, schema, merged_input, mount_path) do
     case Zoi.parse(schema, merged_input) do
       {:ok, validated} ->
         validated
@@ -411,23 +412,38 @@ defmodule Jido.Agent do
 
       {:error, errors} ->
         raise Jido.Agent.SliceValidationError,
-          path: Jido.Dsl.Slice.Info.path(plugin_module),
+          path: mount_path,
           module: plugin_module,
           errors: errors
     end
   end
 
   @doc false
-  @spec __normalize_plugin_instances__([module() | {module(), map()}]) :: [PluginInstance.t()]
+  @spec __normalize_plugin_instances__([{atom(), module()} | {atom(), module(), map()}]) ::
+          [PluginInstance.t()]
   def __normalize_plugin_instances__(plugins) do
-    Enum.map(plugins, &PluginInstance.new/1)
+    Enum.map(plugins, &normalize_default_decl(&1, PluginInstance))
   end
 
   @doc false
-  @spec __normalize_slice_instances__([module() | {module(), map() | keyword()}]) ::
+  @spec __normalize_slice_instances__([{atom(), module()} | {atom(), module(), map()}]) ::
           [SliceInstance.t()]
   def __normalize_slice_instances__(slices) do
-    Enum.map(slices, &SliceInstance.new/1)
+    Enum.map(slices, &normalize_default_decl(&1, SliceInstance))
+  end
+
+  defp normalize_default_decl({path, module}, instance_mod) when is_atom(path) do
+    instance_mod.new({module, %{}}, path)
+  end
+
+  defp normalize_default_decl({path, module, config}, instance_mod)
+       when is_atom(path) and is_map(config) do
+    instance_mod.new({module, config}, path)
+  end
+
+  defp normalize_default_decl({path, module, config}, instance_mod)
+       when is_atom(path) and is_list(config) do
+    instance_mod.new({module, Map.new(config)}, path)
   end
 
   # ---------------------------------------------------------------------------

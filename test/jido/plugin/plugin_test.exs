@@ -9,7 +9,6 @@ defmodule JidoTest.PluginTest do
 
     slice do
       name "basic_plugin"
-      path :basic
     end
 
     signal_routes do
@@ -23,7 +22,6 @@ defmodule JidoTest.PluginTest do
 
     slice do
       name "full_plugin"
-      path :full
       description "A fully configured plugin"
       category "test"
       vsn "1.0.0"
@@ -55,7 +53,6 @@ defmodule JidoTest.PluginTest do
   describe "plugin definition with required fields" do
     test "defines a basic plugin with required fields" do
       assert PluginInfo.name(BasicPlugin) == "basic_plugin"
-      assert PluginInfo.path(BasicPlugin) == :basic
       assert PluginInfo.actions(BasicPlugin) == [JidoTest.PluginTestAction]
     end
 
@@ -75,7 +72,6 @@ defmodule JidoTest.PluginTest do
   describe "plugin definition with all optional fields" do
     test "defines a plugin with all optional fields" do
       assert PluginInfo.name(FullPlugin) == "full_plugin"
-      assert PluginInfo.path(FullPlugin) == :full
 
       assert PluginInfo.actions(FullPlugin) == [
                JidoTest.PluginTestAction,
@@ -104,7 +100,6 @@ defmodule JidoTest.PluginTest do
     @metadata_cases [
       # {accessor_name, BasicPlugin expected, FullPlugin expected}
       {:name, "basic_plugin", "full_plugin"},
-      {:path, :basic, :full},
       {:description, nil, "A fully configured plugin"},
       {:category, nil, "test"},
       {:vsn, nil, "1.0.0"},
@@ -142,7 +137,6 @@ defmodule JidoTest.PluginTest do
           use Jido.Plugin
 
           slice do
-            path :missing
           end
         end
       end
@@ -155,7 +149,6 @@ defmodule JidoTest.PluginTest do
 
           slice do
             name "invalid-name-with-dashes"
-            path :invalid
           end
         end
       end

@@ -41,7 +41,6 @@ defmodule Jido.Thread.Slice do
 
   slice do
     name "thread"
-    path :thread
     description "Append-only conversation history thread for the agent."
     schema Thread.schema()
   end

@@ -60,7 +60,6 @@ defmodule Jido.Dsl.Slice.Verifiers.HasSchemaAndRoutesTest do
 
             slice do
               name "no_schema_no_routes"
-              path :no_schema_no_routes
             end
           end
           """)
@@ -78,7 +77,6 @@ defmodule Jido.Dsl.Slice.Verifiers.HasSchemaAndRoutesTest do
 
             slice do
               name "schema_no_routes"
-              path :schema_no_routes
               schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
             end
           end
@@ -95,7 +93,6 @@ defmodule Jido.Dsl.Slice.Verifiers.HasSchemaAndRoutesTest do
 
         slice do
           name "happy_path"
-          path :happy_path
           schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
         end
 
@@ -103,8 +100,6 @@ defmodule Jido.Dsl.Slice.Verifiers.HasSchemaAndRoutesTest do
           route "happy_path.go", JidoTest.PluginTestAction
         end
       end
-
-      assert Jido.Dsl.Slice.Info.path(HappyPathSlice) == :happy_path
 
       assert Jido.Dsl.Slice.Info.signal_routes(HappyPathSlice) == [
                {"happy_path.go", JidoTest.PluginTestAction}

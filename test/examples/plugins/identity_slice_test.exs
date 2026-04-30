@@ -30,7 +30,6 @@ defmodule JidoExampleTest.IdentitySliceTest do
 
     slice do
       name "custom_identity"
-      path :identity
       description "Custom identity slice override."
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end

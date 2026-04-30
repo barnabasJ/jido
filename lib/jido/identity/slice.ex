@@ -34,7 +34,6 @@ defmodule Jido.Identity.Slice do
 
   slice do
     name "identity"
-    path :identity
     description "Identity self-model for agent (lifecycle facts, profile)."
     schema Identity.schema()
   end

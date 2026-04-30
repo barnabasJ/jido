@@ -17,7 +17,6 @@ defmodule Jido.Dsl.SliceTest do
 
     slice do
       name "minimal"
-      path :minimal
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 
@@ -32,7 +31,6 @@ defmodule Jido.Dsl.SliceTest do
 
     slice do
       name "full"
-      path :full
       description "A full slice"
       category "test"
       vsn "0.1.0"
@@ -60,7 +58,6 @@ defmodule Jido.Dsl.SliceTest do
 
     slice do
       name "schema_only"
-      path :schema_only
       schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
     end
 
@@ -72,7 +69,6 @@ defmodule Jido.Dsl.SliceTest do
   describe "slice section accessors" do
     test "minimal slice exposes name, path, schema, and a single route" do
       assert SliceInfo.name(MinimalSlice) == "minimal"
-      assert SliceInfo.path(MinimalSlice) == :minimal
       assert SliceInfo.actions(MinimalSlice) == [JidoTest.PluginTestAction]
       assert SliceInfo.tags(MinimalSlice) == []
       assert SliceInfo.capabilities(MinimalSlice) == []
@@ -94,7 +90,6 @@ defmodule Jido.Dsl.SliceTest do
 
     test "full slice exposes every metadata field" do
       assert SliceInfo.name(FullSlice) == "full"
-      assert SliceInfo.path(FullSlice) == :full
       assert SliceInfo.description(FullSlice) == "A full slice"
       assert SliceInfo.category(FullSlice) == "test"
       assert SliceInfo.vsn(FullSlice) == "0.1.0"
@@ -134,7 +129,6 @@ defmodule Jido.Dsl.SliceTest do
           use Jido.Slice
 
           slice do
-            path :x
           end
         end
         """)
@@ -149,7 +143,6 @@ defmodule Jido.Dsl.SliceTest do
 
           slice do
             name "has spaces"
-            path :x
           end
         end
         """)

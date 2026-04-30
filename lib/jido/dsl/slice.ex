@@ -32,15 +32,6 @@ defmodule Jido.Dsl.Slice do
         required: true,
         doc: "Slice name (letters, numbers, underscores)."
       ],
-      path: [
-        type: :atom,
-        doc:
-          "Optional default mount path. Most slices should omit this — " <>
-            "host agents bind the path via `slices do slice :path, Module end`. " <>
-            "The slice-declared path is only consulted as a fallback by " <>
-            "default-mounted slices (Pod plugin, package defaults), and the " <>
-            "agent's `slices do …` always wins."
-      ],
       description: [type: :string],
       category: [type: :string],
       vsn: [type: :string],

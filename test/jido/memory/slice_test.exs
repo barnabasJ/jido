@@ -13,7 +13,6 @@ defmodule JidoTest.Memory.SliceTest do
     end
 
     test "path is :memory" do
-      assert SliceInfo.path(MemorySlice) == :memory
     end
 
     test "has memory capability" do

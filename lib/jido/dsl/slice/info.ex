@@ -22,16 +22,6 @@ defmodule Jido.Dsl.Slice.Info do
   @spec name(module()) :: String.t() | nil
   def name(module), do: Extension.get_opt(module, @section, :name)
 
-  @doc """
-  Returns the slice's optional default mount path.
-
-  Most slices return `nil` here — the host agent's `slices do …` block
-  is the source of truth for the mount path. Only consulted as a fallback
-  by default-mounted slices (Pod plugin, package defaults).
-  """
-  @spec path(module()) :: atom() | nil
-  def path(module), do: Extension.get_opt(module, @section, :path)
-
   @doc "Returns the slice's description."
   @spec description(module()) :: String.t() | nil
   def description(module), do: Extension.get_opt(module, @section, :description)

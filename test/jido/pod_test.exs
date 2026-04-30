@@ -22,7 +22,6 @@ defmodule JidoTest.PodTest do
 
     slice do
       name "custom_pod"
-      path :pod
 
       schema(
         Zoi.object(%{
@@ -44,7 +43,6 @@ defmodule JidoTest.PodTest do
 
     slice do
       name "pod_test_user_plugin"
-      path :pod_test_user_plugin
       schema Zoi.object(%{})
     end
   end

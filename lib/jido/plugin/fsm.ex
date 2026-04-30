@@ -27,7 +27,6 @@ defmodule Jido.Plugin.FSM do
 
       agent do
         name "my_agent"
-        path :app
         schema []
       end
 
@@ -70,7 +69,6 @@ defmodule Jido.Plugin.FSM do
 
   slice do
     name "fsm"
-    path :fsm
 
     schema Zoi.object(%{
              state: Zoi.string() |> Zoi.optional(),

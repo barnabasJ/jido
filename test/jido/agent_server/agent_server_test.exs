@@ -1102,7 +1102,6 @@ defmodule JidoTest.AgentServerTest do
 
       slice do
         name "scheduled_plugin"
-        path :scheduled_plugin
       end
 
       schedules do

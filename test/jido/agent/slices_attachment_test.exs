@@ -13,7 +13,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
     slice do
       name "simple_slice"
-      path :simple
 
       schema Zoi.object(%{
                counter: Zoi.integer() |> Zoi.default(0),
@@ -36,7 +35,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
     slice do
       name "routed_slice"
-      path :routed
       schema Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
     end
 
@@ -52,7 +50,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
     slice do
       name "other_slice"
-      path :other
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 
@@ -67,7 +64,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
     slice do
       name "bare_plugin"
-      path :bare_plugin
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 
@@ -234,7 +230,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
         slice do
           name "simple_dup"
-          path :simple
           schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
         end
 

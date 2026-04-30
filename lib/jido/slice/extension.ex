@@ -14,9 +14,9 @@ defmodule Jido.Slice.Extension do
 
   After this, host agents that list `MyApp.MemorySlice` in their
   `extensions:` keyword get a `memory do … end` block whose schema
-  is derived from the slice's `config_schema/0` plus a built-in
-  `path:` field that lets the host rename the slice's mount path
-  inline.
+  is derived from the slice's `config_schema/0`. The slice's mount
+  path is owned by the host agent's `slices do slice :path, Module
+  end` block — the contributed section carries config only.
 
   ## How it works
 
@@ -25,9 +25,8 @@ defmodule Jido.Slice.Extension do
     * `__jido_host_section__/0` — the section atom (`:memory`).
     * `__jido_host_contribution__/0` — returns the
       `%Spark.Dsl.Section{}` to surface on the host. Computed lazily
-      from `Jido.Dsl.Slice.Info.path/1` and the slice's
-      `config_schema/0`. Overridable for slices with richer Zoi
-      shapes that the translator can't handle.
+      from the slice's `config_schema/0`. Overridable for slices with
+      richer Zoi shapes that the translator can't handle.
     * `__jido_host_extension_module__/0` — the sibling
       `Spark.Dsl.Extension` module (`<Slice>.HostExtension`)
       generated alongside the slice via `@after_compile`. Host

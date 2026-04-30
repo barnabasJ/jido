@@ -11,7 +11,6 @@ defmodule Jido.Dsl.Plugin.Info do
   alias Jido.Dsl.Slice.Info, as: SliceInfo
 
   defdelegate name(module), to: SliceInfo
-  defdelegate path(module), to: SliceInfo
   defdelegate description(module), to: SliceInfo
   defdelegate category(module), to: SliceInfo
   defdelegate vsn(module), to: SliceInfo

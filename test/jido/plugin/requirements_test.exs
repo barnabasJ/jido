@@ -10,7 +10,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
 
     slice do
       name "no_requires"
-      path :no_requires
     end
   end
 
@@ -20,7 +19,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
 
     slice do
       name "config_requires"
-      path :config_requires
     end
 
     requires do
@@ -35,7 +33,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
 
     slice do
       name "app_requires"
-      path :app_requires
     end
 
     requires do
@@ -49,7 +46,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
 
     slice do
       name "missing_app_requires"
-      path :missing_app_requires
     end
 
     requires do
@@ -63,7 +59,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
 
     slice do
       name "plugin_requires"
-      path :plugin_requires
     end
 
     requires do
@@ -77,7 +72,6 @@ defmodule JidoTest.Plugin.RequirementsTest do
 
     slice do
       name "mixed_requires"
-      path :mixed_requires
     end
 
     requires do
@@ -89,14 +83,14 @@ defmodule JidoTest.Plugin.RequirementsTest do
 
   describe "validate_requirements/2" do
     test "returns :valid for plugin with no requirements" do
-      instance = Instance.new(PluginNoRequires)
+      instance = Instance.new(PluginNoRequires, :no_requires)
       context = %{mounted_plugins: [], resolved_config: %{}}
 
       assert {:ok, :valid} = Requirements.validate_requirements(instance, context)
     end
 
     test "returns :valid when config requirements are met" do
-      instance = Instance.new(PluginWithConfigRequires)
+      instance = Instance.new(PluginWithConfigRequires, :config_requires)
 
       context = %{
         mounted_plugins: [],
@@ -107,7 +101,7 @@ defmodule JidoTest.Plugin.RequirementsTest do
     end
 
     test "returns error when config requirements are missing" do
-      instance = Instance.new(PluginWithConfigRequires)
+      instance = Instance.new(PluginWithConfigRequires, :config_requires)
       context = %{mounted_plugins: [], resolved_config: %{token: "abc"}}
 
       assert {:error, missing} = Requirements.validate_requirements(instance, context)
@@ -115,7 +109,7 @@ defmodule JidoTest.Plugin.RequirementsTest do
     end
 
     test "returns error when config value is nil" do
-      instance = Instance.new(PluginWithConfigRequires)
+      instance = Instance.new(PluginWithConfigRequires, :config_requires)
       context = %{mounted_plugins: [], resolved_config: %{token: "abc", channel: nil}}
 
       assert {:error, missing} = Requirements.validate_requirements(instance, context)
@@ -123,14 +117,14 @@ defmodule JidoTest.Plugin.RequirementsTest do
     end
 
     test "returns :valid when app requirement is met" do
-      instance = Instance.new(PluginWithAppRequires)
+      instance = Instance.new(PluginWithAppRequires, :app_requires)
       context = %{mounted_plugins: [], resolved_config: %{}}
 
       assert {:ok, :valid} = Requirements.validate_requirements(instance, context)
     end
 
     test "returns error when app requirement is not met" do
-      instance = Instance.new(PluginWithMissingAppRequires)
+      instance = Instance.new(PluginWithMissingAppRequires, :missing_app_requires)
       context = %{mounted_plugins: [], resolved_config: %{}}
 
       assert {:error, missing} = Requirements.validate_requirements(instance, context)
@@ -138,8 +132,8 @@ defmodule JidoTest.Plugin.RequirementsTest do
     end
 
     test "returns :valid when plugin requirement is met" do
-      no_requires_instance = Instance.new(PluginNoRequires)
-      plugin_requires_instance = Instance.new(PluginWithPluginRequires)
+      no_requires_instance = Instance.new(PluginNoRequires, :no_requires)
+      plugin_requires_instance = Instance.new(PluginWithPluginRequires, :plugin_requires)
 
       context = %{
         mounted_plugins: [no_requires_instance],
@@ -150,7 +144,7 @@ defmodule JidoTest.Plugin.RequirementsTest do
     end
 
     test "returns error when plugin requirement is not met" do
-      plugin_requires_instance = Instance.new(PluginWithPluginRequires)
+      plugin_requires_instance = Instance.new(PluginWithPluginRequires, :plugin_requires)
       context = %{mounted_plugins: [], resolved_config: %{}}
 
       assert {:error, missing} =
@@ -160,8 +154,8 @@ defmodule JidoTest.Plugin.RequirementsTest do
     end
 
     test "returns :valid when all mixed requirements are met" do
-      no_requires_instance = Instance.new(PluginNoRequires)
-      mixed_instance = Instance.new(PluginWithMixedRequires)
+      no_requires_instance = Instance.new(PluginNoRequires, :no_requires)
+      mixed_instance = Instance.new(PluginWithMixedRequires, :mixed_requires)
 
       context = %{
         mounted_plugins: [no_requires_instance],
@@ -172,7 +166,7 @@ defmodule JidoTest.Plugin.RequirementsTest do
     end
 
     test "returns all missing requirements for mixed plugin" do
-      mixed_instance = Instance.new(PluginWithMixedRequires)
+      mixed_instance = Instance.new(PluginWithMixedRequires, :mixed_requires)
       context = %{mounted_plugins: [], resolved_config: %{}}
 
       assert {:error, missing} = Requirements.validate_requirements(mixed_instance, context)
@@ -182,7 +176,12 @@ defmodule JidoTest.Plugin.RequirementsTest do
     end
 
     test "uses instance config when resolved_config not in context" do
-      instance = Instance.new({PluginWithConfigRequires, %{token: "abc", channel: "#test"}})
+      instance =
+        Instance.new(
+          {PluginWithConfigRequires, %{token: "abc", channel: "#test"}},
+          :config_requires
+        )
+
       context = %{mounted_plugins: []}
 
       assert {:ok, :valid} = Requirements.validate_requirements(instance, context)
@@ -191,8 +190,8 @@ defmodule JidoTest.Plugin.RequirementsTest do
 
   describe "validate_all_requirements/2" do
     test "returns :valid when all plugins have requirements met" do
-      no_requires_instance = Instance.new(PluginNoRequires)
-      app_requires_instance = Instance.new(PluginWithAppRequires)
+      no_requires_instance = Instance.new(PluginNoRequires, :no_requires)
+      app_requires_instance = Instance.new(PluginWithAppRequires, :app_requires)
 
       instances = [no_requires_instance, app_requires_instance]
       config_map = %{}
@@ -201,8 +200,8 @@ defmodule JidoTest.Plugin.RequirementsTest do
     end
 
     test "returns error map with all missing requirements" do
-      config_requires_instance = Instance.new(PluginWithConfigRequires)
-      missing_app_instance = Instance.new(PluginWithMissingAppRequires)
+      config_requires_instance = Instance.new(PluginWithConfigRequires, :config_requires)
+      missing_app_instance = Instance.new(PluginWithMissingAppRequires, :missing_app_requires)
 
       instances = [config_requires_instance, missing_app_instance]
       config_map = %{}
@@ -219,7 +218,7 @@ defmodule JidoTest.Plugin.RequirementsTest do
     end
 
     test "uses config_map for resolved config per plugin" do
-      config_requires_instance = Instance.new(PluginWithConfigRequires)
+      config_requires_instance = Instance.new(PluginWithConfigRequires, :config_requires)
       instances = [config_requires_instance]
 
       config_map = %{
@@ -230,8 +229,8 @@ defmodule JidoTest.Plugin.RequirementsTest do
     end
 
     test "plugin requirements check against all mounted plugins" do
-      no_requires_instance = Instance.new(PluginNoRequires)
-      plugin_requires_instance = Instance.new(PluginWithPluginRequires)
+      no_requires_instance = Instance.new(PluginNoRequires, :no_requires)
+      plugin_requires_instance = Instance.new(PluginWithPluginRequires, :plugin_requires)
 
       instances = [no_requires_instance, plugin_requires_instance]
       config_map = %{}

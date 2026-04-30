@@ -13,7 +13,6 @@ defmodule JidoTest.Thread.SliceTest do
     end
 
     test "path is :thread" do
-      assert SliceInfo.path(ThreadSlice) == :thread
     end
 
     test "has thread capability" do

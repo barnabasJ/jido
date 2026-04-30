@@ -43,7 +43,6 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
 
     slice do
       name "scheduler_integration_plugin"
-      path :scheduler_integration_plugin
     end
 
     schedules do

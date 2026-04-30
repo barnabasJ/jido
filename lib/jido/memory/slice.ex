@@ -54,7 +54,6 @@ defmodule Jido.Memory.Slice do
 
   slice do
     name "memory"
-    path :memory
     description "Memory state for agent cognition — named map / list spaces."
     schema Memory.schema()
   end

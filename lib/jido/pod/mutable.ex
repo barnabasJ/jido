@@ -3,18 +3,18 @@ defmodule Jido.Pod.Mutable do
 
   alias Jido.Agent
   alias Jido.AgentServer
-  alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Pod
   alias Jido.Pod.Directive.StartNode
   alias Jido.Pod.Directive.StopNode
   alias Jido.Pod.Mutation
   alias Jido.Pod.Mutation.Plan
   alias Jido.Pod.Mutation.Planner
-  alias Jido.Pod.Plugin
   alias Jido.Pod.TopologyState
   alias Jido.Signal
 
-  @pod_state_key PluginInfo.path(Plugin)
+  # Pod plugin mounts at the reserved `:pod` slice key — see
+  # `Jido.Pod.TopologyState` for the same constant.
+  @pod_state_key :pod
 
   @spec mutate(AgentServer.server(), [Mutation.t() | term()], keyword()) ::
           {:ok, %{mutation_id: String.t(), queued: true}} | {:error, term()}

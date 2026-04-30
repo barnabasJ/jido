@@ -64,7 +64,6 @@ defmodule JidoExampleTest.PluginBasicsTest do
 
     slice do
       name "notes_plugin"
-      path :notes
       description "Manages a list of notes"
       schema Zoi.object(%{entries: Zoi.list(Zoi.any()) |> Zoi.default([])})
     end

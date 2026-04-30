@@ -120,7 +120,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     module = Jido.Agent.DefaultSlices.module_of(entry)
     config = Jido.Agent.DefaultSlices.config_of(entry)
     ensure_module_loaded!(module)
-    SliceInstance.new({module, Map.put(config, :__path_override__, path)})
+    SliceInstance.new({module, config}, path)
   end
 
   defp normalize_middleware!(module) when is_atom(module) do
@@ -190,11 +190,9 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     config = Map.merge(normalize_to_map(options), block_config)
 
     if plugin? do
-      decl = {module, Map.merge(config, %{__path_override__: path})}
-      {:plugin, PluginInstance.new(decl)}
+      {:plugin, PluginInstance.new({module, config}, path)}
     else
-      decl = {module, Map.merge(config, %{__path_override__: path})}
-      {:slice, SliceInstance.new(decl)}
+      {:slice, SliceInstance.new({module, config}, path)}
     end
   end
 

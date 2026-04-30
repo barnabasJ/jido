@@ -70,7 +70,6 @@ defmodule JidoExampleTest.ReactPluginTest do
 
         slice do
           name "react"
-          path :react
           schema(
             [
               messages: [type: {:list, :map}, default: []],

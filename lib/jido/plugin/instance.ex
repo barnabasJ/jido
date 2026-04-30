@@ -76,12 +76,11 @@ defmodule Jido.Plugin.Instance do
       Instance.new({MyPlugin, %{token: "abc"}})
       # => %Instance{module: MyPlugin, as: nil, config: %{token: "abc"}}
   """
-  @spec new(module() | {module(), map() | keyword()}) :: t()
-  def new(plugin_declaration) do
+  @spec new(module() | {module(), map() | keyword()}, atom()) :: t()
+  def new(plugin_declaration, base_path) when is_atom(base_path) and not is_nil(base_path) do
     {module, as_opt, overrides} = normalize_declaration(plugin_declaration)
-    {path_override, overrides} = Map.pop(overrides, :__path_override__)
+    overrides = Map.delete(overrides, :__path_override__)
 
-    base_path = path_override || PluginInfo.path(module)
     base_name = PluginInfo.name(module)
 
     resolved_config = Config.resolve_config!(module, overrides)

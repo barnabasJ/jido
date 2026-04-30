@@ -20,7 +20,6 @@ defmodule Jido.Dsl.PluginTest do
 
     slice do
       name "simple_plugin"
-      path :simple_plugin
     end
   end
 
@@ -30,7 +29,6 @@ defmodule Jido.Dsl.PluginTest do
 
     slice do
       name "full_plugin"
-      path :full_plugin
       description "A plugin with slice + middleware halves"
       schema Zoi.object(%{enabled: Zoi.boolean() |> Zoi.default(true)})
     end
@@ -85,7 +83,6 @@ defmodule Jido.Dsl.PluginTest do
 
     test "plugin module exposes the same accessor surface as a slice via Plugin.Info" do
       assert PluginInfo.name(FullPlugin) == "full_plugin"
-      assert PluginInfo.path(FullPlugin) == :full_plugin
       assert PluginInfo.description(FullPlugin) == "A plugin with slice + middleware halves"
       assert PluginInfo.actions(FullPlugin) == [JidoTest.PluginTestAction]
       assert PluginInfo.signal_routes(FullPlugin) == [{"plugin.fired", JidoTest.PluginTestAction}]

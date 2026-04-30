@@ -65,13 +65,12 @@ defmodule Jido.Slice.Instance do
 
   Raises `ArgumentError` when the resolved config fails schema validation.
   """
-  @spec new(module() | {module(), map() | keyword()}) :: t()
-  def new(declaration) do
+  @spec new(module() | {module(), map() | keyword()}, atom()) :: t()
+  def new(declaration, path) when is_atom(path) and not is_nil(path) do
     {module, overrides} = normalize_declaration(declaration)
-    {path_override, overrides} = Map.pop(overrides, :__path_override__)
+    overrides = Map.delete(overrides, :__path_override__)
 
     resolved_config = Config.resolve_config!(module, overrides)
-    path = path_override || SliceInfo.path(module)
 
     %__MODULE__{
       module: module,

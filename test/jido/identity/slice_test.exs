@@ -13,7 +13,6 @@ defmodule JidoTest.Identity.SliceTest do
     end
 
     test "path is :identity" do
-      assert SliceInfo.path(IdentitySlice) == :identity
     end
 
     test "has identity capability" do

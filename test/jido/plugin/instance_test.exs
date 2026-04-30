@@ -9,7 +9,6 @@ defmodule JidoTest.Plugin.InstanceTest do
 
     slice do
       name "test_plugin"
-      path :test
       schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
     end
   end
@@ -20,14 +19,13 @@ defmodule JidoTest.Plugin.InstanceTest do
 
     slice do
       name "slack"
-      path :slack
       schema Zoi.object(%{token: Zoi.string() |> Zoi.optional()})
     end
   end
 
   describe "new/1" do
     test "creates instance from module alone" do
-      instance = Instance.new(TestPlugin)
+      instance = Instance.new(TestPlugin, :test)
 
       assert instance.module == TestPlugin
       assert instance.as == nil
@@ -38,7 +36,7 @@ defmodule JidoTest.Plugin.InstanceTest do
     end
 
     test "creates instance from {module, map} tuple" do
-      instance = Instance.new({TestPlugin, %{custom: "value"}})
+      instance = Instance.new({TestPlugin, %{custom: "value"}}, :test)
 
       assert instance.module == TestPlugin
       assert instance.as == nil
@@ -48,7 +46,7 @@ defmodule JidoTest.Plugin.InstanceTest do
     end
 
     test "creates instance from {module, keyword_list} without :as" do
-      instance = Instance.new({TestPlugin, [custom: "value", other: 123]})
+      instance = Instance.new({TestPlugin, [custom: "value", other: 123]}, :test)
 
       assert instance.module == TestPlugin
       assert instance.as == nil
@@ -58,7 +56,7 @@ defmodule JidoTest.Plugin.InstanceTest do
     end
 
     test "creates instance with :as option from keyword list" do
-      instance = Instance.new({SlackPlugin, as: :support, token: "support-token"})
+      instance = Instance.new({SlackPlugin, as: :support, token: "support-token"}, :slack)
 
       assert instance.module == SlackPlugin
       assert instance.as == :support
@@ -68,7 +66,7 @@ defmodule JidoTest.Plugin.InstanceTest do
     end
 
     test "creates instance with only :as option" do
-      instance = Instance.new({SlackPlugin, as: :sales})
+      instance = Instance.new({SlackPlugin, as: :sales}, :slack)
 
       assert instance.module == SlackPlugin
       assert instance.as == :sales
@@ -78,11 +76,10 @@ defmodule JidoTest.Plugin.InstanceTest do
     end
 
     test "Info accessors read directly from the plugin module" do
-      instance = Instance.new(TestPlugin)
+      instance = Instance.new(TestPlugin, :test)
 
       assert instance.module == TestPlugin
       assert Jido.Dsl.Plugin.Info.name(instance.module) == "test_plugin"
-      assert Jido.Dsl.Plugin.Info.path(instance.module) == :test
     end
   end
 
@@ -114,9 +111,9 @@ defmodule JidoTest.Plugin.InstanceTest do
 
   describe "multiple instances of same plugin" do
     test "same plugin with different :as values get different state keys" do
-      support_instance = Instance.new({SlackPlugin, as: :support})
-      sales_instance = Instance.new({SlackPlugin, as: :sales})
-      default_instance = Instance.new(SlackPlugin)
+      support_instance = Instance.new({SlackPlugin, as: :support}, :slack)
+      sales_instance = Instance.new({SlackPlugin, as: :sales}, :slack)
+      default_instance = Instance.new(SlackPlugin, :slack)
 
       assert support_instance.path == :slack_support
       assert sales_instance.path == :slack_sales
@@ -128,9 +125,9 @@ defmodule JidoTest.Plugin.InstanceTest do
     end
 
     test "same plugin with different :as values get different route prefixes" do
-      support_instance = Instance.new({SlackPlugin, as: :support})
-      sales_instance = Instance.new({SlackPlugin, as: :sales})
-      default_instance = Instance.new(SlackPlugin)
+      support_instance = Instance.new({SlackPlugin, as: :support}, :slack)
+      sales_instance = Instance.new({SlackPlugin, as: :sales}, :slack)
+      default_instance = Instance.new(SlackPlugin, :slack)
 
       assert support_instance.route_prefix == "support.slack"
       assert sales_instance.route_prefix == "sales.slack"
@@ -138,8 +135,8 @@ defmodule JidoTest.Plugin.InstanceTest do
     end
 
     test "different configs are preserved per instance" do
-      support_instance = Instance.new({SlackPlugin, as: :support, token: "support-token"})
-      sales_instance = Instance.new({SlackPlugin, as: :sales, token: "sales-token"})
+      support_instance = Instance.new({SlackPlugin, as: :support, token: "support-token"}, :slack)
+      sales_instance = Instance.new({SlackPlugin, as: :sales, token: "sales-token"}, :slack)
 
       assert support_instance.config == %{token: "support-token"}
       assert sales_instance.config == %{token: "sales-token"}
@@ -148,7 +145,7 @@ defmodule JidoTest.Plugin.InstanceTest do
 
   describe "alias mechanics" do
     test "plugin can be aliased with as:" do
-      instance = Instance.new({SlackPlugin, as: :support})
+      instance = Instance.new({SlackPlugin, as: :support}, :slack)
       assert instance.as == :support
       assert instance.path == :slack_support
     end

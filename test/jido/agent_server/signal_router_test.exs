@@ -36,7 +36,6 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
     slice do
       name "plugin_with_routes"
-      path :router_plugin
     end
 
     signal_routes do
@@ -51,7 +50,6 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
 
     slice do
       name "plugin_without_routes"
-      path :no_route_plugin
     end
   end
 

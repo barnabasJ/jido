@@ -68,23 +68,17 @@ defmodule Jido.Dsl.ExtensionPathOverrideTest do
     end
   end
 
-  describe "Slice.Instance.new/1 with :__path_override__" do
-    test "honours the override key" do
-      instance =
-        SliceInstance.new({Jido.Memory.Slice, %{__path_override__: :short_term}})
+  describe "Slice.Instance.new/2 path arg" do
+    test "uses the supplied path" do
+      instance = SliceInstance.new(Jido.Memory.Slice, :short_term)
 
       assert instance.path == :short_term
       assert instance.module == Jido.Memory.Slice
     end
 
-    test "ignores the absence of the override key" do
-      instance = SliceInstance.new(Jido.Memory.Slice)
-      assert instance.path == :memory
-    end
-
-    test "strips the override key before resolving config" do
+    test "strips the legacy :__path_override__ override key from config" do
       instance =
-        SliceInstance.new({Jido.Memory.Slice, %{__path_override__: :renamed}})
+        SliceInstance.new({Jido.Memory.Slice, %{__path_override__: :renamed}}, :memory)
 
       refute Map.has_key?(instance.config, :__path_override__)
     end

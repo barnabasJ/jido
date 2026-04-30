@@ -10,7 +10,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
     slice do
       name "fake_memory"
-      path :memory
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 
@@ -25,7 +24,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
     slice do
       name "fake_thread"
-      path :thread
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 
@@ -40,7 +38,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
     slice do
       name "replacement_memory"
-      path :memory
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 
@@ -55,7 +52,6 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
     slice do
       name "user_slice"
-      path :user_stuff
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 

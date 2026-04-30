@@ -5,14 +5,17 @@ defmodule Jido.Pod.TopologyState do
   alias Jido.AgentServer
   alias Jido.AgentServer.State
   alias Jido.Dsl.Agent.Info, as: AgentInfo
-  alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Plugin.Instance, as: PluginInstance
-  alias Jido.Pod.Plugin
   alias Jido.Pod.Topology
   alias Jido.Signal
   alias Jido.Signal.Call
 
-  @pod_state_key PluginInfo.path(Plugin)
+  # The pod plugin's mount path is reserved — `AttachPodPlugin` mounts
+  # `Jido.Pod.Plugin` (or a user-supplied replacement) at `:pod`, and
+  # the runtime relies on this key being stable. Keeping it as a literal
+  # here decouples this module from how the pod plugin's path is bound
+  # at the agent's `slices do …` block.
+  @pod_state_key :pod
 
   @spec pod_plugin_instance(module()) :: {:ok, PluginInstance.t()} | {:error, term()}
   def pod_plugin_instance(agent_module) when is_atom(agent_module) do

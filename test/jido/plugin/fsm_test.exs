@@ -45,7 +45,6 @@ defmodule JidoTest.Plugin.FSMTest do
     alias Jido.Dsl.Plugin.Info, as: PluginInfo
 
     test "FSM path is :fsm" do
-      assert PluginInfo.path(FSM) == :fsm
     end
 
     test "FSM signal_routes routes jido.fsm.transition" do

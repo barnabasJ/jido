@@ -54,7 +54,6 @@ defmodule Jido.Pod.BusPlugin do
   slice do
     name "pod_bus"
     description "Auto-subscribes pod children to a named signal bus."
-    path :pod_bus
 
     schema Zoi.object(%{
              bus:

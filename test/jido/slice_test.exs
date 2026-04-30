@@ -9,7 +9,6 @@ defmodule JidoTest.SliceTest do
           use Jido.Slice
 
           slice do
-            path :x
           end
         end
         """)
@@ -24,7 +23,6 @@ defmodule JidoTest.SliceTest do
 
           slice do
             name "has spaces"
-            path :x
           end
         end
         """)
@@ -39,7 +37,6 @@ defmodule JidoTest.SliceTest do
 
       slice do
         name "minimal"
-        path :minimal
         schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
       end
 
@@ -54,7 +51,6 @@ defmodule JidoTest.SliceTest do
 
       slice do
         name "full"
-        path :full
         description "A test slice"
         category "test"
         vsn "0.1.0"
@@ -80,7 +76,6 @@ defmodule JidoTest.SliceTest do
 
     test "minimal slice exposes name and path via Info" do
       assert SliceInfo.name(MinimalSlice) == "minimal"
-      assert SliceInfo.path(MinimalSlice) == :minimal
       assert SliceInfo.actions(MinimalSlice) == [JidoTest.PluginTestAction]
       assert SliceInfo.tags(MinimalSlice) == []
       assert SliceInfo.capabilities(MinimalSlice) == []
@@ -92,7 +87,6 @@ defmodule JidoTest.SliceTest do
 
     test "full slice exposes every metadata field via Info" do
       assert SliceInfo.name(FullSlice) == "full"
-      assert SliceInfo.path(FullSlice) == :full
       assert SliceInfo.description(FullSlice) == "A test slice"
       assert SliceInfo.category(FullSlice) == "test"
       assert SliceInfo.vsn(FullSlice) == "0.1.0"
@@ -112,7 +106,6 @@ defmodule JidoTest.SliceTest do
 
       slice do
         name "schema"
-        path :schema
         schema Zoi.object(%{counter: Zoi.integer() |> Zoi.default(0)})
       end
 

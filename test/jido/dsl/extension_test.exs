@@ -127,7 +127,6 @@ defmodule Jido.Dsl.ExtensionTest do
 
       slice do
         name "slice_a"
-        path :slice_a
         schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
       end
 
@@ -144,7 +143,6 @@ defmodule Jido.Dsl.ExtensionTest do
 
       slice do
         name "slice_b"
-        path :slice_b
         schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
       end
 

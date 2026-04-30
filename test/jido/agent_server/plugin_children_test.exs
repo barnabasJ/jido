@@ -21,7 +21,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
 
     slice do
       name "no_child_plugin"
-      path :no_child
     end
   end
 
@@ -32,7 +31,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
 
     slice do
       name "single_child_plugin"
-      path :single_child
     end
 
     def child_spec(config) do
@@ -52,7 +50,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
 
     slice do
       name "multi_child_plugin"
-      path :multi_child
     end
 
     def child_spec(config) do
@@ -74,7 +71,6 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
 
     slice do
       name "invalid_child_spec_plugin"
-      path :invalid_child
     end
 
     def child_spec(_config) do

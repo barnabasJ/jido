@@ -49,7 +49,6 @@ defmodule JidoTest.Plugin.RoutesTest do
 
     slice do
       name "plugin_with_routes"
-      path :plugin_routes
     end
 
     signal_routes do
@@ -64,7 +63,6 @@ defmodule JidoTest.Plugin.RoutesTest do
 
     slice do
       name "plugin_with_opts"
-      path :plugin_opts
     end
 
     signal_routes do
@@ -79,13 +77,12 @@ defmodule JidoTest.Plugin.RoutesTest do
 
     slice do
       name "plugin_no_routes"
-      path :plugin_no_routes
     end
   end
 
   describe "expand_routes/1" do
     test "expands routes with prefix from instance" do
-      instance = Instance.new(PluginWithRoutes)
+      instance = Instance.new(PluginWithRoutes, :test)
 
       routes = Routes.expand_routes(instance)
 
@@ -95,7 +92,7 @@ defmodule JidoTest.Plugin.RoutesTest do
     end
 
     test "preserves route options" do
-      instance = Instance.new(PluginWithRoutesAndOptions)
+      instance = Instance.new(PluginWithRoutesAndOptions, :test)
 
       routes = Routes.expand_routes(instance)
 
@@ -105,7 +102,7 @@ defmodule JidoTest.Plugin.RoutesTest do
     end
 
     test "applies alias prefix when using :as option" do
-      instance = Instance.new({PluginWithRoutes, as: :support})
+      instance = Instance.new({PluginWithRoutes, as: :support}, :test)
 
       routes = Routes.expand_routes(instance)
 
@@ -115,7 +112,7 @@ defmodule JidoTest.Plugin.RoutesTest do
     end
 
     test "returns empty list when no routes and no patterns" do
-      instance = Instance.new(PluginNoRoutes)
+      instance = Instance.new(PluginNoRoutes, :test)
 
       routes = Routes.expand_routes(instance)
 
@@ -129,7 +126,6 @@ defmodule JidoTest.Plugin.RoutesTest do
 
         slice do
           name "section_routes"
-          path :section_routes
         end
 
         signal_routes do
@@ -137,7 +133,7 @@ defmodule JidoTest.Plugin.RoutesTest do
         end
       end
 
-      instance = Instance.new(PluginWithSectionRoutes)
+      instance = Instance.new(PluginWithSectionRoutes, :test)
       routes = Routes.expand_routes(instance)
 
       assert routes == [{"section_routes.custom.route", TestAction1, []}]
@@ -237,8 +233,8 @@ defmodule JidoTest.Plugin.RoutesTest do
 
   describe "integration: expand and detect" do
     test "two instances of same plugin with different :as don't conflict" do
-      support = Instance.new({PluginWithRoutes, as: :support})
-      sales = Instance.new({PluginWithRoutes, as: :sales})
+      support = Instance.new({PluginWithRoutes, as: :support}, :test)
+      sales = Instance.new({PluginWithRoutes, as: :sales}, :test)
 
       support_routes = Routes.expand_routes(support)
       sales_routes = Routes.expand_routes(sales)
@@ -250,8 +246,8 @@ defmodule JidoTest.Plugin.RoutesTest do
     end
 
     test "same plugin without :as conflicts with itself" do
-      instance1 = Instance.new(PluginWithRoutes)
-      instance2 = Instance.new(PluginWithRoutes)
+      instance1 = Instance.new(PluginWithRoutes, :test)
+      instance2 = Instance.new(PluginWithRoutes, :test)
 
       routes1 = Routes.expand_routes(instance1)
       routes2 = Routes.expand_routes(instance2)

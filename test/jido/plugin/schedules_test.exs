@@ -50,7 +50,6 @@ defmodule JidoTest.Plugin.SchedulesTest do
 
     slice do
       name "scheduled_plugin"
-      path :scheduled
     end
 
     schedules do
@@ -65,7 +64,6 @@ defmodule JidoTest.Plugin.SchedulesTest do
 
     slice do
       name "custom_signal_plugin"
-      path :custom_signal
     end
 
     schedules do
@@ -79,13 +77,12 @@ defmodule JidoTest.Plugin.SchedulesTest do
 
     slice do
       name "no_schedules"
-      path :no_schedules
     end
   end
 
   describe "expand_schedules/1" do
     test "expands simple schedule with default timezone" do
-      instance = Instance.new(PluginWithSchedules)
+      instance = Instance.new(PluginWithSchedules, :scheduled)
       schedules = Schedules.expand_schedules(instance)
 
       assert length(schedules) == 2
@@ -98,7 +95,7 @@ defmodule JidoTest.Plugin.SchedulesTest do
     end
 
     test "expands schedule with custom timezone" do
-      instance = Instance.new(PluginWithSchedules)
+      instance = Instance.new(PluginWithSchedules, :scheduled)
       schedules = Schedules.expand_schedules(instance)
 
       digest_spec = Enum.find(schedules, &(&1.action == DailyDigestAction))
@@ -109,7 +106,7 @@ defmodule JidoTest.Plugin.SchedulesTest do
     end
 
     test "expands schedule with custom signal type" do
-      instance = Instance.new(PluginWithCustomSignal)
+      instance = Instance.new(PluginWithCustomSignal, :custom_signal)
       schedules = Schedules.expand_schedules(instance)
 
       assert length(schedules) == 1
@@ -121,14 +118,14 @@ defmodule JidoTest.Plugin.SchedulesTest do
     end
 
     test "returns empty list for plugin without schedules" do
-      instance = Instance.new(PluginNoSchedules)
+      instance = Instance.new(PluginNoSchedules, :no_schedules)
       schedules = Schedules.expand_schedules(instance)
 
       assert schedules == []
     end
 
     test "applies alias to job_id when using :as option" do
-      instance = Instance.new({PluginWithSchedules, as: :support})
+      instance = Instance.new({PluginWithSchedules, as: :support}, :scheduled)
       schedules = Schedules.expand_schedules(instance)
 
       refresh_spec = Enum.find(schedules, &(&1.action == RefreshTokenAction))
@@ -136,7 +133,7 @@ defmodule JidoTest.Plugin.SchedulesTest do
     end
 
     test "applies alias to signal_type when using :as option" do
-      instance = Instance.new({PluginWithSchedules, as: :support})
+      instance = Instance.new({PluginWithSchedules, as: :support}, :scheduled)
       schedules = Schedules.expand_schedules(instance)
 
       refresh_spec = Enum.find(schedules, &(&1.action == RefreshTokenAction))
@@ -148,7 +145,7 @@ defmodule JidoTest.Plugin.SchedulesTest do
 
   describe "schedule_routes/1" do
     test "generates routes for schedule signal types" do
-      instance = Instance.new(PluginWithSchedules)
+      instance = Instance.new(PluginWithSchedules, :scheduled)
       routes = Schedules.schedule_routes(instance)
 
       assert length(routes) == 2
@@ -165,14 +162,14 @@ defmodule JidoTest.Plugin.SchedulesTest do
     end
 
     test "returns empty list for plugin without schedules" do
-      instance = Instance.new(PluginNoSchedules)
+      instance = Instance.new(PluginNoSchedules, :no_schedules)
       routes = Schedules.schedule_routes(instance)
 
       assert routes == []
     end
 
     test "applies alias prefix to routes when using :as option" do
-      instance = Instance.new({PluginWithSchedules, as: :sales})
+      instance = Instance.new({PluginWithSchedules, as: :sales}, :scheduled)
       routes = Schedules.schedule_routes(instance)
 
       assert length(routes) == 2
@@ -195,8 +192,8 @@ defmodule JidoTest.Plugin.SchedulesTest do
 
   describe "job_id uniqueness" do
     test "different plugin instances have different job_ids" do
-      support = Instance.new({PluginWithSchedules, as: :support})
-      sales = Instance.new({PluginWithSchedules, as: :sales})
+      support = Instance.new({PluginWithSchedules, as: :support}, :scheduled)
+      sales = Instance.new({PluginWithSchedules, as: :sales}, :scheduled)
 
       support_schedules = Schedules.expand_schedules(support)
       sales_schedules = Schedules.expand_schedules(sales)
@@ -214,8 +211,8 @@ defmodule JidoTest.Plugin.SchedulesTest do
     end
 
     test "same plugin without alias has consistent job_id" do
-      instance1 = Instance.new(PluginWithSchedules)
-      instance2 = Instance.new(PluginWithSchedules)
+      instance1 = Instance.new(PluginWithSchedules, :scheduled)
+      instance2 = Instance.new(PluginWithSchedules, :scheduled)
 
       schedules1 = Schedules.expand_schedules(instance1)
       schedules2 = Schedules.expand_schedules(instance2)

@@ -104,7 +104,6 @@ defmodule JidoTest.TestAgents do
 
     slice do
       name "test_routes_plugin"
-      path :test_routes
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 
@@ -120,7 +119,6 @@ defmodule JidoTest.TestAgents do
 
     slice do
       name "priority_plugin"
-      path :priority
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 

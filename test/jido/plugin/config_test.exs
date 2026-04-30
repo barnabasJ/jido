@@ -9,7 +9,6 @@ defmodule JidoTest.Plugin.ConfigTest do
 
     slice do
       name "no_otp_app"
-      path :no_otp_app
     end
   end
 
@@ -19,7 +18,6 @@ defmodule JidoTest.Plugin.ConfigTest do
 
     slice do
       name "with_otp_app"
-      path :with_otp_app
       otp_app :jido
     end
   end
@@ -30,7 +28,6 @@ defmodule JidoTest.Plugin.ConfigTest do
 
     slice do
       name "with_schema"
-      path :with_schema
       otp_app :jido
 
       config_schema Zoi.object(%{

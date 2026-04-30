@@ -86,7 +86,6 @@ defmodule Jido.AI.ReAct do
 
   slice do
     name "ai"
-    path :ai
     description "ReAct reasoning slice attached via `slices:` on a Jido.Agent."
 
     schema Zoi.object(
@@ -135,19 +134,10 @@ defmodule Jido.AI.ReAct do
 
   @doc false
   def __jido_host_contribution__ do
-    base_path = Jido.Dsl.Slice.Info.path(__MODULE__)
-
     %Spark.Dsl.Section{
       name: :react,
       describe: Jido.Dsl.Slice.Info.description(__MODULE__),
       schema: [
-        path: [
-          type: :atom,
-          default: base_path,
-          doc:
-            "Slice mount path on this host. Defaults to `#{inspect(base_path)}`. " <>
-              "Override to rename the slice's slot in `agent.state`."
-        ],
         model: [
           type: :any,
           doc: "Model spec accepted by `ReqLLM.Generation.generate_text/3`."
