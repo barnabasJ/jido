@@ -82,7 +82,18 @@ defmodule Jido.Pod do
       extensions: [
         type: {:list, :any},
         default: [],
-        doc: "Plugin / slice / middleware modules registered with this pod."
+        doc:
+          "Modules whose typed DSL section the host wants to call into " <>
+            "(e.g. `Jido.AI.ReAct` to unlock `react do … end`). " <>
+            "Slice / plugin enumeration goes in `slices do … end`."
+      ],
+      middleware: [
+        type: {:list, :any},
+        default: [],
+        doc:
+          "Ordered list of middleware modules. Order is the wrap-chain " <>
+            "order. Plugin modules with middleware behaviour also appear " <>
+            "here for ordering, in addition to `slices do … end` for path."
       ],
       jido: [
         type: :atom,

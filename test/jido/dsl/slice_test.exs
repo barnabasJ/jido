@@ -196,10 +196,10 @@ defmodule Jido.Dsl.SliceTest do
     end
   end
 
-  # TODO: revisit per task 0053 — `as: :plugin` override on a bare slice may no
+  # NOTE: revisit per task 0053 — `as: :plugin` override on a bare slice may no
   # longer apply; the new DSL exposes distinct sections for slices/plugins.
-  @tag :skip
   describe "task 0029 enforcement: bare slice as :plugin override raises" do
+    @describetag :skip
     test "extensions: [{BareSlice, as: :plugin}] raises with a useful message" do
       assert_raise RuntimeError, ~r/is not a `use Jido.Plugin` module/, fn ->
         defmodule BareSliceAsPluginAgent do

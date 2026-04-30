@@ -118,6 +118,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
 
     action do
       name "expand_pod"
+      path :pod
       schema []
     end
 

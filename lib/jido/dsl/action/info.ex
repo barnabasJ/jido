@@ -32,6 +32,16 @@ defmodule Jido.Dsl.Action.Info do
   @spec vsn(module()) :: String.t() | nil
   def vsn(module), do: Extension.get_opt(module, @section, :vsn)
 
+  @doc """
+  Returns the action's optional escape-valve mount path.
+
+  Most actions return `nil` — the framework resolves the slice path from
+  the slice whose `signal_routes` route to this action. Only set on ad-hoc
+  actions that aren't owned by a slice.
+  """
+  @spec path(module()) :: atom() | nil
+  def path(module), do: Extension.get_opt(module, @section, :path)
+
   @doc "Returns the input schema of the Action."
   @spec schema(module()) :: term()
   def schema(module), do: Extension.get_opt(module, @section, :schema, [])

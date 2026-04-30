@@ -268,7 +268,7 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
   # ===========================================================================
 
   describe "slices: validation" do
-    # TODO: revisit per task 0053 — the `as: :plugin` force-classification override
+    # NOTE: revisit per task 0053 — the `as: :plugin` force-classification override
     # may no longer apply with the unambiguous `slices do …` block. The new DSL
     # disambiguates slice/plugin/middleware kinds via separate sections, so
     # force-mounting a bare slice as a plugin via `as:` may not be supported.
@@ -287,7 +287,7 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
       end
     end
 
-    # TODO: revisit per task 0053 — the rejection message and code path are tied
+    # NOTE: revisit per task 0053 — the rejection message and code path are tied
     # to the legacy `extensions: […]` enumeration channel. Equivalent validation
     # under `slices do slice :path, NotASlice end` may surface a different error.
     @tag :skip

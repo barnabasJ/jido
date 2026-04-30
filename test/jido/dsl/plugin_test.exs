@@ -124,11 +124,11 @@ defmodule Jido.Dsl.PluginTest do
     end
   end
 
-  # TODO: revisit per task 0053 — `as: :slice` override on a plugin may no
+  # NOTE: revisit per task 0053 — `as: :slice` override on a plugin may no
   # longer apply since the new `slices do …` block is the unambiguous channel
   # for slice mounts.
-  @tag :skip
   describe "task 0029 enforcement (relaxed in task 0034 via explicit `as:`)" do
+    @describetag :skip
     test "extensions: [{Plugin, as: :slice}] force-mounts the plugin as a slice" do
       defmodule PluginAsSliceAgent do
         use Jido.Agent,

@@ -1,7 +1,7 @@
 defmodule Jido.Dsl.AgentKindInferenceTest do
   use ExUnit.Case, async: true
 
-  # TODO: revisit per task 0053 — kind inference from markers in a single
+  # NOTE: revisit per task 0053 — kind inference from markers in a single
   # `extensions: [...]` flat list no longer applies. The new surface uses
   # explicit `slices do …` / `middleware: […]` / `extensions: […]` sections,
   # so kind classification is unambiguous by construction. Tests in this
@@ -54,7 +54,7 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
     def on_signal(signal, ctx, _opts, next), do: next.(signal, ctx)
   end
 
-  # TODO: revisit per task 0053 — kind inference from a flat `extensions: […]`
+  # NOTE: revisit per task 0053 — kind inference from a flat `extensions: […]`
   # list is no longer the entry point. Slice/plugin/middleware kinds are
   # disambiguated by which DSL section/option each entry lives in:
   #   - `slices do …`            → slices
@@ -127,7 +127,7 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
     end
   end
 
-  # TODO: revisit per task 0053 — `as:` overrides and force-classification
+  # NOTE: revisit per task 0053 — `as:` overrides and force-classification
   # semantics likely no longer apply with the new unambiguous DSL surface.
   describe "kind override (rare): `{Mod, as: :slice}`" do
     defmodule OverridePluginToSliceAgent do
@@ -146,7 +146,7 @@ defmodule Jido.Dsl.AgentKindInferenceTest do
     end
   end
 
-  # TODO: revisit per task 0053 — marker-mismatch errors arose from inferring
+  # NOTE: revisit per task 0053 — marker-mismatch errors arose from inferring
   # kind from `extensions: […]`. With distinct DSL sections, the error shape
   # and trigger conditions change.
   describe "marker-mismatch errors" do

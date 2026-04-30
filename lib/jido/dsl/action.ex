@@ -27,6 +27,15 @@ defmodule Jido.Dsl.Action do
       category: [type: :string],
       tags: [type: {:list, :string}, default: []],
       vsn: [type: :string],
+      path: [
+        type: :atom,
+        doc:
+          "Optional escape-valve mount path. Most actions should omit this — " <>
+            "the framework resolves the action's slice path from the slice " <>
+            "whose `signal_routes` route to it. Only declare `path:` for " <>
+            "ad-hoc actions that aren't owned by a slice (e.g. test fixtures, " <>
+            "in-turn pod-mutation actions on the agent's own signal_routes)."
+      ],
       compensation: [
         type: :any,
         default: %{enabled: false, max_retries: 1, timeout: 5000},

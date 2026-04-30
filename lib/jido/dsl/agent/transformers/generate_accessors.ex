@@ -238,10 +238,25 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
 
       defp __resolve_slice_path__(action)
            when is_atom(action) and not is_nil(action) do
+        # Resolution order:
+        #   1. Slice that routes to this action (compile-time lookup table
+        #      built from each mounted slice's `signal_routes`).
+        #   2. The action's own `path :foo` escape valve (kept for ad-hoc
+        #      actions not owned by a slice — e.g. test fixtures, in-turn
+        #      pod-mutation actions on the agent's own signal_routes).
+        #   3. The agent's own `path :foo` (its `agent do …` slice).
         case Map.get(@slice_path_for_action, action) do
-          path when is_atom(path) and not is_nil(path) -> path
-          _ -> Jido.Dsl.Agent.Info.path(__MODULE__)
+          path when is_atom(path) and not is_nil(path) ->
+            path
+
+          _ ->
+            case Jido.Dsl.Action.Info.path(action) do
+              path when is_atom(path) and not is_nil(path) -> path
+              _ -> Jido.Dsl.Agent.Info.path(__MODULE__)
+            end
         end
+      rescue
+        UndefinedFunctionError -> Jido.Dsl.Agent.Info.path(__MODULE__)
       end
 
       defp __resolve_slice_path__(_action), do: Jido.Dsl.Agent.Info.path(__MODULE__)

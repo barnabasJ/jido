@@ -119,7 +119,7 @@ defmodule Jido.Dsl.ExtensionTest do
       assert Code.ensure_loaded?(Jido.Dsl.ExtensionTest.HostValidMemory)
     end
 
-    # TODO: revisit per task 0053 — the contributed section's `path:` field
+    # NOTE: revisit per task 0053 — the contributed section's `path:` field
     # was the historical path-override mechanism. After task 0053, paths are
     # owned by the agent's `slices do …` block; the contributed section
     # carries config only, and bad-type validation happens at the

@@ -144,7 +144,7 @@ defmodule JidoTest.TestAgents do
     end
   end
 
-  # TODO: revisit per task 0053 — `as:` override semantics (re-mount the same
+  # NOTE: revisit per task 0053 — `as:` override semantics (re-mount the same
   # plugin under multiple paths) no longer apply to the unambiguous `slices do …`
   # block. The original test exercised two-instance mounting via `{Plugin, as: :foo}`
   # tuples; the new shape would require per-mount route prefixing, which task 0053

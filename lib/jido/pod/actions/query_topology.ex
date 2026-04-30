@@ -20,7 +20,7 @@ defmodule Jido.Pod.Actions.QueryTopology do
   alias Jido.Signal.Call
 
   @impl true
-  def run(signal, _slice, _opts, _ctx) do
+  def run(signal, slice, _opts, _ctx) do
     directive =
       Call.reply_from_state(
         signal,
@@ -29,6 +29,8 @@ defmodule Jido.Pod.Actions.QueryTopology do
         {Jido.Pod.Queries, :build_topology_reply, []}
       )
 
-    {:ok, %{}, List.wrap(directive)}
+    # Read-only query: return the unchanged slice so the framework's
+    # slice-result handler doesn't overwrite agent.state[:pod] with `%{}`.
+    {:ok, slice, List.wrap(directive)}
   end
 end
