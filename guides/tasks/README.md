@@ -109,6 +109,7 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 | [0058](0058-dashboard-router-and-liveviews.md) | `Jido.Dashboard.Router` macro (`jido_dashboard "/path"` Oban-Web style) + `Live.AgentList` (registry-discovered agents) + `Live.AgentDetail` (PubSub stream timeline + signal detail formatted by Presenter); inline CSS in `priv/static/jido_dashboard.css`; flips ADR 0026 to Implementation: Partial | **pending** | [ADR 0026](../adr/0026-redux-devtools-dashboard.md) §1 §3 |
 | [0059](0059-dashboard-dev-runner-preview-and-docs.md) | Dev-only `Jido.Dashboard.Endpoint` (gated on `Mix.env() == :dev`) + `mix jido.dashboard --port N --host …` task; `guides/dashboard.md` (mount, redaction, opt-in toggle, multi-node note, Claude Preview workflow); `guides/dashboard.livemd` (counter agent end-to-end demo); flips ADR 0026 status to Accepted / Implementation: Partial | **pending** | [ADR 0026](../adr/0026-redux-devtools-dashboard.md) §3 |
 | [0060](0060-example-showcase-app.md) | New `examples/jido_showcase/` Phoenix LiveView app with Home / Chat (LM Studio + `Jido.AI.ReAct` agent) / Pod / Multi-slice / Sensor / Dashboard pages; standalone `mix.exs` (path-deps `jido` + `req_llm`); esbuild + tailwind asset pipeline; `.claude/launch.json` for Claude Preview; one `:e2e` test asserting dashboard captures a chat turn's signals; flips ADR 0026 to Implementation: Complete | **pending** | [ADR 0026](../adr/0026-redux-devtools-dashboard.md) §6 |
+| [0061](0061-collapse-pod-into-agent-extension.md) | Collapse `Jido.Pod` into a `Jido.Slice` + `Jido.Slice.Extension` (same shape as `Jido.AI.ReAct`). Delete `Jido.Dsl.Pod`, `Jido.Pod.BeforeCompile`, `AttachPodPlugin` / `ResolveTopology` transformers, `Jido.Pod.Plugin`, and the duplicate Pod opt_schema / `__using__` / `handle_opts`. Users mount via `use Jido.Agent, extensions: [Jido.Pod]` with auto-mount opt on the slice extension | **pending** | Follow-up to [task 0053](0053-slices-as-agent-dsl-entity.md); shape parity with [ADR 0023](../adr/0023-spark-dsl-and-registerable-extensions.md) §4 |
 
 ## Dependencies
 
@@ -148,7 +149,7 @@ Each task corresponds to exactly one commit. The PR is expected to be **red from
 0051                                              (independent — Heartbeat to test/support, Telemetry.Config deletion)
 0043, 0044, 0045, 0046, 0047, 0048, 0049, 0050, 0051 ← 0052   (terminal docs/cheat-sheets refresh; flips ADR 0025 status)
 
-0043 ← 0053                                        (ADR 0023/0025 — slices-as-DSL refactor lands after the misnamed-helpers cleanup)
+0043 ← 0053 ← 0061                                 (slices-as-DSL refactor lands after the misnamed-helpers cleanup; Pod-as-extension lands directly after slices-as-DSL since it consumes the new mount machinery)
 
 0054 ← 0055, 0057                                  (ADR 0026 — scaffold first; Buffer + Presenter are the leaves)
 0055, 0057 ← 0056                                  (ADR 0027 — Recorder middleware needs Buffer + Presenter)
