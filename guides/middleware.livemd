@@ -374,8 +374,8 @@ contract instead of two.
 
 ## Where to next
 
-- [Plugins](plugins.livemd) — the slice + middleware combo.
-- [Actions and directives](actions-and-directives.livemd) — what comes back
+* [Plugins](plugins.livemd) — the slice + middleware combo.
+* [Actions and directives](actions-and-directives.livemd) — what comes back
   from the chain's innermost layer.
-- [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
+* [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
   end-to-end signal lifecycle including how middleware fits in.

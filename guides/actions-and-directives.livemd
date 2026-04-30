@@ -606,8 +606,8 @@ IO.inspect(captured, label: ":captured slice value after cascade — set by rout
 
 ## Where to next
 
-- [Slices](slices.livemd) — `path:`, schema defaults, multi-slice writes.
-- [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
+* [Slices](slices.livemd) — `path:`, schema defaults, multi-slice writes.
+* [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
   the AgentServer primitives the cascade pattern leans on.
-- [Cron and child lifecycle](cron-children-lifecycle.livemd) — the
+* [Cron and child lifecycle](cron-children-lifecycle.livemd) — the
   `Cron`, `CronCancel`, `SpawnAgent`, and `AdoptChild` cascades.

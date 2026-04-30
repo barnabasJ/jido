@@ -24,15 +24,15 @@ end
 `Jido.AgentServer` is the runtime side. Four primitives let callers
 interact with a running agent:
 
-- **`call/4`** — synchronous request. Send a signal, wait for the pipeline
+* **`call/4`** — synchronous request. Send a signal, wait for the pipeline
   to finish, project the post-pipeline state through a selector, return
   the selector's result.
-- **`cast/3`** — fire-and-forget. Send a signal; return `:ok` immediately.
-- **`subscribe/4`** — ambient subscription. Register a selector that
+* **`cast/3`** — fire-and-forget. Send a signal; return `:ok` immediately.
+* **`subscribe/4`** — ambient subscription. Register a selector that
   fires on every signal matching a pattern; selector return decides
   whether the subscriber sees a result (`{:ok, _}` / `{:error, _}`) or
   the subscription stays silent (`:skip`).
-- **`await_ready/2`** — block until the agent has emitted
+* **`await_ready/2`** — block until the agent has emitted
   `jido.agent.lifecycle.ready` (post-thaw, post-init).
 
 Plus **`state/3`** — read-only projection of the current agent state,
@@ -447,9 +447,9 @@ IO.inspect(FlakyAction.attempts(:demo), label: "total action invocations")
 
 ## Where to next
 
-- [Slices](slices.livemd) — what the selector projects against.
-- [Middleware](middleware.livemd) — how Retry sits in the chain.
-- [Actions and directives](actions-and-directives.livemd) — the cascade
+* [Slices](slices.livemd) — what the selector projects against.
+* [Middleware](middleware.livemd) — how Retry sits in the chain.
+* [Actions and directives](actions-and-directives.livemd) — the cascade
   pattern that uses subscribe under the hood.
-- [Observability](observability.livemd) — telemetry, traces, and
+* [Observability](observability.livemd) — telemetry, traces, and
   selector-based reads as the no-polling pattern.

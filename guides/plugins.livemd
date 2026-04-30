@@ -86,9 +86,12 @@ defmodule CounterPlugin do
     schema Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
   end
 
+  # Plugin route paths are auto-prefixed with the plugin's name. Declaring
+  # `route "increment"` here surfaces as `"counter_plugin.increment"` on
+  # the host agent.
   signal_routes do
-    route "counter_plugin.increment", Counter.Increment
-    route "counter_plugin.decrement", Counter.Decrement
+    route "increment", Counter.Increment
+    route "decrement", Counter.Decrement
   end
 end
 
@@ -157,7 +160,7 @@ defmodule GreeterPlugin do
   end
 
   signal_routes do
-    route "greeter.hello", Greeter.Greet
+    route "hello", Greeter.Greet
   end
 end
 
@@ -197,7 +200,7 @@ defmodule ConfigurablePlugin do
   end
 
   signal_routes do
-    route "configurable.tick", Counter.Increment
+    route "tick", Counter.Increment
   end
 end
 
@@ -233,7 +236,7 @@ defmodule ContributingPlugin do
   end
 
   signal_routes do
-    route "react.start", Counter.Increment
+    route "start", Counter.Increment
   end
 end
 
@@ -361,8 +364,10 @@ defmodule MetricsPlugin do
     schema Zoi.object(%{counted: Zoi.integer() |> Zoi.default(0)})
   end
 
+  # `route "tick"` becomes `"metrics_plugin.tick"` on the host because the
+  # plugin's `name "metrics_plugin"` is the auto-prefix.
   signal_routes do
-    route "metrics.tick", Metrics.Tick
+    route "tick", Metrics.Tick
   end
 
   @impl Jido.Middleware
@@ -383,7 +388,7 @@ end
 {:ok, m_pid} = Demo.Jido.start_agent(MetricsAgent, id: "plugins-demo-metrics")
 :ok = Jido.AgentServer.await_ready(m_pid)
 
-tick = Jido.Signal.new!("metrics.tick", %{}, source: "/livebook")
+tick = Jido.Signal.new!("metrics_plugin.tick", %{}, source: "/livebook")
 
 {:ok, counted} =
   Jido.AgentServer.call(m_pid, tick, fn s -> {:ok, s.agent.state.metrics.counted} end)
@@ -400,9 +405,9 @@ IO.inspect(counted, label: "metrics.counted after one tick (slice update from ac
 
 ## Where to next
 
-- [Slices](slices.livemd) — declarative state without the middleware half.
-- [Middleware](middleware.livemd) — the `on_signal/4` chain in detail.
-- [Actions and directives](actions-and-directives.livemd) — what plugin
+* [Slices](slices.livemd) — declarative state without the middleware half.
+* [Middleware](middleware.livemd) — the `on_signal/4` chain in detail.
+* [Actions and directives](actions-and-directives.livemd) — what plugin
   actions return.
-- [Pods](pods.livemd) — the special-case plugin shape that manages
+* [Pods](pods.livemd) — the special-case plugin shape that manages
   hierarchies of agents.

@@ -393,5 +393,5 @@ end
 
 ## Where to next
 
-- [Middleware](middleware.livemd) — wrapping the signal pipeline.
-- [Actions and directives](actions-and-directives.livemd) — the return shape and directive surface.
+* [Middleware](middleware.livemd) — wrapping the signal pipeline.
+* [Actions and directives](actions-and-directives.livemd) — the return shape and directive surface.

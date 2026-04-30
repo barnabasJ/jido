@@ -346,11 +346,11 @@ IO.inspect(adopted_pid == orphan_pid, label: "adopted pid equals the original or
 Children configure how they react to their parent's death via
 `on_parent_death:`. Three modes:
 
-- `:stop` (default) — the child's logical parent dies and the child
+* `:stop` (default) — the child's logical parent dies and the child
   follows.
-- `:continue` — the child becomes orphaned, `state.parent` clears, the
+* `:continue` — the child becomes orphaned, `state.parent` clears, the
   former parent is preserved in `state.orphaned_from`.
-- `:emit_orphan` — same as `:continue` plus the child receives a
+* `:emit_orphan` — same as `:continue` plus the child receives a
   `jido.agent.orphaned` signal.
 
 ```elixir
@@ -441,12 +441,12 @@ end
 
 ## Where to next
 
-- [Actions and directives](actions-and-directives.livemd) — the
+* [Actions and directives](actions-and-directives.livemd) — the
   directive surface in detail.
-- [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
+* [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
   the `subscribe/4` pattern these cascades depend on.
-- [Pods](pods.livemd) — pods reuse the same `child.started` /
+* [Pods](pods.livemd) — pods reuse the same `child.started` /
   `child.exit` cascades to track topology nodes.
-- [Observability](observability.livemd) — the
+* [Observability](observability.livemd) — the
   `[:jido, :agent_server, :cron, *]` telemetry that fires alongside
   these cascades.

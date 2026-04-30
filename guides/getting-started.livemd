@@ -1,10 +1,12 @@
 # Quick Start
 
+## Section
+
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https://github.com/agentjido/jido/blob/main/guides/getting-started.livemd)
 
 ```elixir
 Mix.install([
-  {:jido, "~> 2.0"}
+  {:jido, path: Path.expand("..", __DIR__)}
 ])
 ```
 
@@ -21,21 +23,21 @@ This guide gets you from zero to a working Jido agent in 5 minutes. You'll learn
 
 Jido uses instance-scoped supervisors. Define an instance module and add it to your supervision tree:
 
-```elixir
+```text
 # In lib/my_app/jido.ex
 defmodule MyApp.Jido do
   use Jido, otp_app: :my_app
 end
 ```
 
-```elixir
+```text
 # In config/config.exs
 config :my_app, MyApp.Jido,
   max_tasks: 1000,
   agent_pools: []
 ```
 
-```elixir
+```text
 # In your application.ex
 children = [
   MyApp.Jido
@@ -119,9 +121,10 @@ IO.inspect(agent.state, label: "After increment by 1")
 ```
 
 Key points:
-- `cmd/2` is **pure** - same inputs always produce same outputs
-- The returned agent is fully updated
-- Directives describe side effects but don't modify state
+
+* `cmd/2` is **pure** - same inputs always produce same outputs
+* The returned agent is fully updated
+* Directives describe side effects but don't modify state
 
 ## Step 4: Handle Signals with AgentServer
 
@@ -193,12 +196,12 @@ Create and send signals:
 alias Jido.Signal
 
 increment_signal = Signal.new!("counter.increment", %{amount: 10}, source: "/user")
-{:ok, agent} = Jido.AgentServer.call(pid, increment_signal)
-IO.inspect(agent.state, label: "After increment by 10")
+{:ok, count} = Jido.AgentServer.call(pid, increment_signal, fn s -> {:ok, s.agent.state.state.count} end)
+IO.inspect(count, label: "count after increment by 10")
 
 decrement_signal = Signal.new!("counter.decrement", %{amount: 3}, source: "/user")
-{:ok, agent} = Jido.AgentServer.call(pid, decrement_signal)
-IO.inspect(agent.state, label: "After decrement by 3")
+{:ok, count} = Jido.AgentServer.call(pid, decrement_signal, fn s -> {:ok, s.agent.state.state.count} end)
+IO.inspect(count, label: "count after decrement by 3")
 ```
 
 For async processing, use `cast/2`:
@@ -208,8 +211,8 @@ reset_signal = Signal.new!("counter.reset", %{}, source: "/admin")
 :ok = Jido.AgentServer.cast(pid, reset_signal)
 
 Process.sleep(50)
-{:ok, state} = Jido.AgentServer.state(pid)
-IO.inspect(state.agent.state, label: "After reset")
+{:ok, count} = Jido.AgentServer.state(pid, fn s -> {:ok, s.agent.state.state.count} end)
+IO.inspect(count, label: "count after reset")
 ```
 
 ## Step 5: Query and Manage Agents
@@ -237,19 +240,19 @@ Stop the agent when done:
 
 You've learned the core Jido workflow:
 
-| Concept | Purpose |
-|---------|---------|
+| Concept                      | Purpose                                   |
+| ---------------------------- | ----------------------------------------- |
 | `use Jido, otp_app: :my_app` | Define an instance module for your agents |
-| `use Jido.Agent` | Define agents with schemas |
-| `cmd/2` | Pure state transformations |
-| `MyApp.Jido.start_agent/2` | Run agents in AgentServer |
-| `AgentServer.call/3` | Synchronous signal processing |
-| `AgentServer.cast/2` | Async signal processing |
-| `Signal.new!/3` | Create signals to send to agents |
+| `use Jido.Agent`             | Define agents with schemas                |
+| `cmd/2`                      | Pure state transformations                |
+| `MyApp.Jido.start_agent/2`   | Run agents in AgentServer                 |
+| `AgentServer.call/3`         | Synchronous signal processing             |
+| `AgentServer.cast/2`         | Async signal processing                   |
+| `Signal.new!/3`              | Create signals to send to agents          |
 
 ## Where to go next
 
-- **[Core Loop](core-loop.md)** — Understand "Signal → Action → cmd/2 → {agent, directives}"
-- **[Your First Plugin](your-first-plugin.md)** — Package actions with isolated state
-- **[Your First Sensor](your-first-sensor.md)** — Feed external events into your agent
-- **[Seeing What Happened](observability-intro.md)** — Debug with logs and telemetry
+* **[Core Loop](core-loop.md)** — Understand "Signal → Action → cmd/2 → {agent, directives}"
+* **[Your First Plugin](your-first-plugin.md)** — Package actions with isolated state
+* **[Your First Sensor](your-first-sensor.md)** — Feed external events into your agent
+* **[Seeing What Happened](observability-intro.md)** — Debug with logs and telemetry

@@ -404,10 +404,10 @@ IO.inspect(Enum.map(events, & &1.type), label: "event types from instance shortc
 
 ## Where to next
 
-- [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
+* [Call / cast / await / subscribe](call-cast-await-subscribe.livemd) —
   the no-polling read pattern in detail.
-- [Cron and child lifecycle](cron-children-lifecycle.livemd) — the
+* [Cron and child lifecycle](cron-children-lifecycle.livemd) — the
   cascade telemetry events `[:jido, :agent_server, :cron, :register]` /
   `[:jido, :agent_server, :cron, :cancel]`.
-- [Pods](pods.livemd) — pod-specific telemetry
+* [Pods](pods.livemd) — pod-specific telemetry
   (`[:jido, :pod, :reconcile, *]`, `[:jido, :pod, :node, :ensure, *]`).
