@@ -141,21 +141,6 @@ defmodule Jido.Dsl.SliceTest do
       end
     end
 
-    @tag :skip
-    test "raises when required `path` is missing — task 0053 made path optional" do
-      assert_raise Spark.Error.DslError, ~r/required :path option/, fn ->
-        Code.compile_string("""
-        defmodule Jido.Dsl.SliceTest.NoPath do
-          use Jido.Slice
-
-          slice do
-            name "no_path"
-          end
-        end
-        """)
-      end
-    end
-
     test "raises when name has invalid characters" do
       assert_raise Spark.Error.DslError, fn ->
         Code.compile_string("""
@@ -193,24 +178,6 @@ defmodule Jido.Dsl.SliceTest do
 
     test "extensions: [Slice] mounts the slice at its path()" do
       assert SchemaSlice in Jido.Dsl.Agent.Info.slices(BareSliceAgent)
-    end
-  end
-
-  # NOTE: revisit per task 0053 — `as: :plugin` override on a bare slice may no
-  # longer apply; the new DSL exposes distinct sections for slices/plugins.
-  describe "task 0029 enforcement: bare slice as :plugin override raises" do
-    @describetag :skip
-    test "extensions: [{BareSlice, as: :plugin}] raises with a useful message" do
-      assert_raise RuntimeError, ~r/is not a `use Jido.Plugin` module/, fn ->
-        defmodule BareSliceAsPluginAgent do
-          use Jido.Agent,
-            extensions: [{Jido.Dsl.SliceTest.MinimalSlice, [as: :plugin]}]
-
-          agent do
-            name "bare_as_plugin_agent"
-          end
-        end
-      end
     end
   end
 end

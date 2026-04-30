@@ -16,21 +16,6 @@ defmodule JidoTest.SliceTest do
       end
     end
 
-    @tag :skip
-    test "raises CompileError when path is missing (task 0053 made path optional)" do
-      assert_raise Spark.Error.DslError, ~r/required :path option/, fn ->
-        Code.compile_string("""
-        defmodule JidoTest.SliceTest.NoPath do
-          use Jido.Slice
-
-          slice do
-            name "no_path"
-          end
-        end
-        """)
-      end
-    end
-
     test "raises CompileError on invalid name" do
       assert_raise Spark.Error.DslError, fn ->
         Code.compile_string("""

@@ -148,19 +148,6 @@ defmodule JidoTest.PluginTest do
       end
     end
 
-    @tag :skip
-    test "missing path raises (task 0053 made path optional)" do
-      assert_raise Spark.Error.DslError, fn ->
-        defmodule MissingPathPlugin do
-          use Jido.Plugin
-
-          slice do
-            name "missing_path"
-          end
-        end
-      end
-    end
-
     test "invalid name format raises" do
       assert_raise Spark.Error.DslError, fn ->
         defmodule InvalidNamePlugin do

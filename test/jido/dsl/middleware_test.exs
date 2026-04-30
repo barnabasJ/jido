@@ -82,38 +82,4 @@ defmodule Jido.Dsl.MiddlewareTest do
       refute MinimalMiddleware in Jido.Dsl.Agent.Info.slices(MiddlewareAgent)
     end
   end
-
-  # NOTE: revisit per task 0053 — `as: :middleware` override on a non-middleware
-  # module no longer applies with the unambiguous `middleware: [...]` channel.
-  # The mismatch error path will surface via different validation.
-  describe "task 0034 enforcement: as: :middleware mismatch" do
-    @describetag :skip
-    test "as: :middleware on a non-middleware module raises" do
-      assert_raise RuntimeError, ~r/does not implement Jido.Middleware/, fn ->
-        defmodule NonMiddlewareSlice do
-          @moduledoc false
-          use Jido.Slice
-
-          slice do
-            name "non_middleware"
-            path :non_middleware
-            schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
-          end
-
-          signal_routes do
-            route "non_middleware.noop", JidoTest.PluginTestAction
-          end
-        end
-
-        defmodule BadMiddlewareAgent do
-          use Jido.Agent,
-            extensions: [{Jido.Dsl.MiddlewareTest.NonMiddlewareSlice, [as: :middleware]}]
-
-          agent do
-            name "bad_middleware_agent"
-          end
-        end
-      end
-    end
-  end
 end

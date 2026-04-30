@@ -123,28 +123,4 @@ defmodule Jido.Dsl.PluginTest do
       assert agent.state.full_plugin == %{enabled: true}
     end
   end
-
-  # NOTE: revisit per task 0053 — `as: :slice` override on a plugin may no
-  # longer apply since the new `slices do …` block is the unambiguous channel
-  # for slice mounts.
-  describe "task 0029 enforcement (relaxed in task 0034 via explicit `as:`)" do
-    @describetag :skip
-    test "extensions: [{Plugin, as: :slice}] force-mounts the plugin as a slice" do
-      defmodule PluginAsSliceAgent do
-        use Jido.Agent,
-          extensions: [{Jido.Dsl.PluginTest.FullPlugin, [as: :slice]}],
-          default_slices: false
-
-        agent do
-          name "plugin_as_slice_agent"
-        end
-      end
-
-      # The new design allows the explicit `as: :slice` override. The
-      # OLD task 0029 check ("plugin in slices: raises") is replaced by
-      # the requirement that the user explicitly opt in via `as: :slice`.
-      assert FullPlugin in AgentInfo.slices(PluginAsSliceAgent)
-      refute FullPlugin in AgentInfo.plugins(PluginAsSliceAgent)
-    end
-  end
 end

@@ -267,41 +267,20 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
   # Validation: rejects plugins, rejects non-slices
   # ===========================================================================
 
-  describe "slices: validation" do
-    # NOTE: revisit per task 0053 — the `as: :plugin` force-classification override
-    # may no longer apply with the unambiguous `slices do …` block. The new DSL
-    # disambiguates slice/plugin/middleware kinds via separate sections, so
-    # force-mounting a bare slice as a plugin via `as:` may not be supported.
-    @tag :skip
-    test "force-mounting a bare slice as :plugin raises a clear message" do
-      assert_raise RuntimeError, ~r/is not a `use Jido.Plugin` module/, fn ->
-        defmodule AgentRejectsBareAsPlugin do
-          use Jido.Agent,
-            extensions: [{SimpleSlice, [as: :plugin]}],
-            default_slices: false
-
-          agent do
-            name "rejects_bare_as_plugin_agent"
-          end
-        end
-      end
-    end
-
-    # NOTE: revisit per task 0053 — the rejection message and code path are tied
-    # to the legacy `extensions: […]` enumeration channel. Equivalent validation
-    # under `slices do slice :path, NotASlice end` may surface a different error.
-    @tag :skip
-    test "putting a non-slice module in extensions: raises with a clear message" do
+  describe "slices do … end validation" do
+    test "non-slice/non-plugin module in `slices do …` raises a clear message" do
       assert_raise RuntimeError,
-                   ~r/is not a Jido\.Plugin, Jido\.Slice, or Jido\.Middleware/,
+                   ~r/is neither a `use Jido\.Slice` nor a `use Jido\.Plugin`/,
                    fn ->
                      defmodule AgentRejectsNonSlice do
-                       use Jido.Agent,
-                         extensions: [NotASlice],
-                         default_slices: false
+                       use Jido.Agent, default_slices: false
 
                        agent do
                          name "rejects_non_slice_agent"
+                       end
+
+                       slices do
+                         slice(:bogus, NotASlice)
                        end
                      end
                    end
