@@ -168,8 +168,11 @@ defmodule LivebookAgent do
     system_prompt "You are a concise arithmetic assistant. " <>
                     "Use the `add` and `multiply` tools when calculations are needed, " <>
                     "then state the final answer. Keep the answer to one sentence."
-    max_iterations 5
-    max_tokens 512
+    # Multi-step questions like "(4 + 7) * 5 + (3 + 2 * 8)?" need ~6 LLM
+    # turns (5 tool calls + a final answer). 12 leaves headroom for
+    # smaller models that don't parallel-tool-call.
+    max_iterations 12
+    max_tokens 1024
     llm_opts api_key: api_key_opt
   end
 end
@@ -226,13 +229,26 @@ defmodule Demo.Streamer do
   def render(frame, "ai.react.llm.completed", %{
         status: :completed,
         result: result,
-        iteration: iter
+        iteration: iter,
+        truncated?: truncated?,
+        max_iterations: max_iter
       }) do
+    body =
+      cond do
+        truncated? ->
+          "_Truncated_ — hit `max_iterations: #{max_iter}` while the model still wanted to call tools. " <>
+            "Bump `max_iterations` in the agent's `react do … end` block to ask deeper questions."
+
+        result in [nil, ""] ->
+          "_Model returned no text._"
+
+        true ->
+          result
+      end
+
     Kino.Frame.append(
       frame,
-      Kino.Markdown.new(
-        "**Step #{iter}** — _Final answer:_\n\n#{result || "_(model returned no text)_"}"
-      )
+      Kino.Markdown.new("**Step #{iter}** — _Final answer:_\n\n#{body}")
     )
   end
 
@@ -324,14 +340,33 @@ defmodule Demo.Streamer do
         end)
       end
 
+    # `LLMTurn.truncate/3` settles the slice as :completed with `result: nil`
+    # when iteration hits max_iterations while the model still wanted to call
+    # tools — the last context message in that case is an assistant turn with
+    # `tool_calls` but no committed final answer.
+    truncated? =
+      ai.status == :completed and is_nil(ai.result) and
+        last_assistant_has_tool_calls?(ai.context)
+
     %{
       status: ai.status,
       iteration: ai.iteration,
+      max_iterations: ai.max_iterations,
       pending_tool_calls: ai.pending_tool_calls,
       result: ai.result,
       error: ai.error,
-      last_tool_message: last_tool_message
+      last_tool_message: last_tool_message,
+      truncated?: truncated?
     }
+  end
+
+  defp last_assistant_has_tool_calls?(nil), do: false
+
+  defp last_assistant_has_tool_calls?(context) do
+    case context |> Context.to_list() |> Enum.reverse() |> Enum.find(&(&1.role == :assistant)) do
+      nil -> false
+      msg -> match?([_ | _], Map.get(msg, :tool_calls))
+    end
   end
 
   defp format_tool_message(%{role: :tool, name: name, content: parts}) do
