@@ -55,7 +55,12 @@ Make slices a proper DSL entity *on the agent*. **Plugins register the same way*
 
 ```elixir
 defmodule MyApp.SupportAgent do
-  use Jido.Agent, middleware: [MyApp.AuthMiddleware, MyApp.LoggingMiddleware]
+  use Jido.Agent,
+    middleware: [
+      MyApp.AuthMiddleware,
+      Jido.Plugins.FSM,
+      MyApp.LoggingMiddleware
+    ]
 
   agent do
     name "support"
@@ -82,9 +87,11 @@ end
 
 The agent's `slices do … end` block is the **single source of truth** for path-to-slice binding on this agent. The slice module no longer declares `path :memory` itself — the agent does, when it mounts the slice. Path is set per-mount, not per-module. (This also means the same slice module can be mounted at different paths on different agents — a flexibility the current model does not have.)
 
-Plugins (`Jido.Plugins.FSM`, `Jido.Pod.Plugin`, etc.) are just slice modules from this DSL's point of view. They mount the same way and the same `slice :path, Module do options [...] end` form sets their path and options. There is no separate `plugins do … end` section.
+Plugins (`Jido.Plugins.FSM`, `Jido.Pod.Plugin`, etc.) are slice modules in the `slices do … end` block — same `slice :path, Module do options [...] end` form sets their path and options. There is no separate `plugins do … end` section.
 
-Middleware **stays a top-level `use Jido.Agent, middleware: […]` option**. Order is meaningful for middleware (it determines the wrap chain), and a flat ordered list is the right shape. Middleware is not slice-shaped — it does not own state at a path — so it does not belong inside `slices do … end`.
+When a plugin also has middleware behaviour, it **additionally** appears in the top-level `middleware: [...]` list. Note `Jido.Plugins.FSM` in the example above: it is registered as a slice (for path + options) *and* listed in `middleware:` (for ordering in the wrap chain). The two registrations cooperate — the slice form configures the plugin's state/path, the middleware list orders its middleware contribution among other middlewares.
+
+Middleware **stays a top-level `use Jido.Agent, middleware: […]` option**. Order is meaningful for middleware (it determines the wrap chain), and a flat ordered list is the right shape. Pure middleware (no slice state) belongs only in this list, never in `slices do … end`.
 
 If a plugin (or slice) ships a typed DSL section the user wants to call into directly (the `Jido.Slice.Extension`-style host section), the plugin module also goes on `use Jido.Agent, extensions: […]`. That mechanism stays for DSL contribution only — never for slice/plugin enumeration.
 
@@ -94,7 +101,7 @@ Each action within a slice's namespace inherits the slice's path on this agent: 
 
 | Today | Target |
 |---|---|
-| `use Jido.Agent, extensions: [Jido.Memory.Slice, Jido.SomePlugin, MyMiddleware]` flat list classified by `WalkExtensions` | `use Jido.Agent, middleware: [MyMiddleware]` (only middleware) + `slices do … end` block (slices and plugins both go here) |
+| `use Jido.Agent, extensions: [Jido.Memory.Slice, Jido.SomePlugin, MyMiddleware]` flat list classified by `WalkExtensions` | `use Jido.Agent, middleware: [MyMiddleware, Jido.SomePlugin]` (middleware-shaped plugins also appear here for ordering) + `slices do … end` block (slices and plugins both registered here for path + options) |
 | `slice do path :memory end` inside `Jido.Memory.Slice` | path declared in agent's `slices do slice :memory, … end` (slice DSL drops `path`) |
 | `action do path :memory end` inside every `Jido.Memory.Actions.*` | path inferred at compile/runtime from slice mount; action DSL drops the redundant `path` |
 | `plugin do path :fsm end` inside `Jido.Plugins.FSM` | path declared in agent's `slices do slice :fsm, Jido.Plugins.FSM end` (plugin DSL drops `path` — plugins mount via the same `slice` macro) |
