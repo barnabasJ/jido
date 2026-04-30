@@ -17,12 +17,10 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
-  alias Jido.Identity.Agent, as: IdentityAgent
-  alias Jido.Memory.Agent, as: MemoryAgent
+  alias Jido.Memory
   alias Jido.Persist
   alias Jido.Storage.ETS
   alias Jido.Thread
-  alias Jido.Thread.Agent, as: ThreadAgent
 
   # ===========================================================================
   # AGENT
@@ -56,16 +54,23 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
     test "identity struct is preserved through checkpoint round-trip" do
       table = unique_table()
 
-      agent =
-        FullAgent.new(id: "identity-1")
-        |> IdentityAgent.ensure(profile: %{age: 5, origin: :test})
+      agent = FullAgent.new(id: "identity-1")
 
-      agent = %{agent | state: %{agent.state | counter: 10, status: :active}}
+      {:ok, agent, []} =
+        FullAgent.cmd(
+          agent,
+          {Jido.Identity.Actions.Ensure, %{profile: %{age: 5, origin: :test}}}
+        )
+
+      agent = %{
+        agent
+        | state: %{agent.state | domain: %{agent.state.domain | counter: 10, status: :active}}
+      }
 
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, restored} = Persist.thaw(storage(table), FullAgent, "identity-1")
 
-      assert IdentityAgent.has_identity?(restored)
+      assert restored.state[:identity] != nil
       assert restored.state.identity.profile[:age] == 5
       assert restored.state.identity.profile[:origin] == :test
 
@@ -78,21 +83,30 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
     test "memory spaces are preserved through checkpoint round-trip" do
       table = unique_table()
 
-      agent =
-        FullAgent.new(id: "memory-1")
-        |> MemoryAgent.ensure()
-        |> MemoryAgent.put_in_space(:world, :temperature, 22)
-        |> MemoryAgent.append_to_space(:tasks, %{id: "t1", text: "check"})
+      agent = FullAgent.new(id: "memory-1")
+      {:ok, agent, []} = FullAgent.cmd(agent, {Jido.Memory.Actions.Ensure, %{}})
 
-      agent = %{agent | state: %{agent.state | counter: 5}}
+      {:ok, agent, []} =
+        FullAgent.cmd(
+          agent,
+          {Jido.Memory.Actions.PutInSpace, %{space: :world, key: :temperature, value: 22}}
+        )
+
+      {:ok, agent, []} =
+        FullAgent.cmd(
+          agent,
+          {Jido.Memory.Actions.AppendToSpace, %{space: :tasks, item: %{id: "t1", text: "check"}}}
+        )
+
+      agent = %{agent | state: %{agent.state | domain: %{agent.state.domain | counter: 5}}}
 
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, restored} = Persist.thaw(storage(table), FullAgent, "memory-1")
 
-      assert MemoryAgent.has_memory?(restored)
-      assert MemoryAgent.get_in_space(restored, :world, :temperature) == 22
+      assert restored.state[:memory] != nil
+      assert Memory.get_in_space(restored.state.memory, :world, :temperature) == 22
 
-      tasks_space = MemoryAgent.space(restored, :tasks)
+      tasks_space = Memory.space(restored.state.memory, :tasks)
       assert length(tasks_space.data) == 1
       assert Enum.at(tasks_space.data, 0).id == "t1"
 
@@ -104,37 +118,68 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
     test "comprehensive round-trip with identity, memory, and thread" do
       table = unique_table()
 
-      agent =
-        FullAgent.new(id: "all-slices-1")
-        |> IdentityAgent.ensure(profile: %{age: 3, origin: :spawned})
-        |> MemoryAgent.ensure()
-        |> MemoryAgent.put_in_space(:world, :temperature, 18)
-        |> MemoryAgent.append_to_space(:tasks, %{id: "t1", text: "deploy"})
-        |> ThreadAgent.ensure()
-        |> ThreadAgent.append(%{kind: :message, payload: %{role: "user", content: "hello"}})
-        |> ThreadAgent.append(%{kind: :message, payload: %{role: "assistant", content: "hi"}})
+      agent = FullAgent.new(id: "all-slices-1")
 
-      agent = %{agent | state: %{agent.state | counter: 42, status: :processing}}
+      {:ok, agent, []} =
+        FullAgent.cmd(
+          agent,
+          {Jido.Identity.Actions.Ensure, %{profile: %{age: 3, origin: :spawned}}}
+        )
+
+      {:ok, agent, []} = FullAgent.cmd(agent, {Jido.Memory.Actions.Ensure, %{}})
+
+      {:ok, agent, []} =
+        FullAgent.cmd(
+          agent,
+          {Jido.Memory.Actions.PutInSpace, %{space: :world, key: :temperature, value: 18}}
+        )
+
+      {:ok, agent, []} =
+        FullAgent.cmd(
+          agent,
+          {Jido.Memory.Actions.AppendToSpace, %{space: :tasks, item: %{id: "t1", text: "deploy"}}}
+        )
+
+      {:ok, agent, []} = FullAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{}})
+
+      {:ok, agent, []} =
+        FullAgent.cmd(
+          agent,
+          {Jido.Thread.Actions.Append,
+           %{
+             entry: [
+               %{kind: :message, payload: %{role: "user", content: "hello"}},
+               %{kind: :message, payload: %{role: "assistant", content: "hi"}}
+             ]
+           }}
+        )
+
+      agent = %{
+        agent
+        | state: %{
+            agent.state
+            | domain: %{agent.state.domain | counter: 42, status: :processing}
+          }
+      }
 
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, restored} = Persist.thaw(storage(table), FullAgent, "all-slices-1")
 
       # Identity preserved
-      assert IdentityAgent.has_identity?(restored)
+      assert restored.state[:identity] != nil
       assert restored.state.identity.profile[:age] == 3
       assert restored.state.identity.profile[:origin] == :spawned
 
       # Memory preserved
-      assert MemoryAgent.has_memory?(restored)
-      assert MemoryAgent.get_in_space(restored, :world, :temperature) == 18
-      tasks_space = MemoryAgent.space(restored, :tasks)
+      assert restored.state[:memory] != nil
+      assert Memory.get_in_space(restored.state.memory, :world, :temperature) == 18
+      tasks_space = Memory.space(restored.state.memory, :tasks)
       assert length(tasks_space.data) == 1
       assert Enum.at(tasks_space.data, 0).id == "t1"
 
       # Thread rehydrated from external storage
-      assert ThreadAgent.has_thread?(restored)
-      rehydrated_thread = ThreadAgent.get(restored)
-      assert Thread.entry_count(rehydrated_thread) == 2
+      assert restored.state[:thread] != nil
+      assert Thread.entry_count(restored.state.thread) == 2
 
       # Regular state preserved
       assert restored.state.domain.counter == 42
@@ -147,15 +192,15 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
       table = unique_table()
 
       agent = FullAgent.new(id: "no-slices-1")
-      agent = %{agent | state: %{agent.state | counter: 7}}
+      agent = %{agent | state: %{agent.state | domain: %{agent.state.domain | counter: 7}}}
 
       :ok = Persist.hibernate(storage(table), agent)
       {:ok, restored} = Persist.thaw(storage(table), FullAgent, "no-slices-1")
 
       assert restored.state.domain.counter == 7
-      refute IdentityAgent.has_identity?(restored)
-      refute MemoryAgent.has_memory?(restored)
-      refute ThreadAgent.has_thread?(restored)
+      assert is_nil(restored.state[:identity])
+      assert is_nil(restored.state[:memory])
+      assert is_nil(restored.state[:thread])
     end
   end
 end

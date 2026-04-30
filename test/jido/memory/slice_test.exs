@@ -88,10 +88,10 @@ defmodule JidoTest.Memory.SliceTest do
       refute Jido.Memory.Slice in AgentInfo.slices(AgentWithoutMemory)
     end
 
-    test "memory can be attached after creation via Memory.Agent" do
+    test "memory can be attached after creation via Ensure action" do
       agent = AgentWithMemory.new()
-      agent = Memory.Agent.ensure(agent)
-      assert %Memory{} = Memory.Agent.get(agent)
+      {:ok, agent, []} = AgentWithMemory.cmd(agent, {Jido.Memory.Actions.Ensure, %{}})
+      assert %Memory{} = agent.state[:memory]
     end
 
     test "PutInSpace action mutates agent.state.memory.spaces[:world]" do

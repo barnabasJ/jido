@@ -79,10 +79,10 @@ defmodule JidoTest.Identity.SliceTest do
       refute Jido.Identity.Slice in AgentInfo.slices(AgentWithoutIdentity)
     end
 
-    test "identity can be attached after creation via Identity.Agent" do
+    test "identity can be attached after creation via Ensure action" do
       agent = AgentWithIdentity.new()
-      agent = Identity.Agent.ensure(agent)
-      assert %Identity{} = Identity.Agent.get(agent)
+      {:ok, agent, []} = AgentWithIdentity.cmd(agent, {Jido.Identity.Actions.Ensure, %{}})
+      assert %Identity{} = agent.state[:identity]
     end
 
     test "UpdateProfile action mutates agent.state.identity" do

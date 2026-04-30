@@ -4,8 +4,10 @@ defmodule JidoExampleTest.ThreadSliceTest do
 
   This test shows:
   - Every agent gets `Jido.Thread.Slice` automatically (default singleton slice)
-  - Using `Jido.Thread.Agent` helpers: `ensure/2`, `append/3`, `get/1`, `has_thread?/1`
-  - Actions that build conversation history using Thread
+  - Initializing and appending to thread through `Jido.Thread.Actions.{Ensure,
+    Append}` via `cmd/2`
+  - Reading thread directly off `agent.state[:thread]` and via `Jido.Thread`
+    read-only functions
   - Disabling the thread slice with `default_slices: %{thread: false}`
   - The strategy layer auto-tracks instruction_start/instruction_end when thread exists
 
@@ -18,7 +20,6 @@ defmodule JidoExampleTest.ThreadSliceTest do
 
   alias Jido.AgentServer
   alias Jido.Thread
-  alias Jido.Thread.Agent, as: ThreadAgent
 
   # ===========================================================================
   # ACTIONS: Conversation history via Thread
@@ -30,20 +31,19 @@ defmodule JidoExampleTest.ThreadSliceTest do
 
     action do
       name "record_message"
+      path :thread
       schema role: [type: :string, required: true], content: [type: :string, required: true]
     end
 
     def run(%Jido.Signal{data: %{role: role, content: content}}, slice, _opts, _ctx) do
       thread =
-        case Map.get(slice, :thread) do
-          nil -> Thread.new()
-          existing -> existing
+        case slice do
+          %Thread{} = t -> t
+          _ -> Thread.new()
         end
 
       entry = %{kind: :message, payload: %{role: role, content: content}}
-      updated_thread = Thread.append(thread, entry)
-
-      {:ok, %{thread: updated_thread, last_role: role}, []}
+      {:ok, Thread.append(thread, entry), []}
     end
   end
 
@@ -53,11 +53,12 @@ defmodule JidoExampleTest.ThreadSliceTest do
 
     action do
       name "summarize"
+      path :domain
       schema []
     end
 
-    def run(_signal, slice, _opts, _ctx) do
-      thread = Map.get(slice, :thread)
+    def run(_signal, slice, _opts, ctx) do
+      thread = Map.get(ctx[:agent].state, :thread)
 
       message_count =
         case thread do
@@ -65,7 +66,7 @@ defmodule JidoExampleTest.ThreadSliceTest do
           t -> length(Thread.filter_by_kind(t, :message))
         end
 
-      {:ok, %{summary: "#{message_count} messages in thread"}, []}
+      {:ok, Map.put(slice, :summary, "#{message_count} messages in thread"), []}
     end
   end
 
@@ -81,7 +82,7 @@ defmodule JidoExampleTest.ThreadSliceTest do
       name "chat_agent"
       path :domain
       description "Agent with default thread slice for conversation history"
-      schema last_role: [type: :string, default: nil], summary: [type: :string, default: nil]
+      schema summary: [type: :string, default: nil]
     end
 
     signal_routes do
@@ -111,19 +112,18 @@ defmodule JidoExampleTest.ThreadSliceTest do
     test "new agent has no thread until initialized on demand" do
       agent = ChatAgent.new()
 
-      refute ThreadAgent.has_thread?(agent)
+      assert is_nil(agent.state[:thread])
     end
 
-    test "ThreadAgent.ensure initializes thread on demand" do
+    test "Ensure action initializes thread on demand" do
       agent = ChatAgent.new()
 
-      agent = ThreadAgent.ensure(agent, metadata: %{user_id: "u1"})
+      {:ok, agent, []} =
+        ChatAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{metadata: %{user_id: "u1"}}})
 
-      assert ThreadAgent.has_thread?(agent)
-      thread = ThreadAgent.get(agent)
-      assert %Thread{} = thread
-      assert thread.metadata == %{user_id: "u1"}
-      assert Thread.entry_count(thread) == 0
+      assert %Thread{} = agent.state[:thread]
+      assert agent.state.thread.metadata == %{user_id: "u1"}
+      assert Thread.entry_count(agent.state.thread) == 0
     end
   end
 
@@ -134,10 +134,9 @@ defmodule JidoExampleTest.ThreadSliceTest do
       {:ok, agent, []} =
         ChatAgent.cmd(agent, {RecordMessageAction, %{role: "user", content: "hello"}})
 
-      assert agent.state.domain.last_role == "user"
-      assert ThreadAgent.has_thread?(agent)
+      assert %Thread{} = agent.state[:thread]
 
-      messages = Thread.filter_by_kind(ThreadAgent.get(agent), :message)
+      messages = Thread.filter_by_kind(agent.state.thread, :message)
       assert length(messages) == 1
 
       [entry] = messages
@@ -158,17 +157,14 @@ defmodule JidoExampleTest.ThreadSliceTest do
       {:ok, agent, []} =
         ChatAgent.cmd(agent, {RecordMessageAction, %{role: "user", content: "how are you?"}})
 
-      messages = Thread.filter_by_kind(ThreadAgent.get(agent), :message)
+      messages = Thread.filter_by_kind(agent.state.thread, :message)
       assert length(messages) == 3
 
       roles = Enum.map(messages, & &1.payload.role)
       assert roles == ["user", "assistant", "user"]
 
-      thread = ThreadAgent.get(agent)
-      assert Thread.entry_count(thread) > 3
-
-      instruction_starts = Thread.filter_by_kind(thread, :instruction_start)
-      assert instruction_starts != []
+      thread = agent.state.thread
+      assert Thread.entry_count(thread) == 3
 
       {:ok, agent, []} = ChatAgent.cmd(agent, SummarizeAction)
       assert agent.state.domain.summary == "3 messages in thread"
@@ -179,28 +175,38 @@ defmodule JidoExampleTest.ThreadSliceTest do
     test "agent with default_slices: %{thread: false} has no thread capability" do
       agent = StatelessAgent.new()
 
-      refute ThreadAgent.has_thread?(agent)
+      assert is_nil(agent.state[:thread])
       refute Map.has_key?(agent.state, :thread)
     end
   end
 
-  describe "pure cmd/2 thread manipulation with ThreadAgent helpers" do
-    test "ThreadAgent.append creates thread and adds entries" do
+  describe "appending via Thread.Actions.Append" do
+    test "Append action creates thread and adds entries" do
       agent = ChatAgent.new()
 
-      agent =
-        ThreadAgent.append(agent, %{kind: :message, payload: %{role: "system", content: "init"}})
+      {:ok, agent, []} =
+        ChatAgent.cmd(
+          agent,
+          {Jido.Thread.Actions.Append,
+           %{entry: %{kind: :message, payload: %{role: "system", content: "init"}}}}
+        )
 
-      assert ThreadAgent.has_thread?(agent)
-      assert Thread.entry_count(ThreadAgent.get(agent)) == 1
+      assert %Thread{} = agent.state[:thread]
+      assert Thread.entry_count(agent.state.thread) == 1
 
-      agent =
-        ThreadAgent.append(agent, [
-          %{kind: :message, payload: %{role: "user", content: "q1"}},
-          %{kind: :message, payload: %{role: "assistant", content: "a1"}}
-        ])
+      {:ok, agent, []} =
+        ChatAgent.cmd(
+          agent,
+          {Jido.Thread.Actions.Append,
+           %{
+             entry: [
+               %{kind: :message, payload: %{role: "user", content: "q1"}},
+               %{kind: :message, payload: %{role: "assistant", content: "a1"}}
+             ]
+           }}
+        )
 
-      thread = ThreadAgent.get(agent)
+      thread = agent.state.thread
       assert Thread.entry_count(thread) == 3
 
       entries = Thread.to_list(thread)

@@ -147,34 +147,50 @@ that case, supply a stable `entry_id` up front, then append a second entry that
 points back to the original message by `entry_id`:
 
 ```elixir
-alias Jido.Thread.Agent, as: ThreadAgent
-
 entry_id = "entry_" <> Jido.Util.generate_id()
 
-agent =
-  ThreadAgent.append(agent, %{
-    id: entry_id,
-    kind: :message,
-    payload: %{role: "assistant", content: "Working on it"}
-  })
+{:ok, agent, _} =
+  MyAgent.cmd(
+    agent,
+    {Jido.Thread.Actions.Append,
+     %{
+       entry: %{
+         id: entry_id,
+         kind: :message,
+         payload: %{role: "assistant", content: "Working on it"}
+       }
+     }}
+  )
 
-agent =
-  ThreadAgent.append(agent, %{
-    kind: :message_committed,
-    payload: %{provider: :slack, remote_id: slack_ts},
-    refs: %{entry_id: entry_id}
-  })
+{:ok, agent, _} =
+  MyAgent.cmd(
+    agent,
+    {Jido.Thread.Actions.Append,
+     %{
+       entry: %{
+         kind: :message_committed,
+         payload: %{provider: :slack, remote_id: slack_ts},
+         refs: %{entry_id: entry_id}
+       }
+     }}
+  )
 ```
 
 You can also model this as a more generic annotation entry:
 
 ```elixir
-agent =
-  ThreadAgent.append(agent, %{
-    kind: :annotation,
-    payload: %{type: :provider_ref, provider: :slack, remote_id: slack_ts},
-    refs: %{entry_id: entry_id}
-  })
+{:ok, agent, _} =
+  MyAgent.cmd(
+    agent,
+    {Jido.Thread.Actions.Append,
+     %{
+       entry: %{
+         kind: :annotation,
+         payload: %{type: :provider_ref, provider: :slack, remote_id: slack_ts},
+         refs: %{entry_id: entry_id}
+       }
+     }}
+  )
 ```
 
 This keeps the journal canonical and append-only:

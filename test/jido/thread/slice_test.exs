@@ -108,10 +108,10 @@ defmodule JidoTest.Thread.SliceTest do
       refute Jido.Thread.Slice in AgentInfo.slices(AgentWithoutThread)
     end
 
-    test "thread can be attached after creation via Thread.Agent" do
+    test "thread can be attached after creation via Ensure action" do
       agent = AgentWithThread.new()
-      agent = Thread.Agent.ensure(agent)
-      assert %Thread{} = Thread.Agent.get(agent)
+      {:ok, agent, []} = AgentWithThread.cmd(agent, {Jido.Thread.Actions.Ensure, %{}})
+      assert %Thread{} = agent.state[:thread]
     end
 
     test "Append action mutates agent.state.thread" do

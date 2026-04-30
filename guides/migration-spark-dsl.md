@@ -42,16 +42,15 @@ list → sectioned DSL.
 
 ## One agent module migration
 
-Take a representative in-tree agent. `Jido.Memory.Agent` is the smallest
-concrete example — a working memory agent that mounts the Memory slice
-and a few framework defaults.
+Take a hypothetical agent that mounts the Memory slice and a few
+framework defaults. We'll use `MyApp.SupportAgent` as the example.
 
 ### Before (keyword form)
 
 ```elixir
-defmodule Jido.Memory.Agent do
+defmodule MyApp.SupportAgent do
   use Jido.Agent,
-    name: "memory_agent",
+    name: "support_agent",
     description: "Agent backed by Jido.Memory.Slice",
     path: :state,
     schema: [
@@ -69,11 +68,11 @@ end
 ### After (sectioned DSL)
 
 ```elixir
-defmodule Jido.Memory.Agent do
+defmodule MyApp.SupportAgent do
   use Jido.Agent, extensions: [Jido.Memory.Slice]
 
   agent do
-    name "memory_agent"
+    name "support_agent"
     description "Agent backed by Jido.Memory.Slice"
     path :state
     schema [
