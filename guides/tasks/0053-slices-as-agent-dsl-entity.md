@@ -93,7 +93,34 @@ When a plugin also has middleware behaviour, it **additionally** appears in the 
 
 Middleware **stays a top-level `use Jido.Agent, middleware: […]` option**. Order is meaningful for middleware (it determines the wrap chain), and a flat ordered list is the right shape. Pure middleware (no slice state) belongs only in this list, never in `slices do … end`.
 
-If a plugin (or slice) ships a typed DSL section the user wants to call into directly (the `Jido.Slice.Extension`-style host section), the plugin module also goes on `use Jido.Agent, extensions: […]`. That mechanism stays for DSL contribution only — never for slice/plugin enumeration.
+If a plugin (or slice) ships a typed DSL section the user wants to call into directly (the `Jido.Slice.Extension`-style host section), the plugin module also goes on `use Jido.Agent, extensions: […]`. That mechanism **stays** — it is the channel by which a slice contributes a configuration DSL block to the host agent. It is no longer the channel for slice/plugin enumeration.
+
+Concrete example: `Jido.AI.ReAct` ships a `react do … end` host section for typed configuration. Today it is registered as `extensions: [{Jido.AI.ReAct, [model: "...", tools: [...], …]}]` (tuple form, options inline). After this refactor:
+
+```elixir
+defmodule MyApp.MathAgent do
+  use Jido.Agent, extensions: [Jido.AI.ReAct]
+
+  agent do
+    name "math"
+  end
+
+  react do
+    model "anthropic:claude-haiku-4-5-20251001"
+    tools [Jido.AI.TestActions.TestAdd]
+    system_prompt "You are precise."
+    max_iterations 4
+    max_tokens 256
+    temperature 0.0
+  end
+
+  slices do
+    slice :ai, Jido.AI.ReAct
+  end
+end
+```
+
+`extensions: [Jido.AI.ReAct]` opens the `react do … end` DSL section. The user fills it in with typed fields (autocompleted, schema-validated). The `slices do slice :ai, Jido.AI.ReAct end` line mounts ReAct's slice at path `:ai`. Options that today live in the tuple form move into the typed DSL section. The single `extensions:` registration enables the DSL; the `slices do … end` registration mounts the slice. The two roles are separated — neither mechanism leaks into the other.
 
 Each action within a slice's namespace inherits the slice's path on this agent: `Jido.Slices.Memory.Actions.PutInSpace` resolves to `:memory` because the agent declares `slice :memory, Jido.Slices.Memory` and `PutInSpace` lives under `Jido.Slices.Memory.Actions.*`. No `path :memory` declaration on the action. (Resolution mechanism — by namespace prefix, by signal-route owner, or by some explicit "this action belongs to slice X" link — is the design choice covered in §Resolution below.)
 
