@@ -51,7 +51,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
   defmodule SlowBootWorker do
     @moduledoc false
     use Jido.Agent,
-      extensions: [SlowStartingMiddleware]
+      middleware: [SlowStartingMiddleware]
 
     agent do
       name "pod_mutation_slow_worker"
@@ -118,7 +118,6 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
 
     action do
       name "expand_pod"
-      path :pod
       schema []
     end
 

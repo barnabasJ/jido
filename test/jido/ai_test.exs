@@ -12,21 +12,23 @@ defmodule Jido.AITest do
 
   defmodule MathAgent do
     @moduledoc false
-    use Jido.Agent,
-      extensions: [
-        {Jido.AI.ReAct,
-         [
-           model: "anthropic:claude-haiku-4-5-20251001",
-           tools: [Jido.AI.TestActions.TestAdd],
-           system_prompt: "You are precise.",
-           max_iterations: 4,
-           max_tokens: 256,
-           temperature: 0.0
-         ]}
-      ]
+    use Jido.Agent, extensions: [Jido.AI.ReAct]
 
     agent do
       name "math"
+    end
+
+    slices do
+      slice(:ai, Jido.AI.ReAct)
+    end
+
+    react do
+      model("anthropic:claude-haiku-4-5-20251001")
+      tools([Jido.AI.TestActions.TestAdd])
+      system_prompt("You are precise.")
+      max_iterations(4)
+      max_tokens(256)
+      temperature(0.0)
     end
   end
 
@@ -46,47 +48,59 @@ defmodule Jido.AITest do
 
   defmodule FailingAgent do
     @moduledoc false
-    use Jido.Agent,
-      extensions: [
-        {Jido.AI.ReAct,
-         [
-           model: "anthropic:claude-haiku-4-5-20251001",
-           tools: [Jido.AITest.TestFailingTool],
-           system_prompt: "x",
-           max_iterations: 4
-         ]}
-      ]
+    use Jido.Agent, extensions: [Jido.AI.ReAct]
 
     agent do
       name "failing"
+    end
+
+    slices do
+      slice(:ai, Jido.AI.ReAct)
+    end
+
+    react do
+      model("anthropic:claude-haiku-4-5-20251001")
+      tools([Jido.AITest.TestFailingTool])
+      system_prompt("x")
+      max_iterations(4)
     end
   end
 
   defmodule TightAgent do
     @moduledoc false
-    use Jido.Agent,
-      extensions: [
-        {Jido.AI.ReAct,
-         [
-           model: "anthropic:claude-haiku-4-5-20251001",
-           tools: [Jido.AI.TestActions.TestAdd],
-           system_prompt: "x",
-           max_iterations: 1
-         ]}
-      ]
+    use Jido.Agent, extensions: [Jido.AI.ReAct]
 
     agent do
       name "tight"
+    end
+
+    slices do
+      slice(:ai, Jido.AI.ReAct)
+    end
+
+    react do
+      model("anthropic:claude-haiku-4-5-20251001")
+      tools([Jido.AI.TestActions.TestAdd])
+      system_prompt("x")
+      max_iterations(1)
     end
   end
 
   defmodule NoModelAgent do
     @moduledoc false
-    use Jido.Agent,
-      extensions: [{Jido.AI.ReAct, [tools: [Jido.AI.TestActions.TestAdd], max_iterations: 2]}]
+    use Jido.Agent, extensions: [Jido.AI.ReAct]
 
     agent do
       name "no_model"
+    end
+
+    slices do
+      slice(:ai, Jido.AI.ReAct)
+    end
+
+    react do
+      tools([Jido.AI.TestActions.TestAdd])
+      max_iterations(2)
     end
   end
 
@@ -428,18 +442,20 @@ defmodule Jido.AITest do
     test ":api_key in slice config llm_opts is propagated to ReqLLM", ctx do
       defmodule SliceKeyAgent do
         @moduledoc false
-        use Jido.Agent,
-          extensions: [
-            {Jido.AI.ReAct,
-             [
-               model: "anthropic:claude-haiku-4-5-20251001",
-               tools: [],
-               llm_opts: [api_key: "key-from-slice"]
-             ]}
-          ]
+        use Jido.Agent, extensions: [Jido.AI.ReAct]
 
         agent do
           name "slice_key"
+        end
+
+        slices do
+          slice(:ai, Jido.AI.ReAct)
+        end
+
+        react do
+          model("anthropic:claude-haiku-4-5-20251001")
+          tools([])
+          llm_opts(api_key: "key-from-slice")
         end
       end
 
@@ -458,18 +474,20 @@ defmodule Jido.AITest do
     test ":api_key per-call llm_opts overrides the slice default", ctx do
       defmodule SliceKeyOverrideAgent do
         @moduledoc false
-        use Jido.Agent,
-          extensions: [
-            {Jido.AI.ReAct,
-             [
-               model: "anthropic:claude-haiku-4-5-20251001",
-               tools: [],
-               llm_opts: [api_key: "slice-default"]
-             ]}
-          ]
+        use Jido.Agent, extensions: [Jido.AI.ReAct]
 
         agent do
           name "slice_key_override"
+        end
+
+        slices do
+          slice(:ai, Jido.AI.ReAct)
+        end
+
+        react do
+          model("anthropic:claude-haiku-4-5-20251001")
+          tools([])
+          llm_opts(api_key: "slice-default")
         end
       end
 

@@ -10,7 +10,6 @@ defmodule Jido.Memory.Actions.PutInSpace do
 
   action do
     name "memory_put_in_space"
-    path :memory
     description "Set a key in a map space."
 
     schema space: [type: :atom, required: true, doc: "Map space name."],

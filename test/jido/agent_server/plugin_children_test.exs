@@ -86,10 +86,14 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
   defmodule NoChildAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [JidoTest.AgentServer.PluginChildrenTest.NoChildPlugin]
+      middleware: [JidoTest.AgentServer.PluginChildrenTest.NoChildPlugin]
 
     agent do
       name "no_child_agent"
+    end
+
+    slices do
+      slice(:no_child, JidoTest.AgentServer.PluginChildrenTest.NoChildPlugin)
     end
   end
 
@@ -97,10 +101,14 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
   defmodule SingleChildAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [JidoTest.AgentServer.PluginChildrenTest.SingleChildPlugin]
+      middleware: [JidoTest.AgentServer.PluginChildrenTest.SingleChildPlugin]
 
     agent do
       name "single_child_agent"
+    end
+
+    slices do
+      slice(:single_child, JidoTest.AgentServer.PluginChildrenTest.SingleChildPlugin)
     end
   end
 
@@ -108,12 +116,18 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
   defmodule ConfiguredChildAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [
+      middleware: [
         {JidoTest.AgentServer.PluginChildrenTest.SingleChildPlugin, %{initial_value: :custom}}
       ]
 
     agent do
       name "configured_child_agent"
+    end
+
+    slices do
+      slice(:single_child, JidoTest.AgentServer.PluginChildrenTest.SingleChildPlugin,
+        options: [initial_value: :custom]
+      )
     end
   end
 
@@ -121,10 +135,16 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
   defmodule MultiChildAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [{JidoTest.AgentServer.PluginChildrenTest.MultiChildPlugin, %{count: 3}}]
+      middleware: [{JidoTest.AgentServer.PluginChildrenTest.MultiChildPlugin, %{count: 3}}]
 
     agent do
       name "multi_child_agent"
+    end
+
+    slices do
+      slice(:multi_child, JidoTest.AgentServer.PluginChildrenTest.MultiChildPlugin,
+        options: [count: 3]
+      )
     end
   end
 
@@ -132,10 +152,14 @@ defmodule JidoTest.AgentServer.PluginChildrenTest do
   defmodule InvalidChildAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [JidoTest.AgentServer.PluginChildrenTest.InvalidChildSpecPlugin]
+      middleware: [JidoTest.AgentServer.PluginChildrenTest.InvalidChildSpecPlugin]
 
     agent do
       name "invalid_child_agent"
+    end
+
+    slices do
+      slice(:invalid_child, JidoTest.AgentServer.PluginChildrenTest.InvalidChildSpecPlugin)
     end
   end
 

@@ -79,8 +79,9 @@ defmodule Jido.Plugin.Instance do
   @spec new(module() | {module(), map() | keyword()}) :: t()
   def new(plugin_declaration) do
     {module, as_opt, overrides} = normalize_declaration(plugin_declaration)
+    {path_override, overrides} = Map.pop(overrides, :__path_override__)
 
-    base_path = PluginInfo.path(module)
+    base_path = path_override || PluginInfo.path(module)
     base_name = PluginInfo.name(module)
 
     resolved_config = Config.resolve_config!(module, overrides)

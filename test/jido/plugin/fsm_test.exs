@@ -6,33 +6,38 @@ defmodule JidoTest.Plugin.FSMTest do
 
   defmodule DefaultFSMAgent do
     @moduledoc false
-    use Jido.Agent,
-      extensions: [FSM]
+    use Jido.Agent
 
     agent do
       name "fsm_default"
+    end
+
+    slices do
+      slice(:fsm, FSM)
     end
   end
 
   defmodule ConfiguredFSMAgent do
     @moduledoc false
-    use Jido.Agent,
-      extensions: [
-        {FSM,
-         %{
-           initial_state: "ready",
-           transitions: %{
-             "ready" => ["working", "done"],
-             "working" => ["ready", "done", "errored"],
-             "done" => [],
-             "errored" => []
-           },
-           terminal_states: ["done", "errored"]
-         }}
-      ]
+    use Jido.Agent
 
     agent do
       name "fsm_configured"
+    end
+
+    slices do
+      slice(:fsm, FSM,
+        options: [
+          initial_state: "ready",
+          transitions: %{
+            "ready" => ["working", "done"],
+            "working" => ["ready", "done", "errored"],
+            "done" => [],
+            "errored" => []
+          },
+          terminal_states: ["done", "errored"]
+        ]
+      )
     end
   end
 

@@ -20,15 +20,9 @@ defmodule Jido.Dsl.ExtensionTest do
 
       assert %Spark.Dsl.Section{name: :memory, schema: schema} = section
       assert is_list(schema)
-      assert Keyword.has_key?(schema, :path)
-    end
-
-    test "the contributed section's `path:` field defaults to the slice's declared path" do
-      section = Jido.Memory.Slice.__jido_host_contribution__()
-      path_opt = Keyword.fetch!(section.schema, :path)
-
-      assert path_opt[:type] == :atom
-      assert path_opt[:default] == :memory
+      # task 0053: path is no longer in the contributed section — it lives
+      # on the agent's `slices do slice :path, Module end` mount.
+      refute Keyword.has_key?(schema, :path)
     end
 
     test "creates a sibling Spark.Dsl.Extension shadow module" do
@@ -105,17 +99,19 @@ defmodule Jido.Dsl.ExtensionTest do
   end
 
   describe "DSL section schema validation" do
-    test "valid memory block compiles cleanly" do
+    test "valid memory block compiles cleanly when extensions: registers the host section" do
       Code.compile_string("""
       defmodule Jido.Dsl.ExtensionTest.HostValidMemory do
-        use Jido.Agent, extensions: [Jido.Memory.Slice], default_slices: false
+        use Jido.Agent,
+          extensions: [Jido.Memory.Slice],
+          default_slices: false
 
         agent do
           name "host_valid_memory"
         end
 
-        memory do
-          path :short_term
+        slices do
+          slice :short_term, Jido.Memory.Slice
         end
       end
       """)
@@ -123,23 +119,15 @@ defmodule Jido.Dsl.ExtensionTest do
       assert Code.ensure_loaded?(Jido.Dsl.ExtensionTest.HostValidMemory)
     end
 
+    # TODO: revisit per task 0053 — the contributed section's `path:` field
+    # was the historical path-override mechanism. After task 0053, paths are
+    # owned by the agent's `slices do …` block; the contributed section
+    # carries config only, and bad-type validation happens at the
+    # agent-DSL boundary instead.
+    @tag :skip
     test "rejects bad config types in the contributed section at compile time" do
-      # `path:` must be an atom; pass an integer to provoke a Spark validation error.
-      assert_raise Spark.Error.DslError, fn ->
-        Code.compile_string("""
-        defmodule Jido.Dsl.ExtensionTest.HostBadMemory do
-          use Jido.Agent, extensions: [Jido.Memory.Slice], default_slices: false
-
-          agent do
-            name "host_bad_memory"
-          end
-
-          memory do
-            path 42
-          end
-        end
-        """)
-      end
+      # Removed: the contributed section no longer owns the `path:` field.
+      :ok
     end
   end
 
@@ -191,6 +179,11 @@ defmodule Jido.Dsl.ExtensionTest do
 
           agent do
             name "colliding_host"
+          end
+
+          slices do
+            slice :slice_a, #{inspect(slice_a)}
+            slice :slice_b, #{inspect(slice_b)}
           end
         end
         """)

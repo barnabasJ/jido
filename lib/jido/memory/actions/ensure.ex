@@ -12,7 +12,6 @@ defmodule Jido.Memory.Actions.Ensure do
 
   action do
     name "memory_ensure"
-    path :memory
     description "Initialize memory state if missing."
 
     schema metadata: [type: :map, default: %{}, doc: "Optional metadata for new memory."],

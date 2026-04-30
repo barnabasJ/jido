@@ -65,66 +65,69 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
   end
 
   describe "package_defaults/0" do
-    test "returns list with Thread.Slice, Identity.Slice, and Memory.Slice" do
+    test "returns list of {path, module} tuples for Thread / Identity / Memory slices" do
       assert DefaultSlices.package_defaults() == [
-               Jido.Thread.Slice,
-               Jido.Identity.Slice,
-               Jido.Memory.Slice
+               {:thread, Jido.Thread.Slice},
+               {:identity, Jido.Identity.Slice},
+               {:memory, Jido.Memory.Slice}
              ]
     end
   end
 
   describe "apply_agent_overrides/2" do
     test "nil overrides returns defaults unchanged" do
-      defaults = [FakeMemorySlice, FakeThreadSlice]
+      defaults = [{:memory, FakeMemorySlice}, {:thread, FakeThreadSlice}]
       assert DefaultSlices.apply_agent_overrides(defaults, nil) == defaults
     end
 
     test "false disables all defaults" do
-      defaults = [FakeMemorySlice, FakeThreadSlice]
+      defaults = [{:memory, FakeMemorySlice}, {:thread, FakeThreadSlice}]
       assert DefaultSlices.apply_agent_overrides(defaults, false) == []
     end
 
     test "empty map returns defaults unchanged" do
-      defaults = [FakeMemorySlice, FakeThreadSlice]
+      defaults = [{:memory, FakeMemorySlice}, {:thread, FakeThreadSlice}]
       assert DefaultSlices.apply_agent_overrides(defaults, %{}) == defaults
     end
 
-    test "exclude a default by state_key" do
-      defaults = [FakeMemorySlice, FakeThreadSlice]
+    test "exclude a default by path" do
+      defaults = [{:memory, FakeMemorySlice}, {:thread, FakeThreadSlice}]
       result = DefaultSlices.apply_agent_overrides(defaults, %{thread: false})
-      assert result == [FakeMemorySlice]
+      assert result == [{:memory, FakeMemorySlice}]
     end
 
     test "replace a default with another module" do
-      defaults = [FakeMemorySlice, FakeThreadSlice]
+      defaults = [{:memory, FakeMemorySlice}, {:thread, FakeThreadSlice}]
 
       result =
         DefaultSlices.apply_agent_overrides(defaults, %{memory: ReplacementMemorySlice})
 
-      assert result == [ReplacementMemorySlice, FakeThreadSlice]
+      assert result == [{:memory, ReplacementMemorySlice}, {:thread, FakeThreadSlice}]
     end
 
     test "replace a default with module and config tuple" do
-      defaults = [FakeMemorySlice, FakeThreadSlice]
+      defaults = [{:memory, FakeMemorySlice}, {:thread, FakeThreadSlice}]
 
       result =
         DefaultSlices.apply_agent_overrides(defaults, %{
           memory: {ReplacementMemorySlice, %{timeout: 5000}}
         })
 
-      assert result == [{ReplacementMemorySlice, %{timeout: 5000}}, FakeThreadSlice]
+      assert result == [
+               {:memory, ReplacementMemorySlice, %{timeout: 5000}},
+               {:thread, FakeThreadSlice}
+             ]
     end
 
     test "combine exclude and replace" do
-      defaults = [FakeMemorySlice, FakeThreadSlice]
+      defaults = [{:memory, FakeMemorySlice}, {:thread, FakeThreadSlice}]
       overrides = %{thread: false, memory: ReplacementMemorySlice}
       result = DefaultSlices.apply_agent_overrides(defaults, overrides)
-      assert result == [ReplacementMemorySlice]
+      assert result == [{:memory, ReplacementMemorySlice}]
     end
 
     test "invalid override key raises CompileError" do
-      defaults = [FakeMemorySlice, FakeThreadSlice]
+      defaults = [{:memory, FakeMemorySlice}, {:thread, FakeThreadSlice}]
 
       assert_raise CompileError, ~r/Invalid default_slices override keys/, fn ->
         DefaultSlices.apply_agent_overrides(defaults, %{nonexistent: false})
@@ -132,29 +135,29 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
     end
 
     test "handles defaults with config tuples" do
-      defaults = [{FakeMemorySlice, %{opt: true}}, FakeThreadSlice]
+      defaults = [{:memory, FakeMemorySlice, %{opt: true}}, {:thread, FakeThreadSlice}]
       result = DefaultSlices.apply_agent_overrides(defaults, %{thread: false})
-      assert result == [{FakeMemorySlice, %{opt: true}}]
+      assert result == [{:memory, FakeMemorySlice, %{opt: true}}]
     end
 
     test "replace a default that has config tuple" do
-      defaults = [{FakeMemorySlice, %{opt: true}}, FakeThreadSlice]
+      defaults = [{:memory, FakeMemorySlice, %{opt: true}}, {:thread, FakeThreadSlice}]
 
       result =
         DefaultSlices.apply_agent_overrides(defaults, %{memory: ReplacementMemorySlice})
 
-      assert result == [ReplacementMemorySlice, FakeThreadSlice]
+      assert result == [{:memory, ReplacementMemorySlice}, {:thread, FakeThreadSlice}]
     end
 
     test "exclude all defaults individually" do
-      defaults = [FakeMemorySlice, FakeThreadSlice]
+      defaults = [{:memory, FakeMemorySlice}, {:thread, FakeThreadSlice}]
       overrides = %{memory: false, thread: false}
       result = DefaultSlices.apply_agent_overrides(defaults, overrides)
       assert result == []
     end
 
     test "single default list" do
-      defaults = [FakeMemorySlice]
+      defaults = [{:memory, FakeMemorySlice}]
       result = DefaultSlices.apply_agent_overrides(defaults, %{memory: false})
       assert result == []
     end
@@ -193,12 +196,14 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
     test "agent with slices still gets them when default_slices is false" do
       defmodule AgentUserSlicesOnly do
-        use Jido.Agent,
-          extensions: [UserSlice],
-          default_slices: false
+        use Jido.Agent, default_slices: false
 
         agent do
           name "ds_agent_user_only"
+        end
+
+        slices do
+          slice(:user_stuff, UserSlice)
         end
       end
 
@@ -209,7 +214,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
     test "agent with jido: option resolves defaults from instance" do
       defmodule FakeJido do
-        def __default_slices__, do: [FakeMemorySlice]
+        def __default_slices__, do: [{:memory, FakeMemorySlice}]
       end
 
       defmodule AgentWithJido do
@@ -228,7 +233,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
     test "agent with jido: and default_slices override map" do
       defmodule FakeJido2 do
-        def __default_slices__, do: [FakeMemorySlice, FakeThreadSlice]
+        def __default_slices__, do: [{:memory, FakeMemorySlice}, {:thread, FakeThreadSlice}]
       end
 
       defmodule AgentWithJidoOverride do
@@ -248,7 +253,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
     test "agent with jido: and replacement in default_slices" do
       defmodule FakeJido3 do
-        def __default_slices__, do: [FakeMemorySlice, FakeThreadSlice]
+        def __default_slices__, do: [{:memory, FakeMemorySlice}, {:thread, FakeThreadSlice}]
       end
 
       defmodule AgentWithReplacement do
@@ -270,16 +275,18 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
 
     test "defaults mount before user slices" do
       defmodule FakeJido4 do
-        def __default_slices__, do: [FakeMemorySlice]
+        def __default_slices__, do: [{:memory, FakeMemorySlice}]
       end
 
       defmodule AgentMountOrder do
-        use Jido.Agent,
-          extensions: [UserSlice],
-          jido: FakeJido4
+        use Jido.Agent, jido: FakeJido4
 
         agent do
           name "ds_agent_mount_order"
+        end
+
+        slices do
+          slice(:user_stuff, UserSlice)
         end
       end
 

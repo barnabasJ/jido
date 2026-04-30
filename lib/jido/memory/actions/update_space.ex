@@ -15,7 +15,6 @@ defmodule Jido.Memory.Actions.UpdateSpace do
 
   action do
     name "memory_update_space"
-    path :memory
     description "Replace the value of an existing space."
 
     schema space: [type: :atom, required: true, doc: "Space name to update."],

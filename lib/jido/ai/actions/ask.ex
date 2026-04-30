@@ -22,7 +22,6 @@ defmodule Jido.AI.Actions.Ask do
 
   action do
     name "ai_ask"
-    path :ai
     description "Open a ReAct run on a Jido.AI.ReAct-equipped agent."
 
     schema query: [type: :string, required: true],

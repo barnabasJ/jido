@@ -87,20 +87,28 @@ defmodule JidoExampleTest.PluginBasicsTest do
   defmodule NotesAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [JidoExampleTest.PluginBasicsTest.NotesPlugin]
+      middleware: [JidoExampleTest.PluginBasicsTest.NotesPlugin]
 
     agent do
       name "notes_agent"
+    end
+
+    slices do
+      slice(:notes, JidoExampleTest.PluginBasicsTest.NotesPlugin)
     end
   end
 
   defmodule ConfiguredNotesAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [{JidoExampleTest.PluginBasicsTest.NotesPlugin, %{label: "work"}}]
+      middleware: [JidoExampleTest.PluginBasicsTest.NotesPlugin]
 
     agent do
       name "configured_notes_agent"
+    end
+
+    slices do
+      slice(:notes, JidoExampleTest.PluginBasicsTest.NotesPlugin, options: [label: "work"])
     end
   end
 

@@ -21,7 +21,6 @@ defmodule JidoTest.AgentServer.MiddlewarePipelineTest do
 
     action do
       name "inspect"
-      path :app
       schema []
     end
 
@@ -33,7 +32,7 @@ defmodule JidoTest.AgentServer.MiddlewarePipelineTest do
   defmodule MiddlewareAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [
+      middleware: [
         {JidoTest.AgentServer.MiddlewarePipelineTest.TaggingMiddleware, %{tag: :outer}},
         {JidoTest.AgentServer.MiddlewarePipelineTest.TaggingMiddleware, %{tag: :inner}}
       ]

@@ -10,7 +10,6 @@ defmodule Jido.Memory.Actions.DeleteFromSpace do
 
   action do
     name "memory_delete_from_space"
-    path :memory
     description "Delete a key from a map space."
 
     schema space: [type: :atom, required: true, doc: "Map space name."],

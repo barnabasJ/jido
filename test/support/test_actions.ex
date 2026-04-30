@@ -122,7 +122,6 @@ defmodule JidoTest.TestActions do
     action do
       name "multi_slice_action"
       description "Action that returns a SliceUpdate writing two slices in one turn"
-      path :domain
     end
 
     def run(_signal, _slice, _opts, _ctx) do

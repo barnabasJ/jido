@@ -19,7 +19,6 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
   action do
     name "pod_auto_subscribe_child"
     description "Subscribe a pod child's pid to its signal_routes paths on the pod bus."
-    path :pod_bus
 
     schema pid: [type: :any, required: true],
            child_module: [type: :atom, required: true],

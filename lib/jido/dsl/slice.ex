@@ -34,8 +34,12 @@ defmodule Jido.Dsl.Slice do
       ],
       path: [
         type: :atom,
-        required: true,
-        doc: "Atom slice key in agent.state."
+        doc:
+          "Optional default mount path. Most slices should omit this — " <>
+            "host agents bind the path via `slices do slice :path, Module end`. " <>
+            "The slice-declared path is only consulted as a fallback by " <>
+            "default-mounted slices (Pod plugin, package defaults), and the " <>
+            "agent's `slices do …` always wins."
       ],
       description: [type: :string],
       category: [type: :string],

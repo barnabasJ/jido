@@ -12,7 +12,6 @@ defmodule Jido.Memory.Actions.PutSpace do
 
   action do
     name "memory_put_space"
-    path :memory
     description "Store a space wholesale at the named key."
 
     schema space: [type: :atom, required: true, doc: "Space name to set."],

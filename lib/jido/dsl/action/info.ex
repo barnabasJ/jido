@@ -32,10 +32,6 @@ defmodule Jido.Dsl.Action.Info do
   @spec vsn(module()) :: String.t() | nil
   def vsn(module), do: Extension.get_opt(module, @section, :vsn)
 
-  @doc "Returns the slice path this Action operates on (atom, list, or nil)."
-  @spec path(module()) :: atom() | [atom()] | nil
-  def path(module), do: Extension.get_opt(module, @section, :path)
-
   @doc "Returns the input schema of the Action."
   @spec schema(module()) :: term()
   def schema(module), do: Extension.get_opt(module, @section, :schema, [])
@@ -66,7 +62,6 @@ defmodule Jido.Dsl.Action.Info do
       category: category(module),
       tags: tags(module),
       vsn: vsn(module),
-      path: path(module),
       compensation: compensation(module),
       schema: schema(module),
       output_schema: output_schema(module)

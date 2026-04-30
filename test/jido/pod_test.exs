@@ -131,10 +131,14 @@ defmodule JidoTest.PodTest do
       @moduledoc false
       alias #{inspect(UserPlugin)}, as: UserPlugin
 
-      use Jido.Pod, extensions: [UserPlugin]
+      use Jido.Pod, middleware: [UserPlugin]
 
       agent do
         name #{inspect(pod_name)}
+      end
+
+      slices do
+        slice :pod_test_user_plugin, UserPlugin
       end
     end
     """)

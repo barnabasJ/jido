@@ -27,13 +27,14 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
     own_schema = Spark.Dsl.Extension.get_opt(dsl_state, [:agent], :schema, [])
     plugin_paths = Transformer.get_persisted(dsl_state, :plugin_paths, [])
     slice_paths = Transformer.get_persisted(dsl_state, :slice_paths, [])
+    slice_path_for_action = Transformer.get_persisted(dsl_state, :slice_path_for_action, %{})
 
     block =
       quote location: :keep do
         require OK
 
         unquote(quoted_new_function(own_path, own_schema, plugin_paths, slice_paths))
-        unquote(quoted_cmd_function())
+        unquote(quoted_cmd_function(slice_path_for_action))
         unquote(quoted_utility_functions())
         unquote(quoted_overridables())
       end
@@ -161,8 +162,9 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
     end
   end
 
-  defp quoted_cmd_function do
+  defp quoted_cmd_function(slice_path_for_action) do
     quote do
+      @slice_path_for_action unquote(Macro.escape(slice_path_for_action))
       @doc "Execute actions against the agent."
       @spec cmd(Jido.Agent.t(), Jido.Agent.action()) :: Jido.Agent.cmd_result()
       def cmd(%Jido.Agent{} = agent, action), do: cmd(agent, action, [])
@@ -236,14 +238,10 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
 
       defp __resolve_slice_path__(action)
            when is_atom(action) and not is_nil(action) do
-        Code.ensure_loaded(action)
-
-        case Jido.Dsl.Action.Info.path(action) do
-          p when is_atom(p) and not is_nil(p) -> p
+        case Map.get(@slice_path_for_action, action) do
+          path when is_atom(path) and not is_nil(path) -> path
           _ -> Jido.Dsl.Agent.Info.path(__MODULE__)
         end
-      rescue
-        UndefinedFunctionError -> Jido.Dsl.Agent.Info.path(__MODULE__)
       end
 
       defp __resolve_slice_path__(_action), do: Jido.Dsl.Agent.Info.path(__MODULE__)

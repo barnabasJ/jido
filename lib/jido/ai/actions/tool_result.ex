@@ -21,7 +21,6 @@ defmodule Jido.AI.Actions.ToolResult do
 
   action do
     name "ai_tool_result"
-    path :ai
     description "Process one tool result and fan-in to the next LLM turn."
 
     schema tool_call_id: [type: :string, required: true],

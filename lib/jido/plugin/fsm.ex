@@ -23,9 +23,17 @@ defmodule Jido.Plugin.FSM do
   Per-agent configuration is a map merged into the slice at
   `Jido.Agent.new/1`:
 
-      use Jido.Agent,
-        extensions: [
-          {Jido.Plugin.FSM, %{
+      use Jido.Agent, middleware: [Jido.Plugin.FSM]
+
+      agent do
+        name "my_agent"
+        path :app
+        schema []
+      end
+
+      slices do
+        slice :fsm, Jido.Plugin.FSM,
+          options: [
             initial_state: "ready",
             transitions: %{
               "ready" => ["working", "done"],
@@ -34,13 +42,7 @@ defmodule Jido.Plugin.FSM do
               "errored" => []
             },
             terminal_states: ["done", "errored"]
-          }}
-        ]
-
-      agent do
-        name "my_agent"
-        path :app
-        schema []
+          ]
       end
 
   The default transition map mirrors the historical FSM strategy:

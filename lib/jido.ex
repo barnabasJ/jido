@@ -112,7 +112,7 @@ defmodule Jido do
       # warning from dialyzer.
       @dialyzer {:nowarn_function, [__default_slices__: 0]}
       @doc "Returns the default slices for agents bound to this Jido instance."
-      @spec __default_slices__() :: [module() | {module(), map()}]
+      @spec __default_slices__() :: [Jido.Agent.DefaultSlices.default_entry()]
       def __default_slices__, do: @default_slices
 
       @doc false

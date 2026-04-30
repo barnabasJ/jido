@@ -132,25 +132,36 @@ defmodule JidoTest.TestAgents do
   defmodule AgentWithPluginRoutes do
     @moduledoc false
     use Jido.Agent,
-      extensions: [JidoTest.TestAgents.TestPluginWithRoutes],
+      middleware: [JidoTest.TestAgents.TestPluginWithRoutes],
       default_slices: false
 
     agent do
       name "agent_with_plugin_routes"
     end
+
+    slices do
+      slice(:test_routes, JidoTest.TestAgents.TestPluginWithRoutes)
+    end
   end
 
+  # TODO: revisit per task 0053 — `as:` override semantics (re-mount the same
+  # plugin under multiple paths) no longer apply to the unambiguous `slices do …`
+  # block. The original test exercised two-instance mounting via `{Plugin, as: :foo}`
+  # tuples; the new shape would require per-mount route prefixing, which task 0053
+  # explicitly defers. Mount once for now so the file compiles; reinstate
+  # per-instance routing in a follow-up if the test premise is still relevant.
   defmodule AgentWithMultiInstancePlugins do
     @moduledoc false
     use Jido.Agent,
-      extensions: [
-        {JidoTest.TestAgents.TestPluginWithRoutes, [as: :support]},
-        {JidoTest.TestAgents.TestPluginWithRoutes, [as: :sales]}
-      ],
+      middleware: [JidoTest.TestAgents.TestPluginWithRoutes],
       default_slices: false
 
     agent do
       name "agent_multi_instance"
+    end
+
+    slices do
+      slice(:support, JidoTest.TestAgents.TestPluginWithRoutes)
     end
   end
 end

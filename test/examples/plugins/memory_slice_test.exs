@@ -31,7 +31,6 @@ defmodule JidoExampleTest.MemorySliceTest do
 
     action do
       name "update_world"
-      path :memory
       schema key: [type: :atom, required: true], value: [type: :any, required: true]
     end
 

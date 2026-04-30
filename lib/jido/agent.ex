@@ -32,17 +32,20 @@ defmodule Jido.Agent do
   ```elixir
   defmodule MyAgent do
     use Jido.Agent,
-      extensions: [
-        MyApp.MemorySlice,
-        MyApp.SlackPlugin,
-        Jido.Middleware.Retry
-      ]
+      middleware: [Jido.Middleware.Retry]
 
     agent do
       name "my_agent"
       description "My custom agent"
       path :domain
       schema [counter: [type: :integer, default: 0]]
+    end
+
+    slices do
+      slice :memory, MyApp.MemorySlice
+      slice :slack, MyApp.SlackPlugin do
+        options token: "xoxb-..."
+      end
     end
 
     signal_routes do
@@ -56,12 +59,15 @@ defmodule Jido.Agent do
   end
   ```
 
-  Each module listed in `extensions: […]` that opts into the contribution
-  mechanism (`use Jido.Slice.Extension, host_section: …`) surfaces a typed
-  configuration block on the host agent — e.g. `memory do … end`,
-  `react do … end`. Each contributed section's schema includes a
-  built-in `path:` field so the host can rename the slice's mount path
-  inline (`memory do path :short_term end`).
+  Each `slice :path, Module` line in `slices do … end` mounts a slice
+  (or plugin) at the agent-declared path. Plugin modules with
+  middleware behaviour also appear in the top-level `middleware: […]`
+  list so their position in the wrap chain is explicit.
+
+  The `extensions: […]` keyword stays available for modules whose typed
+  DSL section the host wants to call into (e.g. `extensions: [Jido.AI.ReAct]`
+  unlocks `react do … end`). It is **not** the channel for slice/plugin
+  enumeration — that role moves entirely into `slices do … end`.
   """
 
   use Spark.Dsl,
@@ -71,7 +77,18 @@ defmodule Jido.Agent do
       extensions: [
         type: {:list, :any},
         default: [],
-        doc: "Plugin / slice / middleware modules registered with this agent."
+        doc:
+          "Modules whose typed DSL section the host wants to call into " <>
+            "(e.g. `Jido.AI.ReAct` to unlock `react do … end`). " <>
+            "Slice / plugin enumeration goes in `slices do … end`."
+      ],
+      middleware: [
+        type: {:list, :any},
+        default: [],
+        doc:
+          "Ordered list of middleware modules. Order is the wrap-chain " <>
+            "order. Plugin modules with middleware behaviour also appear " <>
+            "here for ordering, in addition to `slices do … end` for path."
       ],
       jido: [
         type: :atom,
@@ -106,6 +123,9 @@ defmodule Jido.Agent do
         end)
       end
 
+    # Strip middleware: from the opts handed to Spark — Spark only knows
+    # about :extensions and our own :jido / :default_slices keys (we
+    # persist :middleware ourselves in handle_opts/1 below).
     super(new_opts)
   end
 
@@ -302,6 +322,11 @@ defmodule Jido.Agent do
       |> List.wrap()
       |> Enum.reject(&__spark_extension_module__?/1)
 
+    user_middleware =
+      opts
+      |> Keyword.get(:middleware, [])
+      |> List.wrap()
+
     quote location: :keep do
       @behaviour Jido.Agent
 
@@ -316,6 +341,7 @@ defmodule Jido.Agent do
       require OK
 
       @persist {:jido_user_extensions, unquote(Macro.escape(user_extensions))}
+      @persist {:jido_user_middleware, unquote(Macro.escape(user_middleware))}
       @persist {:jido_instance_module, unquote(opts[:jido])}
       @persist {:default_slices_override, unquote(Macro.escape(opts[:default_slices]))}
     end

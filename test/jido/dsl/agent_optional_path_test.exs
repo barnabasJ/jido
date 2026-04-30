@@ -45,12 +45,15 @@ defmodule Jido.Dsl.AgentOptionalPathTest do
     defmodule CompositionAgent do
       @moduledoc false
       use Jido.Agent,
-        extensions: [Jido.Memory.Slice],
         default_slices: %{memory: false, thread: false, identity: false}
 
       agent do
         name "composition_agent"
         description "Composition over a single contributed slice."
+      end
+
+      slices do
+        slice(:memory, Jido.Memory.Slice)
       end
     end
 

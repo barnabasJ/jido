@@ -4,7 +4,7 @@ defmodule JidoTest.Igniter.TemplatesTest do
   alias Jido.Igniter.Templates
 
   describe "agent_template/3" do
-    test "includes optional extensions list when provided" do
+    test "emits a slices do … end block when plugins are provided" do
       template =
         Templates.agent_template(
           "MyApp.Agent",
@@ -12,7 +12,9 @@ defmodule JidoTest.Igniter.TemplatesTest do
           plugins: [MyApp.PluginOne, MyApp.PluginTwo]
         )
 
-      assert template =~ "extensions: [MyApp.PluginOne, MyApp.PluginTwo]"
+      assert template =~ "slices do"
+      assert template =~ "slice :plugin_one, MyApp.PluginOne"
+      assert template =~ "slice :plugin_two, MyApp.PluginTwo"
     end
   end
 

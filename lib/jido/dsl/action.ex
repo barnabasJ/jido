@@ -27,12 +27,6 @@ defmodule Jido.Dsl.Action do
       category: [type: :string],
       tags: [type: {:list, :string}, default: []],
       vsn: [type: :string],
-      path: [
-        type: :any,
-        doc:
-          "Atom slice key this action operates on. " <>
-            "Defaults to the agent's `path:` at routing time."
-      ],
       compensation: [
         type: :any,
         default: %{enabled: false, max_retries: 1, timeout: 5000},

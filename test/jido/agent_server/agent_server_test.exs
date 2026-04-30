@@ -1113,10 +1113,14 @@ defmodule JidoTest.AgentServerTest do
     defmodule AgentWithScheduledPlugin do
       @moduledoc false
       use Jido.Agent,
-        extensions: [ScheduledPlugin]
+        middleware: [ScheduledPlugin]
 
       agent do
         name "agent_with_scheduled_plugin"
+      end
+
+      slices do
+        slice(:scheduled_plugin, ScheduledPlugin)
       end
     end
 

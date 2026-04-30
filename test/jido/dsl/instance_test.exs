@@ -14,11 +14,12 @@ defmodule Jido.Dsl.InstanceTest do
     assert {Jido.Storage.ETS, _opts} = TestInstance.__jido_storage__()
   end
 
-  test "__default_slices__/0 returns the framework default slices" do
+  test "__default_slices__/0 returns the framework default slices as {path, module} pairs" do
     slices = TestInstance.__default_slices__()
-    assert Jido.Memory.Slice in slices
-    assert Jido.Identity.Slice in slices
-    assert Jido.Thread.Slice in slices
+    modules = Enum.map(slices, &Jido.Agent.DefaultSlices.module_of/1)
+    assert Jido.Memory.Slice in modules
+    assert Jido.Identity.Slice in modules
+    assert Jido.Thread.Slice in modules
   end
 
   test "config/1 reads the runtime config and merges overrides" do

@@ -31,7 +31,6 @@ defmodule JidoExampleTest.ThreadSliceTest do
 
     action do
       name "record_message"
-      path :thread
       schema role: [type: :string, required: true], content: [type: :string, required: true]
     end
 
@@ -53,7 +52,6 @@ defmodule JidoExampleTest.ThreadSliceTest do
 
     action do
       name "summarize"
-      path :domain
       schema []
     end
 

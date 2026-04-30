@@ -11,7 +11,6 @@ defmodule Jido.Identity.Actions.Evolve do
 
   action do
     name "identity_evolve"
-    path :identity
     description "Evolve agent identity over simulated time"
 
     schema days: [type: :integer, default: 0, doc: "Days of simulated time to add"],

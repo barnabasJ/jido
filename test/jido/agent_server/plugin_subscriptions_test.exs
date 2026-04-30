@@ -223,17 +223,21 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
   defmodule AgentWithSensorPlugin do
     @moduledoc false
     use Jido.Agent,
-      extensions: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithSensor]
+      middleware: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithSensor]
 
     agent do
       name "agent_with_sensor_plugin"
+    end
+
+    slices do
+      slice(:with_sensor, JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithSensor)
     end
   end
 
   defmodule AgentWithRoutedSensorPlugin do
     @moduledoc false
     use Jido.Agent,
-      extensions: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithRoutedSensor]
+      middleware: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithRoutedSensor]
 
     agent do
       name "agent_with_routed_sensor_plugin"
@@ -241,6 +245,10 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
 
       schema last_sensor_value: [type: :any, default: nil],
              last_sensor_count: [type: :integer, default: 0]
+    end
+
+    slices do
+      slice(:routed_sensor, JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithRoutedSensor)
     end
 
     signal_routes do
@@ -267,55 +275,89 @@ defmodule JidoTest.AgentServer.PluginSubscriptionsTest do
   defmodule AgentWithStaticSubscriptionPlugin do
     @moduledoc false
     use Jido.Agent,
-      extensions: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithStaticSubscriptions]
+      middleware: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithStaticSubscriptions]
 
     agent do
       name "agent_with_static_sub_plugin"
+    end
+
+    slices do
+      slice(
+        :static_subs,
+        JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithStaticSubscriptions
+      )
     end
   end
 
   defmodule AgentWithMultiSensorPlugin do
     @moduledoc false
     use Jido.Agent,
-      extensions: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithMultipleSensors]
+      middleware: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithMultipleSensors]
 
     agent do
       name "agent_with_multi_sensor_plugin"
+    end
+
+    slices do
+      slice(
+        :multi_sensors,
+        JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithMultipleSensors
+      )
     end
   end
 
   defmodule AgentWithNoSubscriptionsPlugin do
     @moduledoc false
     use Jido.Agent,
-      extensions: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithNoSubscriptions]
+      middleware: [JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithNoSubscriptions]
 
     agent do
       name "agent_with_no_subs_plugin"
+    end
+
+    slices do
+      slice(:no_subs, JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithNoSubscriptions)
     end
   end
 
   defmodule AgentWithPluginWithoutCallback do
     @moduledoc false
     use Jido.Agent,
-      extensions: [
+      middleware: [
         JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithoutSubscriptionsCallback
       ]
 
     agent do
       name "agent_with_plugin_without_callback"
     end
+
+    slices do
+      slice(
+        :no_callback,
+        JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithoutSubscriptionsCallback
+      )
+    end
   end
 
   defmodule AgentWithMultiplePlugins do
     @moduledoc false
     use Jido.Agent,
-      extensions: [
+      middleware: [
         JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithSensor,
         JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithMultipleSensors
       ]
 
     agent do
       name "agent_with_multiple_plugins"
+    end
+
+    slices do
+      slice(:with_sensor, JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithSensor)
+
+      slice(
+        :multi_sensors,
+        JidoTest.AgentServer.PluginSubscriptionsTest.PluginWithMultipleSensors
+      )
     end
   end
 

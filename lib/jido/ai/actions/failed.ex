@@ -15,7 +15,6 @@ defmodule Jido.AI.Actions.Failed do
 
   action do
     name "ai_react_failed"
-    path :ai
     description "Settle the slice as :failed with the reason."
 
     schema reason: [type: :any, required: true],

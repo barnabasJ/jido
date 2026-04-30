@@ -9,31 +9,27 @@ defmodule Jido.Dsl.ExtensionComposeTest do
 
   alias Jido.Dsl.Agent.Info, as: AgentInfo
 
+  # Path overrides now live in the agent's `slices do …` block, not in
+  # contributed-section `path:` fields. The contributed sections still
+  # carry per-slice config (when the slice has a `config_schema/0`); they
+  # just don't carry path anymore.
   defmodule MultiHost do
     @moduledoc false
-    use Jido.Agent,
-      extensions: [Jido.Memory.Slice, Jido.Identity.Slice, Jido.Thread.Slice],
-      default_slices: false
+    use Jido.Agent, default_slices: false
 
     agent do
       name "multi_host"
     end
 
-    memory do
-      path :short_term
-    end
-
-    identity do
-      path :who
-    end
-
-    thread do
-      path :history
+    slices do
+      slice(:short_term, Jido.Memory.Slice)
+      slice(:who, Jido.Identity.Slice)
+      slice(:history, Jido.Thread.Slice)
     end
   end
 
   describe "multiple contributions compose" do
-    test "all three contributed sections apply" do
+    test "all three slices mount at the agent-declared paths" do
       instances = AgentInfo.slice_instances(MultiHost)
 
       memory = Enum.find(instances, &(&1.module == Jido.Memory.Slice))
@@ -48,12 +44,15 @@ defmodule Jido.Dsl.ExtensionComposeTest do
 
   defmodule HostNoBlocks do
     @moduledoc false
-    use Jido.Agent,
-      extensions: [Jido.Memory.Slice, Jido.Identity.Slice],
-      default_slices: false
+    use Jido.Agent, default_slices: false
 
     agent do
       name "host_no_blocks"
+    end
+
+    slices do
+      slice(:memory, Jido.Memory.Slice)
+      slice(:identity, Jido.Identity.Slice)
     end
   end
 

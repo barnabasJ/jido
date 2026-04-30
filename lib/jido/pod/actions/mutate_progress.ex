@@ -10,7 +10,6 @@ defmodule Jido.Pod.Actions.MutateProgress do
 
   action do
     name "pod_mutate_progress"
-    path :pod
     schema []
   end
 

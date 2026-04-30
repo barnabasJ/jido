@@ -12,7 +12,6 @@ defmodule Jido.Plugin.FSM.Transition do
 
   action do
     name "fsm_transition"
-    path :fsm
 
     schema(
       Zoi.object(%{

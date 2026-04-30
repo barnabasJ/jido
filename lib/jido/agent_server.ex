@@ -2066,7 +2066,16 @@ defmodule Jido.AgentServer do
   defp compose_chain(entries, core_next) do
     Enum.reduce(Enum.reverse(entries), core_next, fn entry, acc_next ->
       {mod, opts} = normalize_entry(entry)
-      fn sig, ctx -> mod.on_signal(sig, ctx, opts, acc_next) end
+      Code.ensure_loaded(mod)
+
+      if function_exported?(mod, :on_signal, 4) do
+        fn sig, ctx -> mod.on_signal(sig, ctx, opts, acc_next) end
+      else
+        # Plugin / module declared `@behaviour Jido.Middleware` but did
+        # not implement `on_signal/4`. The callback is optional — pass
+        # the signal through unchanged.
+        acc_next
+      end
     end)
   end
 

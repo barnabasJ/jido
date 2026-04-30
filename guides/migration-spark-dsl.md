@@ -3,6 +3,47 @@
 This guide walks through migrating an out-of-tree Jido codebase to the
 sectioned **Spark DSL** surface that Jido ships today.
 
+> ## Update — task 0053: `slices do … end` block
+>
+> Slice/plugin enumeration moved out of the `extensions: […]` flat list
+> and into a typed `slices do slice :path, Module end` block on the
+> agent. Middleware moved to a top-level `middleware: […]` opt on
+> `use Jido.Agent` (ordering matters and a flat ordered list is the
+> right shape). The `extensions: […]` keyword stays available for
+> modules that contribute a typed DSL section to the host (e.g.
+> `Jido.AI.ReAct` to unlock `react do … end`) — it is no longer the
+> channel for slice/plugin enumeration.
+>
+> ```elixir
+> # Before:
+> use Jido.Agent,
+>   extensions: [Jido.Memory.Slice, Jido.Plugin.FSM, Jido.Middleware.Retry]
+>
+> # After:
+> use Jido.Agent, middleware: [Jido.Plugin.FSM, Jido.Middleware.Retry]
+>
+> agent do
+>   name "my_agent"
+>   path :domain
+> end
+>
+> slices do
+>   slice :memory, Jido.Memory.Slice
+>   slice :fsm, Jido.Plugin.FSM
+> end
+> ```
+>
+> Action modules no longer carry a `path :foo` field. The slice path
+> for an action's return value is now resolved through a compile-time
+> lookup table built from each slice's `signal_routes` — i.e. "the
+> slice whose route points at this action owns its return value."
+> Slices and plugins still declare an optional `path :foo` field on
+> their own DSL, but the agent's `slices do …` mount path always
+> wins. Most slices should omit the field entirely.
+>
+> The rest of this guide describes the original keyword-list →
+> Spark migration; pair it with the `slices do …` shape above.
+
 ## Why we're migrating
 
 The agent / slice / plugin / middleware / action / sensor / pod surfaces

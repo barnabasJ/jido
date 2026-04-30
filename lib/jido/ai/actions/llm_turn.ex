@@ -29,7 +29,6 @@ defmodule Jido.AI.Actions.LLMTurn do
 
   action do
     name "ai_llm_turn"
-    path :ai
     description "Process a completed LLM turn and decide the next ReAct step."
 
     schema turn: [type: :any, required: true],

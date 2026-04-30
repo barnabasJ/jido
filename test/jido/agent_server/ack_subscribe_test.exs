@@ -9,7 +9,6 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
 
     action do
       name "write"
-      path :app
       schema []
     end
 
@@ -24,7 +23,6 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
 
     action do
       name "fail"
-      path :app
       schema []
     end
 
@@ -55,7 +53,6 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
 
     action do
       name "flaky"
-      path :app
       schema []
     end
 
@@ -85,7 +82,7 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
   defmodule RetryingAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [{Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}]
+      middleware: [{Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}]
 
     agent do
       name "retrying_agent"

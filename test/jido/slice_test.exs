@@ -16,7 +16,8 @@ defmodule JidoTest.SliceTest do
       end
     end
 
-    test "raises CompileError when path is missing" do
+    @tag :skip
+    test "raises CompileError when path is missing (task 0053 made path optional)" do
       assert_raise Spark.Error.DslError, ~r/required :path option/, fn ->
         Code.compile_string("""
         defmodule JidoTest.SliceTest.NoPath do
@@ -138,11 +139,14 @@ defmodule JidoTest.SliceTest do
     defmodule SchemaAgent do
       @moduledoc false
       use Jido.Agent,
-        extensions: [JidoTest.SliceTest.SchemaSlice],
         default_slices: false
 
       agent do
         name "schema_agent"
+      end
+
+      slices do
+        slice(:schema, JidoTest.SliceTest.SchemaSlice)
       end
     end
 
@@ -155,11 +159,14 @@ defmodule JidoTest.SliceTest do
       defmodule SchemaAgentConfigured do
         @moduledoc false
         use Jido.Agent,
-          extensions: [{JidoTest.SliceTest.SchemaSlice, %{counter: 42}}],
           default_slices: false
 
         agent do
           name "schema_agent_configured"
+        end
+
+        slices do
+          slice(:schema, JidoTest.SliceTest.SchemaSlice, options: [counter: 42])
         end
       end
 

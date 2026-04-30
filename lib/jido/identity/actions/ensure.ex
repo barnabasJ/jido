@@ -11,7 +11,6 @@ defmodule Jido.Identity.Actions.Ensure do
 
   action do
     name "identity_ensure"
-    path :identity
     description "Initialize identity state if missing."
 
     schema profile: [

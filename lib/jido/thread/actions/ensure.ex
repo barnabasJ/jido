@@ -11,7 +11,6 @@ defmodule Jido.Thread.Actions.Ensure do
 
   action do
     name "thread_ensure"
-    path :thread
     description "Initialize thread state if missing."
 
     schema metadata: [

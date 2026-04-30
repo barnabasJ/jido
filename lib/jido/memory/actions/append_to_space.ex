@@ -10,7 +10,6 @@ defmodule Jido.Memory.Actions.AppendToSpace do
 
   action do
     name "memory_append_to_space"
-    path :memory
     description "Append an item to a list space."
 
     schema space: [type: :atom, required: true, doc: "List space name."],

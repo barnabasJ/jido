@@ -98,18 +98,7 @@ defmodule Jido.Slice.Extension do
   end
 
   defp build_schema(module) do
-    base_path = SliceInfo.path(module)
-    user_schema = SchemaTranslate.translate(SliceInfo.config_schema(module))
-
-    [
-      path: [
-        type: :atom,
-        default: base_path,
-        doc:
-          "Slice mount path on this host. Defaults to the slice's declared `path()`. " <>
-            "Override to rename the slice's slot in `agent.state`."
-      ]
-    ] ++ user_schema
+    SchemaTranslate.translate(SliceInfo.config_schema(module))
   end
 
   defp section_describe(module) do

@@ -54,12 +54,16 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
   defmodule PluginScheduledAgent do
     @moduledoc false
     use Jido.Agent,
-      extensions: [ScheduledPlugin]
+      middleware: [ScheduledPlugin]
 
     agent do
       name "scheduler_integration_plugin_agent"
       path :domain
       schema tick_count: [type: :integer, default: 0], ticks: [type: {:list, :any}, default: []]
+    end
+
+    slices do
+      slice(:scheduler_integration_plugin, ScheduledPlugin)
     end
   end
 

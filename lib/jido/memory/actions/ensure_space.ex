@@ -12,7 +12,6 @@ defmodule Jido.Memory.Actions.EnsureSpace do
 
   action do
     name "memory_ensure_space"
-    path :memory
     description "Create a space with default data if missing."
 
     schema space: [type: :atom, required: true, doc: "Space name to ensure."],

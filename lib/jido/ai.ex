@@ -39,6 +39,10 @@ defmodule Jido.AI do
           system_prompt "You are a support agent."
           max_iterations 5
         end
+
+        slices do
+          slice :ai, Jido.AI.ReAct
+        end
       end
 
       {:ok, pid}  = Jido.AgentServer.start_link(agent_module: MyApp.SupportAgent)

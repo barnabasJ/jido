@@ -21,34 +21,37 @@ defmodule Jido.Dsl.ExtensionPathOverrideTest do
   alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Slice.Instance, as: SliceInstance
 
+  # The path-override mechanism is now `slices do slice :path, Slice end`
+  # on the host agent. The contributed-section `path:` field that used to
+  # carry path was removed in task 0053 — paths are owned by the agent.
   defmodule HostWithMemoryOverride do
     @moduledoc false
-    use Jido.Agent,
-      extensions: [Jido.Memory.Slice],
-      default_slices: false
+    use Jido.Agent, default_slices: false
 
     agent do
       name "host_memory_override"
     end
 
-    memory do
-      path :short_term
+    slices do
+      slice(:short_term, Jido.Memory.Slice)
     end
   end
 
   defmodule HostWithoutMemoryOverride do
     @moduledoc false
-    use Jido.Agent,
-      extensions: [Jido.Memory.Slice],
-      default_slices: false
+    use Jido.Agent, default_slices: false
 
     agent do
       name "host_memory_default"
     end
+
+    slices do
+      slice(:memory, Jido.Memory.Slice)
+    end
   end
 
-  describe "contributed-section path override" do
-    test "renames the slice's mount path when set" do
+  describe "agent-declared mount path" do
+    test "renames the slice's mount path when the agent picks a non-default" do
       instances = AgentInfo.slice_instances(HostWithMemoryOverride)
       memory = Enum.find(instances, &(&1.module == Jido.Memory.Slice))
 
@@ -56,7 +59,7 @@ defmodule Jido.Dsl.ExtensionPathOverrideTest do
       assert memory.path == :short_term
     end
 
-    test "falls back to the slice's declared path when not set" do
+    test "uses the path the agent declared in `slices do …`" do
       instances = AgentInfo.slice_instances(HostWithoutMemoryOverride)
       memory = Enum.find(instances, &(&1.module == Jido.Memory.Slice))
 

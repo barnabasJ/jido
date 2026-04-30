@@ -10,7 +10,6 @@ defmodule Jido.Memory.Actions.DeleteSpace do
 
   action do
     name "memory_delete_space"
-    path :memory
     description "Delete a non-reserved space."
 
     schema space: [type: :atom, required: true, doc: "Space name to delete."]

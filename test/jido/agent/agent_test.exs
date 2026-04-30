@@ -413,7 +413,11 @@ defmodule JidoTest.AgentTest do
       assert {"test_routes_plugin.list", JidoTest.PluginTestAction, -10} in routes
     end
 
+    @tag :skip
     test "multi-instance plugins get unique route prefixes" do
+      # task 0053: multi-instance via `as: :alias` is no longer supported.
+      # Route prefixing for multiple mounts of the same plugin needs a
+      # follow-up design.
       routes = AgentInfo.plugin_routes(TestAgents.AgentWithMultiInstancePlugins)
 
       assert length(routes) == 4
@@ -428,10 +432,15 @@ defmodule JidoTest.AgentTest do
         ExUnit.CaptureIO.capture_io(:stderr, fn ->
           defmodule ConflictAgent do
             use Jido.Agent,
-              extensions: [TestAgents.TestPluginWithRoutes, TestAgents.TestPluginWithRoutes]
+              middleware: [TestAgents.TestPluginWithRoutes]
 
             agent do
               name "conflict_agent"
+            end
+
+            slices do
+              slice(:test_routes, TestAgents.TestPluginWithRoutes)
+              slice(:test_routes, TestAgents.TestPluginWithRoutes)
             end
           end
         end)
@@ -439,7 +448,9 @@ defmodule JidoTest.AgentTest do
       assert stderr =~ ~r/Route conflict|Duplicate.*paths|same path/
     end
 
+    @tag :skip
     test "no route conflict when plugins use different :as aliases" do
+      # task 0053: see comment on `multi-instance plugins get unique route prefixes`.
       routes = AgentInfo.plugin_routes(TestAgents.AgentWithMultiInstancePlugins)
       assert length(routes) == 4
     end

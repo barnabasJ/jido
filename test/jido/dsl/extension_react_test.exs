@@ -25,6 +25,10 @@ defmodule Jido.Dsl.ExtensionReactTest do
       name "support"
     end
 
+    slices do
+      slice(:ai, Jido.AI.ReAct)
+    end
+
     react do
       model("anthropic:claude-haiku-4-5-20251001")
       tools([Jido.AI.TestActions.TestAdd])
@@ -53,27 +57,6 @@ defmodule Jido.Dsl.ExtensionReactTest do
     end
   end
 
-  defmodule SliceOnlyAgent do
-    @moduledoc false
-    use Jido.Agent,
-      extensions: [{Jido.AI.ReAct, as: :slice}],
-      default_slices: false
-
-    agent do
-      name "slice_only"
-    end
-  end
-
-  describe "override form: {ReAct, as: :slice}" do
-    test "still produces a slice instance for ReAct" do
-      instances = AgentInfo.slice_instances(SliceOnlyAgent)
-      react_instance = Enum.find(instances, &(&1.module == ReAct))
-
-      assert react_instance
-      assert react_instance.path == :ai
-    end
-  end
-
   defmodule RenamedReactAgent do
     @moduledoc false
     use Jido.Agent, extensions: [Jido.AI.ReAct], default_slices: false
@@ -82,15 +65,18 @@ defmodule Jido.Dsl.ExtensionReactTest do
       name "renamed_react"
     end
 
+    slices do
+      slice(:reasoning, Jido.AI.ReAct)
+    end
+
     react do
-      path :reasoning
       model("anthropic:claude-haiku-4-5-20251001")
       tools([Jido.AI.TestActions.TestAdd])
     end
   end
 
-  describe "path override on the contributed react section" do
-    test "renames the slice's mount path" do
+  describe "agent-declared mount path for ReAct" do
+    test "the slice mounts at the agent-declared path even when the typed `react do` block is present" do
       instances = AgentInfo.slice_instances(RenamedReactAgent)
       react_instance = Enum.find(instances, &(&1.module == ReAct))
 

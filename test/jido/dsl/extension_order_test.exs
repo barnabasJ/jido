@@ -38,7 +38,7 @@ defmodule Jido.Dsl.ExtensionOrderTest do
   defmodule HostOrderTest do
     @moduledoc false
     use Jido.Agent,
-      extensions: [MiddlewareA, MiddlewareB, MiddlewareC],
+      middleware: [MiddlewareA, MiddlewareB, MiddlewareC],
       default_slices: false
 
     agent do
@@ -49,7 +49,7 @@ defmodule Jido.Dsl.ExtensionOrderTest do
   defmodule HostReverseOrder do
     @moduledoc false
     use Jido.Agent,
-      extensions: [MiddlewareC, MiddlewareB, MiddlewareA],
+      middleware: [MiddlewareC, MiddlewareB, MiddlewareA],
       default_slices: false
 
     agent do

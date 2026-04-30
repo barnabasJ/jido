@@ -15,7 +15,6 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
   action do
     name "pod_auto_unsubscribe_child"
     description "Unsubscribe a pod child from the pod bus on child.exit."
-    path :pod_bus
 
     schema tag: [type: :any, required: true],
            pid: [type: :any, required: false],

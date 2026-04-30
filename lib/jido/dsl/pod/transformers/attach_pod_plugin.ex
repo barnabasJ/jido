@@ -1,17 +1,18 @@
 defmodule Jido.Dsl.Pod.Transformers.AttachPodPlugin do
   @moduledoc """
   Attaches `Jido.Pod.Plugin` (or a user-supplied replacement via
-  `default_slices: %{pod: SomePlugin}`) to the pod's user-extensions
-  list. Validates the resolved pod plugin advertises `path: :pod` and
-  capability `:pod` so the rest of the pod runtime can rely on a known
-  slice key.
+  `default_slices: %{pod: SomePlugin}`) into the pod's `slices do …`
+  section as a `SliceMount` at path `:pod`. Validates the resolved
+  pod plugin advertises capability `:pod` so the rest of the pod
+  runtime can rely on a known slice key.
 
-  Runs before `DiscoverExtensions` / `WalkExtensions` so the pod plugin
-  is processed alongside any user-supplied extensions.
+  Runs before `WalkExtensions` so the pod plugin is processed
+  alongside any user-supplied slice mounts.
   """
 
   use Spark.Dsl.Transformer
 
+  alias Jido.Dsl.Agent.SliceMount
   alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Pod.Plugin
   alias Spark.Dsl.Transformer
@@ -26,7 +27,6 @@ defmodule Jido.Dsl.Pod.Transformers.AttachPodPlugin do
 
   @impl Spark.Dsl.Transformer
   def transform(dsl_state) do
-    user_extensions = Transformer.get_persisted(dsl_state, :jido_user_extensions, [])
     pod_section_plugin = Transformer.get_option(dsl_state, [:pod], :plugin)
     default_slices_override = Transformer.get_persisted(dsl_state, :default_slices_override)
 
@@ -35,12 +35,20 @@ defmodule Jido.Dsl.Pod.Transformers.AttachPodPlugin do
 
     validate_pod_plugin!(pod_plugin_decl)
 
-    dsl_state =
-      dsl_state
-      |> Transformer.persist(:jido_user_extensions, [pod_plugin_decl | user_extensions])
-      |> Transformer.persist(:default_slices_override, remaining_default_slices)
+    {pod_module, pod_options} = unpack_decl(pod_plugin_decl)
+    pod_mount = %SliceMount{path: @pod_state_key, module: pod_module, options: pod_options}
 
-    {:ok, dsl_state}
+    dsl_state
+    |> Transformer.add_entity([:slices], pod_mount)
+    |> Transformer.persist(:default_slices_override, remaining_default_slices)
+    |> then(&{:ok, &1})
+  end
+
+  defp unpack_decl(module) when is_atom(module), do: {module, []}
+  defp unpack_decl({module, opts}) when is_atom(module) and is_list(opts), do: {module, opts}
+
+  defp unpack_decl({module, opts}) when is_atom(module) and is_map(opts) do
+    {module, Map.to_list(opts)}
   end
 
   # `pod do plugin SomePlugin end` takes precedence over the
@@ -104,24 +112,15 @@ defmodule Jido.Dsl.Pod.Transformers.AttachPodPlugin do
         path: []
     end
 
-    cond do
-      PluginInfo.path(module) != @pod_state_key ->
-        raise Spark.Error.DslError,
-          message:
-            "#{inspect(module)} must use path: #{inspect(@pod_state_key)} " <>
-              "to replace the pod plugin.",
-          path: []
-
-      @pod_capability not in PluginInfo.capabilities(module) ->
-        raise Spark.Error.DslError,
-          message:
-            "#{inspect(module)} must advertise capability " <>
-              "#{inspect(@pod_capability)} to replace the pod plugin.",
-          path: []
-
-      true ->
-        :ok
+    if @pod_capability not in PluginInfo.capabilities(module) do
+      raise Spark.Error.DslError,
+        message:
+          "#{inspect(module)} must advertise capability " <>
+            "#{inspect(@pod_capability)} to replace the pod plugin.",
+        path: []
     end
+
+    :ok
   end
 
   defp extract_module(module) when is_atom(module), do: module

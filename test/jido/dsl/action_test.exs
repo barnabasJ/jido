@@ -25,7 +25,6 @@ defmodule Jido.Dsl.ActionTest do
         category "test"
         tags ["a", "b"]
         vsn "1.2.3"
-        path :counter
         schema by: [type: :integer, default: 1]
         output_schema(count: [type: :integer])
       end
@@ -73,30 +72,9 @@ defmodule Jido.Dsl.ActionTest do
       assert meta.category == "test"
       assert meta.tags == ["a", "b"]
       assert meta.vsn == "1.2.3"
-      assert meta.path == :counter
+      refute Map.has_key?(meta, :path)
       assert meta.schema == [by: [type: :integer, default: 1]]
       assert meta.output_schema == [count: [type: :integer]]
-    end
-  end
-
-  describe "path defaulting" do
-    defmodule PathlessAction do
-      @moduledoc false
-      use Jido.Action
-
-      action do
-        name "pathless"
-        schema []
-      end
-
-      def run(_signal, slice, _opts, _ctx), do: {:ok, slice, []}
-    end
-
-    test "an action with no path: returns nil from path/1" do
-      # Jido.Agent.cmd/2 falls back to the agent's own path: when the
-      # action's path/1 is nil. The accessor must return nil so that
-      # fallback is reachable.
-      assert ActionInfo.path(PathlessAction) == nil
     end
   end
 

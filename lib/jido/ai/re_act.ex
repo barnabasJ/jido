@@ -18,6 +18,10 @@ defmodule Jido.AI.ReAct do
           system_prompt "You are a support agent."
           max_iterations 5
         end
+
+        slices do
+          slice :ai, Jido.AI.ReAct
+        end
       end
 
   The slice owns the `:ai` key of the agent's state and contains the full

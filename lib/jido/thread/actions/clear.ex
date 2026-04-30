@@ -11,7 +11,6 @@ defmodule Jido.Thread.Actions.Clear do
 
   action do
     name "thread_clear"
-    path :thread
     description "Reset the thread to an empty state."
 
     schema []

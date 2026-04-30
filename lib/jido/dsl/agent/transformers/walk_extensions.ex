@@ -1,26 +1,29 @@
 defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   @moduledoc """
-  Walks the user's `extensions: […]` keyword list (recorded by
-  the `use Jido.Agent` macro as `:jido_user_extensions`), classifies each
-  entry as a plugin / slice / middleware via Spark's
-  `Spark.Dsl.is?/2`, and produces the internal `:plugin_instances` /
-  `:slice_instances` / `:middleware_list` lists agent introspection
-  reads.
+  Reads the agent's `slices do … end` section + `middleware:` opt and
+  produces the runtime instance lists agent introspection consumes:
 
-  Reads `:jido_contributed_sections` (persisted by
-  `Jido.Dsl.Agent.Transformers.DiscoverExtensions`) to look up each
-  extension's typed-section contribution; the user's block options
-  for that section are merged into the extension's config map and
-  the section's `:path` field becomes the slice instance's mount
-  path override.
+    * `:slice_instances` — bare-slice mounts (`use Jido.Slice` modules).
+    * `:plugin_instances` — plugin mounts (`use Jido.Plugin` modules).
+    * `:middleware_list` — ordered middleware (from `middleware: […]`).
+    * `:slice_path_for_action` — compile-time lookup
+      `%{action_module => mount_path}` so `cmd/2` can route an action's
+      return value to the correct slice without per-action `path :foo`
+      declarations.
 
-  Order in `extensions: […]` becomes the middleware-chain order for any
-  middleware halves contributed by plugins and bare-middleware modules
-  (slice entries do not participate in the chain).
+  The mount path comes **from the agent's `slices do …` block**, not
+  from the slice's own DSL — slices/plugins no longer carry a `path`
+  field.
+
+  When a slice contributes a typed DSL section to the host (the
+  `Jido.Slice.Extension` host-section mechanism, e.g. `react do … end`),
+  this transformer merges the contributed-block opts into the slice's
+  config map.
   """
 
   use Spark.Dsl.Transformer
 
+  alias Jido.Dsl.Agent.SliceMount
   alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias Jido.Plugin.Instance, as: PluginInstance
@@ -30,19 +33,22 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
 
   @impl Spark.Dsl.Transformer
   def transform(dsl_state) do
-    user_extensions = Transformer.get_persisted(dsl_state, :jido_user_extensions, [])
+    user_mounts = Transformer.get_entities(dsl_state, [:slices])
+    user_middleware = Transformer.get_persisted(dsl_state, :jido_user_middleware, [])
     default_slice_list = resolve_default_slices(dsl_state)
 
-    classified = Enum.map(user_extensions, &classify(&1, dsl_state))
+    classified_user = Enum.map(user_mounts, &classify_mount(&1, dsl_state))
 
-    plugin_instances = collect(classified, :plugin)
-    middleware_list = collect(classified, :middleware)
-    slice_instances_from_user = collect(classified, :slice)
+    plugin_instances_from_user = collect(classified_user, :plugin)
+    slice_instances_from_user = collect(classified_user, :slice)
 
     default_slice_instances =
-      Enum.map(default_slice_list, &SliceInstance.new/1)
+      Enum.map(default_slice_list, &normalize_default_slice/1)
 
+    plugin_instances = plugin_instances_from_user
     slice_instances = default_slice_instances ++ slice_instances_from_user
+
+    middleware_list = Enum.map(user_middleware, &normalize_middleware!/1)
 
     plugin_specs = Enum.map(plugin_instances, &build_plugin_spec/1)
 
@@ -59,6 +65,9 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
          (slice_instances |> Enum.flat_map(fn inst -> SliceInfo.actions(inst.module) end)))
       |> Enum.uniq()
 
+    slice_path_for_action =
+      build_action_path_table(plugin_instances, slice_instances)
+
     dsl_state =
       dsl_state
       |> Transformer.persist(:plugin_instances, plugin_instances)
@@ -69,6 +78,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
       |> Transformer.persist(:plugin_paths, plugin_paths)
       |> Transformer.persist(:slice_paths, slice_paths)
       |> Transformer.persist(:plugin_actions, plugin_actions)
+      |> Transformer.persist(:slice_path_for_action, slice_path_for_action)
       |> Transformer.persist(:default_slice_list, default_slice_list)
 
     {:ok, dsl_state}
@@ -105,6 +115,55 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     Jido.Agent.DefaultSlices.apply_agent_overrides(base_defaults, default_slices_override)
   end
 
+  defp normalize_default_slice(entry) do
+    path = Jido.Agent.DefaultSlices.path_of(entry)
+    module = Jido.Agent.DefaultSlices.module_of(entry)
+    config = Jido.Agent.DefaultSlices.config_of(entry)
+    ensure_module_loaded!(module)
+    SliceInstance.new({module, Map.put(config, :__path_override__, path)})
+  end
+
+  defp normalize_middleware!(module) when is_atom(module) do
+    ensure_module_loaded!(module)
+
+    if middleware_eligible?(module) do
+      {module, %{}}
+    else
+      raise CompileError,
+        description:
+          "Middleware module #{inspect(module)} does not implement the " <>
+            "`Jido.Middleware` behaviour. Add `@behaviour Jido.Middleware` " <>
+            "or move it out of the top-level `middleware: […]` list."
+    end
+  end
+
+  defp normalize_middleware!({module, opts}) when is_atom(module) do
+    ensure_module_loaded!(module)
+
+    if middleware_eligible?(module) do
+      {module, normalize_to_map(opts)}
+    else
+      raise CompileError,
+        description:
+          "Middleware module #{inspect(module)} does not implement the " <>
+            "`Jido.Middleware` behaviour. Add `@behaviour Jido.Middleware` " <>
+            "or move it out of the top-level `middleware: […]` list."
+    end
+  end
+
+  defp normalize_middleware!(other) do
+    raise CompileError,
+      description:
+        "Invalid middleware entry: #{inspect(other)}. Expected a module or `{Module, opts}`."
+  end
+
+  # A module is middleware-eligible if it explicitly declares the
+  # behaviour OR is a `use Jido.Plugin` module (which adds the
+  # behaviour via `handle_opts/1`).
+  defp middleware_eligible?(module) do
+    Spark.Dsl.is?(module, Jido.Plugin) or behaves_as_middleware?(module)
+  end
+
   defp collect(classified, kind) do
     classified
     |> Enum.flat_map(fn
@@ -113,34 +172,29 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     end)
   end
 
-  defp classify(entry, dsl_state) do
-    {module, opts, as_override} = normalize_entry(entry)
-
+  defp classify_mount(%SliceMount{path: path, module: module, options: options}, dsl_state) do
     ensure_module_loaded!(module)
 
     plugin? = Spark.Dsl.is?(module, Jido.Plugin)
     slice? = Spark.Dsl.is?(module, Jido.Slice)
-    middleware? = behaves_as_middleware?(module)
 
-    kind = pick_kind(module, plugin?, slice?, middleware?, as_override)
+    if not (plugin? or slice?) do
+      raise CompileError,
+        description:
+          "Module #{inspect(module)} mounted in `slices do …` is neither a " <>
+            "`use Jido.Slice` nor a `use Jido.Plugin` module. " <>
+            "Did you forget the `use` line?"
+    end
 
-    case kind do
-      :plugin ->
-        # Plugins do not contribute typed host sections in v1; pass raw
-        # opts through so `PluginInstance.new/1` can pop `:as` from the
-        # caller's keyword list.
-        decl = build_decl(module, opts)
-        {:plugin, PluginInstance.new(decl)}
+    block_config = read_contributed_block(module, dsl_state)
+    config = Map.merge(normalize_to_map(options), block_config)
 
-      :slice ->
-        {mount_path, block_config} = read_contributed_block(module, dsl_state)
-        config = Map.merge(normalize_to_map(opts), block_config)
-        decl = slice_decl(module, config, mount_path)
-        {:slice, SliceInstance.new(decl)}
-
-      :middleware ->
-        opts_map = if is_map(opts), do: opts, else: Map.new(opts)
-        {:middleware, {module, opts_map}}
+    if plugin? do
+      decl = {module, Map.merge(config, %{__path_override__: path})}
+      {:plugin, PluginInstance.new(decl)}
+    else
+      decl = {module, Map.merge(config, %{__path_override__: path})}
+      {:slice, SliceInstance.new(decl)}
     end
   end
 
@@ -150,48 +204,15 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
 
     case Map.get(contributed_sections, module) do
       nil ->
-        {nil, %{}}
+        %{}
 
       section_name ->
-        opts =
-          dsl_state
-          |> Map.get([section_name], Spark.Dsl.Extension.default_section_config())
-          |> Map.get(:opts)
-          |> Kernel.||([])
-          |> Map.new()
-
-        {Map.get(opts, :path), Map.delete(opts, :path)}
+        dsl_state
+        |> Map.get([section_name], Spark.Dsl.Extension.default_section_config())
+        |> Map.get(:opts)
+        |> Kernel.||([])
+        |> Map.new()
     end
-  end
-
-  defp slice_decl(module, config, nil), do: build_decl(module, config)
-
-  defp slice_decl(module, config, mount_path) do
-    {module, Map.put(config, :__path_override__, mount_path)}
-  end
-
-  defp normalize_entry(module) when is_atom(module), do: {module, %{}, nil}
-
-  defp normalize_entry({module, opts}) when is_atom(module) and is_list(opts) do
-    case Keyword.get(opts, :as) do
-      kind when kind in [:plugin, :slice, :middleware] ->
-        {module, Keyword.delete(opts, :as), kind}
-
-      _other ->
-        # `:as` is a plugin/slice instance alias (e.g. `as: :support`), not a
-        # kind override; let `Plugin.Instance.new/1` consume it.
-        {module, opts, nil}
-    end
-  end
-
-  defp normalize_entry({module, opts}) when is_atom(module) and is_map(opts) do
-    {module, opts, nil}
-  end
-
-  defp normalize_entry(other) do
-    raise CompileError,
-      description:
-        "Invalid extension entry: #{inspect(other)}. Expected a module or `{Module, opts}`."
   end
 
   defp ensure_module_loaded!(module) do
@@ -201,7 +222,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     else
       {:error, reason} ->
         raise CompileError,
-          description: "Extension #{inspect(module)} could not be compiled: #{inspect(reason)}"
+          description: "Module #{inspect(module)} could not be compiled: #{inspect(reason)}"
     end
   end
 
@@ -212,56 +233,21 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     Jido.Middleware in behaviours
   end
 
-  defp pick_kind(module, plugin?, slice?, middleware?, nil) do
-    cond do
-      plugin? -> :plugin
-      slice? -> :slice
-      middleware? -> :middleware
-      true -> raise_no_marker(module)
-    end
-  end
-
-  defp pick_kind(module, plugin?, slice?, _middleware?, :slice) do
-    if slice? or plugin?,
-      do: :slice,
-      else: raise_override_mismatch(module, :slice, "is not a Jido.Slice")
-  end
-
-  defp pick_kind(module, plugin?, _slice?, _middleware?, :plugin) do
-    if plugin?,
-      do: :plugin,
-      else:
-        raise_override_mismatch(
-          module,
-          :plugin,
-          "is not a `use Jido.Plugin` module"
-        )
-  end
-
-  defp pick_kind(module, _plugin?, _slice?, middleware?, :middleware) do
-    if middleware?,
-      do: :middleware,
-      else: raise_override_mismatch(module, :middleware, "does not implement Jido.Middleware")
-  end
-
-  defp raise_no_marker(module) do
-    raise CompileError,
-      description:
-        "Extension #{inspect(module)} is not a Jido.Plugin, Jido.Slice, or Jido.Middleware. " <>
-          "Did you forget `use Jido.Plugin`, `use Jido.Slice`, or `use Jido.Middleware`?"
-  end
-
-  defp raise_override_mismatch(module, kind, detail) do
-    raise CompileError,
-      description:
-        "Cannot register #{inspect(module)} as #{inspect(kind)}: " <>
-          "#{inspect(module)} #{detail}."
-  end
-
-  defp build_decl(module, opts) when opts == %{}, do: module
-  defp build_decl(module, opts) when opts == [], do: module
-  defp build_decl(module, opts), do: {module, opts}
-
   defp normalize_to_map(opts) when is_map(opts), do: opts
   defp normalize_to_map(opts) when is_list(opts), do: Map.new(opts)
+
+  defp build_action_path_table(plugin_instances, slice_instances) do
+    pairs =
+      Enum.flat_map(plugin_instances, fn %PluginInstance{module: module, path: path} ->
+        Enum.map(SliceInfo.actions(module), &{&1, path})
+      end) ++
+        Enum.flat_map(slice_instances, fn %SliceInstance{module: module, path: path} ->
+          Enum.map(SliceInfo.actions(module), &{&1, path})
+        end)
+
+    # If two slices route to the same action module, last one wins
+    # (the user picked an unusual layout — they can disambiguate by
+    # giving each slice its own action module).
+    Map.new(pairs)
+  end
 end

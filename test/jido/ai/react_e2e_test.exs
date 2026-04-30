@@ -36,72 +36,81 @@ defmodule Jido.AI.ReActE2ETest do
   defmodule NoToolsAgent do
     @moduledoc false
 
-    use Jido.Agent,
-      extensions: [
-        {Jido.AI.ReAct,
-         [
-           model: %{
-             provider: :openai,
-             id: "google/gemma-4-26b-a4b",
-             base_url: "http://localhost:1234/v1"
-           },
-           tools: [],
-           max_iterations: 3,
-           max_tokens: 256,
-           llm_opts: [api_key: "lm-studio"]
-         ]}
-      ]
+    use Jido.Agent, extensions: [Jido.AI.ReAct]
 
     agent do
       name "react_e2e_no_tools"
+    end
+
+    slices do
+      slice(:ai, Jido.AI.ReAct)
+    end
+
+    react do
+      model(%{
+        provider: :openai,
+        id: "google/gemma-4-26b-a4b",
+        base_url: "http://localhost:1234/v1"
+      })
+
+      tools([])
+      max_iterations(3)
+      max_tokens(256)
+      llm_opts(api_key: "lm-studio")
     end
   end
 
   defmodule EchoAgent do
     @moduledoc false
 
-    use Jido.Agent,
-      extensions: [
-        {Jido.AI.ReAct,
-         [
-           model: %{
-             provider: :openai,
-             id: "google/gemma-4-26b-a4b",
-             base_url: "http://localhost:1234/v1"
-           },
-           tools: [Jido.AI.TestActions.TestEcho],
-           max_iterations: 5,
-           max_tokens: 256,
-           llm_opts: [api_key: "lm-studio"]
-         ]}
-      ]
+    use Jido.Agent, extensions: [Jido.AI.ReAct]
 
     agent do
       name "react_e2e_echo"
+    end
+
+    slices do
+      slice(:ai, Jido.AI.ReAct)
+    end
+
+    react do
+      model(%{
+        provider: :openai,
+        id: "google/gemma-4-26b-a4b",
+        base_url: "http://localhost:1234/v1"
+      })
+
+      tools([Jido.AI.TestActions.TestEcho])
+      max_iterations(5)
+      max_tokens(256)
+      llm_opts(api_key: "lm-studio")
     end
   end
 
   defmodule AddAgent do
     @moduledoc false
 
-    use Jido.Agent,
-      extensions: [
-        {Jido.AI.ReAct,
-         [
-           model: %{
-             provider: :openai,
-             id: "google/gemma-4-26b-a4b",
-             base_url: "http://localhost:1234/v1"
-           },
-           tools: [Jido.AI.TestActions.TestAdd],
-           max_iterations: 5,
-           max_tokens: 256,
-           llm_opts: [api_key: "lm-studio"]
-         ]}
-      ]
+    use Jido.Agent, extensions: [Jido.AI.ReAct]
 
     agent do
       name "react_e2e_add"
+    end
+
+    slices do
+      slice(:ai, Jido.AI.ReAct)
+    end
+
+    react do
+      model(%{
+        provider: :openai,
+        id: "google/gemma-4-26b-a4b",
+        base_url: "http://localhost:1234/v1"
+      })
+
+      tools([Jido.AI.TestActions.TestAdd])
+      max_iterations(5)
+      max_tokens(256)
+      llm_opts(api_key: "lm-studio")
     end
   end
 

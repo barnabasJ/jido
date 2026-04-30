@@ -94,10 +94,15 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
   defmodule AgentWithPlugins do
     @moduledoc false
     use Jido.Agent,
-      extensions: [PluginWithRoutes, PluginWithoutRoutes]
+      middleware: [PluginWithRoutes, PluginWithoutRoutes]
 
     agent do
       name "agent_with_plugins"
+    end
+
+    slices do
+      slice(:router_plugin, PluginWithRoutes)
+      slice(:no_route_plugin, PluginWithoutRoutes)
     end
   end
 

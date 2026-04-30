@@ -9,7 +9,6 @@ defmodule JidoTest.AgentServer.IdentitySignalsTest do
 
     action do
       name "identity_watcher"
-      path :app
       schema []
     end
 

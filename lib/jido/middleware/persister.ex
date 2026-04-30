@@ -130,40 +130,48 @@ defmodule Jido.Middleware.Persister do
     do: walk_transforms(agent, agent_module, :reinstate)
 
   defp walk_transforms(agent, agent_module, callback) do
-    mods = [agent_module | declared_plugin_modules(agent_module)]
+    targets = transform_targets(agent_module)
 
     new_state =
-      Enum.reduce(mods, agent.state, fn mod, acc ->
-        with true <- transform_impl?(mod),
-             path when not is_nil(path) <- module_path(mod),
-             true <- Map.has_key?(acc, path) do
+      Enum.reduce(targets, agent.state, fn {mod, path}, acc ->
+        if Map.has_key?(acc, path) do
           Map.update!(acc, path, &apply(mod, callback, [&1]))
         else
-          _ -> acc
+          acc
         end
       end)
 
     %{agent | state: new_state}
   end
 
-  defp module_path(mod) do
-    cond do
-      Spark.Dsl.is?(mod, Jido.Agent) -> Jido.Dsl.Agent.Info.path(mod)
-      Spark.Dsl.is?(mod, Jido.Plugin) -> Jido.Dsl.Plugin.Info.path(mod)
-      Spark.Dsl.is?(mod, Jido.Slice) -> Jido.Dsl.Slice.Info.path(mod)
-      true -> nil
-    end
-  end
+  # Returns `{module, mount_path}` pairs for every transform-implementing
+  # module attached to this agent. The agent's own slice (if any) ships
+  # alongside plugin / slice mounts so its checkpoint hooks fire too.
+  defp transform_targets(agent_module) do
+    plugin_targets =
+      agent_module
+      |> Jido.Dsl.Agent.Info.plugin_instances()
+      |> Enum.map(fn %{module: mod, path: path} -> {mod, path} end)
 
-  defp declared_plugin_modules(agent_module) do
-    Jido.Dsl.Agent.Info.plugins(agent_module)
+    slice_targets =
+      agent_module
+      |> Jido.Dsl.Agent.Info.slice_instances()
+      |> Enum.map(fn %{module: mod, path: path} -> {mod, path} end)
+
+    own_target =
+      case Jido.Dsl.Agent.Info.path(agent_module) do
+        nil -> []
+        path -> [{agent_module, path}]
+      end
+
+    (own_target ++ plugin_targets ++ slice_targets)
+    |> Enum.filter(fn {mod, _path} -> transform_impl?(mod) end)
   end
 
   defp transform_impl?(mod) do
     Code.ensure_loaded(mod)
 
     function_exported?(mod, :externalize, 1) and
-      function_exported?(mod, :reinstate, 1) and
-      function_exported?(mod, :path, 0)
+      function_exported?(mod, :reinstate, 1)
   end
 end

@@ -11,7 +11,6 @@ defmodule Jido.Thread.Actions.Append do
 
   action do
     name "thread_append"
-    path :thread
     description "Append one or more entries to the thread."
 
     schema entry: [

@@ -7,7 +7,6 @@ defmodule Jido.Pod.Actions.Mutate do
 
   action do
     name "pod_mutate"
-    path :pod
 
     schema ops: [type: {:list, :any}, required: true],
            opts: [type: :map, default: %{}]

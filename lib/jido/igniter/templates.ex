@@ -14,7 +14,7 @@ defmodule Jido.Igniter.Templates do
   @spec agent_template(module :: String.t(), name :: String.t(), opts :: keyword()) :: String.t()
   def agent_template(module, name, opts) do
     plugins = Keyword.get(opts, :plugins, [])
-    extensions_opt = format_extensions_option(plugins)
+    slices_block = format_slices_block(plugins)
 
     """
     defmodule #{module} do
@@ -26,14 +26,14 @@ defmodule Jido.Igniter.Templates do
       a `:counter` field is read as `agent.state.domain.counter`.
       \"\"\"
 
-      use Jido.Agent#{extensions_opt}
+      use Jido.Agent
 
       agent do
         name "#{name}"
         description "TODO: Add description"
         path :domain
         schema []
-      end
+      end#{slices_block}
     end
     """
   end
@@ -76,7 +76,7 @@ defmodule Jido.Igniter.Templates do
           path :: String.t(),
           signal_routes :: [String.t()]
         ) :: String.t()
-  def plugin_template(module, name, path, signal_routes) do
+  def plugin_template(module, name, _path, signal_routes) do
     routes_block =
       signal_routes
       |> Enum.map_join("\n", fn type -> "    route #{inspect(type)}, :todo" end)
@@ -87,7 +87,6 @@ defmodule Jido.Igniter.Templates do
 
       slice do
         name "#{name}"
-        path :#{path}
         schema Zoi.object(%{})
       end
 
@@ -115,10 +114,6 @@ defmodule Jido.Igniter.Templates do
       describe "Plugin.Info introspection" do
         test "exposes the configured name" do
           assert is_binary(PluginInfo.name(#{alias_name}))
-        end
-
-        test "exposes the configured path" do
-          assert is_atom(PluginInfo.path(#{alias_name}))
         end
       end
     end
@@ -193,11 +188,26 @@ defmodule Jido.Igniter.Templates do
     """
   end
 
-  defp format_extensions_option([]), do: ""
+  defp format_slices_block([]), do: ""
 
-  defp format_extensions_option(plugins) do
-    plugins_str = Enum.map_join(plugins, ", ", &inspect/1)
-    ", extensions: [#{plugins_str}]"
+  defp format_slices_block(plugins) do
+    lines =
+      Enum.map_join(plugins, "\n", fn plugin ->
+        "    slice :#{slice_path_for(plugin)}, #{inspect(plugin)}"
+      end)
+
+    "\n\n  slices do\n#{lines}\n  end"
+  end
+
+  defp slice_path_for(plugin) when is_atom(plugin) do
+    # Default heuristic: use the plugin's last namespace segment lowercased
+    # as the slice path. Users can edit the generated `slice :path, Module`
+    # line to assign a different mount path.
+    plugin
+    |> Module.split()
+    |> List.last()
+    |> Macro.underscore()
+    |> String.to_atom()
   end
 
   defp module_alias(module) do

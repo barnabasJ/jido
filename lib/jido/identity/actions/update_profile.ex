@@ -11,7 +11,6 @@ defmodule Jido.Identity.Actions.UpdateProfile do
 
   action do
     name "identity_update_profile"
-    path :identity
     description "Merge a partial profile map into the identity profile."
 
     schema profile: [
