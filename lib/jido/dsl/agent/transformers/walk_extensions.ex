@@ -36,6 +36,39 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
 
   @impl Spark.Dsl.Transformer
   def transform(dsl_state) do
+    with :ok <- check_section_name_collisions(dsl_state) do
+      do_transform(dsl_state)
+    end
+  end
+
+  defp check_section_name_collisions(dsl_state) do
+    contributed = Transformer.get_persisted(dsl_state, :jido_contributed_sections, %{})
+
+    duplicates =
+      contributed
+      |> Enum.group_by(fn {_mod, section} -> section end, fn {mod, _} -> mod end)
+      |> Enum.filter(fn {_section, mods} -> length(Enum.uniq(mods)) > 1 end)
+
+    case duplicates do
+      [] ->
+        :ok
+
+      list ->
+        message =
+          Enum.map_join(list, "; ", fn {section, mods} ->
+            names = mods |> Enum.uniq() |> Enum.map_join(", ", &inspect/1)
+            "section #{inspect(section)} is contributed by multiple extensions: #{names}"
+          end)
+
+        {:error,
+         Spark.Error.DslError.exception(
+           message: "Section name collisions: " <> message,
+           path: []
+         )}
+    end
+  end
+
+  defp do_transform(dsl_state) do
     user_mounts = Transformer.get_entities(dsl_state, [:slices])
     user_middleware = Transformer.get_persisted(dsl_state, :jido_user_middleware, [])
     default_slice_list = resolve_default_slices(dsl_state)

@@ -18,8 +18,8 @@ defmodule Jido.Slice.Extension.SchemaTranslate do
       tolerated — fields are read off the inner object.
 
   Anything more exotic falls back to `:any`. Slice authors with richer
-  shapes override `__jido_host_contribution__/0` manually to write the
-  schema by hand.
+  shapes hand-write their `@<name>_section %Spark.Dsl.Section{}` literal
+  instead of relying on `Jido.Slice.Extension.build_section/2`.
   """
 
   @spec translate(term()) :: keyword()

@@ -130,52 +130,51 @@ defmodule Jido.AI.ReAct do
     route "ai.react.failed", Actions.Failed
   end
 
-  use Jido.Slice.Extension, host_section: :react
-
-  @doc false
-  def __jido_host_contribution__ do
-    %Spark.Dsl.Section{
-      name: :react,
-      describe: Jido.Dsl.Slice.Info.description(__MODULE__),
-      schema: [
-        model: [
-          type: :any,
-          doc: "Model spec accepted by `ReqLLM.Generation.generate_text/3`."
-        ],
-        tools: [
-          type: {:list, :atom},
-          default: [],
-          doc: "List of `Jido.Action` modules exposed to the model."
-        ],
-        system_prompt: [
-          type: :any,
-          doc: "System message text prepended to the conversation."
-        ],
-        max_iterations: [
-          type: :integer,
-          default: 10,
-          doc: "Cap on LLM calls per run."
-        ],
-        max_tokens: [
-          type: :integer,
-          default: 4096,
-          doc: "Default max tokens, folded into `:llm_opts`."
-        ],
-        temperature: [
-          type: :any,
-          default: 0.2,
-          doc: "Default temperature, folded into `:llm_opts`."
-        ],
-        llm_opts: [
-          type: :any,
-          default: [],
-          doc:
-            "Extra keyword list merged into per-call options " <>
-              "(last-write-wins over `:max_tokens` / `:temperature`)."
-        ]
+  @react_section %Spark.Dsl.Section{
+    name: :react,
+    describe: "ReAct reasoning slice attached via `slices:` on a Jido.Agent.",
+    schema: [
+      model: [
+        type: :any,
+        doc: "Model spec accepted by `ReqLLM.Generation.generate_text/3`."
+      ],
+      tools: [
+        type: {:list, :atom},
+        default: [],
+        doc: "List of `Jido.Action` modules exposed to the model."
+      ],
+      system_prompt: [
+        type: :any,
+        doc: "System message text prepended to the conversation."
+      ],
+      max_iterations: [
+        type: :integer,
+        default: 10,
+        doc: "Cap on LLM calls per run."
+      ],
+      max_tokens: [
+        type: :integer,
+        default: 4096,
+        doc: "Default max tokens, folded into `:llm_opts`."
+      ],
+      temperature: [
+        type: :any,
+        default: 0.2,
+        doc: "Default temperature, folded into `:llm_opts`."
+      ],
+      llm_opts: [
+        type: :any,
+        default: [],
+        doc:
+          "Extra keyword list merged into per-call options " <>
+            "(last-write-wins over `:max_tokens` / `:temperature`)."
       ]
-    }
-  end
+    ]
+  }
+
+  use Spark.Dsl.Extension,
+    sections: [@react_section],
+    transformers: [Jido.AI.ReAct.Transformers.RegisterContribution]
 
   @doc false
   # Folds the convenience keys `:max_tokens` and `:temperature` into

@@ -1,15 +1,15 @@
-defmodule Jido.Pod.Transformers.RegisterContribution do
+defmodule Jido.Identity.Slice.Transformers.RegisterContribution do
   @moduledoc """
-  Registers `Jido.Pod` as the slice module that owns the contributed
-  `pod do … end` section in the host agent's `:jido_contributed_sections`
-  map.
+  Registers `Jido.Identity.Slice` as the slice module that owns the
+  contributed `identity do … end` section in the host agent's
+  `:jido_contributed_sections` map.
 
   `Jido.Dsl.Agent.Transformers.WalkExtensions.read_contributed_block/2`
   reads this map to know which contributed-section opts to merge into a
-  given slice's instance config. By persisting `%{Jido.Pod => :pod}`,
-  this transformer makes the `pod do topology … end` block opts flow
-  into Jido.Pod's slice config when the user mounts
-  `slices do slice :pod, Jido.Pod end`.
+  given slice's instance config. By persisting
+  `%{Jido.Identity.Slice => :identity}`, this transformer makes the
+  `identity do … end` block opts flow into the Identity slice's instance
+  config when the user mounts `slices do slice :identity, Jido.Identity.Slice end`.
 
   Pure `Spark.Dsl.Transformer.persist/3` — no Jido-custom callbacks.
   """
@@ -30,7 +30,7 @@ defmodule Jido.Pod.Transformers.RegisterContribution do
      Transformer.persist(
        dsl_state,
        :jido_contributed_sections,
-       Map.put(contributed, Jido.Pod, :pod)
+       Map.put(contributed, Jido.Identity.Slice, :identity)
      )}
   end
 end

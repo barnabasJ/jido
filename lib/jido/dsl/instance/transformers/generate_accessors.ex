@@ -1,10 +1,18 @@
 defmodule Jido.Dsl.Instance.Transformers.GenerateAccessors do
   @moduledoc """
-  Reads the `instance do … end` section and emits, into the user's Jido
-  instance module, the same runtime surface today's `Jido.__using__/1`
-  emits: `__otp_app__/0`, `__jido_storage__/0`, `__default_slices__/0`,
-  `child_spec/1`, `start_link/1`, `config/1`, agent-lifecycle delegators,
-  debug helpers, etc.
+  Reads the `instance do … end` section and emits the runtime instance
+  surface: `__otp_app__/0`, `__jido_storage__/0`, `__default_slices__/0`,
+  `child_spec/1`, `start_link/1`, `config/1`, agent-lifecycle delegators
+  (`start_agent/2`, `stop_agent/2`, `whereis/2`, `list_agents/1`,
+  `agent_count/1`), runtime names (`registry_name/0`, …), persistence
+  helpers (`hibernate/2`, `thaw/3`), and debug helpers.
+
+  `__jido_storage__/0` and `__default_slices__/0` defer to
+  `Jido.Dsl.Instance.Info` at runtime rather than baking the value via
+  `Macro.escape/1`, so any storage tuples that carry `&Mod.fun/arity`
+  references work cleanly. Anonymous `fn x -> … end` closures with
+  captured locals are not supported in `storage:` — pass `&Mod.fun/arity`
+  capture syntax instead.
   """
 
   use Spark.Dsl.Transformer
@@ -13,11 +21,12 @@ defmodule Jido.Dsl.Instance.Transformers.GenerateAccessors do
 
   @impl Spark.Dsl.Transformer
   def transform(dsl_state) do
-    bindings = read_section_bindings(dsl_state)
+    otp_app = Spark.Dsl.Extension.get_opt(dsl_state, [:instance], :otp_app)
 
     block =
       quote location: :keep do
-        unquote(quoted_storage_and_otp_app())
+        unquote(quoted_otp_app(otp_app))
+        unquote(quoted_storage())
         unquote(quoted_default_slices())
         unquote(quoted_child_spec_start_link_config())
         unquote(quoted_agent_lifecycle())
@@ -26,52 +35,42 @@ defmodule Jido.Dsl.Instance.Transformers.GenerateAccessors do
         unquote(quoted_debug())
       end
 
-    {:ok, Transformer.eval(dsl_state, bindings, block)}
+    {:ok, Transformer.eval(dsl_state, [], block)}
   end
 
-  defp read_section_bindings(dsl_state) do
-    [
-      otp_app: Spark.Dsl.Extension.get_opt(dsl_state, [:instance], :otp_app),
-      storage:
-        Spark.Dsl.Extension.get_opt(
-          dsl_state,
-          [:instance],
-          :storage,
-          {Jido.Storage.ETS, [table: :jido_storage]}
-        ),
-      default_slices_override:
-        Spark.Dsl.Extension.get_opt(dsl_state, [:instance], :default_slices)
-    ]
-  end
-
-  defp quoted_storage_and_otp_app do
+  defp quoted_otp_app(otp_app) do
     quote do
-      @otp_app otp_app
-      @jido_storage Jido.Storage.normalize_storage(storage)
+      @otp_app unquote(otp_app)
 
       @doc false
       @spec __otp_app__() :: atom()
       def __otp_app__, do: @otp_app
+    end
+  end
 
+  defp quoted_storage do
+    quote do
       @doc "Returns the storage configuration for this Jido instance."
       @spec __jido_storage__() :: {module(), keyword()}
-      def __jido_storage__, do: @jido_storage
+      def __jido_storage__,
+        do: Jido.Storage.normalize_storage(Jido.Dsl.Instance.Info.storage(__MODULE__))
     end
   end
 
   defp quoted_default_slices do
     quote do
-      @default_slices Jido.Agent.DefaultSlices.apply_agent_overrides(
-                        Application.compile_env(@otp_app, __MODULE__, [])
-                        |> Keyword.get(:default_slices) ||
-                          Jido.Agent.DefaultSlices.package_defaults(),
-                        default_slices_override
-                      )
-
       @dialyzer {:nowarn_function, [__default_slices__: 0]}
       @doc "Returns the default slices for agents bound to this Jido instance."
-      @spec __default_slices__() :: [module() | {module(), map()}]
-      def __default_slices__, do: @default_slices
+      @spec __default_slices__() :: [Jido.Agent.DefaultSlices.default_entry()]
+      def __default_slices__ do
+        base =
+          Application.get_env(@otp_app, __MODULE__, [])
+          |> Keyword.get(:default_slices) ||
+            Jido.Agent.DefaultSlices.package_defaults()
+
+        override = Jido.Dsl.Instance.Info.default_slices(__MODULE__)
+        Jido.Agent.DefaultSlices.apply_agent_overrides(base, override)
+      end
     end
   end
 

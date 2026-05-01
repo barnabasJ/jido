@@ -48,5 +48,13 @@ defmodule Jido.Identity.Slice do
     capability :identity
   end
 
-  use Jido.Slice.Extension, host_section: :identity
+  @identity_section %Spark.Dsl.Section{
+    name: :identity,
+    describe: "Configuration block contributed by Jido.Identity.Slice.",
+    schema: []
+  }
+
+  use Spark.Dsl.Extension,
+    sections: [@identity_section],
+    transformers: [Jido.Identity.Slice.Transformers.RegisterContribution]
 end

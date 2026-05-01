@@ -73,5 +73,13 @@ defmodule Jido.Memory.Slice do
     capability :memory
   end
 
-  use Jido.Slice.Extension, host_section: :memory
+  @memory_section %Spark.Dsl.Section{
+    name: :memory,
+    describe: "Configuration block contributed by Jido.Memory.Slice.",
+    schema: []
+  }
+
+  use Spark.Dsl.Extension,
+    sections: [@memory_section],
+    transformers: [Jido.Memory.Slice.Transformers.RegisterContribution]
 end

@@ -101,72 +101,6 @@ defmodule Jido.Agent do
       ]
     ]
 
-  defmacro __using__(opts) do
-    env = __CALLER__
-
-    user_extensions =
-      opts
-      |> Keyword.get(:extensions, [])
-      |> List.wrap()
-
-    shadow_extensions =
-      user_extensions
-      |> Enum.flat_map(&Jido.Agent.__shadow_extensions__(&1, env))
-      |> Enum.uniq()
-
-    new_opts =
-      if shadow_extensions == [] do
-        opts
-      else
-        Keyword.update(opts, :extensions, shadow_extensions, fn current ->
-          List.wrap(current) ++ shadow_extensions
-        end)
-      end
-
-    # Strip middleware: from the opts handed to Spark — Spark only knows
-    # about :extensions and our own :jido / :default_slices keys (we
-    # persist :middleware ourselves in handle_opts/1 below).
-    super(new_opts)
-  end
-
-  @doc false
-  @spec __shadow_extensions__(term(), Macro.Env.t()) :: [module()]
-  def __shadow_extensions__(entry, env) do
-    case __extract_module__(entry, env) do
-      nil ->
-        []
-
-      module ->
-        with {:module, _} <- Code.ensure_compiled(module),
-             true <- function_exported?(module, :__jido_host_extension_module__, 0),
-             shadow when is_atom(shadow) <- module.__jido_host_extension_module__(),
-             {:module, _} <- Code.ensure_compiled(shadow) do
-          [shadow]
-        else
-          _ -> []
-        end
-    end
-  end
-
-  defp __extract_module__({:__aliases__, _meta, _segments} = ast, env) do
-    case Macro.expand(ast, env) do
-      module when is_atom(module) -> module
-      _ -> nil
-    end
-  end
-
-  defp __extract_module__({entry, _opts}, env), do: __extract_module__(entry, env)
-  defp __extract_module__(module, _env) when is_atom(module), do: module
-  defp __extract_module__(_other, _env), do: nil
-
-  @doc false
-  @spec __spark_extension_module__?(term()) :: boolean()
-  def __spark_extension_module__?(module) when is_atom(module) do
-    Code.ensure_loaded?(module) and Spark.implements_behaviour?(module, Spark.Dsl.Extension)
-  end
-
-  def __spark_extension_module__?(_), do: false
-
   alias Jido.Agent
   alias Jido.Agent.Directive
   alias Jido.Agent.State, as: StateHelper
@@ -316,12 +250,6 @@ defmodule Jido.Agent do
 
   @impl Spark.Dsl
   def handle_opts(opts) do
-    user_extensions =
-      opts
-      |> Keyword.get(:extensions, [])
-      |> List.wrap()
-      |> Enum.reject(&__spark_extension_module__?/1)
-
     user_middleware =
       opts
       |> Keyword.get(:middleware, [])
@@ -340,7 +268,6 @@ defmodule Jido.Agent do
 
       require OK
 
-      @persist {:jido_user_extensions, unquote(Macro.escape(user_extensions))}
       @persist {:jido_user_middleware, unquote(Macro.escape(user_middleware))}
       @persist {:jido_instance_module, unquote(opts[:jido])}
       @persist {:default_slices_override, unquote(Macro.escape(opts[:default_slices]))}

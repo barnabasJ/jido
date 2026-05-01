@@ -1,91 +1,31 @@
 defmodule Jido.Slice.Extension do
   @moduledoc """
-  Opt a slice into being a host-agent extension that contributes one
-  typed DSL block (`<host_section> do … end`) to host modules that
-  list it in `extensions: [...]`.
+  Helper for slices that opt into being a host-agent extension by
+  contributing one typed DSL block (`<host_section> do … end`) to host
+  modules that list them in `extensions: [...]`.
 
-      defmodule MyApp.MemorySlice do
-        use Jido.Slice
-        slice do … end
-        signal_routes do … end
+  Each contributing slice declares its `@<name>_section` literal and
+  `use Spark.Dsl.Extension, …` directly in its module body, mirroring
+  `Jido.Pod`. A small per-slice transformer
+  (`<Slice>.Transformers.RegisterContribution`) calls
+  `Spark.Dsl.Transformer.persist/3` to register the slice in the host's
+  `:jido_contributed_sections` map.
 
-        use Jido.Slice.Extension, host_section: :memory
-      end
-
-  After this, host agents that list `MyApp.MemorySlice` in their
-  `extensions:` keyword get a `memory do … end` block whose schema
-  is derived from the slice's `config_schema/0`. The slice's mount
-  path is owned by the host agent's `slices do slice :path, Module
-  end` block — the contributed section carries config only.
-
-  ## How it works
-
-  The `__using__` macro defines three accessors on the slice:
-
-    * `__jido_host_section__/0` — the section atom (`:memory`).
-    * `__jido_host_contribution__/0` — returns the
-      `%Spark.Dsl.Section{}` to surface on the host. Computed lazily
-      from the slice's `config_schema/0`. Overridable for slices with
-      richer Zoi shapes that the translator can't handle.
-    * `__jido_host_extension_module__/0` — the sibling
-      `Spark.Dsl.Extension` module (`<Slice>.HostExtension`)
-      generated alongside the slice via `@after_compile`. Host
-      agents inject this module into their `extensions:` list so
-      Spark imports the contributed section's macros.
-
-  The shadow extension module is created once, after the slice has
-  fully compiled (so the slice's DSL state is queryable), via
-  `Module.create/3`.
+  This module survives only as `build_section/2`, a callable helper for
+  slices that want to auto-derive their `%Spark.Dsl.Section{}` from
+  `config_schema/0` instead of hand-writing a literal. Call it from
+  positions where the slice has fully compiled (e.g. inside a transformer's
+  `transform/1`); module-attribute-eval-time use is unsafe because the
+  slice's DSL state isn't queryable mid-compile.
   """
 
   alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias Jido.Slice.Extension.SchemaTranslate
 
-  defmacro __using__(opts) do
-    section_name = Keyword.fetch!(opts, :host_section)
-
-    quote bind_quoted: [section_name: section_name] do
-      @doc false
-      @spec __jido_host_section__() :: atom()
-      def __jido_host_section__, do: unquote(section_name)
-
-      @doc false
-      @spec __jido_host_contribution__() :: Spark.Dsl.Section.t()
-      def __jido_host_contribution__ do
-        Jido.Slice.Extension.build_section(__MODULE__, unquote(section_name))
-      end
-
-      @doc false
-      @spec __jido_host_extension_module__() :: module()
-      def __jido_host_extension_module__, do: Module.concat(__MODULE__, HostExtension)
-
-      defoverridable __jido_host_contribution__: 0
-
-      @after_compile {Jido.Slice.Extension, :__after_compile__}
-    end
-  end
-
-  @doc false
-  def __after_compile__(env, _bytecode) do
-    module = env.module
-    shadow = Module.concat(module, HostExtension)
-    section = module.__jido_host_contribution__()
-
-    body =
-      quote do
-        @moduledoc false
-        use Spark.Dsl.Extension, sections: [unquote(Macro.escape(section))]
-      end
-
-    Module.create(shadow, body, file: env.file, line: env.line)
-    :ok
-  end
-
   @doc """
-  Builds the `%Spark.Dsl.Section{}` that the host agent surfaces for
-  this slice. Reads the slice's `path/0` for the `path:` field
-  default and translates `config_schema/0` (when present) for the
-  remaining schema entries.
+  Builds the `%Spark.Dsl.Section{}` that the host agent surfaces for this
+  slice. Translates `config_schema/0` (when present) into the section's
+  schema entries.
   """
   @spec build_section(module(), atom()) :: Spark.Dsl.Section.t()
   def build_section(module, section_name) do

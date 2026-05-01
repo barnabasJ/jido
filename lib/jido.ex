@@ -81,160 +81,24 @@ defmodule Jido do
   """
   defmacro __using__(opts) do
     otp_app = Keyword.fetch!(opts, :otp_app)
-    storage = Keyword.get(opts, :storage, {Jido.Storage.ETS, [table: :jido_storage]})
-    default_slices = Keyword.get(opts, :default_slices, nil)
+    storage = Keyword.get(opts, :storage)
+    default_slices = Keyword.get(opts, :default_slices)
 
-    # Mirrors `Jido.Dsl.Instance` so the macro and the Spark extension share
-    # the same accessor surface. The extension is the documented contract;
-    # this macro is the runtime implementation that doesn't need Spark's full
-    # machinery (`use Jido` only takes kwargs — there's no `instance do … end`
-    # block to parse).
+    instance_options =
+      [{:otp_app, otp_app}, {:storage, storage}, {:default_slices, default_slices}]
+      |> Enum.filter(fn {key, val} -> key == :otp_app or val != nil end)
+      |> Enum.map(fn {key, val} ->
+        quote do: unquote(key)(unquote(val))
+      end)
+
+    instance_block = {:__block__, [], instance_options}
+
     quote location: :keep do
-      @otp_app unquote(otp_app)
+      use Jido.Dsl.Instance.Host
 
-      @doc false
-      @spec __otp_app__() :: unquote(otp_app)
-      def __otp_app__, do: @otp_app
-
-      @doc "Returns the storage configuration for this Jido instance."
-      @spec __jido_storage__() :: {module(), keyword()}
-      def __jido_storage__, do: Jido.Storage.normalize_storage(unquote(storage))
-
-      require Jido.Agent.DefaultSlices
-
-      @default_slices Jido.Agent.DefaultSlices.resolve_instance_defaults(
-                        @otp_app,
-                        __MODULE__,
-                        unquote(Macro.escape(default_slices))
-                      )
-
-      # The typespec for __default_slices__ triggers a `contract_supertype`
-      # warning from dialyzer.
-      @dialyzer {:nowarn_function, [__default_slices__: 0]}
-      @doc "Returns the default slices for agents bound to this Jido instance."
-      @spec __default_slices__() :: [Jido.Agent.DefaultSlices.default_entry()]
-      def __default_slices__, do: @default_slices
-
-      @doc false
-      def child_spec(init_arg \\ []) do
-        opts =
-          config(init_arg)
-          |> Keyword.put_new(:name, __MODULE__)
-          |> Keyword.put_new(:otp_app, @otp_app)
-
-        Jido.child_spec(opts)
+      instance do
+        unquote(instance_block)
       end
-
-      @doc false
-      def start_link(init_arg \\ []) do
-        opts =
-          config(init_arg)
-          |> Keyword.put_new(:name, __MODULE__)
-          |> Keyword.put_new(:otp_app, @otp_app)
-
-        Jido.start_link(opts)
-      end
-
-      @doc """
-      Returns the runtime config for this Jido instance.
-
-      Configuration is loaded from `config :#{@otp_app}, #{inspect(__MODULE__)}` and
-      overridden by any runtime options passed in.
-      """
-      @spec config(keyword()) :: keyword()
-      def config(overrides \\ []) do
-        @otp_app
-        |> Application.get_env(__MODULE__, [])
-        |> Keyword.merge(overrides)
-      end
-
-      defoverridable config: 1
-
-      @doc "Starts an agent under this Jido instance."
-      @spec start_agent(module() | struct(), keyword()) :: DynamicSupervisor.on_start_child()
-      def start_agent(agent, opts \\ []) do
-        Jido.start_agent(__MODULE__, agent, opts)
-      end
-
-      @doc "Stops an agent (by pid or id) under this Jido instance."
-      @spec stop_agent(pid() | String.t(), keyword()) :: :ok | {:error, :not_found}
-      def stop_agent(pid_or_id, opts \\ []) when is_list(opts) do
-        Jido.stop_agent(__MODULE__, pid_or_id, opts)
-      end
-
-      @doc "Looks up an agent by ID under this Jido instance."
-      @spec whereis(String.t(), keyword()) :: pid() | nil
-      def whereis(id, opts \\ []) when is_binary(id) and is_list(opts) do
-        Jido.whereis(__MODULE__, id, opts)
-      end
-
-      @doc "Lists all agents under this Jido instance."
-      @spec list_agents(keyword()) :: [{String.t(), pid()}]
-      def list_agents(opts \\ []) when is_list(opts) do
-        Jido.list_agents(__MODULE__, opts)
-      end
-
-      @doc "Returns the count of running agents under this Jido instance."
-      @spec agent_count(keyword()) :: non_neg_integer()
-      def agent_count(opts \\ []) when is_list(opts) do
-        Jido.agent_count(__MODULE__, opts)
-      end
-
-      @doc "Returns the Registry name for this Jido instance."
-      @spec registry_name() :: atom()
-      def registry_name, do: Jido.registry_name(__MODULE__)
-
-      @doc "Returns the AgentSupervisor name for this Jido instance."
-      @spec agent_supervisor_name() :: atom()
-      def agent_supervisor_name, do: Jido.agent_supervisor_name(__MODULE__)
-
-      @doc "Returns the TaskSupervisor name for this Jido instance."
-      @spec task_supervisor_name() :: atom()
-      def task_supervisor_name, do: Jido.task_supervisor_name(__MODULE__)
-
-      @doc "Returns the RuntimeStore name for this Jido instance."
-      @spec runtime_store_name() :: atom()
-      def runtime_store_name, do: Jido.runtime_store_name(__MODULE__)
-
-      @doc "Hibernate an agent to storage."
-      @spec hibernate(Jido.Agent.t(), keyword()) :: :ok | {:error, term()}
-      def hibernate(agent, opts \\ []) when is_list(opts) do
-        Jido.hibernate(__MODULE__, agent, opts)
-      end
-
-      @doc "Thaw an agent from storage."
-      @spec thaw(module(), term(), keyword()) :: {:ok, Jido.Agent.t()} | {:error, term()}
-      def thaw(agent_module, key, opts \\ []) when is_list(opts) do
-        Jido.thaw(__MODULE__, agent_module, key, opts)
-      end
-
-      @doc """
-      Controls debug mode for this Jido instance.
-
-      - `debug()` — returns current debug level
-      - `debug(:on)` — enable developer-friendly verbosity
-      - `debug(:verbose)` — enable maximum detail
-      - `debug(:off)` — disable debug overrides
-      - `debug(pid)` — toggle per-agent debug mode
-      - `debug(:on, redact: false)` — also disable redaction
-      """
-      @spec debug() :: Jido.Debug.level()
-      def debug, do: Jido.Debug.level(__MODULE__)
-
-      @spec debug(Jido.Debug.level() | pid()) :: :ok | {:error, term()} | Jido.Debug.level()
-      def debug(pid) when is_pid(pid), do: Jido.AgentServer.set_debug(pid, true)
-      def debug(level) when is_atom(level), do: Jido.Debug.enable(__MODULE__, level)
-
-      @spec debug(Jido.Debug.level(), keyword()) :: :ok
-      def debug(level, opts) when is_atom(level), do: Jido.Debug.enable(__MODULE__, level, opts)
-
-      @doc "Returns recent debug events from an agent's ring buffer."
-      @spec recent(pid(), non_neg_integer()) :: {:ok, [map()]} | {:error, term()}
-      def recent(pid, limit \\ 50), do: Jido.AgentServer.recent_events(pid, limit: limit)
-
-      @doc "Returns the current debug status for this instance."
-      @spec debug_status() :: map()
-      def debug_status, do: Jido.Debug.status(__MODULE__)
     end
   end
 

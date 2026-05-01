@@ -55,7 +55,15 @@ defmodule Jido.Thread.Slice do
     capability :thread
   end
 
-  use Jido.Slice.Extension, host_section: :thread
+  @thread_section %Spark.Dsl.Section{
+    name: :thread,
+    describe: "Configuration block contributed by Jido.Thread.Slice.",
+    schema: []
+  }
+
+  use Spark.Dsl.Extension,
+    sections: [@thread_section],
+    transformers: [Jido.Thread.Slice.Transformers.RegisterContribution]
 
   @behaviour Jido.Persist.Transform
 

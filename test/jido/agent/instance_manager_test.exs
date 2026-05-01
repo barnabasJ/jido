@@ -73,7 +73,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       storage:
         {Redis,
          [
-           command_fn: fn cmd -> JidoTest.Agent.InstanceManagerTest.RedisMock.command(cmd) end,
+           command_fn: &JidoTest.Agent.InstanceManagerTest.RedisMock.command/1,
            prefix: "instance_manager_test"
          ]}
   end

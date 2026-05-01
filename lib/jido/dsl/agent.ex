@@ -148,7 +148,6 @@ defmodule Jido.Dsl.Agent do
       @schedules_section
     ],
     transformers: [
-      Jido.Dsl.Agent.Transformers.DiscoverExtensions,
       Jido.Dsl.Agent.Transformers.WalkExtensions,
       Jido.Dsl.Agent.Transformers.MergeSchemas,
       Jido.Dsl.Agent.Transformers.ExpandRoutes,
@@ -158,7 +157,6 @@ defmodule Jido.Dsl.Agent do
     verifiers: [
       Jido.Dsl.Agent.Verifiers.PathSchemaPair,
       Jido.Dsl.Agent.Verifiers.UniquePaths,
-      Jido.Dsl.Agent.Verifiers.NoRouteConflicts,
-      Jido.Dsl.Agent.Verifiers.NoSectionNameCollisions
+      Jido.Dsl.Agent.Verifiers.NoRouteConflicts
     ]
 end

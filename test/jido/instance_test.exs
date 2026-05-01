@@ -65,7 +65,7 @@ defmodule JidoTest.InstanceTest do
       use Jido,
         otp_app: :jido_test_instance,
         storage: {Jido.Storage.Redis, [
-          command_fn: fn cmd -> JidoTest.InstanceTest.RedisMock.command(cmd) end,
+          command_fn: &JidoTest.InstanceTest.RedisMock.command/1,
           prefix: #{inspect(prefix)}
         ]}
     end
