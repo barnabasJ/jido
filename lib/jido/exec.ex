@@ -667,6 +667,8 @@ defmodule Jido.Exec do
         |> maybe_put(:agent, Map.get(ctx_in, :agent))
         |> maybe_put(:agent_server_pid, Map.get(ctx_in, :agent_server_pid))
         |> maybe_put(:action_metadata, Map.get(ctx_in, :action_metadata))
+        |> maybe_put(:slice_path, Map.get(ctx_in, :slice_path))
+        |> maybe_put(:slice_config, Map.get(ctx_in, :slice_config))
 
       {signal, slice, action_opts, ctx}
     end

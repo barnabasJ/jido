@@ -29,6 +29,22 @@ defmodule Jido.Pod do
   `slices do slice :pod, MyCustomPodPlugin end` (and omit
   `extensions: [Jido.Pod]` if the custom plugin owns its own contributed
   section). The replacement must advertise capability `:pod`.
+
+  ## Singleton — mount only once
+
+  `Jido.Pod` is meant to be a singleton at `:pod`. Multi-instance fan-out
+  (the runtime semantics that lets `slice :slack_a, SlackPlugin;
+  slice :slack_b, SlackPlugin` dispatch one signal across both mounts) is
+  framework-uniform — it would technically apply to `Jido.Pod` too. But
+  Pod's lifecycle handlers (`MutateProgress` reacts to
+  `jido.agent.child.started` / `jido.agent.child.exit`) bind 1:1 to the
+  child processes managed by a single pod manager. If you mount Pod twice
+  the framework will fan those handlers out across both mounts and the
+  mutation tracking will go wrong (each mount sees lifecycle signals for
+  children that don't belong to it).
+
+  The framework does not enforce single-mount because singleton-ness isn't
+  a uniform property of slices. Don't mount `Jido.Pod` twice.
   """
 
   alias Jido.Agent

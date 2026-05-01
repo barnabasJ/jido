@@ -27,14 +27,15 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
     own_schema = Spark.Dsl.Extension.get_opt(dsl_state, [:agent], :schema, [])
     plugin_paths = Transformer.get_persisted(dsl_state, :plugin_paths, [])
     slice_paths = Transformer.get_persisted(dsl_state, :slice_paths, [])
-    slice_path_for_action = Transformer.get_persisted(dsl_state, :slice_path_for_action, %{})
+    slice_paths_for_action = Transformer.get_persisted(dsl_state, :slice_paths_for_action, %{})
+    mount_config_map = Transformer.get_persisted(dsl_state, :mount_config_map, %{})
 
     block =
       quote location: :keep do
         require OK
 
         unquote(quoted_new_function(own_path, own_schema, plugin_paths, slice_paths))
-        unquote(quoted_cmd_function(slice_path_for_action))
+        unquote(quoted_cmd_function(slice_paths_for_action, mount_config_map))
         unquote(quoted_utility_functions())
         unquote(quoted_overridables())
       end
@@ -165,9 +166,10 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
     end
   end
 
-  defp quoted_cmd_function(slice_path_for_action) do
+  defp quoted_cmd_function(slice_paths_for_action, mount_config_map) do
     quote do
-      @slice_path_for_action unquote(Macro.escape(slice_path_for_action))
+      @slice_paths_for_action unquote(Macro.escape(slice_paths_for_action))
+      @mount_config_map unquote(Macro.escape(mount_config_map))
       @doc "Execute actions against the agent."
       @spec cmd(Jido.Agent.t(), Jido.Agent.action()) :: Jido.Agent.cmd_result()
       def cmd(%Jido.Agent{} = agent, action), do: cmd(agent, action, [])
@@ -208,61 +210,79 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
         end)
       end
 
+      # Fan out a single Instruction across every mount path that owns the
+      # action. The fold is atomic per-instruction: any mount returning
+      # `{:error, _}` halts and earlier mounts' state mutations within this
+      # fan-out drop on the floor (the outer __run_cmd_loop__ keeps its
+      # input agent on halt — same all-or-nothing guarantee as the
+      # single-mount case, applied uniformly across N mounts).
       defp __run_instruction__(
              agent,
              %Jido.Instruction{action: action} = instruction,
              jido_instance
            ) do
-        slice_path = __resolve_slice_path__(action)
-        scoped_state = Map.get(agent.state, slice_path, %{})
+        paths = __resolve_slice_paths__(action)
 
-        instruction = %{
-          instruction
-          | context:
-              instruction.context
-              |> Map.put(:state, scoped_state)
-              |> Map.put(:agent, agent)
-              |> Map.put(:agent_server_pid, self())
-        }
+        Enum.reduce_while(paths, {:ok, agent, []}, fn mount_path, {:ok, acc_agent, acc_dirs} ->
+          scoped_state = Map.get(acc_agent.state, mount_path, %{})
+          slice_config = Map.get(@mount_config_map, mount_path, %{})
 
-        exec_opts = Jido.Observe.Config.action_exec_opts(jido_instance, instruction.opts)
+          per_mount = %{
+            instruction
+            | context:
+                instruction.context
+                |> Map.put(:state, scoped_state)
+                |> Map.put(:agent, acc_agent)
+                |> Map.put(:agent_server_pid, self())
+                |> Map.put(:slice_path, mount_path)
+                |> Map.put(:slice_config, slice_config)
+          }
 
-        case Jido.Exec.run(%{instruction | opts: exec_opts}) do
-          {:ok, new_slice, effects} when is_map(new_slice) ->
-            {new_agent, dirs} =
-              __apply_slice_result__(agent, slice_path, new_slice, List.wrap(effects))
+          exec_opts = Jido.Observe.Config.action_exec_opts(jido_instance, per_mount.opts)
 
-            {:ok, new_agent, dirs}
+          case Jido.Exec.run(%{per_mount | opts: exec_opts}) do
+            {:ok, new_slice, effects} when is_map(new_slice) ->
+              {new_agent, dirs} =
+                __apply_slice_result__(acc_agent, mount_path, new_slice, List.wrap(effects))
 
-          {:error, reason} ->
-            {:error, Jido.Error.from_term(reason)}
-        end
+              {:cont, {:ok, new_agent, acc_dirs ++ dirs}}
+
+            {:error, reason} ->
+              {:halt, {:error, Jido.Error.from_term(reason)}}
+          end
+        end)
       end
 
-      defp __resolve_slice_path__(action)
+      defp __resolve_slice_paths__(action)
            when is_atom(action) and not is_nil(action) do
         # Resolution order:
-        #   1. Slice that routes to this action (compile-time lookup table
-        #      built from each mounted slice's `signal_routes`).
-        #   2. The action's own `path :foo` escape valve (kept for ad-hoc
-        #      actions not owned by a slice — e.g. test fixtures, in-turn
-        #      pod-mutation actions on the agent's own signal_routes).
-        #   3. The agent's own `path :foo` (its `agent do …` slice).
-        case Map.get(@slice_path_for_action, action) do
-          path when is_atom(path) and not is_nil(path) ->
-            path
+        #   1. Every mount that owns the action via its `signal_routes`,
+        #      plus the agent's own path if the action is also declared on
+        #      the agent's own `signal_routes` (compile-time list-valued
+        #      lookup table).
+        #   2. Fall back to a single-element list with the action's own
+        #      `path :foo` escape valve, then the agent's own path.
+        case Map.get(@slice_paths_for_action, action) do
+          [_ | _] = paths ->
+            paths
 
           _ ->
-            case Jido.Dsl.Action.Info.path(action) do
-              path when is_atom(path) and not is_nil(path) -> path
-              _ -> Jido.Dsl.Agent.Info.path(__MODULE__)
-            end
+            [__fallback_slice_path__(action)]
+        end
+      rescue
+        UndefinedFunctionError -> [Jido.Dsl.Agent.Info.path(__MODULE__)]
+      end
+
+      defp __resolve_slice_paths__(_action), do: [Jido.Dsl.Agent.Info.path(__MODULE__)]
+
+      defp __fallback_slice_path__(action) do
+        case Jido.Dsl.Action.Info.path(action) do
+          path when is_atom(path) and not is_nil(path) -> path
+          _ -> Jido.Dsl.Agent.Info.path(__MODULE__)
         end
       rescue
         UndefinedFunctionError -> Jido.Dsl.Agent.Info.path(__MODULE__)
       end
-
-      defp __resolve_slice_path__(_action), do: Jido.Dsl.Agent.Info.path(__MODULE__)
 
       defp __apply_slice_result__(
              agent,

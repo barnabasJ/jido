@@ -18,9 +18,9 @@ defmodule Jido.Dsl.Agent.Transformers.ValidateRequirements do
   @impl Spark.Dsl.Transformer
   def transform(dsl_state) do
     plugin_instances = Transformer.get_persisted(dsl_state, :plugin_instances, [])
-    plugin_config_map = Transformer.get_persisted(dsl_state, :plugin_config_map, %{})
+    mount_config_map = Transformer.get_persisted(dsl_state, :mount_config_map, %{})
 
-    case Requirements.validate_all_requirements(plugin_instances, plugin_config_map) do
+    case Requirements.validate_all_requirements(plugin_instances, mount_config_map) do
       {:ok, :valid} ->
         {:ok, dsl_state}
 

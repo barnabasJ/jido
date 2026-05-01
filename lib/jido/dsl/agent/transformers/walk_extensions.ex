@@ -6,10 +6,13 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     * `:slice_instances` — bare-slice mounts (`use Jido.Slice` modules).
     * `:plugin_instances` — plugin mounts (`use Jido.Plugin` modules).
     * `:middleware_list` — ordered middleware (from `middleware: […]`).
-    * `:slice_path_for_action` — compile-time lookup
-      `%{action_module => mount_path}` so `cmd/2` can route an action's
-      return value to the correct slice without per-action `path :foo`
-      declarations.
+    * `:slice_paths_for_action` — compile-time lookup
+      `%{action_module => [mount_path, …]}` so `cmd/2` can fan an
+      action's return value out across every mount that owns it.
+      Multi-instance mounts of the same slice contribute multiple
+      entries; agent-level `signal_routes` entries contribute the
+      agent's own path (so an action declared in BOTH a slice and the
+      agent's own routes fans out across all of them).
 
   The mount path comes **from the agent's `slices do …` block**, not
   from the slice's own DSL — slices/plugins no longer carry a `path`
@@ -65,8 +68,11 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
          (slice_instances |> Enum.flat_map(fn inst -> SliceInfo.actions(inst.module) end)))
       |> Enum.uniq()
 
-    slice_path_for_action =
-      build_action_path_table(plugin_instances, slice_instances)
+    agent_path = Spark.Dsl.Extension.get_opt(dsl_state, [:agent], :path)
+    agent_routes = Transformer.get_entities(dsl_state, [:signal_routes])
+
+    slice_paths_for_action =
+      build_action_path_table(plugin_instances, slice_instances, agent_routes, agent_path)
 
     dsl_state =
       dsl_state
@@ -78,7 +84,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
       |> Transformer.persist(:plugin_paths, plugin_paths)
       |> Transformer.persist(:slice_paths, slice_paths)
       |> Transformer.persist(:plugin_actions, plugin_actions)
-      |> Transformer.persist(:slice_path_for_action, slice_path_for_action)
+      |> Transformer.persist(:slice_paths_for_action, slice_paths_for_action)
       |> Transformer.persist(:default_slice_list, default_slice_list)
 
     {:ok, dsl_state}
@@ -234,18 +240,30 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   defp normalize_to_map(opts) when is_map(opts), do: opts
   defp normalize_to_map(opts) when is_list(opts), do: Map.new(opts)
 
-  defp build_action_path_table(plugin_instances, slice_instances) do
+  defp build_action_path_table(plugin_instances, slice_instances, agent_routes, agent_path) do
     pairs =
       Enum.flat_map(plugin_instances, fn %PluginInstance{module: module, path: path} ->
         Enum.map(SliceInfo.actions(module), &{&1, path})
       end) ++
         Enum.flat_map(slice_instances, fn %SliceInstance{module: module, path: path} ->
           Enum.map(SliceInfo.actions(module), &{&1, path})
-        end)
+        end) ++
+        agent_route_pairs(agent_routes, agent_path)
 
-    # If two slices route to the same action module, last one wins
-    # (the user picked an unusual layout — they can disambiguate by
-    # giving each slice its own action module).
-    Map.new(pairs)
+    pairs
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Map.new(fn {action, paths} -> {action, Enum.uniq(paths)} end)
+  end
+
+  defp agent_route_pairs(_routes, nil), do: []
+
+  defp agent_route_pairs(routes, agent_path) when is_atom(agent_path) do
+    Enum.flat_map(routes, fn
+      %Jido.Dsl.Agent.Route{action: action} when is_atom(action) and not is_nil(action) ->
+        [{action, agent_path}]
+
+      _ ->
+        []
+    end)
   end
 end

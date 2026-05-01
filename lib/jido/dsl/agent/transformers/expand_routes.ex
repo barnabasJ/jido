@@ -68,8 +68,8 @@ defmodule Jido.Dsl.Agent.Transformers.ExpandRoutes do
         {:error, _} -> []
       end
 
-    plugin_config_map =
-      Enum.reduce(plugin_instances, %{}, fn instance, acc ->
+    mount_config_map =
+      Enum.reduce(plugin_instances ++ slice_instances, %{}, fn instance, acc ->
         Map.put(acc, instance.path, instance.config)
       end)
 
@@ -83,7 +83,7 @@ defmodule Jido.Dsl.Agent.Transformers.ExpandRoutes do
       |> Transformer.persist(:all_plugin_routes, all_plugin_routes)
       |> Transformer.persist(:plugin_routes_result, plugin_routes_result)
       |> Transformer.persist(:validated_plugin_routes, validated_plugin_routes)
-      |> Transformer.persist(:plugin_config_map, plugin_config_map)
+      |> Transformer.persist(:mount_config_map, mount_config_map)
 
     {:ok, dsl_state}
   end

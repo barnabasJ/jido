@@ -1,20 +1,22 @@
 defmodule Jido.Dsl.SlicePathResolutionTest do
   @moduledoc """
-  Targeted coverage for the post-task-0053 `__resolve_slice_path__/1`
-  resolution order:
+  Targeted coverage for the `__resolve_slice_paths__/1` resolution
+  order:
 
-    1. The slice that routes to the action via its `signal_routes` (the
-       compile-time `:slice_path_for_action` lookup table).
-    2. The action's own `path :foo` escape valve (for ad-hoc actions on
-       the agent's own `signal_routes` that aren't owned by any slice's
-       routes).
-    3. The agent's own `path :foo` (the `agent do … end` slice).
+    1. Every mount that routes to the action via its `signal_routes`
+       (the compile-time `:slice_paths_for_action` lookup table). Returns
+       a list — multi-instance mounts contribute multiple entries; the
+       agent's own path is appended when the agent's own `signal_routes`
+       also declares the action.
+    2. Fallback (when the table has no entry for the action): the
+       action's own `path :foo` escape valve (for ad-hoc actions on the
+       agent's own `signal_routes` that aren't owned by any slice).
+    3. Final fallback: the agent's own `path :foo` (its `agent do … end`
+       slice).
 
-  Pre-task-0053 only step 2 and step 3 existed; step 1 is the new
-  behaviour task 0053 introduces. Step 2 is preserved as an explicit
-  escape valve so test fixtures and in-turn pod-mutation actions on the
-  agent's own routes can still bind a slice path without going through a
-  slice's `signal_routes`.
+  Steps 2 and 3 yield a single-element list so the runtime fan-out fold
+  in `__run_instruction__` is uniform across single-mount and
+  multi-mount cases.
   """
 
   use ExUnit.Case, async: true
@@ -93,10 +95,12 @@ defmodule Jido.Dsl.SlicePathResolutionTest do
       slice(:counter, CounterSlice)
     end
 
-    signal_routes do
-      route "agent.escape", Jido.Dsl.SlicePathResolutionTest.EscapeAction
-      route "agent.unbound", Jido.Dsl.SlicePathResolutionTest.UnboundAction
-    end
+    # No agent-level signal_routes — these tests target the FALLBACK chain
+    # (action's own `path :foo`, then agent's path) for actions that are
+    # not declared in any slice's or the agent's signal_routes. Coverage
+    # for design choice #1 ("agent-level routes contribute the agent's
+    # own path to the fan-out list") lives in the multi-instance fan-out
+    # test suite.
   end
 
   describe "step 1 — slice that routes to the action wins" do
@@ -142,13 +146,15 @@ defmodule Jido.Dsl.SlicePathResolutionTest do
   end
 
   describe "compile-time lookup table shape" do
-    test "slice_path_for_action maps each slice action module to its mount path" do
-      table = Spark.Dsl.Extension.get_persisted(ResolutionAgent, :slice_path_for_action)
+    test "slice_paths_for_action maps each slice action module to a list of mount paths" do
+      table = Jido.Dsl.Agent.Info.slice_paths_for_action(ResolutionAgent)
 
       assert is_map(table)
-      assert Map.get(table, BumpAction) == :counter
+      # Single-mount case is a one-element list — fan-out is uniform.
+      assert Map.get(table, BumpAction) == [:counter]
       # The escape-valve action and the unbound action are NOT in the table —
-      # they're not routed-to from any slice's signal_routes.
+      # they're not routed-to from any slice's signal_routes nor declared on
+      # the agent's own signal_routes.
       refute Map.has_key?(table, EscapeAction)
       refute Map.has_key?(table, UnboundAction)
     end

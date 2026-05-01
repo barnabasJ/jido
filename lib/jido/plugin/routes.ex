@@ -16,11 +16,15 @@ defmodule Jido.Plugin.Routes do
 
   ## Conflict Detection
 
-  Routes conflict when they have the same signal type. Resolution:
+  Routes conflict when they have the same signal type AND target different
+  actions at the same priority. Resolution:
 
-  - Same priority + no `:on_conflict` => error
-  - Different priority => higher priority wins (not a conflict)
-  - Route with `on_conflict: :replace` => overrides without error
+  - Same `(target, priority, on_conflict)` triple from multiple mounts =>
+    deduped (the same slice mounted at multiple paths produces identical
+    expanded routes; runtime fan-out at `cmd/2` handles per-mount dispatch).
+  - Different targets at same priority + no `:on_conflict` => error.
+  - Different priority => higher priority wins (not a conflict).
+  - Route with `on_conflict: :replace` => overrides without error.
 
   ## Priority Levels
 
@@ -185,14 +189,30 @@ defmodule Jido.Plugin.Routes do
   end
 
   defp resolve_path_routes(path, routes) do
-    replace_routes =
-      Enum.filter(routes, fn {_, _, _, on_conflict} -> on_conflict == :replace end)
+    # Dedupe identical (target, priority, on_conflict) triples — the same
+    # slice mounted at multiple paths contributes the same expanded route
+    # to this group. Keeping them as separate entries is what used to trip
+    # `NoRouteConflicts`; collapsing them lets the runtime fan-out at
+    # `cmd/2` carry the per-mount semantics instead.
+    deduped =
+      Enum.uniq_by(routes, fn {_path, target, priority, on_conflict} ->
+        {target, priority, on_conflict}
+      end)
 
-    if replace_routes != [] do
-      winner = Enum.max_by(replace_routes, fn {_, _, priority, _} -> priority end)
-      {:ok, winner}
-    else
-      resolve_by_priority(path, routes)
+    case deduped do
+      [single] ->
+        {:ok, single}
+
+      _ ->
+        replace_routes =
+          Enum.filter(deduped, fn {_, _, _, on_conflict} -> on_conflict == :replace end)
+
+        if replace_routes != [] do
+          winner = Enum.max_by(replace_routes, fn {_, _, priority, _} -> priority end)
+          {:ok, winner}
+        else
+          resolve_by_priority(path, deduped)
+        end
     end
   end
 

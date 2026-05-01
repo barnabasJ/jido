@@ -92,7 +92,11 @@ defmodule Jido.Dsl.Agent do
     name: :slices,
     describe:
       "Slice and plugin mounts. Each `slice :path, Module` registers a slice/plugin " <>
-        "at the agent-declared path.",
+        "at the agent-declared path. The same module may be mounted at multiple " <>
+        "paths (`slice :slack_support, SlackPlugin; slice :slack_sales, SlackPlugin`); " <>
+        "at signal-route dispatch the framework fans the action out, calling it once " <>
+        "per matching mount with each mount's own slice state and `ctx.slice_config` " <>
+        "(per-mount config visible to the action).",
     entities: [@slice_mount]
   }
 

@@ -245,7 +245,12 @@ defmodule JidoTest.Plugin.RoutesTest do
       assert length(merged) == 4
     end
 
-    test "same plugin without :as conflicts with itself" do
+    test "same plugin mounted twice produces deduped routes (no conflict)" do
+      # Post-task-0062: mounting the same plugin at multiple paths is the
+      # multi-instance fan-out case. The route tuples are identical
+      # (same prefix, same target, same priority); detect_conflicts/1
+      # collapses them and runtime fan-out at `cmd/2` carries the
+      # per-mount semantics.
       instance1 = Instance.new(PluginWithRoutes, :test)
       instance2 = Instance.new(PluginWithRoutes, :test)
 
@@ -254,8 +259,10 @@ defmodule JidoTest.Plugin.RoutesTest do
 
       all_routes = routes1 ++ routes2
 
-      assert {:error, conflicts} = Routes.detect_conflicts(all_routes)
-      assert length(conflicts) == 2
+      assert {:ok, merged} = Routes.detect_conflicts(all_routes)
+      # PluginWithRoutes contributes 2 distinct routes; mounting twice
+      # still yields 2 deduped entries (one per route).
+      assert length(merged) == 2
     end
   end
 end

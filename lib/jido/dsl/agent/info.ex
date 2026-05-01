@@ -134,6 +134,28 @@ defmodule Jido.Dsl.Agent.Info do
     do: Extension.get_persisted(module, :expanded_signal_routes, [])
 
   @doc """
+  Returns the compile-time `action_module => [mount_path, …]` map used by
+  `cmd/2` to fan an action out across every mount that owns it.
+
+  Multi-instance mounts of the same slice produce multi-element lists;
+  single-mount actions are one-element lists; agent-level `signal_routes`
+  declarations contribute the agent's own path. Actions not owned by any
+  declared route are absent from the map (and resolved at runtime via the
+  action's own `path :foo` escape valve or the agent's path).
+  """
+  @spec slice_paths_for_action(module()) :: %{module() => [atom()]}
+  def slice_paths_for_action(module),
+    do: Extension.get_persisted(module, :slice_paths_for_action, %{})
+
+  @doc """
+  Returns the compile-time `mount_path => config` map exposed to actions as
+  `ctx.slice_config` during fan-out. Includes both plugin and slice mounts.
+  """
+  @spec mount_config_map(module()) :: %{atom() => map()}
+  def mount_config_map(module),
+    do: Extension.get_persisted(module, :mount_config_map, %{})
+
+  @doc """
   Returns the resolved configuration for a specific plugin attached to
   the agent, or `nil` if the plugin isn't mounted.
 
