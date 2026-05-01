@@ -48,10 +48,14 @@ of “partitioned durable teams.”
 
 ```elixir
 defmodule MyApp.WorkspacePod do
-  use Jido.Pod
+  use Jido.Agent, extensions: [Jido.Pod]
 
   agent do
     name "workspace"
+  end
+
+  slices do
+    slice :pod, Jido.Pod
   end
 
   pod do

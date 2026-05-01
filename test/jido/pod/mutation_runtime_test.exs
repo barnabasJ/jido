@@ -60,10 +60,14 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
 
   defmodule ReviewPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "pod_mutation_review_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -92,19 +96,27 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
 
   defmodule AlternateReviewPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "pod_mutation_alternate_review_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
   end
 
   defmodule EmptyMutablePod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "pod_mutation_empty_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
   end
 
@@ -142,10 +154,14 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
 
   defmodule SelfMutatingPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "pod_mutation_self_mutating_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do

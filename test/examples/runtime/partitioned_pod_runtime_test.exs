@@ -43,10 +43,14 @@ defmodule JidoExampleTest.PartitionedPodRuntimeTest do
 
   defmodule WorkspacePod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "workspace_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do

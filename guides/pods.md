@@ -24,7 +24,7 @@ Use the existing `Jido.Agent.InstanceManager` for the pod agent itself.
 
 ```elixir
 defmodule MyApp.OrderReviewPod do
-  use Jido.Pod
+  use Jido.Agent, extensions: [Jido.Pod]
 
   agent do
     name "order_review"
@@ -32,6 +32,10 @@ defmodule MyApp.OrderReviewPod do
     schema [
       phase: [type: :atom, default: :planning]
     ]
+  end
+
+  slices do
+    slice :pod, Jido.Pod
   end
 
   pod do
@@ -43,19 +47,23 @@ defmodule MyApp.OrderReviewPod do
 end
 ```
 
-`use Jido.Pod` adds the agent / signal_routes / schedules sections from
-`Jido.Agent` plus a `pod do … end` section, and the reserved pod plugin
-attaches automatically under `:pod`.
+Listing `Jido.Pod` in `extensions:` opens the contributed `pod do … end`
+block on the host. Mounting `slice :pod, Jido.Pod` at the reserved `:pod`
+key wires the pod slice into agent state.
 
 The `pod do topology %{} end` block may be omitted to start with an empty
 named topology:
 
 ```elixir
 defmodule MyApp.EmptyReviewPod do
-  use Jido.Pod
+  use Jido.Agent, extensions: [Jido.Pod]
 
   agent do
     name "empty_review"
+  end
+
+  slices do
+    slice :pod, Jido.Pod
   end
 end
 ```
@@ -67,7 +75,8 @@ and jump to [Running A Pod](#running-a-pod).
 
 Most users only need this flow:
 
-- define a pod with `use Jido.Pod`
+- define a pod with `use Jido.Agent, extensions: [Jido.Pod]` plus
+  `slices do slice :pod, Jido.Pod end`
 - run the pod manager through a normal `Jido.Agent.InstanceManager`
 - call `Jido.Pod.get/3` to load the durable team and reconcile eager members
 - call `Jido.Pod.ensure_node/3` for lazy members
@@ -95,10 +104,14 @@ defmodule MyApp.ReviewWorkerAgent do
 end
 
 defmodule MyApp.ReviewPod do
-  use Jido.Pod
+  use Jido.Agent, extensions: [Jido.Pod]
 
   agent do
     name "review_pod"
+  end
+
+  slices do
+    slice :pod, Jido.Pod
   end
 end
 
@@ -152,36 +165,37 @@ What this demonstrates:
 - lazy members stay defined but stopped until `ensure_node/3`
 - later reacquisition restores the same durable topology before reconcile
 
-## Pod Plugin
+## Pod Slice
 
-The default pod plugin is `Jido.Pod.Plugin`.
+The reserved pod slice is `Jido.Pod` itself.
 
-- It is always singleton.
 - It uses the reserved state key `:pod`.
 - It persists the resolved topology snapshot as ordinary agent state.
 - It advertises the `:pod` capability.
 
-You can replace it through the `pod do plugin … end` override:
+You can replace it by mounting a different module at `:pod`:
 
 ```elixir
 defmodule MyApp.CustomPod do
-  use Jido.Pod
+  use Jido.Agent
 
   agent do
     name "custom_pod"
   end
 
-  pod do
-    topology %{
-      worker: %{agent: MyApp.WorkerAgent, manager: :workers}
-    }
-    plugin MyApp.CustomPodPlugin
+  slices do
+    slice :pod, MyApp.CustomPodPlugin do
+      options topology: Jido.Pod.Topology.from_nodes!("custom_pod", %{
+        worker: %{agent: MyApp.WorkerAgent, manager: :workers}
+      })
+    end
   end
 end
 ```
 
-Replacement plugins must keep the same `:pod` state key, be singleton, and
-advertise the `:pod` capability.
+Replacement plugins must keep the `:pod` state key and advertise the
+`:pod` capability. Custom plugins don't open the `pod do … end` block —
+configure them through the `options` keyword on the slice mount.
 
 ## Topology
 

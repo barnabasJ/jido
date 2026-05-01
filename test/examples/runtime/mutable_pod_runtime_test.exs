@@ -40,10 +40,14 @@ defmodule JidoExampleTest.MutablePodRuntimeTest do
 
   defmodule MutableReviewPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "example_mutable_review_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
   end
 

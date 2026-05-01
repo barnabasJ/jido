@@ -2,7 +2,6 @@ defmodule JidoTest.PodTest do
   use ExUnit.Case, async: true
 
   alias Jido.Pod
-  alias Jido.Pod.Plugin
   alias Jido.Pod.Topology
   alias Jido.Pod.Topology.Node
   alias Jido.Storage.ETS
@@ -49,10 +48,14 @@ defmodule JidoTest.PodTest do
 
   defmodule ExamplePod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "example_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -65,50 +68,61 @@ defmodule JidoTest.PodTest do
 
   defmodule EmptyPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "empty_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
   end
 
   defmodule CustomPluginPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent
 
     agent do
       name "custom_plugin_pod"
     end
 
-    pod do
-      plugin CustomPodPlugin
-
-      topology(%{
-        worker: %{agent: WorkerAgent, manager: :worker_nodes}
-      })
+    slices do
+      slice :pod, CustomPodPlugin do
+        options(
+          topology:
+            Jido.Pod.Topology.from_nodes!("custom_plugin_pod", %{
+              worker: %{agent: WorkerAgent, manager: :worker_nodes}
+            })
+        )
+      end
     end
   end
 
-  test "use Jido.Pod wraps an agent module with a canonical topology" do
-    assert ExamplePod.pod?()
-    assert %Topology{name: "example_pod"} = ExamplePod.topology()
+  test "Jido.Pod extension wraps an agent module with a canonical topology" do
+    assert Jido.Pod.Info.pod?(ExamplePod)
 
-    assert %Node{activation: :eager, module: WorkerAgent} = ExamplePod.topology().nodes.planner
+    assert {:ok, %Topology{name: "example_pod"} = topology} =
+             Jido.Pod.Info.pod_topology(ExamplePod)
 
-    assert Enum.any?(Jido.Dsl.Agent.Info.plugin_instances(ExamplePod), fn instance ->
-             instance.module == Plugin and instance.path == :pod
+    assert %Node{activation: :eager, module: WorkerAgent} = topology.nodes.planner
+
+    assert Enum.any?(Jido.Dsl.Agent.Info.slice_instances(ExamplePod), fn instance ->
+             instance.module == Jido.Pod and instance.path == :pod
            end)
   end
 
-  test "use Jido.Pod defaults omitted topology to an empty topology" do
-    assert EmptyPod.pod?()
-    assert %Topology{name: "empty_pod", nodes: %{}, links: []} = EmptyPod.topology()
+  test "Jido.Pod extension defaults omitted topology to an empty topology" do
+    assert Jido.Pod.Info.pod?(EmptyPod)
+
+    assert {:ok, %Topology{name: "empty_pod", nodes: %{}, links: []}} =
+             Jido.Pod.Info.pod_topology(EmptyPod)
 
     agent = EmptyPod.new()
     assert {:ok, %Topology{name: "empty_pod", nodes: %{}}} = Pod.fetch_topology(agent)
   end
 
-  test "default_slices can replace the reserved pod plugin" do
+  test "custom pod plugin can be mounted at :pod via slices block" do
     assert Enum.any?(Jido.Dsl.Agent.Info.plugin_instances(CustomPluginPod), fn instance ->
              instance.module == CustomPodPlugin and instance.path == :pod
            end)
@@ -119,7 +133,7 @@ defmodule JidoTest.PodTest do
     assert {:ok, %Topology{name: "custom_plugin_pod"}} = Pod.fetch_topology(agent)
   end
 
-  test "plugins option resolves aliased plugin modules before pod opts are escaped" do
+  test "plugins option resolves aliased plugin modules before opts are escaped" do
     suffix = System.unique_integer([:positive])
     pod_mod = Module.concat(__MODULE__, :"AliasedPluginPod#{suffix}")
     pod_name = "aliased_plugin_pod_#{suffix}"
@@ -129,13 +143,14 @@ defmodule JidoTest.PodTest do
       @moduledoc false
       alias #{inspect(UserPlugin)}, as: UserPlugin
 
-      use Jido.Pod, middleware: [UserPlugin]
+      use Jido.Agent, extensions: [Jido.Pod], middleware: [UserPlugin]
 
       agent do
         name #{inspect(pod_name)}
       end
 
       slices do
+        slice :pod, Jido.Pod
         slice :pod_test_user_plugin, UserPlugin
       end
     end
@@ -144,27 +159,6 @@ defmodule JidoTest.PodTest do
     assert Enum.any?(Jido.Dsl.Agent.Info.plugin_instances(pod_mod), fn instance ->
              instance.module == UserPlugin and instance.path == :pod_test_user_plugin
            end)
-  end
-
-  test "disabling the reserved pod plugin raises at compile time" do
-    message = ~r/Jido.Pod requires a pod plugin under pod/
-
-    assert_raise Spark.Error.DslError, message, fn ->
-      Code.compile_string("""
-      defmodule JidoTest.PodDisabledPluginPod do
-        use Jido.Pod
-
-        agent do
-          name "disabled_pod"
-        end
-
-        pod do
-          plugin false
-          topology %{worker: %{agent: #{inspect(WorkerAgent)}, manager: :workers}}
-        end
-      end
-      """)
-    end
   end
 
   test "topology data structures can be mutated purely" do

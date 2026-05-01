@@ -504,20 +504,24 @@ declare in its own schema — there's no reason to put it in a separate
 module. If you're hitting this verifier, either move the data into the
 agent's `agent do schema … end` or give the slice a route.
 
-### `Pod` agents — `pod do … end` is mandatory
+### `Pod` agents — list `Jido.Pod` in `extensions:` and mount it
 
-`use Jido.Pod` adds the agent surface plus a `pod do … end` section
-carrying `topology` and an optional `plugin` override. The reserved
-pod plugin attaches automatically under `:pod`; you don't list it in
-`extensions:`. Override the topology and (rarely) the plugin module
-inside the `pod` section.
+Pod is a regular slice + Spark extension. Listing it in `extensions:`
+opens the contributed `pod do topology … end` block; mounting it under
+`slices do slice :pod, Jido.Pod end` wires the pod slice into agent
+state. To use a custom pod plugin, mount a different module at `:pod`
+and configure it through `options:` on the slice mount.
 
 ```elixir
 defmodule MyApp.Workspace do
-  use Jido.Pod
+  use Jido.Agent, extensions: [Jido.Pod]
 
   agent do
     name "workspace"
+  end
+
+  slices do
+    slice :pod, Jido.Pod
   end
 
   pod do

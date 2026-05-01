@@ -27,10 +27,14 @@ defmodule JidoTest.Pod.RuntimeTest do
 
   defmodule ReviewPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "runtime_review_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -61,10 +65,14 @@ defmodule JidoTest.Pod.RuntimeTest do
 
   defmodule HierarchicalReviewPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "hierarchical_runtime_review_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -81,10 +89,14 @@ defmodule JidoTest.Pod.RuntimeTest do
 
   defmodule LazyReviewPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "lazy_runtime_review_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -115,10 +127,14 @@ defmodule JidoTest.Pod.RuntimeTest do
 
   defmodule StringNamedReviewPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "string_named_runtime_review_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -149,10 +165,14 @@ defmodule JidoTest.Pod.RuntimeTest do
 
   defmodule MixedNamedReviewPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "mixed_named_runtime_review_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -183,10 +203,14 @@ defmodule JidoTest.Pod.RuntimeTest do
 
   defmodule RecursiveReviewPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "recursive_review_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -203,10 +227,14 @@ defmodule JidoTest.Pod.RuntimeTest do
 
   defmodule AlternateReviewPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "alternate_review_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -223,10 +251,14 @@ defmodule JidoTest.Pod.RuntimeTest do
 
   defmodule PartialFailurePod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "partial_failure_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -254,10 +286,14 @@ defmodule JidoTest.Pod.RuntimeTest do
 
   defmodule ManagerMismatchPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "manager_mismatch_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do

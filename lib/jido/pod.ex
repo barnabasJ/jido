@@ -1,15 +1,20 @@
 defmodule Jido.Pod do
   @moduledoc """
-  Pod wrapper macro and runtime helpers.
+  Reserved slice + Spark extension for pod-extended agents.
 
-  A pod is just a `Jido.Agent` with a canonical topology and a singleton pod
-  slice mounted under the `:pod` slice key:
+  A pod is a `Jido.Agent` that lists `Jido.Pod` in its `extensions:` (so
+  the contributed `pod do topology … end` block opens) and mounts
+  `Jido.Pod` at `:pod` in `slices do … end`:
 
       defmodule MyApp.Fulfillment do
-        use Jido.Pod
+        use Jido.Agent, extensions: [Jido.Pod]
 
         agent do
           name "fulfillment"
+        end
+
+        slices do
+          slice :pod, Jido.Pod
         end
 
         pod do
@@ -20,10 +25,10 @@ defmodule Jido.Pod do
         end
       end
 
-  The reserved pod plugin (`Jido.Pod.Plugin`) attaches automatically. To
-  swap in a custom pod plugin, pass `default_slices: %{pod: MyPodPlugin}`
-  to `use Jido.Pod`; the replacement must declare `path: :pod` and
-  advertise the `:pod` capability.
+  To swap in a custom pod plugin, mount a different module at `:pod`:
+  `slices do slice :pod, MyCustomPodPlugin end` (and omit
+  `extensions: [Jido.Pod]` if the custom plugin owns its own contributed
+  section). The replacement must advertise capability `:pod`.
   """
 
   alias Jido.Agent
@@ -31,6 +36,10 @@ defmodule Jido.Pod do
   alias Jido.AgentServer
   alias Jido.AgentServer.State
   alias Jido.Plugin.Instance, as: PluginInstance
+  alias Jido.Pod.Actions.Mutate, as: MutateAction
+  alias Jido.Pod.Actions.MutateProgress
+  alias Jido.Pod.Actions.QueryNodes
+  alias Jido.Pod.Actions.QueryTopology
   alias Jido.Pod.Mutable
   alias Jido.Pod.Mutation
   alias Jido.Pod.Mutation.Report
@@ -38,6 +47,8 @@ defmodule Jido.Pod do
   alias Jido.Pod.Topology
   alias Jido.Pod.Topology.Node
   alias Jido.Pod.TopologyState
+
+  @capability :pod
 
   @type node_status :: :adopted | :running | :misplaced | :stopped
   @type ensure_source :: :adopted | :running | :started
@@ -75,73 +86,138 @@ defmodule Jido.Pod do
 
   @type mutation_report :: Report.t()
 
-  use Spark.Dsl,
-    default_extensions: [extensions: [Jido.Dsl.Pod]],
-    untyped_extensions?: false,
-    opt_schema: [
-      extensions: [
-        type: {:list, :any},
-        default: [],
-        doc:
-          "Modules whose typed DSL section the host wants to call into " <>
-            "(e.g. `Jido.AI.ReAct` to unlock `react do … end`). " <>
-            "Slice / plugin enumeration goes in `slices do … end`."
-      ],
-      middleware: [
-        type: {:list, :any},
-        default: [],
-        doc:
-          "Ordered list of middleware modules. Order is the wrap-chain " <>
-            "order. Plugin modules with middleware behaviour also appear " <>
-            "here for ordering, in addition to `slices do … end` for path."
-      ],
-      jido: [
-        type: :atom,
-        doc: "Optional Jido instance module for resolving default slices at compile time."
-      ],
-      default_slices: [
+  # ──────────────────────────────────────────────────────────────────
+  # Slice DSL — owns the :pod slice key in agent state
+  # ──────────────────────────────────────────────────────────────────
+
+  use Jido.Slice
+
+  slice do
+    name "pod"
+
+    schema Zoi.object(%{
+             topology: Zoi.any(description: "Resolved pod topology.") |> Zoi.optional(),
+             topology_version:
+               Zoi.integer(description: "Resolved topology version.") |> Zoi.default(1),
+             mutation:
+               Zoi.object(%{
+                 id: Zoi.string(description: "In-flight mutation id.") |> Zoi.optional(),
+                 status: Zoi.atom(description: "Mutation status.") |> Zoi.default(:idle),
+                 plan: Zoi.any(description: "Mutation plan struct.") |> Zoi.optional(),
+                 phase: Zoi.any(description: "State machine phase.") |> Zoi.default(:idle),
+                 awaiting: Zoi.any(description: "Awaiting kind + names set.") |> Zoi.optional(),
+                 report: Zoi.any(description: "Latest mutation report.") |> Zoi.optional(),
+                 error: Zoi.any(description: "Latest mutation error/report.") |> Zoi.optional()
+               })
+               |> Zoi.default(%{
+                 id: nil,
+                 status: :idle,
+                 plan: nil,
+                 phase: :idle,
+                 awaiting: nil,
+                 report: nil,
+                 error: nil
+               }),
+             metadata:
+               Zoi.map(description: "Pod-level runtime metadata owned by the slice.")
+               |> Zoi.default(%{})
+           })
+  end
+
+  signal_routes do
+    route "pod.mutate", MutateAction
+    route "jido.pod.query.nodes", QueryNodes
+    route "jido.pod.query.topology", QueryTopology
+    route "jido.agent.child.started", MutateProgress
+    route "jido.agent.child.exit", MutateProgress
+  end
+
+  capabilities do
+    capability @capability
+  end
+
+  # ──────────────────────────────────────────────────────────────────
+  # Spark extension — contributes the `pod do topology … end` section
+  # ──────────────────────────────────────────────────────────────────
+
+  @pod_section %Spark.Dsl.Section{
+    name: :pod,
+    describe: "Pod topology and runtime options.",
+    schema: [
+      topology: [
         type: :any,
+        default: %{},
         doc:
-          "Override default slices: false to disable all, or %{path => false | Module | {Module, config}}. " <>
-            "`%{pod: ReplacementPlugin}` swaps in a custom pod plugin (must declare path: :pod " <>
-            "and capability :pod)."
+          "Map of node names to node specs, or a `%Jido.Pod.Topology{}` struct " <>
+            "describing the pod's canonical child agents."
       ]
     ]
+  }
 
-  defmacro __using__(opts) do
-    env = __CALLER__
+  use Spark.Dsl.Extension,
+    sections: [@pod_section],
+    transformers: [
+      Jido.Pod.Transformers.RegisterContribution,
+      Jido.Pod.Transformers.ResolveTopology
+    ]
 
-    user_extensions =
-      opts
-      |> Keyword.get(:extensions, [])
-      |> List.wrap()
+  # ──────────────────────────────────────────────────────────────────
+  # Capability + slice state builder
+  # ──────────────────────────────────────────────────────────────────
 
-    shadow_extensions =
-      user_extensions
-      |> Enum.flat_map(&Jido.Agent.__shadow_extensions__(&1, env))
-      |> Enum.uniq()
+  @doc false
+  @spec capability() :: atom()
+  def capability, do: @capability
 
-    new_opts =
-      if shadow_extensions == [] do
-        opts
-      else
-        Keyword.update(opts, :extensions, shadow_extensions, fn current ->
-          List.wrap(current) ++ shadow_extensions
-        end)
-      end
-
-    super(new_opts)
+  @doc """
+  Builds the canonical default state for a pod slice.
+  """
+  @spec build_state(module() | Topology.t(), map()) :: {:ok, map()} | {:error, term()}
+  def build_state(%Topology{} = topology, overrides) when is_map(overrides) do
+    {:ok,
+     %{
+       topology: topology,
+       topology_version: topology.version,
+       mutation: %{
+         id: nil,
+         status: :idle,
+         plan: nil,
+         phase: :idle,
+         awaiting: nil,
+         report: nil,
+         error: nil
+       },
+       metadata: %{}
+     }
+     |> deep_merge(overrides)}
   end
 
-  @impl Spark.Dsl
-  def handle_opts(opts) do
-    agent_quote = Jido.Agent.handle_opts(opts)
+  def build_state(agent_module, overrides) when is_atom(agent_module) and is_map(overrides) do
+    case Jido.Pod.Info.pod_topology(agent_module) do
+      {:ok, %Topology{} = topology} ->
+        build_state(topology, overrides)
 
-    quote do
-      unquote(agent_quote)
-      @before_compile Jido.Pod.BeforeCompile
+      _ ->
+        {:error,
+         Jido.Error.validation_error(
+           "#{inspect(agent_module)} is not a pod-extended agent (no resolved topology)."
+         )}
     end
   end
+
+  defp deep_merge(left, right) do
+    Map.merge(left, right, fn _key, left_value, right_value ->
+      if is_map(left_value) and is_map(right_value) do
+        deep_merge(left_value, right_value)
+      else
+        right_value
+      end
+    end)
+  end
+
+  # ──────────────────────────────────────────────────────────────────
+  # Runtime helpers (unchanged signatures and semantics)
+  # ──────────────────────────────────────────────────────────────────
 
   @doc """
   Gets a pod instance through the given `InstanceManager` and immediately
@@ -166,7 +242,7 @@ defmodule Jido.Pod do
   end
 
   @doc """
-  Returns the reserved pod plugin instance for a pod-wrapped agent module.
+  Returns the reserved pod plugin instance for a pod-extended agent module.
   """
   @spec pod_plugin_instance(module()) :: {:ok, PluginInstance.t()} | {:error, term()}
   defdelegate pod_plugin_instance(agent_module), to: TopologyState

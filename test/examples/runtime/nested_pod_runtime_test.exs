@@ -41,10 +41,14 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
 
   defmodule EditorialPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "editorial_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -73,10 +77,14 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
 
   defmodule ProgramPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "program_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do

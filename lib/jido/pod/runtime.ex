@@ -541,7 +541,10 @@ defmodule Jido.Pod.Runtime do
   defp fetch_pod_topology(module) when is_atom(module) do
     case Code.ensure_loaded(module) do
       {:module, _} ->
-        if function_exported?(module, :topology, 0), do: {:ok, module.topology()}, else: :error
+        case Jido.Pod.Info.pod_topology(module) do
+          {:ok, %Jido.Pod.Topology{} = topology} -> {:ok, topology}
+          _ -> :error
+        end
 
       _ ->
         :error
@@ -559,7 +562,7 @@ defmodule Jido.Pod.Runtime do
   defp ensure_pod_module(module) when is_atom(module) do
     case Code.ensure_loaded(module) do
       {:module, _loaded} ->
-        if function_exported?(module, :pod?, 0) and module.pod?() do
+        if Jido.Pod.Info.pod?(module) do
           case TopologyState.pod_plugin_instance(module) do
             {:ok, _instance} -> :ok
             {:error, reason} -> {:error, reason}

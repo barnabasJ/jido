@@ -16,10 +16,14 @@ defmodule JidoTest.Pod.Mutation.PlannerTest do
 
   defmodule NestedPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "mutation_planner_nested_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
   end
 

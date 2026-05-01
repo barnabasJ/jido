@@ -9,20 +9,21 @@ defmodule Jido.Pod.TopologyState do
   alias Jido.Pod.Topology
   alias Jido.Signal
   alias Jido.Signal.Call
+  alias Jido.Slice.Instance, as: SliceInstance
 
-  # The pod plugin's mount path is reserved — `AttachPodPlugin` mounts
-  # `Jido.Pod.Plugin` (or a user-supplied replacement) at `:pod`, and
-  # the runtime relies on this key being stable. Keeping it as a literal
-  # here decouples this module from how the pod plugin's path is bound
-  # at the agent's `slices do …` block.
+  # The pod plugin's mount path is reserved — users mount `Jido.Pod`
+  # (or a custom pod plugin) at `:pod` via `slices do …`, and the
+  # runtime relies on this key being stable.
   @pod_state_key :pod
 
-  @spec pod_plugin_instance(module()) :: {:ok, PluginInstance.t()} | {:error, term()}
+  @spec pod_plugin_instance(module()) ::
+          {:ok, PluginInstance.t() | SliceInstance.t()} | {:error, term()}
   def pod_plugin_instance(agent_module) when is_atom(agent_module) do
-    instances = AgentInfo.plugin_instances(agent_module)
+    instances =
+      AgentInfo.plugin_instances(agent_module) ++ AgentInfo.slice_instances(agent_module)
 
     case Enum.find(instances, &(&1.path == @pod_state_key)) do
-      %PluginInstance{} = instance ->
+      %_{} = instance ->
         {:ok, instance}
 
       nil ->
@@ -63,10 +64,9 @@ defmodule Jido.Pod.TopologyState do
   @spec fetch_topology(module() | Agent.t() | State.t() | AgentServer.server()) ::
           {:ok, Topology.t()} | {:error, term()}
   def fetch_topology(module) when is_atom(module) do
-    if function_exported?(module, :topology, 0) do
-      {:ok, module.topology()}
-    else
-      fetch_topology_via_signal(module)
+    case Jido.Pod.Info.pod_topology(module) do
+      {:ok, %Topology{} = topology} -> {:ok, topology}
+      _ -> fetch_topology_via_signal(module)
     end
   end
 

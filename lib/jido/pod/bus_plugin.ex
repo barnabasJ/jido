@@ -16,10 +16,15 @@ defmodule Jido.Pod.BusPlugin do
   ## Usage
 
       defmodule MyApp.Fulfillment do
-        use Jido.Pod
+        use Jido.Agent, extensions: [Jido.Pod]
 
         agent do
           name "fulfillment"
+        end
+
+        slices do
+          slice :pod, Jido.Pod
+          slice :pod_bus, {Jido.Pod.BusPlugin, %{bus: :my_bus}}
         end
 
         pod do
@@ -28,8 +33,6 @@ defmodule Jido.Pod.BusPlugin do
             shipping:  %{module: MyApp.Shipping,  manager: :fulfillment_shipping,  activation: :eager}
           }
         end
-
-        # Listed in `extensions: […]` to attach the bus plugin.
       end
 
   ## Routes

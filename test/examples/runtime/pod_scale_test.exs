@@ -179,10 +179,14 @@ defmodule JidoExampleTest.PodScaleTest do
 
   defmodule HierarchyShapedScalePod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "hierarchy_shaped_scale_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do

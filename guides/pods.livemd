@@ -62,10 +62,14 @@ defmodule WorkerAgent do
 end
 
 defmodule ReviewPod do
-  use Jido.Pod
+  use Jido.Agent, extensions: [Jido.Pod]
 
   agent do
     name "pods_demo_pod"
+  end
+
+  slices do
+    slice :pod, Jido.Pod
   end
 end
 ```

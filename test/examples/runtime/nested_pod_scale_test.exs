@@ -125,10 +125,14 @@ defmodule JidoExampleTest.NestedPodScaleTest do
 
   defmodule WorkerGroupPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "worker_group_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
@@ -194,10 +198,14 @@ defmodule JidoExampleTest.NestedPodScaleTest do
 
   defmodule RootHierarchyPod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "root_hierarchy_pod"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do

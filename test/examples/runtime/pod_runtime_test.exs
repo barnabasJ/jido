@@ -10,7 +10,7 @@ defmodule JidoExampleTest.PodRuntimeTest do
 
   ## What This Covers
 
-  - `use Jido.Pod` wraps an ordinary agent module
+  - `use Jido.Agent, extensions: [Jido.Pod]` wraps an ordinary agent module
   - `Jido.Pod.get/3` is the happy path over `InstanceManager.get/3`
   - eager nodes start in ownership/dependency order during reconcile
   - lazy nodes are materialized on demand with `ensure_node/3`
@@ -51,14 +51,22 @@ defmodule JidoExampleTest.PodRuntimeTest do
       path :domain
       schema role: [type: :string, default: "worker"]
     end
+
+    slices do
+      slice(:pod, Jido.Pod)
+    end
   end
 
   defmodule ReviewPipelinePod do
     @moduledoc false
-    use Jido.Pod
+    use Jido.Agent, extensions: [Jido.Pod]
 
     agent do
       name "review_pipeline"
+    end
+
+    slices do
+      slice(:pod, Jido.Pod)
     end
 
     pod do
