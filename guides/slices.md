@@ -155,7 +155,7 @@ A Slice is the wrong tool when:
 - you need to inject side effects around the action's return.
 
 Those belong in [Middleware](middleware.md). Use `Jido.Plugin` if a single
-module needs both. The `Jido.Plugins.FSM` module is the in-tree slice
+module needs both. The `Jido.Slices.FSM` module is the in-tree slice
 example (a slice that supplies FSM transition action and route).
 
 ## See also

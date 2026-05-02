@@ -1,8 +1,8 @@
 defmodule JidoTest.Plugin.FSMTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Plugins.FSM
-  alias Jido.Plugins.FSM.Transition
+  alias Jido.Slices.FSM
+  alias Jido.Slices.FSM.Transition
 
   defmodule DefaultFSMAgent do
     @moduledoc false

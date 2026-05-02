@@ -17,10 +17,10 @@ sectioned **Spark DSL** surface that Jido ships today.
 > ```elixir
 > # Before:
 > use Jido.Agent,
->   extensions: [Jido.Slices.Memory, Jido.Plugins.FSM, Jido.Middlewares.Retry]
+>   extensions: [Jido.Slices.Memory, Jido.Slices.FSM, Jido.Middlewares.Retry]
 >
 > # After:
-> use Jido.Agent, middleware: [Jido.Plugins.FSM, Jido.Middlewares.Retry]
+> use Jido.Agent, middleware: [Jido.Slices.FSM, Jido.Middlewares.Retry]
 >
 > agent do
 >   name "my_agent"
@@ -29,7 +29,7 @@ sectioned **Spark DSL** surface that Jido ships today.
 >
 > slices do
 >   slice :memory, Jido.Slices.Memory
->   slice :fsm, Jido.Plugins.FSM
+>   slice :fsm, Jido.Slices.FSM
 > end
 > ```
 >
@@ -240,13 +240,13 @@ end
 
 ## One plugin module migration
 
-`Jido.Plugins.FSM` is the in-tree plugin example: a slice that exposes
+`Jido.Slices.FSM` is the in-tree plugin example: a slice that exposes
 state-machine transitions plus a small middleware half.
 
 ### Before
 
 ```elixir
-defmodule Jido.Plugins.FSM do
+defmodule Jido.Slices.FSM do
   use Jido.Plugin,
     name: "fsm",
     path: :fsm,
@@ -261,7 +261,7 @@ defmodule Jido.Plugins.FSM do
       transitions: Zoi.map(Zoi.string(), Zoi.list(Zoi.string())) |> Zoi.default(%{})
     }),
     signal_routes: [
-      {"fsm.transition", Jido.Plugins.FSM.Transition}
+      {"fsm.transition", Jido.Slices.FSM.Transition}
     ]
 
   @impl Jido.Middleware
@@ -272,7 +272,7 @@ end
 ### After
 
 ```elixir
-defmodule Jido.Plugins.FSM do
+defmodule Jido.Slices.FSM do
   use Jido.Plugin
 
   slice do
@@ -291,7 +291,7 @@ defmodule Jido.Plugins.FSM do
   end
 
   signal_routes do
-    route "fsm.transition", Jido.Plugins.FSM.Transition
+    route "fsm.transition", Jido.Slices.FSM.Transition
   end
 
   @impl Jido.Middleware

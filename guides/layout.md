@@ -14,9 +14,15 @@ top-level directory:
 lib/jido/
 ├── slices/        # built-in slices (state contributions)
 ├── middlewares/   # built-in middlewares (signal-pipeline wrappers)
-├── plugins/       # built-in plugins (slice + middleware)
 └── directives/    # framework-level directives (side-effect requests)
 ```
+
+A fourth surface — **plugins** (`Jido.Plugins.*`, at `lib/jido/plugins/`) —
+is part of the convention but currently has no in-tree members. A plugin
+is `Slice + Middleware` in one module; the only previous in-tree plugin
+(`Jido.Plugin.FSM`) was reduced to a pure slice and lives at
+`lib/jido/slices/fsm.ex`. Out-of-tree plugin authors still mirror the
+shape under `MyOrg.Plugins.<Name>`.
 
 Each built-in extension is **one file at the top of its surface dir**
 (the entry point) plus a **same-named subdirectory** for supporting
@@ -31,9 +37,8 @@ lib/jido/slices/memory/transformers/      # Spark transformer for typed-block co
 ```
 
 Same shape for `lib/jido/slices/identity/`, `lib/jido/slices/thread/`,
-`lib/jido/slices/ai_react/`. The middleware and plugin surfaces are
-shaped the same way, scaled to the smaller extension surface (Retry
-and Persister are leaf middlewares, FSM is the only in-tree plugin).
+`lib/jido/slices/ai_react/`. Middlewares are leaf modules without a
+sibling subdirectory (Retry, Persister).
 
 ## Framework infrastructure stays put
 
