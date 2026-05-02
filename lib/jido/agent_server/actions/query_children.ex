@@ -1,7 +1,7 @@
 defmodule Jido.AgentServer.Actions.QueryChildren do
   @moduledoc """
   Routed to `jido.agent.query.children`. Builds the reply via the
-  `%Jido.Agent.Directive.Reply{}` directive so the children map is read
+  `%Jido.Directives.Reply{}` directive so the children map is read
   under directive execution with server state access.
 
   Reply shapes:

@@ -161,10 +161,10 @@ verbatim without retrying.
 
 ```elixir
 alias Jido.Middlewares.Retry
-alias Jido.Agent.Directive
+alias Jido.Directives
 
 next_ok = fn _sig, ctx ->
-  {:ok, ctx, [%Directive.Emit{signal: %Jido.Signal{type: "ok", source: "/x", id: "y"}}]}
+  {:ok, ctx, [%Directives.Emit{signal: %Jido.Signal{type: "ok", source: "/x", id: "y"}}]}
 end
 
 {:ok, _ctx, dirs} = Retry.on_signal(sig, %{}, %{max_attempts: 3}, next_ok)
@@ -186,7 +186,7 @@ next_flaky = fn _sig, ctx ->
   if n < 2 do
     {:error, ctx, :transient}
   else
-    {:ok, ctx, [%Directive.Emit{signal: %Jido.Signal{type: "done", source: "/x", id: "z"}}]}
+    {:ok, ctx, [%Directives.Emit{signal: %Jido.Signal{type: "done", source: "/x", id: "z"}}]}
   end
 end
 
@@ -232,7 +232,7 @@ IO.inspect(:counters.get(counter3, 1), label: "work.start matches — full 3 att
 
 ### Retry middleware — user-emitted `%Error{}` is not a chain error
 
-If an action returns success but emits a `%Directive.Error{}` for log/audit
+If an action returns success but emits a `%Directives.Error{}` for log/audit
 purposes, Retry does not fire — it pattern-matches `{:error, _, _}` from the
 chain return, not directives in the success list.
 
@@ -242,7 +242,7 @@ counter4 = :counters.new(1, [])
 next_audit_only = fn _sig, ctx ->
   :counters.add(counter4, 1, 1)
   # Success path with an audit-style error directive — chain returned :ok
-  {:ok, ctx, [%Directive.Error{error: %{reason: :logged_for_audit}}]}
+  {:ok, ctx, [%Directives.Error{error: %{reason: :logged_for_audit}}]}
 end
 
 {:ok, _ctx, dirs} = Retry.on_signal(sig, %{}, %{max_attempts: 5}, next_audit_only)

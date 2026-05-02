@@ -2,7 +2,7 @@ defmodule JidoTest.Actions.ControlTest do
   use ExUnit.Case, async: true
 
   alias Jido.Actions.Control
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Signal
 
   defp sig(type, data \\ %{}) do
@@ -38,7 +38,7 @@ defmodule JidoTest.Actions.ControlTest do
       {:ok, result, [directive]} = Control.Forward.run(sig("forward", data), %{}, %{}, %{})
 
       assert result == %{forwarded_to: target}
-      assert %Directive.Emit{} = directive
+      assert %Directives.Emit{} = directive
       assert {:pid, opts} = directive.dispatch
       assert Keyword.get(opts, :target) == target
     end
@@ -84,7 +84,7 @@ defmodule JidoTest.Actions.ControlTest do
       {:ok, result, [directive]} = Control.Broadcast.run(sig("broadcast", data), %{}, %{}, %{})
 
       assert result == %{broadcast_to: "workers"}
-      assert %Directive.Emit{} = directive
+      assert %Directives.Emit{} = directive
       assert directive.dispatch == {:pubsub, topic: "workers"}
       assert directive.signal.type == "work.available"
     end
@@ -108,7 +108,7 @@ defmodule JidoTest.Actions.ControlTest do
       {:ok, result, [directive]} = Control.Reply.run(input, %{}, %{}, %{})
 
       assert result == %{replied_to: reply_pid}
-      assert %Directive.Emit{} = directive
+      assert %Directives.Emit{} = directive
       assert directive.signal.type == "response"
       assert directive.signal.data == %{answer: 42}
     end

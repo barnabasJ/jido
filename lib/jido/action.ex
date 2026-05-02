@@ -113,15 +113,15 @@ defmodule Jido.Action do
               opts :: map(),
               ctx :: map()
             ) ::
-              {:ok, new_slice :: term(), [Jido.Agent.Directive.t()]}
+              {:ok, new_slice :: term(), [Jido.Directives.t()]}
               | {:error, term()}
 
   @callback on_before_validate_params(params :: map()) :: {:ok, map()} | {:error, any()}
   @callback on_after_validate_params(params :: map()) :: {:ok, map()} | {:error, any()}
   @callback on_before_validate_output(output :: map()) :: {:ok, map()} | {:error, any()}
   @callback on_after_validate_output(output :: map()) :: {:ok, map()} | {:error, any()}
-  @callback on_after_run(result :: {:ok, term(), [Jido.Agent.Directive.t()]} | {:error, any()}) ::
-              {:ok, term(), [Jido.Agent.Directive.t()]} | {:error, any()}
+  @callback on_after_run(result :: {:ok, term(), [Jido.Directives.t()]} | {:error, any()}) ::
+              {:ok, term(), [Jido.Directives.t()]} | {:error, any()}
 
   @optional_callbacks [
     on_before_validate_params: 1,

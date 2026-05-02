@@ -123,7 +123,7 @@ def on_signal(signal, ctx, _opts, next) do
   if authorized?(ctx[:current_user], signal.type) do
     next.(signal, ctx)
   else
-    {ctx, [%Directive.Error{reason: :unauthorized}]}
+    {ctx, [%Directives.Error{reason: :unauthorized}]}
   end
 end
 ```
@@ -157,7 +157,7 @@ struct. See [the source](../lib/jido/middleware/persister.ex).
 ### Retry
 
 [`Jido.Middlewares.Retry`](../lib/jido/middleware/retry.ex) re-invokes `next`
-when the chain returns `%Directive.Error{}`. Configurable max attempts
+when the chain returns `%Directives.Error{}`. Configurable max attempts
 and an optional `Jido.Signal.Router` pattern to scope which signals retry.
 
 ```elixir
@@ -176,7 +176,7 @@ def on_signal(signal, ctx, _opts, next) do
   {ctx, dirs} = next.(signal, ctx)
 
   Enum.each(dirs, fn
-    %Directive.Error{reason: r} ->
+    %Directives.Error{reason: r} ->
       Logger.error("agent #{ctx[:agent_id]} failed #{signal.type}: #{inspect(r)}")
     _ -> :ok
   end)

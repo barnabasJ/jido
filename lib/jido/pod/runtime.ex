@@ -1,7 +1,7 @@
 defmodule Jido.Pod.Runtime do
   @moduledoc false
 
-  alias Jido.Agent.Directive.SpawnManagedAgent
+  alias Jido.Directives.SpawnManagedAgent
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
   alias Jido.AgentServer.{ParentRef, State}

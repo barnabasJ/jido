@@ -10,7 +10,7 @@ This guide is the short decision tree.
 ## The Simple Mental Model
 
 - use `MyApp.Jido.start_agent/2` (or `Jido.start_agent/3`) or `Jido.AgentServer.start_link/1` for one live agent
-- use `Directive.SpawnAgent` for a live tracked child of the current parent
+- use `Directives.SpawnAgent` for a live tracked child of the current parent
 - use `Jido.Agent.InstanceManager` for one named durable agent
 - use `Jido.Pod` for one named durable team of agents
 - use `partition` to namespace any of the above in a shared Jido instance
@@ -27,7 +27,7 @@ The important boundary is this:
 | Need | Use | Why |
 | --- | --- | --- |
 | A single live process right now | `MyApp.Jido.start_agent/2` (or `Jido.start_agent/3`) or `Jido.AgentServer.start_link/1` | Smallest runtime surface |
-| A child that should be tracked by the current parent during this live workflow | `Directive.SpawnAgent` | Logical hierarchy, child exit signals, parent-child routing |
+| A child that should be tracked by the current parent during this live workflow | `Directives.SpawnAgent` | Logical hierarchy, child exit signals, parent-child routing |
 | A single named agent that may hibernate and thaw later | `Jido.Agent.InstanceManager` | Durable keyed lifecycle for one agent |
 | A named group of agents with a durable topology | `Jido.Pod` | Durable team/workspace/unit with explicit reconcile semantics |
 | Many tenants or workspaces in one shared Jido instance | `partition` | Isolates registry identity, persistence, lineage, and telemetry |
@@ -44,7 +44,7 @@ Use `SpawnAgent` when the child is part of the current live workflow:
 Good fit:
 
 ```elixir
-Directive.spawn_agent(MyWorker, :researcher,
+Directives.spawn_agent(MyWorker, :researcher,
   opts: %{id: "research-1", on_parent_death: :stop}
 )
 ```
@@ -139,7 +139,7 @@ hibernate/thaw or named reacquisition, use `InstanceManager` or `Pod`.
 If you are unsure, start here:
 
 1. One live agent: `MyApp.Jido.start_agent/2` (or `Jido.start_agent/3`)
-2. Live tracked child: `Directive.SpawnAgent`
+2. Live tracked child: `Directives.SpawnAgent`
 3. One durable named agent: `InstanceManager`
 4. One durable named team: `Pod`
 5. Need shared-instance tenancy: add `partition`

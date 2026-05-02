@@ -11,7 +11,7 @@
 # After: Declarative orchestration
 def cmd({:fan_out, urls}, agent, _ctx) do
   directives = Enum.map(urls, fn url ->
-    Directive.spawn_agent(FetcherAgent, :"fetcher_#{:erlang.phash2(url)}", 
+    Directives.spawn_agent(FetcherAgent, :"fetcher_#{:erlang.phash2(url)}", 
       meta: %{url: url})
   end)
   
@@ -68,7 +68,7 @@ Jido gives you three policies for child behavior when the logical parent dies:
 
 Use orphan survival only when the child owns work that should outlive the
 original coordinator. If you want a replacement coordinator to take over, make
-that handoff explicit with `Directive.adopt_child/3`. The adopted relationship
+that handoff explicit with `Directives.adopt_child/3`. The adopted relationship
 is mirrored into `Jido.RuntimeStore`, so future child restarts keep the
 replacement coordinator instead of reverting to the startup parent.
 
@@ -95,7 +95,7 @@ defmodule FetchUrlAction do
     ]
   end
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Signal
 
   def run(%{url: url, request_id: request_id}, context) do
@@ -118,7 +118,7 @@ defmodule FetchUrlAction do
     )
 
     # Send to parent using emit_to_parent helper
-    emit_directive = Directive.emit_to_parent(%{state: context.state}, result_signal)
+    emit_directive = Directives.emit_to_parent(%{state: context.state}, result_signal)
 
     {:ok, %{status: :completed, last_fetch: url}, List.wrap(emit_directive)}
   end
@@ -157,7 +157,7 @@ defmodule SpawnFetchersAction do
     ]
   end
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
 
   def run(%{urls: urls}, _context) do
     # Create pending requests map and spawn directives
@@ -174,7 +174,7 @@ defmodule SpawnFetchersAction do
       urls
       |> Enum.with_index()
       |> Enum.map(fn {url, i} ->
-        Directive.spawn_agent(FetcherAgent, :"worker_#{i}",
+        Directives.spawn_agent(FetcherAgent, :"worker_#{i}",
           meta: %{url: url, request_id: "req-#{i}"})
       end)
 
@@ -194,7 +194,7 @@ defmodule HandleChildStartedAction do
     ]
   end
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Signal
 
   def run(%{pid: pid, meta: meta}, _context) do
@@ -205,7 +205,7 @@ defmodule HandleChildStartedAction do
       source: "/coordinator"
     )
 
-    emit_directive = Directive.emit_to_pid(work_signal, pid)
+    emit_directive = Directives.emit_to_pid(work_signal, pid)
 
     {:ok, %{}, [emit_directive]}
   end
@@ -403,11 +403,11 @@ defmodule CleanupWorkersAction do
     schema [tags: [type: {:list, :atom}, required: true]]
   end
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
 
   def run(%{tags: tags}, _context) do
     stop_directives = Enum.map(tags, fn tag ->
-      Directive.stop_child(tag, :cleanup)
+      Directives.stop_child(tag, :cleanup)
     end)
 
     {:ok, %{status: :cleaned_up}, stop_directives}
@@ -429,7 +429,7 @@ defmodule ParallelFetcher do
   """
 
   alias Jido.{Signal, AgentServer}
-  alias Jido.Agent.Directive
+  alias Jido.Directives
 
   # ============================================================================
   # Worker Agent
@@ -455,7 +455,7 @@ defmodule ParallelFetcher do
         source: "/worker"
       )
 
-      emit = Directive.emit_to_parent(%{state: context.state}, signal)
+      emit = Directives.emit_to_parent(%{state: context.state}, signal)
 
       {:ok, %{status: :completed}, List.wrap(emit)}
     end
@@ -513,7 +513,7 @@ defmodule ParallelFetcher do
         urls
         |> Enum.with_index()
         |> Enum.map(fn {url, i} ->
-          Directive.spawn_agent(Worker, :"w#{i}", 
+          Directives.spawn_agent(Worker, :"w#{i}", 
             meta: %{url: url, request_id: "req-#{i}"})
         end)
 
@@ -535,7 +535,7 @@ defmodule ParallelFetcher do
         request_id: meta.request_id
       }, source: "/coordinator")
 
-      {:ok, %{}, [Directive.emit_to_pid(signal, pid)]}
+      {:ok, %{}, [Directives.emit_to_pid(signal, pid)]}
     end
   end
 

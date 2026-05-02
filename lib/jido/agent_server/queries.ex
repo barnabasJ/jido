@@ -2,7 +2,7 @@ defmodule Jido.AgentServer.Queries do
   @moduledoc """
   Reply builders for agent-level introspection queries.
 
-  Invoked by the `%Jido.Agent.Directive.Reply{}` executor with full
+  Invoked by the `%Jido.Directives.Reply{}` executor with full
   `%Jido.AgentServer.State{}` access. Mirrors `Jido.Pod.Queries` but for
   signals that are universal to every agent (not pod-specific).
 

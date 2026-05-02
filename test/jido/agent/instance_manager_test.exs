@@ -7,7 +7,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
   # Tests with timing-based assertions (idle timeout behavior)
   @moduletag :integration
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
   alias Jido.Scheduler
@@ -122,7 +122,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       timezone = Map.get(params, :timezone)
       message = Signal.new!("cron.tick", %{}, source: "/instance-manager-test")
 
-      {:ok, slice, [Directive.cron(cron, message, job_id: job_id, timezone: timezone)]}
+      {:ok, slice, [Directives.cron(cron, message, job_id: job_id, timezone: timezone)]}
     end
   end
 
@@ -137,7 +137,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
     @impl true
     def run(%Jido.Signal{data: %{job_id: job_id}}, slice, _opts, _ctx) do
-      {:ok, slice, [Directive.cron_cancel(job_id)]}
+      {:ok, slice, [Directives.cron_cancel(job_id)]}
     end
   end
 

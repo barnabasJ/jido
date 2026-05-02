@@ -39,7 +39,7 @@ defmodule Jido.Middlewares.Persister do
 
   use Jido.Middleware
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Signal
 
   @starting_type "jido.agent.lifecycle.starting"
@@ -121,7 +121,7 @@ defmodule Jido.Middlewares.Persister do
 
   defp append_observability({:error, _ctx, _reason} = err, _observability), do: err
 
-  defp emit(type, data), do: %Directive.Emit{signal: Signal.new!(type, data)}
+  defp emit(type, data), do: %Directives.Emit{signal: Signal.new!(type, data)}
 
   defp apply_externalize(agent, agent_module),
     do: walk_transforms(agent, agent_module, :externalize)

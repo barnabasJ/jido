@@ -161,9 +161,9 @@ Pattern matching is supported on each `route "type"`:
 - `"chat.*"` — matches `chat.message`, `chat.clear`, etc.
 - `"chat.**"` — matches `chat.message`, `chat.room.join`, etc.
 
-## Emitting Signals (Directive.Emit)
+## Emitting Signals (Directives.Emit)
 
-Actions emit signals using the `Directive.Emit` directive:
+Actions emit signals using the `Directives.Emit` directive:
 
 ```elixir
 defmodule MyApp.Actions.ProcessOrder do
@@ -174,7 +174,7 @@ defmodule MyApp.Actions.ProcessOrder do
     schema [order_id: [type: :integer, required: true]]
   end
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Signal
 
   def run(%{order_id: order_id}, _context) do
@@ -183,7 +183,7 @@ defmodule MyApp.Actions.ProcessOrder do
     # Emit a signal to notify completion
     signal = Signal.new!("order.processed", %{order_id: order_id}, source: "/processor")
     
-    {:ok, %{status: :processed}, [Directive.emit(signal)]}
+    {:ok, %{status: :processed}, [Directives.emit(signal)]}
   end
 end
 ```
@@ -191,19 +191,19 @@ end
 ### Emit Helpers
 
 ```elixir
-alias Jido.Agent.Directive
+alias Jido.Directives
 
 # Basic emit
-Directive.emit(signal)
+Directives.emit(signal)
 
 # Emit to a specific adapter (e.g., PubSub)
-Directive.emit(signal, {:pubsub, topic: "events"})
+Directives.emit(signal, {:pubsub, topic: "events"})
 
 # Emit directly to a pid
-Directive.emit_to_pid(signal, pid)
+Directives.emit_to_pid(signal, pid)
 
 # Emit to parent agent (in hierarchies)
-Directive.emit_to_parent(agent, signal)
+Directives.emit_to_parent(agent, signal)
 ```
 
 ## Signal Flow Diagram
@@ -223,7 +223,7 @@ Directive.emit_to_parent(agent, signal)
 │  → process directives                                            │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
-                                ▼ Directive.Emit
+                                ▼ Directives.Emit
 ┌─────────────────────────────────────────────────────────────────┐
 │                       Dispatch Adapters                          │
 │               (PubSub, PID, External Systems)                    │

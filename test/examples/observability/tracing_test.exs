@@ -22,7 +22,7 @@ defmodule JidoExampleTest.TracingTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Signal
   alias Jido.Tracing.Trace
@@ -49,7 +49,7 @@ defmodule JidoExampleTest.TracingTest do
           source: "/workflow-agent"
         )
 
-      {:ok, %{workflow: params.workflow_name, step: 1}, [%Directive.Emit{signal: event_signal}]}
+      {:ok, %{workflow: params.workflow_name, step: 1}, [%Directives.Emit{signal: event_signal}]}
     end
   end
 
@@ -73,7 +73,7 @@ defmodule JidoExampleTest.TracingTest do
           source: "/workflow-agent"
         )
 
-      {:ok, %{step: new_step}, [%Directive.Emit{signal: event_signal}]}
+      {:ok, %{step: new_step}, [%Directives.Emit{signal: event_signal}]}
     end
   end
 
@@ -96,7 +96,7 @@ defmodule JidoExampleTest.TracingTest do
           source: "/workflow-agent"
         )
 
-      {:ok, %{status: :completed}, [%Directive.Emit{signal: event_signal}]}
+      {:ok, %{status: :completed}, [%Directives.Emit{signal: event_signal}]}
     end
   end
 

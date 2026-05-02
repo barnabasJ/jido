@@ -59,8 +59,8 @@ Job IDs are automatically namespaced as `{:agent_schedule, agent_name, job_id}` 
 | Use case | Approach |
 |----------|----------|
 | Known at compile time, always runs | `schedules do … end` in agent definition |
-| Depends on runtime state or user input | `Directive.cron/3` in an action |
-| One-time delayed message | `Directive.schedule/2` in an action |
+| Depends on runtime state or user input | `Directives.cron/3` in an action |
+| One-time delayed message | `Directives.schedule/2` in an action |
 
 ## Delayed Messages with Schedule
 
@@ -75,7 +75,7 @@ defmodule RetryAction do
     schema [attempt: [type: :integer, default: 1]]
   end
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
 
   def run(%{attempt: attempt}, context) do
     if attempt < 3 do
@@ -85,7 +85,7 @@ defmodule RetryAction do
         source: "/agent/#{context.agent.id}"
       )
 
-      {:ok, %{scheduled_retry: true}, [Directive.schedule(5_000, retry_signal)]}
+      {:ok, %{scheduled_retry: true}, [Directives.schedule(5_000, retry_signal)]}
     else
       {:error, Jido.Error.execution_error("Max retries exceeded")}
     end
@@ -98,13 +98,13 @@ The message arrives as a signal after the delay. `Process.send_after/3` powers t
 ### Schedule API
 
 ```elixir
-alias Jido.Agent.Directive
+alias Jido.Directives
 
-Directive.schedule(delay_ms, message)
+Directives.schedule(delay_ms, message)
 
-Directive.schedule(5_000, :timeout)
-Directive.schedule(1_000, {:check, some_ref})
-Directive.schedule(30_000, my_signal)
+Directives.schedule(5_000, :timeout)
+Directives.schedule(1_000, {:check, some_ref})
+Directives.schedule(30_000, my_signal)
 ```
 
 ## Dynamic Recurring Jobs with Cron
@@ -119,7 +119,7 @@ defmodule SetupCronAction do
     name "setup_cron"
   end
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
 
   def run(_params, context) do
     tick_signal = Jido.Signal.new!(
@@ -129,7 +129,7 @@ defmodule SetupCronAction do
     )
 
     {:ok, %{}, [
-      Directive.cron("*/5 * * * *", tick_signal, job_id: :heartbeat)
+      Directives.cron("*/5 * * * *", tick_signal, job_id: :heartbeat)
     ]}
   end
 end
@@ -162,7 +162,7 @@ Aliases are also available:
 ### Timezone Support
 
 ```elixir
-Directive.cron("0 9 * * *", morning_signal, 
+Directives.cron("0 9 * * *", morning_signal, 
   job_id: :morning_task,
   timezone: "America/New_York"
 )
@@ -188,9 +188,9 @@ If timezone configuration is missing or invalid, cron registration returns
 Registering a cron job with an existing `job_id` validates and starts the replacement first, then swaps it in and cancels the old job:
 
 ```elixir
-Directive.cron("*/5 * * * *", tick_signal, job_id: :heartbeat)
+Directives.cron("*/5 * * * *", tick_signal, job_id: :heartbeat)
 
-Directive.cron("*/10 * * * *", tick_signal, job_id: :heartbeat)
+Directives.cron("*/10 * * * *", tick_signal, job_id: :heartbeat)
 ```
 
 The second directive cancels the 5-minute job and starts a 10-minute one.
@@ -207,10 +207,10 @@ defmodule StopHeartbeatAction do
     name "stop_heartbeat"
   end
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
 
   def run(_params, _context) do
-    {:ok, %{}, [Directive.cron_cancel(:heartbeat)]}
+    {:ok, %{}, [Directives.cron_cancel(:heartbeat)]}
   end
 end
 ```
@@ -228,7 +228,7 @@ agent is managed by `Jido.Agent.InstanceManager` **and** storage is enabled.
 In that mode, dynamic cron specs are persisted through `Jido.Persist` and
 re-registered on thaw.
 
-Only dynamic `Directive.cron/3` registrations are persisted. Declarative `schedules do … end` entries and plugin schedules are recreated from code when the `AgentServer` starts and remain runtime-only.
+Only dynamic `Directives.cron/3` registrations are persisted. Declarative `schedules do … end` entries and plugin schedules are recreated from code when the `AgentServer` starts and remain runtime-only.
 
 **What this means:**
 
@@ -254,7 +254,7 @@ If persistence fails, registration/cancellation is isolated and the agent keeps 
 - Scheduler startup/runtime failures are non-fatal to the owning agent.
 - Cron runtime pids are monitored separately from child lifecycle monitors.
 - Abnormal cron job exits trigger capped exponential-backoff restart from in-memory runtime specs while the owning `AgentServer` remains alive.
-- Only dynamic `Directive.cron/3` registrations are restored after thaw/restart from durable `cron_specs`.
+- Only dynamic `Directives.cron/3` registrations are restored after thaw/restart from durable `cron_specs`.
 - Normal/shutdown cron exits are treated as expected removal (no restart).
 
 ### Missed-Run Behavior
@@ -368,7 +368,7 @@ defmodule DailyReportAgent do
       name "generate_report"
     end
 
-    alias Jido.Agent.Directive
+    alias Jido.Directives
 
     def run(_params, context) do
       last_run = Map.get(context.state, :last_report_at)
@@ -395,7 +395,7 @@ defmodule DailyReportAgent do
               report_count: count + 1
             })
 
-          {:ok, new_state, [Directive.emit(notification)]}
+          {:ok, new_state, [Directives.emit(notification)]}
       end
     end
 
@@ -416,7 +416,7 @@ defmodule DailyReportAgent do
     end
 
     def run(_params, _context) do
-      {:ok, %{}, [Directive.cron_cancel({:agent_schedule, "daily_report_agent", :daily_report})]}
+      {:ok, %{}, [Directives.cron_cancel({:agent_schedule, "daily_report_agent", :daily_report})]}
     end
   end
 end

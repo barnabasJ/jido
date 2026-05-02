@@ -1,6 +1,6 @@
 defmodule JidoTest.AgentServer.CronTickDeliveryTest do
   @moduledoc """
-  Regression test for issue #136: Directive.Cron executor silently fails
+  Regression test for issue #136: Directives.Cron executor silently fails
   because cast(agent_id, signal) rejects string IDs via resolve_server/1.
 
   These tests verify that cron ticks actually reach the agent and update state,
@@ -11,7 +11,7 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
   @moduletag :integration
   @moduletag capture_log: true
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Signal
 
@@ -49,7 +49,7 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
       job_id = Map.get(params, :job_id)
 
       tick_signal = Signal.new!("cron.tick", %{}, source: "/test/cron")
-      directive = Directive.cron(cron_expr, tick_signal, job_id: job_id)
+      directive = Directives.cron(cron_expr, tick_signal, job_id: job_id)
       {:ok, slice, [directive]}
     end
   end

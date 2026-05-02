@@ -19,7 +19,7 @@ defmodule Jido.Exec.Compensation do
   @type context :: map()
   @type run_opts :: [timeout: non_neg_integer()]
   @type exec_result ::
-          {:ok, map(), [Jido.Agent.Directive.t()]}
+          {:ok, map(), [Jido.Directives.t()]}
           | {:error, Exception.t()}
 
   @doc """

@@ -1,8 +1,8 @@
-defmodule JidoTest.Agent.Directive.CronTest do
+defmodule JidoTest.Agent.Directives.CronTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Agent.Directive
-  alias Jido.Agent.Directive.Cron
+  alias Jido.Directives
+  alias Jido.Directives.Cron
   alias Jido.Signal
 
   describe "Cron directive creation" do
@@ -64,10 +64,10 @@ defmodule JidoTest.Agent.Directive.CronTest do
     end
   end
 
-  describe "Directive.cron/3 helper" do
+  describe "Directives.cron/3 helper" do
     test "creates cron directive with minimal arguments" do
       message = Signal.new!(%{type: "test.tick", source: "/test", data: %{}})
-      directive = Directive.cron("* * * * *", message)
+      directive = Directives.cron("* * * * *", message)
 
       assert %Cron{} = directive
       assert directive.cron == "* * * * *"
@@ -77,7 +77,7 @@ defmodule JidoTest.Agent.Directive.CronTest do
     end
 
     test "creates cron directive with job_id option" do
-      directive = Directive.cron("@daily", :cleanup_msg, job_id: :daily_cleanup)
+      directive = Directives.cron("@daily", :cleanup_msg, job_id: :daily_cleanup)
 
       assert directive.cron == "@daily"
       assert directive.message == :cleanup_msg
@@ -86,7 +86,7 @@ defmodule JidoTest.Agent.Directive.CronTest do
     end
 
     test "creates cron directive with timezone option" do
-      directive = Directive.cron("0 9 * * *", :morning_task, timezone: "America/Los_Angeles")
+      directive = Directives.cron("0 9 * * *", :morning_task, timezone: "America/Los_Angeles")
 
       assert directive.cron == "0 9 * * *"
       assert directive.timezone == "America/Los_Angeles"
@@ -94,7 +94,7 @@ defmodule JidoTest.Agent.Directive.CronTest do
 
     test "creates cron directive with both job_id and timezone" do
       directive =
-        Directive.cron(
+        Directives.cron(
           "0 9 * * MON",
           :weekly_signal,
           job_id: :monday_9am,
@@ -107,21 +107,21 @@ defmodule JidoTest.Agent.Directive.CronTest do
 
     test "handles signal structs as messages" do
       signal = Signal.new!(%{type: "cron.tick", source: "/scheduler", data: %{count: 1}})
-      directive = Directive.cron("*/5 * * * *", signal, job_id: :check)
+      directive = Directives.cron("*/5 * * * *", signal, job_id: :check)
 
       assert %Signal{} = directive.message
       assert directive.message.type == "cron.tick"
     end
 
     test "handles atom messages" do
-      directive = Directive.cron("* * * * *", :tick)
+      directive = Directives.cron("* * * * *", :tick)
 
       assert directive.message == :tick
     end
 
     test "handles map messages" do
       message = %{action: "cleanup", priority: :high}
-      directive = Directive.cron("@daily", message)
+      directive = Directives.cron("@daily", message)
 
       assert directive.message == message
     end

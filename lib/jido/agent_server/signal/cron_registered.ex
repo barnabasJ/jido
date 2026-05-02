@@ -1,6 +1,6 @@
 defmodule Jido.AgentServer.Signal.CronRegistered do
   @moduledoc """
-  Synthesized by the `Jido.Agent.Directive.Cron` impl after the
+  Synthesized by the `Jido.Directives.Cron` impl after the
   scheduler job spawns and the spec is persisted, then cast back to the
   agent so the cascade callback `maybe_track_cron_registered/2` can
   insert into `state.cron_specs`, `state.cron_jobs`, `state.cron_monitors`,

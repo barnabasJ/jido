@@ -1,4 +1,4 @@
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Pod.Directive.StartNode do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Pod.Directives.StartNode do
   @moduledoc false
 
   alias Jido.AgentServer
@@ -31,7 +31,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Pod.Directive.StartNode do
   end
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Pod.Directive.StopNode do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Pod.Directives.StopNode do
   @moduledoc false
 
   alias Jido.Pod.Runtime

@@ -3,7 +3,7 @@ defmodule JidoTest.AgentServer.TelemetryTest do
 
   import ExUnit.CaptureLog
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Debug
   alias Jido.Signal
@@ -20,7 +20,7 @@ defmodule JidoTest.AgentServer.TelemetryTest do
 
     def run(_signal, _slice, _opts, _ctx) do
       signal = Signal.new!("test.emitted", %{}, source: "/test")
-      {:ok, %{}, [%Directive.Emit{signal: signal}]}
+      {:ok, %{}, [%Directives.Emit{signal: signal}]}
     end
   end
 
@@ -34,7 +34,7 @@ defmodule JidoTest.AgentServer.TelemetryTest do
     end
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, [%Directive.Schedule{delay_ms: 100, message: :tick}]}
+      {:ok, %{}, [%Directives.Schedule{delay_ms: 100, message: :tick}]}
     end
   end
 
@@ -272,13 +272,13 @@ defmodule JidoTest.AgentServer.TelemetryTest do
                       %{directive_type: "Schedule", signal_type: "schedule_directive"} = metadata},
                      500
 
-      assert match?(%Directive.Schedule{}, metadata.directive)
+      assert match?(%Directives.Schedule{}, metadata.directive)
 
       assert_receive {:telemetry_event, [:jido, :agent_server, :directive, :stop], _,
                       %{result: :ok, signal_type: "schedule_directive"} = metadata},
                      500
 
-      assert match?(%Directive.Schedule{}, metadata.directive)
+      assert match?(%Directives.Schedule{}, metadata.directive)
 
       GenServer.stop(pid)
     end

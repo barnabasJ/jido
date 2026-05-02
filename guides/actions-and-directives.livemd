@@ -118,7 +118,7 @@ defmodule Counter.IncAndEmit do
         source: "/counter"
       )
 
-    {:ok, new_slice, [%Jido.Agent.Directive.Emit{signal: emission}]}
+    {:ok, new_slice, [%Jido.Directives.Emit{signal: emission}]}
   end
 end
 
@@ -171,7 +171,7 @@ defmodule Counter.MultiEmit do
     emissions =
       for i <- 1..count do
         sig = Jido.Signal.new!("batch.event", %{index: i}, source: "/batch")
-        %Jido.Agent.Directive.Emit{signal: sig}
+        %Jido.Directives.Emit{signal: sig}
       end
 
     {:ok, %{slice | count: slice.count + count}, emissions}
@@ -201,7 +201,7 @@ defmodule Timer.Start do
   @impl true
   def run(%Jido.Signal{data: %{delay_ms: delay}}, slice, _opts, _ctx) do
     tick = Jido.Signal.new!("timer.tick", %{}, source: "/timer")
-    schedule = %Jido.Agent.Directive.Schedule{delay_ms: delay, message: tick}
+    schedule = %Jido.Directives.Schedule{delay_ms: delay, message: tick}
 
     {:ok, %{slice | count: slice.count}, [schedule]}
   end
@@ -220,7 +220,7 @@ the GenServer, terminating the agent. No state mutation, just process
 termination.
 
 ```elixir
-%Jido.Agent.Directive.Stop{reason: :normal}
+%Jido.Directives.Stop{reason: :normal}
 |> IO.inspect(label: "Stop directive — terminates the agent process on the next pipeline turn")
 ```
 
@@ -337,7 +337,7 @@ defmodule Spawn.Worker do
 
   @impl true
   def run(_signal, slice, _opts, _ctx) do
-    directive = %Jido.Agent.Directive.SpawnAgent{
+    directive = %Jido.Directives.SpawnAgent{
       agent: HarnessAgent,
       tag: :worker,
       opts: %{},
@@ -531,7 +531,7 @@ defmodule RunInstruction.Issue do
     instruction = Jido.Instruction.new!(%{action: Inner.Action})
 
     directive =
-      Jido.Agent.Directive.run_instruction(instruction,
+      Jido.Directives.run_instruction(instruction,
         result_signal_type: "demo.captured",
         meta: %{}
       )

@@ -15,7 +15,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
   @moduletag :example
   @moduletag timeout: 20_000
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Signal
 
@@ -35,7 +35,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
     def run(%Jido.Signal{data: %{delay_ms: delay_ms, timer_id: timer_id}}, _slice, _opts, _ctx) do
       tick_signal = Signal.new!("timer.tick", %{timer_id: timer_id}, source: "/timer")
 
-      schedule = %Directive.Schedule{
+      schedule = %Directives.Schedule{
         delay_ms: delay_ms,
         message: tick_signal
       }
@@ -73,7 +73,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
     def run(%Jido.Signal{data: %{max_attempts: max, retry_delay_ms: delay}}, _slice, _opts, _ctx) do
       retry_signal = Signal.new!("retry.attempt", %{}, source: "/retry")
 
-      schedule = %Directive.Schedule{
+      schedule = %Directives.Schedule{
         delay_ms: delay,
         message: retry_signal
       }
@@ -102,7 +102,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
       else
         retry_signal = Signal.new!("retry.attempt", %{}, source: "/retry")
 
-        schedule = %Directive.Schedule{
+        schedule = %Directives.Schedule{
           delay_ms: delay,
           message: retry_signal
         }
@@ -132,7 +132,7 @@ defmodule JidoExampleTest.ScheduleDirectiveTest do
       timeout_signal =
         Signal.new!("request.timeout", %{request_id: request_id}, source: "/timeout")
 
-      schedule = %Directive.Schedule{
+      schedule = %Directives.Schedule{
         delay_ms: timeout_ms,
         message: timeout_signal
       }

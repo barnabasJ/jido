@@ -1,10 +1,10 @@
 defmodule JidoExampleTest.ErrorHandlingTest do
   @moduledoc """
-  Example test demonstrating error handling patterns with Directive.Error.
+  Example test demonstrating error handling patterns with Directives.Error.
 
   This test shows:
   - How actions returning {:error, reason} produce error directives
-  - How Directive.Error wraps Jido.Error structs
+  - How Directives.Error wraps Jido.Error structs
   - Recovery pattern: failed → retry → success
   - Error state includes error details
   - Bounded retry (max_attempts) prevents infinite loops
@@ -12,7 +12,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
   ## Usage
 
   Actions can signal errors by returning `{:error, reason}` from their `run/2` function.
-  The agent strategy wraps these into `%Directive.Error{}` directives.
+  The agent strategy wraps these into `%Directives.Error{}` directives.
 
   For validation errors, use `Jido.Error.validation_error/2`:
 
@@ -28,7 +28,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Signal
 
@@ -102,7 +102,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
     def run(%Jido.Signal{data: %{error_message: message, error_context: ctx}}, slice, _opts, _ctx) do
       error = Jido.Error.execution_error(message)
 
-      error_directive = %Directive.Error{error: error, context: ctx}
+      error_directive = %Directives.Error{error: error, context: ctx}
 
       current_attempts = Map.get(slice, :attempts, 0)
 
@@ -128,7 +128,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       else
         retry_signal = Signal.new!("retry", %{}, source: "/retry")
 
-        schedule = %Directive.Schedule{
+        schedule = %Directives.Schedule{
           delay_ms: 10,
           message: retry_signal
         }
@@ -172,7 +172,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
         true ->
           retry_signal = Signal.new!("retry", %{}, source: "/retry")
 
-          schedule = %Directive.Schedule{
+          schedule = %Directives.Schedule{
             delay_ms: 10,
             message: retry_signal
           }
@@ -248,7 +248,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
     end
   end
 
-  describe "Directive.Error wraps Jido.Error structs" do
+  describe "Directives.Error wraps Jido.Error structs" do
     test "action can emit error directive with context" do
       agent = ErrorHandlingAgent.new()
 
@@ -262,7 +262,7 @@ defmodule JidoExampleTest.ErrorHandlingTest do
       assert updated_agent.state.domain.error == "Something broke"
       assert updated_agent.state.error_context == :processing
 
-      assert [%Directive.Error{error: error, context: :processing}] = directives
+      assert [%Directives.Error{error: error, context: :processing}] = directives
       assert %Jido.Error.ExecutionError{} = error
       assert error.message == "Something broke"
     end

@@ -16,7 +16,7 @@ defmodule Jido.Middlewares.Retry do
   user-defined middleware sitting upstream of this one.
 
   Retry pattern-matches the chain return: it fires only on `{:error, _}`
-  returns, never on `%Directive.Error{}` directives that user code emits
+  returns, never on `%Directives.Error{}` directives that user code emits
   for logging on the success path.
   """
 

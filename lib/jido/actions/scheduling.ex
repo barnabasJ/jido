@@ -18,7 +18,7 @@ defmodule Jido.Actions.Scheduling do
       end
   """
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Signal
 
   defmodule ScheduleSignal do
@@ -65,7 +65,7 @@ defmodule Jido.Actions.Scheduling do
           _ctx
         ) do
       signal = Signal.new!(type, payload, source: source)
-      directive = Directive.schedule(delay, signal)
+      directive = Directives.schedule(delay, signal)
       {:ok, %{scheduled_for_ms: delay, signal_type: type}, [directive]}
     end
   end
@@ -109,7 +109,7 @@ defmodule Jido.Actions.Scheduling do
           _ctx
         ) do
       signal = Signal.new!(type, %{timeout_id: id}, source: "/timeout")
-      directive = Directive.schedule(timeout, signal)
+      directive = Directives.schedule(timeout, signal)
       {:ok, %{timeout_set: id, expires_in_ms: timeout}, [directive]}
     end
   end
@@ -175,7 +175,7 @@ defmodule Jido.Actions.Scheduling do
       signal = Signal.new!(type, payload, source: "/cron")
       opts = if job_id, do: [job_id: job_id], else: []
       opts = if tz, do: Keyword.put(opts, :timezone, tz), else: opts
-      directive = Directive.cron(cron_expr, signal, opts)
+      directive = Directives.cron(cron_expr, signal, opts)
       {:ok, %{cron_scheduled: cron_expr, job_id: job_id}, [directive]}
     end
   end
@@ -202,7 +202,7 @@ defmodule Jido.Actions.Scheduling do
     end
 
     def run(%Jido.Signal{data: %{job_id: job_id}}, _slice, _opts, _ctx) do
-      directive = Directive.cron_cancel(job_id)
+      directive = Directives.cron_cancel(job_id)
       {:ok, %{cancelled_job: job_id}, [directive]}
     end
   end

@@ -102,7 +102,7 @@ defmodule Jido.Agent do
     ]
 
   alias Jido.Agent
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Agent.State, as: StateHelper
   alias Jido.Error
   alias Jido.Instruction
@@ -224,7 +224,7 @@ defmodule Jido.Agent do
   @type action :: module() | {module(), map()} | Instruction.t() | [action()]
 
   # Directive types (external effects only - never modify agent state)
-  @type directive :: Directive.t()
+  @type directive :: Directives.t()
 
   @type agent_result :: {:ok, t()} | {:error, Error.t()}
   @type cmd_result :: {:ok, t(), [directive()]} | {:error, term()}
@@ -259,7 +259,7 @@ defmodule Jido.Agent do
       @behaviour Jido.Agent
 
       alias Jido.Agent
-      alias Jido.Agent.Directive, as: AgentDirective
+      alias Jido.Directives, as: AgentDirective
       alias Jido.Agent.SliceUpdate
       alias Jido.Agent.State, as: AgentState
       alias Jido.Instruction

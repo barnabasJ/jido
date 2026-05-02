@@ -84,7 +84,7 @@ defmodule Jido.Exec do
         }
 
   # Execution result types — see ADR 0018
-  @type exec_success :: {:ok, map(), [Jido.Agent.Directive.t()]}
+  @type exec_success :: {:ok, map(), [Jido.Directives.t()]}
   @type exec_error :: {:error, term()}
 
   @type exec_result :: exec_success | exec_error

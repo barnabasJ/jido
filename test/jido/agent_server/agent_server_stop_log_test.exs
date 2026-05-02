@@ -3,7 +3,7 @@ defmodule JidoTest.AgentServerStopLogTest do
 
   import ExUnit.CaptureLog
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Signal
 
@@ -17,7 +17,7 @@ defmodule JidoTest.AgentServerStopLogTest do
     end
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, [%Directive.Stop{reason: :normal}]}
+      {:ok, %{}, [%Directives.Stop{reason: :normal}]}
     end
   end
 

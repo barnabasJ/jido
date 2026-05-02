@@ -72,7 +72,7 @@ defprotocol Jido.AgentServer.DirectiveExec do
 
   ## Example Implementation
 
-      defimpl Jido.AgentServer.DirectiveExec, for: MyApp.Directive.CallLLM do
+      defimpl Jido.AgentServer.DirectiveExec, for: MyApp.Directives.CallLLM do
         def exec(%{model: model, prompt: prompt}, _input_signal, state) do
           agent_pid = self()
 

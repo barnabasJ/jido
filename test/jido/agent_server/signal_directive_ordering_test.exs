@@ -25,7 +25,7 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
       name "step1"
     end
 
-    alias Jido.Agent.Directive
+    alias Jido.Directives
     alias Jido.Signal
 
     def run(_signal, slice, _opts, _ctx) do
@@ -36,7 +36,7 @@ defmodule JidoTest.AgentServer.SignalDirectiveOrderingTest do
       # processed in a later mailbox turn by SetFollowupKeyAction.
       followup = Signal.new!(%{type: "step1.followup", source: "/test", data: %{}})
 
-      {:ok, Map.put(slice, :step1_cmd_ran, true), [Directive.emit(followup)]}
+      {:ok, Map.put(slice, :step1_cmd_ran, true), [Directives.emit(followup)]}
     end
   end
 

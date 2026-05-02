@@ -1,7 +1,7 @@
 defmodule JidoTest.AgentServer.DirectiveExecTest do
   use JidoTest.Case, async: true
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.AgentServer.{DirectiveExec, Options, State}
   alias Jido.Signal
@@ -44,16 +44,16 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       schema reason: [type: :any, default: :normal]
     end
 
-    alias Jido.Agent.Directive
+    alias Jido.Directives
 
     def run(%Jido.Signal{data: %{reason: reason}}, %{observer_pid: observer_pid}, _opts, _ctx)
         when is_pid(observer_pid) do
       send(observer_pid, {:child_stop_signal_received, reason})
-      {:ok, %{stop_reason: reason}, [%Directive.Stop{reason: reason}]}
+      {:ok, %{stop_reason: reason}, [%Directives.Stop{reason: reason}]}
     end
 
     def run(%Jido.Signal{data: %{reason: reason}}, _slice, _opts, _ctx) do
-      {:ok, %{stop_reason: reason}, [%Directive.Stop{reason: reason}]}
+      {:ok, %{stop_reason: reason}, [%Directives.Stop{reason: reason}]}
     end
   end
 
@@ -151,7 +151,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
     def run(_signal, slice, _opts, _ctx) do
       slice = slice || %{}
-      directive = Directive.emit(%{type: "capture.result.event"})
+      directive = Directives.emit(%{type: "capture.result.event"})
       {:ok, Map.put(slice, :captured_emit, true), [directive]}
     end
   end
@@ -201,7 +201,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       input_signal: input_signal
     } do
       signal = Signal.new!(%{type: "test.emitted", source: "/test", data: %{}})
-      directive = %Directive.Emit{signal: signal, dispatch: nil}
+      directive = %Directives.Emit{signal: signal, dispatch: nil}
 
       assert :ok = DirectiveExec.exec(directive, input_signal, state)
       assert_receive {:signal, %Signal{type: "test.emitted"}}
@@ -212,7 +212,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       input_signal: input_signal
     } do
       signal = Signal.new!(%{type: "test.emitted", source: "/test", data: %{}})
-      directive = %Directive.Emit{signal: signal, dispatch: {:logger, level: :info}}
+      directive = %Directives.Emit{signal: signal, dispatch: {:logger, level: :info}}
 
       assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
@@ -233,7 +233,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       {:ok, state} = State.from_options(opts, agent.__struct__, agent)
 
       signal = Signal.new!(%{type: "test.emitted", source: "/test", data: %{}})
-      directive = %Directive.Emit{signal: signal, dispatch: nil}
+      directive = %Directives.Emit{signal: signal, dispatch: nil}
 
       assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
@@ -245,7 +245,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       input_signal: input_signal
     } do
       error = Jido.Error.validation_error("Test error")
-      directive = %Directive.Error{error: error, context: :test}
+      directive = %Directives.Error{error: error, context: :test}
 
       assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
@@ -275,7 +275,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       {:ok, state} = State.from_options(opts, agent.__struct__, agent)
 
       child_spec = {Task, fn -> :ok end}
-      directive = %Directive.Spawn{child_spec: child_spec, tag: :worker}
+      directive = %Directives.Spawn{child_spec: child_spec, tag: :worker}
 
       assert :ok = DirectiveExec.exec(directive, input_signal, state)
       assert_receive {:spawn_called, ^child_spec}
@@ -301,7 +301,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       {:ok, state} = State.from_options(opts, agent.__struct__, agent)
 
       child_spec = {Task, fn -> :ok end}
-      directive = %Directive.Spawn{child_spec: child_spec, tag: :worker}
+      directive = %Directives.Spawn{child_spec: child_spec, tag: :worker}
 
       assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
@@ -329,7 +329,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       {:ok, state} = State.from_options(opts, agent.__struct__, agent)
 
       child_spec = {Task, fn -> :ok end}
-      directive = %Directive.Spawn{child_spec: child_spec, tag: :worker}
+      directive = %Directives.Spawn{child_spec: child_spec, tag: :worker}
 
       assert :ok = DirectiveExec.exec(directive, input_signal, state)
       assert_receive {:spawn_called, ^child_spec}
@@ -355,7 +355,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       {:ok, state} = State.from_options(opts, agent.__struct__, agent)
 
       child_spec = {Task, fn -> :ok end}
-      directive = %Directive.Spawn{child_spec: child_spec, tag: :worker}
+      directive = %Directives.Spawn{child_spec: child_spec, tag: :worker}
 
       assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end
@@ -368,7 +368,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       instruction = Jido.Instruction.new!(%{action: RunInstructionSuccessAction})
 
       directive =
-        Directive.run_instruction(instruction,
+        Directives.run_instruction(instruction,
           result_signal_type: "test.run_instruction.captured",
           meta: %{source: :test}
         )
@@ -392,7 +392,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       instruction = Jido.Instruction.new!(%{action: RunInstructionFailureAction})
 
       directive =
-        Directive.run_instruction(instruction,
+        Directives.run_instruction(instruction,
           result_signal_type: "test.run_instruction.failure"
         )
 
@@ -419,7 +419,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       instruction = Jido.Instruction.new!(%{action: RunInstructionSuccessAction})
 
       directive =
-        Directive.run_instruction(instruction,
+        Directives.run_instruction(instruction,
           result_signal_type: "test.run_instruction.captured",
           meta: %{source: :test}
         )
@@ -449,7 +449,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
   describe "Schedule directive" do
     test "sends scheduled signal after delay", %{state: state, input_signal: input_signal} do
       signal = Signal.new!(%{type: "scheduled.ping", source: "/test", data: %{}})
-      directive = %Directive.Schedule{delay_ms: 10, message: signal}
+      directive = %Directives.Schedule{delay_ms: 10, message: signal}
 
       assert :ok = DirectiveExec.exec(directive, input_signal, state)
       assert_receive {:scheduled_signal, received_signal}, 100
@@ -457,7 +457,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
     end
 
     test "wraps non-signal message in signal", %{state: state, input_signal: input_signal} do
-      directive = %Directive.Schedule{delay_ms: 10, message: :timeout}
+      directive = %Directives.Schedule{delay_ms: 10, message: :timeout}
 
       assert :ok = DirectiveExec.exec(directive, input_signal, state)
       assert_receive {:scheduled_signal, received_signal}, 100
@@ -468,13 +468,13 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
 
   describe "Stop directive" do
     test "returns stop tuple with reason", %{state: state, input_signal: input_signal} do
-      directive = %Directive.Stop{reason: :normal}
+      directive = %Directives.Stop{reason: :normal}
 
       assert {:stop, :normal} = DirectiveExec.exec(directive, input_signal, state)
     end
 
     test "returns stop tuple with custom reason", %{state: state, input_signal: input_signal} do
-      directive = %Directive.Stop{reason: {:shutdown, :user_requested}}
+      directive = %Directives.Stop{reason: {:shutdown, :user_requested}}
 
       assert {:stop, {:shutdown, :user_requested}} =
                DirectiveExec.exec(directive, input_signal, state)
@@ -487,7 +487,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
     } do
       parent_pid = start_server(%{jido: jido}, TestAgent, id: "spawn-cascade-parent")
 
-      directive = %Directive.SpawnAgent{
+      directive = %Directives.SpawnAgent{
         agent: TestAgent,
         tag: :child_worker,
         opts: %{},
@@ -516,7 +516,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
     } do
       parent_pid = start_server(%{jido: jido}, TestAgent, id: "spawn-strict-parent")
 
-      directive = %Directive.SpawnAgent{
+      directive = %Directives.SpawnAgent{
         agent: TestAgent,
         tag: :strict_child,
         opts: %{},
@@ -542,7 +542,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
     end
 
     test "handles spawn failure gracefully", %{state: state, input_signal: input_signal} do
-      directive = %Directive.SpawnAgent{
+      directive = %Directives.SpawnAgent{
         agent: NonExistentAgentModule,
         tag: :failing_child,
         opts: %{},
@@ -557,7 +557,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       state: state,
       input_signal: input_signal
     } do
-      directive = %Directive.SpawnAgent{
+      directive = %Directives.SpawnAgent{
         agent: "not_a_module_or_struct",
         tag: :unknown_agent,
         opts: %{},
@@ -571,7 +571,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       state: state,
       input_signal: input_signal
     } do
-      directive = %Directive.SpawnAgent{
+      directive = %Directives.SpawnAgent{
         agent: TestAgent,
         tag: :managed_child,
         opts: %{storage: Jido.Storage.ETS, idle_timeout: 5_000},
@@ -586,7 +586,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       state: state,
       input_signal: input_signal
     } do
-      directive = %Directive.SpawnAgent{
+      directive = %Directives.SpawnAgent{
         agent: TestAgent,
         tag: :bad_opts_child,
         opts: [:not_a_map],
@@ -602,7 +602,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
     test "sends jido.agent.stop to child", %{jido: jido} do
       parent_pid = start_server(%{jido: jido}, StopAwareAgent, id: "stop-aware-parent-1")
 
-      spawn_directive = %Directive.SpawnAgent{
+      spawn_directive = %Directives.SpawnAgent{
         agent: StopAwareAgent,
         tag: :stop_signal_child,
         opts: %{initial_state: %{observer_pid: self()}},
@@ -614,7 +614,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       child_pid = await_child_pid(parent_pid, :stop_signal_child)
       child_ref = Process.monitor(child_pid)
 
-      stop_directive = %Directive.StopChild{tag: :stop_signal_child, reason: :shutdown}
+      stop_directive = %Directives.StopChild{tag: :stop_signal_child, reason: :shutdown}
       AgentServer.cast(parent_pid, signal_carrying_directive(stop_directive))
 
       assert_receive {:child_stop_signal_received, :shutdown}, 1_000
@@ -624,7 +624,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
     test "wraps custom stop reasons as clean shutdowns", %{jido: jido} do
       parent_pid = start_server(%{jido: jido}, StopAwareAgent, id: "stop-aware-parent-2")
 
-      spawn_directive = %Directive.SpawnAgent{
+      spawn_directive = %Directives.SpawnAgent{
         agent: StopAwareAgent,
         tag: :custom_reason_child,
         opts: %{initial_state: %{observer_pid: self()}},
@@ -636,7 +636,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       child_pid = await_child_pid(parent_pid, :custom_reason_child)
       child_ref = Process.monitor(child_pid)
 
-      stop_directive = %Directive.StopChild{tag: :custom_reason_child, reason: :cleanup}
+      stop_directive = %Directives.StopChild{tag: :custom_reason_child, reason: :cleanup}
       AgentServer.cast(parent_pid, signal_carrying_directive(stop_directive))
 
       assert_receive {:child_stop_signal_received, {:shutdown, :cleanup}}, 1_000
@@ -646,7 +646,7 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
     test "stops existing child", %{jido: jido} do
       parent_pid = start_server(%{jido: jido}, TestAgent, id: "stop-child-parent")
 
-      spawn_directive = %Directive.SpawnAgent{
+      spawn_directive = %Directives.SpawnAgent{
         agent: TestAgent,
         tag: :child_to_stop,
         opts: %{},
@@ -656,14 +656,14 @@ defmodule JidoTest.AgentServer.DirectiveExecTest do
       AgentServer.cast(parent_pid, signal_carrying_directive(spawn_directive))
       child_pid = await_child_pid(parent_pid, :child_to_stop)
 
-      stop_directive = %Directive.StopChild{tag: :child_to_stop, reason: :normal}
+      stop_directive = %Directives.StopChild{tag: :child_to_stop, reason: :normal}
       AgentServer.cast(parent_pid, signal_carrying_directive(stop_directive))
 
       refute_eventually(Process.alive?(child_pid))
     end
 
     test "returns ok when child tag not found", %{state: state, input_signal: input_signal} do
-      directive = %Directive.StopChild{tag: :nonexistent_child, reason: :normal}
+      directive = %Directives.StopChild{tag: :nonexistent_child, reason: :normal}
 
       assert :ok = DirectiveExec.exec(directive, input_signal, state)
     end

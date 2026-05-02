@@ -80,9 +80,9 @@ This is why a child can survive a logical parent death and become orphaned witho
 Emit a `SpawnAgent` directive to create a child agent:
 
 ```elixir
-%Directive.SpawnAgent{agent: ChildAgent, tag: :worker_1}
+%Directives.SpawnAgent{agent: ChildAgent, tag: :worker_1}
 # Or keep the child running across restarts/stops:
-%Directive.SpawnAgent{agent: ChildAgent, tag: :durable_worker, restart: :permanent}
+%Directives.SpawnAgent{agent: ChildAgent, tag: :durable_worker, restart: :permanent}
 ```
 
 `SpawnAgent` is for live tracked child agents. It supports standard child
@@ -119,7 +119,7 @@ The parent:
 Children can emit signals back to their parent:
 
 ```elixir
-Directive.emit_to_parent(agent, signal)
+Directives.emit_to_parent(agent, signal)
 ```
 
 `emit_to_parent/3` only works while the child is currently attached. If the
@@ -143,7 +143,7 @@ When orphaning happens, Jido:
 - preserves the former parent in `state.orphaned_from`
 - preserves the former parent in `agent.state.__orphaned_from__`
 
-If you need to reattach the child, use `Directive.adopt_child/3` from the new
+If you need to reattach the child, use `Directives.adopt_child/3` from the new
 parent. Adoption restores `emit_to_parent/3` and child visibility on the new
 parent, and the current binding is mirrored into `Jido.RuntimeStore` so later
 child restarts come back under the adopted parent as well. See
@@ -152,7 +152,7 @@ child restarts come back under the adopted parent as well. See
 ### Stopping Children
 
 ```elixir
-%Directive.StopChild{tag: :worker_1}
+%Directives.StopChild{tag: :worker_1}
 ```
 
 `SpawnAgent` children default to `restart: :transient`, so `StopChild` cleanly removes

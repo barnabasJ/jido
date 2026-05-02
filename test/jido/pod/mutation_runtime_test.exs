@@ -4,7 +4,7 @@ defmodule JidoTest.Pod.MutationRuntimeTest do
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
   alias Jido.Pod
-  alias Jido.Pod.Directive.StartNode
+  alias Jido.Pod.Directives.StartNode
   alias Jido.Pod.Mutation
   alias Jido.Pod.Topology
   alias Jido.Signal

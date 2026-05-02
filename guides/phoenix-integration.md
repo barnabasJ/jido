@@ -108,7 +108,7 @@ defmodule MyApp.Actions.Increment do
     schema [amount: [type: :integer, default: 1]]
   end
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
 
   def run(%{amount: amount}, context) do
     current = context.state[:count] || 0
@@ -118,7 +118,7 @@ defmodule MyApp.Actions.Increment do
       Jido.Signal.new!("counter.updated", %{count: new_count}, source: "/agent")
 
     {:ok, %{count: new_count}, [
-      Directive.emit(broadcast_signal, {:pubsub, pubsub: MyApp.PubSub, topic: "counter:updates"})
+      Directives.emit(broadcast_signal, {:pubsub, pubsub: MyApp.PubSub, topic: "counter:updates"})
     ]}
   end
 end

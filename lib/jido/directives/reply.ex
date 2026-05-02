@@ -1,4 +1,4 @@
-defmodule Jido.Agent.Directive.Reply do
+defmodule Jido.Directives.Reply do
   @moduledoc """
   Directive that builds a reply signal from the full `%AgentServer.State{}`
   at execution time and dispatches it to the caller of a

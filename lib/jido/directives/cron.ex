@@ -1,4 +1,4 @@
-defmodule Jido.Agent.Directive.Cron do
+defmodule Jido.Directives.Cron do
   @moduledoc """
   Register or update a recurring cron job for this agent.
 
@@ -122,7 +122,7 @@ defmodule Jido.Agent.Directive.Cron do
   end
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Cron do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.Cron do
   @moduledoc false
 
   require Logger
@@ -135,7 +135,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Cron do
         _input_signal,
         state
       ) do
-    case Jido.Agent.Directive.Cron.register_io(state, cron_expr, message, logical_id, tz) do
+    case Jido.Directives.Cron.register_io(state, cron_expr, message, logical_id, tz) do
       {:ok, io_result} ->
         signal =
           CronRegistered.new!(

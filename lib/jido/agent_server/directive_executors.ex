@@ -1,4 +1,4 @@
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Emit do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.Emit do
   @moduledoc false
 
   require Logger
@@ -37,18 +37,18 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Emit do
   end
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Error do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.Error do
   @moduledoc false
 
   # The framework-level error policy is gone (C4 of ADR 0014). Error
   # directives just log and continue; users who need stop-on-error or
   # max-errors semantics write a small middleware that pattern-matches on
-  # `%Directive.Error{}` in the chain result. A formal error-handling
+  # `%Directives.Error{}` in the chain result. A formal error-handling
   # surface lands in a follow-up PR per task 0004 S6.
 
   require Logger
 
-  def exec(%Jido.Agent.Directive.Error{error: error, context: context}, _input_signal, state) do
+  def exec(%Jido.Directives.Error{error: error, context: context}, _input_signal, state) do
     Logger.error("Agent #{state.id}#{format_context(context)}: #{format_error(error)}")
 
     :ok
@@ -61,7 +61,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Error do
   defp format_error(error), do: inspect(error)
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.RunInstruction do
   @moduledoc """
   Pure I/O directive: runs the instruction and emits a result signal of
   type `result_signal_type`. The directive does not call `cmd/2`
@@ -117,7 +117,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.RunInstruction
   end
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Spawn do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.Spawn do
   @moduledoc false
 
   require Logger
@@ -152,7 +152,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Spawn do
   end
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Schedule do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.Schedule do
   @moduledoc false
 
   alias Jido.AgentServer.Signal.Scheduled
@@ -182,7 +182,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Schedule do
   end
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.SpawnAgent do
   @moduledoc """
   Pure I/O directive: spawns the child via the agent supervisor and
   persists the parent ⇒ child relationship in `Jido.RuntimeStore`. The
@@ -199,7 +199,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
 
   require Logger
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.RuntimeStore
 
@@ -211,8 +211,8 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
         _input_signal,
         state
       ) do
-    with :ok <- Directive.validate_restart_policy(restart),
-         :ok <- Directive.validate_spawn_agent_opts(opts) do
+    with :ok <- Directives.validate_restart_policy(restart),
+         :ok <- Directives.validate_spawn_agent_opts(opts) do
       spawn_child(state, agent, tag, opts, meta, restart)
     else
       {:error, reason} ->
@@ -303,7 +303,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnAgent do
   defp maybe_put_jido(opts, jido), do: Map.put(opts, :jido, jido)
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.AdoptChild do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.AdoptChild do
   @moduledoc """
   Pure I/O directive: pushes a fresh `%ParentRef{}` into the live child
   via `AgentServer.adopt_parent/2`. The child's
@@ -384,7 +384,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.AdoptChild do
   end
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.StopChild do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.StopChild do
   @moduledoc false
 
   alias Jido.AgentServer.StopChildRuntime
@@ -394,7 +394,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.StopChild do
   end
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Stop do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.Stop do
   @moduledoc false
 
   def exec(%{reason: reason}, _input_signal, _state) do
@@ -402,12 +402,12 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Stop do
   end
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnManagedAgent do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.SpawnManagedAgent do
   @moduledoc false
 
   require Logger
 
-  alias Jido.Agent.Directive.SpawnManagedAgent
+  alias Jido.Directives.SpawnManagedAgent
 
   # Delegate to SpawnManagedAgent.execute/2 (the single source of truth for
   # "spawn via InstanceManager with a parent ref") and discard the pid to
@@ -430,7 +430,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.SpawnManagedAg
   end
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Reply do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.Reply do
   @moduledoc false
 
   require Logger
@@ -447,7 +447,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.Reply do
   end
 
   def exec(
-        %Jido.Agent.Directive.Reply{
+        %Jido.Directives.Reply{
           input_signal: input,
           reply_type: reply_type,
           error_type: error_type,

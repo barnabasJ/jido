@@ -1,6 +1,6 @@
 defmodule Jido.AgentServer.Signal.CronCancelled do
   @moduledoc """
-  Synthesized by the `Jido.Agent.Directive.CronCancel` impl after the
+  Synthesized by the `Jido.Directives.CronCancel` impl after the
   scheduler job is cancelled and the spec map is persisted, then cast
   back to the agent so the cascade callback
   `maybe_track_cron_cancelled/2` can drop the entry from

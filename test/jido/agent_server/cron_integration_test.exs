@@ -6,7 +6,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
   @moduletag :integration
   @moduletag capture_log: true
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Signal
 
@@ -41,7 +41,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
       message = Map.get(params, :message, Signal.new!(%{type: "cron.tick", source: "/test"}))
       timezone = Map.get(params, :timezone)
 
-      directive = Directive.cron(cron_expr, message, job_id: job_id, timezone: timezone)
+      directive = Directives.cron(cron_expr, message, job_id: job_id, timezone: timezone)
       {:ok, %{}, [directive]}
     end
   end
@@ -56,7 +56,7 @@ defmodule JidoTest.AgentServer.CronIntegrationTest do
     end
 
     def run(%Jido.Signal{data: %{job_id: job_id}}, _slice, _opts, _ctx) do
-      {:ok, %{}, [Directive.cron_cancel(job_id)]}
+      {:ok, %{}, [Directives.cron_cancel(job_id)]}
     end
   end
 

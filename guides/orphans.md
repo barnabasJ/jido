@@ -54,7 +54,7 @@ When a child becomes orphaned:
 - `agent.state.__parent__` is cleared
 - `state.orphaned_from` is populated with the former `ParentRef`
 - `agent.state.__orphaned_from__` is populated with the same former `ParentRef`
-- `Directive.emit_to_parent/3` starts returning `nil`
+- `Directives.emit_to_parent/3` starts returning `nil`
 
 If the child uses `on_parent_death: :emit_orphan`, it also receives `jido.agent.orphaned` with:
 
@@ -69,7 +69,7 @@ The orphan signal is delivered **after** detachment, so the handler sees orphane
 ## Spawning a Recoverable Child
 
 ```elixir
-Directive.spawn_agent(MyWorker, :worker,
+Directives.spawn_agent(MyWorker, :worker,
   opts: %{
     id: "worker-123",
     on_parent_death: :emit_orphan
@@ -82,7 +82,7 @@ While attached, the child can respond normally:
 
 ```elixir
 reply = Signal.new!("worker.result", %{ok: true}, source: "/worker")
-Directive.emit_to_parent(%{state: context.state}, reply)
+Directives.emit_to_parent(%{state: context.state}, reply)
 ```
 
 After orphaning, the same helper returns `nil` until the child is explicitly adopted.
@@ -117,7 +117,7 @@ defmodule HandleOrphanedAction do
 
   def run(params, context) do
     former_parent = Map.get(context.state, :__orphaned_from__)
-    can_reply = Directive.emit_to_parent(%{state: context.state}, %{type: "noop"}) != nil
+    can_reply = Directives.emit_to_parent(%{state: context.state}, %{type: "noop"}) != nil
 
     {:ok,
      %{
@@ -134,10 +134,10 @@ end
 
 ## Adoption Is Explicit
 
-Use `Directive.adopt_child/3` to attach an orphaned or unattached child to the current parent:
+Use `Directives.adopt_child/3` to attach an orphaned or unattached child to the current parent:
 
 ```elixir
-Directive.adopt_child("worker-123", :recovered_worker, meta: %{restored: true})
+Directives.adopt_child("worker-123", :recovered_worker, meta: %{restored: true})
 ```
 
 Adoption:

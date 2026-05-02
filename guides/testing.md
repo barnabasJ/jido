@@ -95,7 +95,7 @@ defmodule CounterAgentTest do
 
       {agent, directives} = CounterAgent.cmd(agent, NotifyAction)
 
-      assert [%Jido.Agent.Directive.Emit{signal: signal}] = directives
+      assert [%Jido.Directives.Emit{signal: signal}] = directives
       assert signal.type == "counter.updated"
     end
   end
@@ -524,9 +524,9 @@ Good orphan lifecycle tests should verify:
 
 - `state.parent` and `agent.state.__parent__` are cleared
 - `state.orphaned_from` and `agent.state.__orphaned_from__` are populated
-- `Directive.emit_to_parent/3` returns `nil` while orphaned
+- `Directives.emit_to_parent/3` returns `nil` while orphaned
 - `jido.agent.orphaned` handlers see detached state, not stale parent routing
-- `Directive.adopt_child/3` restores child visibility and child-to-parent messaging
+- `Directives.adopt_child/3` restores child visibility and child-to-parent messaging
 - an adopted child restart still binds to the adopted parent, not stale startup metadata
 
 For a full acceptance test that reads like user documentation, see
@@ -591,7 +591,7 @@ test "returns error directive for invalid action", %{jido: _jido} do
 
   {_agent, directives} = MyAgent.cmd(agent, {InvalidAction, %{}})
 
-  assert [%Jido.Agent.Directive.Error{context: :instruction}] = directives
+  assert [%Jido.Directives.Error{context: :instruction}] = directives
 end
 ```
 

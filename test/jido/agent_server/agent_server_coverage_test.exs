@@ -46,13 +46,13 @@ defmodule JidoTest.AgentServerCoverageTest do
       schema count: [type: :integer, default: 10]
     end
 
-    alias Jido.Agent.Directive
+    alias Jido.Directives
 
     def run(%Jido.Signal{data: %{count: count}}, _slice, _opts, _ctx) do
       directives =
         for i <- 1..count do
           signal = Jido.Signal.new!("test.emitted.#{i}", %{index: i}, source: "/test")
-          %Directive.Emit{signal: signal}
+          %Directives.Emit{signal: signal}
         end
 
       {:ok, %{directive_count: count}, directives}

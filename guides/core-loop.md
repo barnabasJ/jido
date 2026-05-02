@@ -127,7 +127,7 @@ Signal → AgentServer → Agent.cmd/2 → {agent, directives} → DirectiveExec
 agent = MyAgent.new()
 {agent, directives} = MyAgent.cmd(agent, MyAction)
 assert agent.state.count == 1
-assert match?([%Directive.Emit{}], directives)
+assert match?([%Directives.Emit{}], directives)
 ```
 
 **Predictability**: No hidden state mutations. The agent you get back is complete.

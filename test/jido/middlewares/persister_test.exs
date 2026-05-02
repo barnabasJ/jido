@@ -65,7 +65,7 @@ defmodule JidoTest.Middleware.PersisterTest do
                )
 
       assert Enum.any?(dirs, fn d ->
-               match?(%Jido.Agent.Directive.Emit{}, d) and
+               match?(%Jido.Directives.Emit{}, d) and
                  d.signal.type == "jido.persist.thaw.failed"
              end)
     end
@@ -89,7 +89,7 @@ defmodule JidoTest.Middleware.PersisterTest do
       assert final_ctx.agent.state.app.counter == 99
 
       assert Enum.any?(dirs, fn d ->
-               match?(%Jido.Agent.Directive.Emit{}, d) and
+               match?(%Jido.Directives.Emit{}, d) and
                  d.signal.type == "jido.persist.thaw.completed"
              end)
     end
@@ -146,7 +146,7 @@ defmodule JidoTest.Middleware.PersisterTest do
                )
 
       assert Enum.any?(dirs, fn d ->
-               match?(%Jido.Agent.Directive.Emit{}, d) and
+               match?(%Jido.Directives.Emit{}, d) and
                  d.signal.type == "jido.persist.hibernate.completed"
              end)
 

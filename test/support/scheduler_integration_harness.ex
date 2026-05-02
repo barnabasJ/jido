@@ -1,7 +1,7 @@
 defmodule JidoTest.Support.SchedulerIntegrationHarness do
   @moduledoc false
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Scheduler
   alias Jido.Signal
@@ -37,7 +37,7 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
       timezone = Map.get(params, :timezone)
       message = Map.get(params, :message, Signal.new!(%{type: "cron.tick", source: "/test"}))
 
-      directive = Directive.cron(cron_expr, message, job_id: job_id, timezone: timezone)
+      directive = Directives.cron(cron_expr, message, job_id: job_id, timezone: timezone)
       {:ok, slice, [directive]}
     end
   end
@@ -52,7 +52,7 @@ defmodule JidoTest.Support.SchedulerIntegrationHarness do
     end
 
     def run(%Jido.Signal{data: %{job_id: job_id}}, slice, _opts, _ctx) do
-      {:ok, slice, [Directive.cron_cancel(job_id)]}
+      {:ok, slice, [Directives.cron_cancel(job_id)]}
     end
   end
 

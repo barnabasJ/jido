@@ -3,7 +3,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
   Example test demonstrating the Emit directive for domain events.
 
   This test shows:
-  - How actions emit signals via Directive.Emit
+  - How actions emit signals via Directives.Emit
   - How to configure dispatch targets (pid, pubsub, etc.)
   - Event-driven patterns where agents produce domain events
   - Combining state updates with signal emission
@@ -15,7 +15,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Signal
   alias JidoTest.SignalCollector
@@ -57,7 +57,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         )
 
       {:ok, %{orders: [order | orders], last_order_id: order.id},
-       [%Directive.Emit{signal: event_signal}]}
+       [%Directives.Emit{signal: event_signal}]}
     end
   end
 
@@ -83,7 +83,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
         )
 
       {:ok, %{last_payment: %{order_id: order_id, status: :success}},
-       [%Directive.Emit{signal: payment_signal}]}
+       [%Directives.Emit{signal: payment_signal}]}
     end
   end
 
@@ -100,7 +100,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
       emissions =
         for i <- 1..count do
           signal = Signal.new!("batch.event", %{index: i}, source: "/batch")
-          %Directive.Emit{signal: signal}
+          %Directives.Emit{signal: signal}
         end
 
       {:ok, %{emitted_count: count}, emissions}
@@ -154,7 +154,7 @@ defmodule JidoExampleTest.EmitDirectiveTest do
           source: "/internal-counter"
         )
 
-      {:ok, %{count: new_count}, [Directive.emit(internal_signal)]}
+      {:ok, %{count: new_count}, [Directives.emit(internal_signal)]}
     end
   end
 

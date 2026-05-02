@@ -21,7 +21,7 @@ defmodule Jido.Actions.Control do
       end
   """
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Signal
 
   defmodule Cancel do
@@ -131,7 +131,7 @@ defmodule Jido.Actions.Control do
       final_source = resolve_source(source, original)
 
       out_signal = Signal.new!(final_type, final_payload, source: final_source)
-      directive = Directive.emit_to_pid(out_signal, pid)
+      directive = Directives.emit_to_pid(out_signal, pid)
       {:ok, %{forwarded_to: pid}, [directive]}
     end
 
@@ -191,7 +191,7 @@ defmodule Jido.Actions.Control do
           _ctx
         ) do
       signal = Signal.new!(type, payload, source: source)
-      directive = Directive.emit(signal, {:pubsub, topic: topic})
+      directive = Directives.emit(signal, {:pubsub, topic: topic})
       {:ok, %{broadcast_to: topic}, [directive]}
     end
   end
@@ -247,7 +247,7 @@ defmodule Jido.Actions.Control do
       case extract_reply_to(input) do
         {:ok, pid} ->
           out = Signal.new!(type, payload, source: "/reply")
-          directive = Directive.emit_to_pid(out, pid)
+          directive = Directives.emit_to_pid(out, pid)
           {:ok, %{replied_to: pid}, [directive]}
 
         :error ->

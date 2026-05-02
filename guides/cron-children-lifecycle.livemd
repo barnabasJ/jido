@@ -115,7 +115,7 @@ caller = self()
   )
 
 # Cast a signal carrying a Cron directive.
-cron_directive = %Jido.Agent.Directive.Cron{
+cron_directive = %Jido.Directives.Cron{
   cron: "@hourly",
   message: :tick,
   job_id: :hourly_demo,
@@ -168,7 +168,7 @@ callback prunes the runtime maps.
     once: true
   )
 
-cancel_directive = %Jido.Agent.Directive.CronCancel{job_id: :hourly_demo}
+cancel_directive = %Jido.Directives.CronCancel{job_id: :hourly_demo}
 cancel_sig = Jido.Signal.new!("emit", %{directive: cancel_directive}, source: "/livebook")
 :ok = Jido.AgentServer.cast(pid, cancel_sig)
 
@@ -194,7 +194,7 @@ IO.inspect(final_state, label: "all cron maps clean after cancel cascade")
 
 ## Variations
 
-### `Directive.cron/3` helper
+### `Directives.cron/3` helper
 
 The struct has the canonical shape but you usually build it via the
 helper. Equivalent:
@@ -202,7 +202,7 @@ helper. Equivalent:
 ```elixir
 sig = Jido.Signal.new!("cron.tick", %{}, source: "/livebook")
 
-direct_struct = %Jido.Agent.Directive.Cron{
+direct_struct = %Jido.Directives.Cron{
   cron: "@daily",
   message: sig,
   job_id: :daily_thing,
@@ -210,7 +210,7 @@ direct_struct = %Jido.Agent.Directive.Cron{
 }
 
 via_helper =
-  Jido.Agent.Directive.cron("@daily", sig, job_id: :daily_thing)
+  Jido.Directives.cron("@daily", sig, job_id: :daily_thing)
 
 IO.inspect(direct_struct == via_helper, label: "struct equals helper output")
 ```
@@ -234,7 +234,7 @@ expressions = [
 ]
 
 for expr <- expressions do
-  d = %Jido.Agent.Directive.Cron{cron: expr, message: :test, job_id: nil, timezone: nil}
+  d = %Jido.Directives.Cron{cron: expr, message: :test, job_id: nil, timezone: nil}
   IO.inspect({d.cron, d.timezone}, label: "valid cron expression")
 end
 ```
@@ -246,7 +246,7 @@ zone instead.
 
 ```elixir
 ny =
-  Jido.Agent.Directive.cron(
+  Jido.Directives.cron(
     "0 9 * * MON",
     :weekly_kickoff,
     job_id: :monday_9am_ny,
@@ -265,7 +265,7 @@ cascade callback inserts the child into `state.children`. The window
 between "directive runs" and "child is tracked" is the async gap.
 
 ```elixir
-spawn_directive = %Jido.Agent.Directive.SpawnAgent{
+spawn_directive = %Jido.Directives.SpawnAgent{
   agent: HarnessAgent,
   tag: :child_a,
   opts: %{},
@@ -309,7 +309,7 @@ child is running and emits the signal.
 {:ok, orphan_pid} = Demo.Jido.start_agent(HarnessAgent, id: "ccl-orphan-target")
 :ok = Jido.AgentServer.await_ready(orphan_pid)
 
-adopt_directive = %Jido.Agent.Directive.AdoptChild{
+adopt_directive = %Jido.Directives.AdoptChild{
   child: orphan_pid,
   tag: :adopted_one,
   meta: %{}

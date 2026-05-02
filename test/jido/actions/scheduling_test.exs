@@ -2,7 +2,7 @@ defmodule JidoTest.Actions.SchedulingTest do
   use ExUnit.Case, async: true
 
   alias Jido.Actions.Scheduling
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Signal
 
   defp sig(type, data) do
@@ -22,7 +22,7 @@ defmodule JidoTest.Actions.SchedulingTest do
         Scheduling.ScheduleSignal.run(sig("schedule_signal", data), %{}, %{}, %{})
 
       assert result == %{scheduled_for_ms: 5000, signal_type: "work.check"}
-      assert %Directive.Schedule{} = directive
+      assert %Directives.Schedule{} = directive
       assert directive.delay_ms == 5000
       assert directive.message.type == "work.check"
       assert directive.message.data == %{attempt: 1}
@@ -46,7 +46,7 @@ defmodule JidoTest.Actions.SchedulingTest do
         Scheduling.ScheduleTimeout.run(sig("schedule_timeout", data), %{}, %{}, %{})
 
       assert result == %{timeout_set: :work_deadline, expires_in_ms: 30_000}
-      assert %Directive.Schedule{} = directive
+      assert %Directives.Schedule{} = directive
       assert directive.delay_ms == 30_000
       assert directive.message.type == "agent.timeout"
       assert directive.message.data == %{timeout_id: :work_deadline}
@@ -76,7 +76,7 @@ defmodule JidoTest.Actions.SchedulingTest do
         Scheduling.ScheduleCron.run(sig("schedule_cron", data), %{}, %{}, %{})
 
       assert result == %{cron_scheduled: "* * * * *", job_id: :heartbeat}
-      assert %Directive.Cron{} = directive
+      assert %Directives.Cron{} = directive
       assert directive.cron == "* * * * *"
       assert directive.job_id == :heartbeat
       assert directive.message.type == "agent.heartbeat"
@@ -106,7 +106,7 @@ defmodule JidoTest.Actions.SchedulingTest do
         Scheduling.CancelCron.run(sig("cancel_cron", data), %{}, %{}, %{})
 
       assert result == %{cancelled_job: :heartbeat}
-      assert %Directive.CronCancel{} = directive
+      assert %Directives.CronCancel{} = directive
       assert directive.job_id == :heartbeat
     end
   end

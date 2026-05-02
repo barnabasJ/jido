@@ -365,7 +365,7 @@ defmodule JidoTest.AgentTest do
       {:ok, updated, directives} = TestAgents.Basic.cmd(agent, TestActions.EmitAction)
 
       assert updated.state.domain.emitted == true
-      assert [%Jido.Agent.Directive.Emit{signal: signal}] = directives
+      assert [%Jido.Directives.Emit{signal: signal}] = directives
       assert signal.type == "test.emitted"
     end
 
@@ -375,7 +375,7 @@ defmodule JidoTest.AgentTest do
 
       assert updated.state.domain.triggered == true
       assert length(directives) == 2
-      assert [%Jido.Agent.Directive.Emit{}, %Jido.Agent.Directive.Schedule{}] = directives
+      assert [%Jido.Directives.Emit{}, %Jido.Directives.Schedule{}] = directives
     end
 
     test "SliceUpdate writes multiple slices in one action turn" do

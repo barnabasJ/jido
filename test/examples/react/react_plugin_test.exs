@@ -16,10 +16,10 @@ defmodule JidoExampleTest.ReactPluginTest do
   ## Primitives used
 
   - Plugin surface: `:react` slice, actions, `signal_routes/1`.
-  - Self-dispatch: `%Jido.Agent.Directive.Emit{dispatch: nil}` falls back to
+  - Self-dispatch: `%Jido.Directives.Emit{dispatch: nil}` falls back to
     `send(self(), {:signal, ...})` in `directive_executors`, re-entering the
     mailbox and re-routing via `signal_router`. Load-bearing for the loop.
-  - Async tool calls: `%Jido.Agent.Directive.SpawnTask{task, timeout,
+  - Async tool calls: `%Jido.Directives.SpawnTask{task, timeout,
     on_success, on_timeout}` — a user-defined directive whose executor spawns
     a supervised task with a deadline and emits one of the two signals on
     outcome.
@@ -31,7 +31,7 @@ defmodule JidoExampleTest.ReactPluginTest do
       signal "react.user_query" {query}
         → action ReAct.StartQuery
             writes :react.messages = [{:user, query}]
-            emits %Directive.SpawnTask{
+            emits %Directives.SpawnTask{
               task: fn -> LLM.call(messages) end,
               timeout: 20_000,
               on_success: "ai.llm_response",
@@ -43,22 +43,22 @@ defmodule JidoExampleTest.ReactPluginTest do
             branches:
               * tool_calls present:
                   appends assistant message to :react.messages
-                  emits one %Directive.SpawnTask per tool_call
+                  emits one %Directives.SpawnTask per tool_call
                     on_success: "tool.result"
                     on_timeout: "tool.timeout"
               * final_answer present:
-                  emits %Directive.Emit{signal: "react.done", data: answer}
+                  emits %Directives.Emit{signal: "react.done", data: answer}
                   (user-facing terminal signal)
 
       signal "tool.result" {tool_id, result}
         → action ReAct.ToolCompleted
             appends tool message to :react.messages
-            emits %Directive.SpawnTask (next LLM call — loops back)
+            emits %Directives.SpawnTask (next LLM call — loops back)
 
       signal "tool.timeout" {tool_id}
         → action ReAct.ToolCompleted
             appends tool-timeout message so LLM sees the failure
-            emits %Directive.SpawnTask (next LLM call)
+            emits %Directives.SpawnTask (next LLM call)
 
   Each hop is a signal → route → action → directive → signal chain. No
   continuations, no mid-handler blocking, no strategy escape hatches.
@@ -138,7 +138,7 @@ defmodule JidoExampleTest.ReactPluginTest do
 
       test "global loop budget ends the loop with a stop directive" do
         # LoopTimeout middleware tracks elapsed time on each on_cmd entry
-        # → after 30s emits %Directive.Stop{reason: :loop_budget_exceeded}
+        # → after 30s emits %Directives.Stop{reason: :loop_budget_exceeded}
         # → agent server halts processing, emits jido.agent.stopping
       end
 

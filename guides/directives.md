@@ -20,7 +20,7 @@ Jido has exactly two channels for change, and they don't overlap:
 | Concept | Where it lives | What it does |
 |---------|----------------|--------------|
 | **Action return value** | The slice value (or `%SliceUpdate{}`) returned from an action's `run/2` | Mutates `agent.state` — sole channel |
-| **Directives** | `Jido.Agent.Directive.*` structs returned alongside the slice | Pure I/O — emit signals, spawn processes, schedule messages. Mutate nothing. |
+| **Directives** | `Jido.Directives.*` structs returned alongside the slice | Pure I/O — emit signals, spawn processes, schedule messages. Mutate nothing. |
 
 Reading the action tells you everything that changes in `agent.state`. Reading the directive list tells you everything the runtime will do as I/O. The two lists do not overlap.
 
@@ -28,7 +28,7 @@ Reading the action tells you everything that changes in `agent.state`. Reading t
 def cmd({:notify_user, message}, agent, _context) do
   signal = Jido.Signal.new!("notification.sent", %{message: message}, source: "/agent")
 
-  {:ok, agent, [Directive.emit(signal)]}
+  {:ok, agent, [Directives.emit(signal)]}
 end
 ```
 
@@ -51,37 +51,37 @@ end
 ## Helper Constructors
 
 ```elixir
-alias Jido.Agent.Directive
+alias Jido.Directives
 
 # Emit signals
-Directive.emit(signal)
-Directive.emit(signal, {:pubsub, topic: "events"})
-Directive.emit_to_pid(signal, pid)
-Directive.emit_to_parent(agent, signal)
+Directives.emit(signal)
+Directives.emit(signal, {:pubsub, topic: "events"})
+Directives.emit_to_pid(signal, pid)
+Directives.emit_to_parent(agent, signal)
 
 # Spawn processes
-Directive.spawn(child_spec)
-Directive.spawn_agent(MyWorkerAgent, :worker_1)
-Directive.spawn_agent(MyWorkerAgent, :processor, opts: %{initial_state: %{batch_size: 100}})
-Directive.spawn_agent(MyWorkerAgent, :durable, restart: :permanent)
-Directive.adopt_child("worker-123", :recovered_worker)
-Directive.adopt_child(child_pid, :recovered_worker, meta: %{restored: true})
+Directives.spawn(child_spec)
+Directives.spawn_agent(MyWorkerAgent, :worker_1)
+Directives.spawn_agent(MyWorkerAgent, :processor, opts: %{initial_state: %{batch_size: 100}})
+Directives.spawn_agent(MyWorkerAgent, :durable, restart: :permanent)
+Directives.adopt_child("worker-123", :recovered_worker)
+Directives.adopt_child(child_pid, :recovered_worker, meta: %{restored: true})
 
 # Stop processes
-Directive.stop_child(:worker_1)
-Directive.stop()
-Directive.stop(:shutdown)
+Directives.stop_child(:worker_1)
+Directives.stop()
+Directives.stop(:shutdown)
 
 # Scheduling
-Directive.schedule(5000, :timeout)
-Directive.cron("*/5 * * * *", :tick, job_id: :heartbeat)
-Directive.cron_cancel(:heartbeat)
+Directives.schedule(5000, :timeout)
+Directives.cron("*/5 * * * *", :tick, job_id: :heartbeat)
+Directives.cron_cancel(:heartbeat)
 
 # Runtime instruction execution
-Directive.run_instruction(instruction, result_action: :fsm_instruction_result)
+Directives.run_instruction(instruction, result_action: :fsm_instruction_result)
 
 # Errors
-Directive.error(Jido.Error.validation_error("Invalid input"))
+Directives.error(Jido.Error.validation_error("Invalid input"))
 ```
 
 ## Cron and CronCancel Semantics
@@ -99,7 +99,7 @@ Non-persistent lifecycles keep cron state runtime-only.
 ## RunInstruction
 
 `RunInstruction` is used by strategies that keep `cmd/2` pure. Instead of calling
-`Jido.Exec.run/1` inline, the strategy emits `%Directive.RunInstruction{}` and the
+`Jido.Exec.run/1` inline, the strategy emits `%Directives.RunInstruction{}` and the
 runtime executes it, then routes the result back through `cmd/2` using `result_action`.
 
 ## Spawn vs SpawnAgent
@@ -113,10 +113,10 @@ runtime executes it, then routes the result back through `cmd/2` using `result_a
 
 ```elixir
 # Fire-and-forget task
-Directive.spawn({Task, :start_link, [fn -> send_webhook(url) end]})
+Directives.spawn({Task, :start_link, [fn -> send_webhook(url) end]})
 
 # Tracked child agent
-Directive.spawn_agent(WorkerAgent, :worker_1, opts: %{initial_state: state})
+Directives.spawn_agent(WorkerAgent, :worker_1, opts: %{initial_state: state})
 ```
 
 `SpawnAgent` forwards standard child startup options such as `:id`,
@@ -126,19 +126,19 @@ Directive.spawn_agent(WorkerAgent, :worker_1, opts: %{initial_state: state})
 `:restored_from_storage` are rejected.
 
 `SpawnAgent` children default to `restart: :transient`, which means:
-- `Directive.stop_child/2` cleanly removes them
+- `Directives.stop_child/2` cleanly removes them
 - abnormal exits still restart the child
 - callers can override to `:permanent` or `:temporary` when needed
 
 Children spawned this way can later become orphaned if `on_parent_death` is set
-to `:continue` or `:emit_orphan`. In that case, `Directive.adopt_child/3` is
+to `:continue` or `:emit_orphan`. In that case, `Directives.adopt_child/3` is
 the explicit way to reattach the live child to a new logical parent. Jido keeps
 the active logical binding in `Jido.RuntimeStore`, so child restarts continue
 to use the current parent relationship after adoption.
 
 ## Parent-Aware Communication
 
-`Directive.emit_to_parent/3` is intentionally strict:
+`Directives.emit_to_parent/3` is intentionally strict:
 
 - it works only while `agent.state.__parent__` is present
 - it returns `nil` for standalone agents
@@ -155,7 +155,7 @@ See [Orphans & Adoption](orphans.md) for the full orphan lifecycle.
 External packages can define their own directives:
 
 ```elixir
-defmodule MyApp.Directive.CallLLM do
+defmodule MyApp.Directives.CallLLM do
   defstruct [:model, :prompt, :tag]
 end
 ```
@@ -175,7 +175,7 @@ defmodule ProcessOrderAction do
     schema [order_id: [type: :string, required: true]]
   end
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
 
   def run(%{order_id: order_id}, context) do
     signal = Jido.Signal.new!(
@@ -186,7 +186,7 @@ defmodule ProcessOrderAction do
 
     new_slice = Map.put(context.state, :last_order, order_id)
 
-    {:ok, new_slice, [Directive.emit(signal)]}
+    {:ok, new_slice, [Directives.emit(signal)]}
   end
 end
 ```
@@ -198,6 +198,6 @@ When the agent runs this action via `cmd/2`:
 
 ---
 
-See `Jido.Agent.Directive` moduledoc for the complete API reference.
+See `Jido.Directives` moduledoc for the complete API reference.
 
 **Related guides:** [Orphans & Adoption](orphans.md)

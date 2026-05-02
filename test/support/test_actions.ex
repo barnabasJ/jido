@@ -33,7 +33,7 @@ defmodule JidoTest.TestActions do
   Shared test actions for Jido test suite.
   """
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Agent.SliceUpdate
 
   defmodule BasicAction do
@@ -92,7 +92,7 @@ defmodule JidoTest.TestActions do
 
     def run(_signal, _slice, _opts, _ctx) do
       signal = %{type: "test.emitted", data: %{value: 42}}
-      {:ok, %{emitted: true}, [Directive.emit(signal)]}
+      {:ok, %{emitted: true}, [Directives.emit(signal)]}
     end
   end
 
@@ -107,8 +107,8 @@ defmodule JidoTest.TestActions do
 
     def run(_signal, _slice, _opts, _ctx) do
       effects = [
-        Directive.emit(%{type: "event.1"}),
-        Directive.schedule(1000, :check)
+        Directives.emit(%{type: "event.1"}),
+        Directives.schedule(1000, :check)
       ]
 
       {:ok, %{triggered: true}, effects}

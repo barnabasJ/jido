@@ -61,7 +61,7 @@ defmodule Jido.Middleware do
 
   use Spark.Dsl, default_extensions: [extensions: [Jido.Dsl.Middleware]]
 
-  @typep result :: {:ok, map(), [Jido.Agent.Directive.t()]} | {:error, map(), term()}
+  @typep result :: {:ok, map(), [Jido.Directives.t()]} | {:error, map(), term()}
 
   @callback on_signal(
               signal :: Jido.Signal.t(),

@@ -22,7 +22,7 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
   """
   use JidoTest.Case, async: true
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.AgentServer.DirectiveExec
   alias Jido.Signal
@@ -117,7 +117,7 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
     test "directive does not write state.children; cascade does", %{jido: jido} do
       pid = start_server(%{jido: jido}, HarnessAgent, id: "strict-spawn")
 
-      directive = %Directive.SpawnAgent{
+      directive = %Directives.SpawnAgent{
         agent: HarnessAgent,
         tag: :worker,
         opts: %{},
@@ -143,7 +143,7 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
       parent_pid = start_server(%{jido: jido}, HarnessAgent, id: "strict-adopt-parent")
       orphan_pid = start_server(%{jido: jido}, HarnessAgent, id: "strict-adopt-orphan")
 
-      directive = %Directive.AdoptChild{
+      directive = %Directives.AdoptChild{
         child: orphan_pid,
         tag: :adopted,
         meta: %{}
@@ -167,7 +167,7 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
     test "directive does not write state.cron_*; cascade does", %{jido: jido} do
       pid = start_server(%{jido: jido}, HarnessAgent, id: "strict-cron")
 
-      directive = %Directive.Cron{
+      directive = %Directives.Cron{
         cron: "@hourly",
         message: :tick,
         job_id: :strict_cron,
@@ -212,7 +212,7 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
 
       AgentServer.cast(
         pid,
-        signal_carrying_directive(%Directive.CronCancel{job_id: :strict_cron})
+        signal_carrying_directive(%Directives.CronCancel{job_id: :strict_cron})
       )
     end
   end
@@ -223,7 +223,7 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
 
       AgentServer.cast(
         pid,
-        signal_carrying_directive(%Directive.Cron{
+        signal_carrying_directive(%Directives.Cron{
           cron: "@hourly",
           message: :tick,
           job_id: :cancel_target,
@@ -238,7 +238,7 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
           pattern: "jido.agent.cron.registered"
         )
 
-      directive = %Directive.CronCancel{job_id: :cancel_target}
+      directive = %Directives.CronCancel{job_id: :cancel_target}
 
       # Capture state immediately after the directive runs (still inside
       # the agent process). The directive performs the I/O (cancel +
@@ -287,7 +287,7 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
       instruction = Jido.Instruction.new!(%{action: SuccessAction})
 
       directive =
-        Directive.run_instruction(instruction,
+        Directives.run_instruction(instruction,
           result_signal_type: "test.routed.captured",
           meta: %{}
         )

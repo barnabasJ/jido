@@ -50,8 +50,8 @@ defmodule Jido.Signal.Call do
     `Application.get_env(:jido, :call_timeout_ms, 5_000)`.
   """
 
-  alias Jido.Agent.Directive.Emit
-  alias Jido.Agent.Directive.Reply
+  alias Jido.Directives.Emit
+  alias Jido.Directives.Reply
   alias Jido.AgentServer
   alias Jido.Signal
 
@@ -140,7 +140,7 @@ defmodule Jido.Signal.Call do
   end
 
   @doc """
-  Builds a `%Jido.Agent.Directive.Reply{}` directive that will construct
+  Builds a `%Jido.Directives.Reply{}` directive that will construct
   the reply *at directive execution time* by calling `{m, f, extra_args}`
   with the full `%AgentServer.State{}`.
 

@@ -4,8 +4,8 @@ defmodule Jido.Pod.Mutable do
   alias Jido.Agent
   alias Jido.AgentServer
   alias Jido.Pod
-  alias Jido.Pod.Directive.StartNode
-  alias Jido.Pod.Directive.StopNode
+  alias Jido.Pod.Directives.StartNode
+  alias Jido.Pod.Directives.StopNode
   alias Jido.Pod.Mutation
   alias Jido.Pod.Mutation.Plan
   alias Jido.Pod.Mutation.Planner

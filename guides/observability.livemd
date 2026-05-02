@@ -182,7 +182,7 @@ defmodule Emitter do
   def run(_signal, slice, _opts, _ctx) do
     sig = Jido.Signal.new!("downstream.event", %{}, source: "/x")
 
-    {:ok, slice || %{}, [%Jido.Agent.Directive.Emit{signal: sig}]}
+    {:ok, slice || %{}, [%Jido.Directives.Emit{signal: sig}]}
   end
 end
 
@@ -268,7 +268,7 @@ defmodule TraceCapture do
   def run(input_signal, slice, _opts, _ctx) do
     # Emit a downstream event so we can compare traces.
     sig = Jido.Signal.new!("trace.downstream", %{from: input_signal.id}, source: "/x")
-    {:ok, slice || %{}, [%Jido.Agent.Directive.Emit{signal: sig}]}
+    {:ok, slice || %{}, [%Jido.Directives.Emit{signal: sig}]}
   end
 end
 

@@ -2,7 +2,7 @@ defmodule JidoTest.Actions.LifecycleTest do
   use ExUnit.Case, async: true
 
   alias Jido.Actions.Lifecycle
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer.ParentRef
   alias Jido.Signal
 
@@ -21,7 +21,7 @@ defmodule JidoTest.Actions.LifecycleTest do
         Lifecycle.NotifyParent.run(sig("notify_parent", data), %{}, %{}, %{parent: parent})
 
       assert result == %{notified: true}
-      assert [%Directive.Emit{} = emit] = directives
+      assert [%Directives.Emit{} = emit] = directives
       assert emit.signal.type == "child.done"
       assert emit.signal.data == %{result: 42}
       assert emit.dispatch == {:pid, [target: parent_pid]}
@@ -54,7 +54,7 @@ defmodule JidoTest.Actions.LifecycleTest do
         Lifecycle.NotifyPid.run(sig("notify_pid", data), %{}, %{}, %{})
 
       assert result == %{sent_to: target}
-      assert %Directive.Emit{} = directive
+      assert %Directives.Emit{} = directive
       assert directive.signal.type == "result.ready"
       assert directive.signal.data == %{data: "test"}
       assert {:pid, opts} = directive.dispatch
@@ -96,7 +96,7 @@ defmodule JidoTest.Actions.LifecycleTest do
         Lifecycle.SpawnChild.run(sig("spawn_child", data), %{}, %{}, %{})
 
       assert result == %{spawning: :worker_1}
-      assert %Directive.SpawnAgent{} = directive
+      assert %Directives.SpawnAgent{} = directive
       assert directive.agent == SomeWorker
       assert directive.tag == :worker_1
       assert directive.opts == %{initial_state: %{batch_size: 100}}
@@ -127,7 +127,7 @@ defmodule JidoTest.Actions.LifecycleTest do
         Lifecycle.StopSelf.run(sig("stop_self", %{reason: :normal}), %{}, %{}, %{})
 
       assert result == %{stopping: true, reason: :normal}
-      assert %Directive.Stop{} = directive
+      assert %Directives.Stop{} = directive
       assert directive.reason == :normal
     end
 
@@ -148,7 +148,7 @@ defmodule JidoTest.Actions.LifecycleTest do
         Lifecycle.StopChild.run(sig("stop_child", data), %{}, %{}, %{})
 
       assert result == %{stopping_child: :worker_1, reason: :normal}
-      assert %Directive.StopChild{} = directive
+      assert %Directives.StopChild{} = directive
       assert directive.tag == :worker_1
       assert directive.reason == :normal
     end

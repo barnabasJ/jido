@@ -1,7 +1,7 @@
 defmodule Jido.Pod.Actions.QueryTopology do
   @moduledoc """
   Routed to `jido.pod.query.topology`. Builds the reply via the
-  `%Jido.Agent.Directive.Reply{}` directive so topology resolution runs
+  `%Jido.Directives.Reply{}` directive so topology resolution runs
   with server state access (same pattern as `Jido.Pod.Actions.QueryNodes`).
 
   Reply shapes:

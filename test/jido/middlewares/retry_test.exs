@@ -1,7 +1,7 @@
 defmodule JidoTest.Middleware.RetryTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Middlewares.Retry
 
   defp signal(type \\ "work.start") do
@@ -11,7 +11,7 @@ defmodule JidoTest.Middleware.RetryTest do
 
   describe "on_signal/4 — happy path" do
     test "passes the chain success through verbatim" do
-      next = fn _sig, ctx -> {:ok, ctx, [%Directive.Emit{signal: signal("ok")}]} end
+      next = fn _sig, ctx -> {:ok, ctx, [%Directives.Emit{signal: signal("ok")}]} end
 
       assert {:ok, %{} = _ctx, dirs} =
                Retry.on_signal(signal(), %{}, %{max_attempts: 3}, next)
@@ -27,7 +27,7 @@ defmodule JidoTest.Middleware.RetryTest do
 
         # Action emits an %Error{} directive on the success path for log/audit;
         # the chain itself returned {:ok, _, _}. Retry must not fire here.
-        {:ok, ctx, [%Directive.Error{error: %{reason: :logged_for_audit}}]}
+        {:ok, ctx, [%Directives.Error{error: %{reason: :logged_for_audit}}]}
       end
 
       assert {:ok, _ctx, dirs} =
@@ -35,7 +35,7 @@ defmodule JidoTest.Middleware.RetryTest do
 
       # Single attempt; the audit-style error directive is irrelevant to Retry.
       assert :counters.get(counter, 1) == 1
-      assert [%Directive.Error{}] = dirs
+      assert [%Directives.Error{}] = dirs
     end
   end
 
@@ -50,7 +50,7 @@ defmodule JidoTest.Middleware.RetryTest do
         if n < 2 do
           {:error, ctx, :transient}
         else
-          {:ok, ctx, [%Directive.Emit{signal: signal("done")}]}
+          {:ok, ctx, [%Directives.Emit{signal: signal("done")}]}
         end
       end
 
@@ -59,7 +59,7 @@ defmodule JidoTest.Middleware.RetryTest do
 
       # Third attempt succeeded; observable through the success directive list.
       assert length(dirs) == 1
-      assert hd(dirs).__struct__ == Directive.Emit
+      assert hd(dirs).__struct__ == Directives.Emit
       assert :counters.get(counter, 1) == 3
     end
   end

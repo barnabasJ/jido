@@ -1,4 +1,4 @@
-defmodule Jido.Pod.Directive.StopNode do
+defmodule Jido.Pod.Directives.StopNode do
   @moduledoc false
 
   alias Jido.Pod.Mutation

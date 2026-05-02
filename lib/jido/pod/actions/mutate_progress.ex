@@ -1,8 +1,8 @@
 defmodule Jido.Pod.Actions.MutateProgress do
   @moduledoc false
 
-  alias Jido.Pod.Directive.StartNode
-  alias Jido.Pod.Directive.StopNode
+  alias Jido.Pod.Directives.StartNode
+  alias Jido.Pod.Directives.StopNode
   alias Jido.Pod.Mutation.Plan
   alias Jido.Pod.Mutation.Report
 

@@ -1,7 +1,7 @@
 defmodule Jido.Pod.Actions.QueryNodes do
   @moduledoc """
   Routed to `jido.pod.query.nodes`. Translates the query signal into a
-  `%Jido.Agent.Directive.Reply{}` that — at directive execution time —
+  `%Jido.Directives.Reply{}` that — at directive execution time —
   builds the reply from the full `%AgentServer.State{}` via
   `Jido.Pod.Queries.build_nodes_reply/1`.
 

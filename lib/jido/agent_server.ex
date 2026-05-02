@@ -146,7 +146,7 @@ defmodule Jido.AgentServer do
   identity-transition signals (`jido.agent.identity.*`).
 
   Reattachment is explicit. A replacement parent can adopt the live child with
-  `Jido.Agent.Directive.adopt_child/3`, which refreshes the child's live parent
+  `Jido.Directives.adopt_child/3`, which refreshes the child's live parent
   reference and monitoring relationship.
 
   Relationship bindings are mirrored into `Jido.RuntimeStore`, so when a child
@@ -185,7 +185,7 @@ defmodule Jido.AgentServer do
     StopChildRuntime
   }
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
 
   alias Jido.AgentServer.Signal.{
     ChildAdopted,
@@ -711,7 +711,7 @@ defmodule Jido.AgentServer do
   @doc """
   Low-level primitive: imperatively attach a running agent to a parent ref.
 
-  Used internally by the `%Jido.Agent.Directive.AdoptChild{}` executor to
+  Used internally by the `%Jido.Directives.AdoptChild{}` executor to
   push the parent relationship into the child's live `state.parent`.
   Prefer booting the child with `parent: parent_ref` in its AgentServer
   options (`State.from_options/3` consumes it) so `post_init` can emit
@@ -734,13 +734,13 @@ defmodule Jido.AgentServer do
   end
 
   @doc """
-  Imperative counterpart to `Jido.Agent.Directive.adopt_child/3`.
+  Imperative counterpart to `Jido.Directives.adopt_child/3`.
 
   Adopts a live child into this agent's logical child map. Updates both
   the child's live parent reference and the manager's tracked
   `state.children` map before returning.
 
-  Prefer returning a `%Jido.Agent.Directive.AdoptChild{}` from an action
+  Prefer returning a `%Jido.Directives.AdoptChild{}` from an action
   when the initiator is already inside an agent — this function is for
   external callers (tests, supervisors, LiveView mounts) that need to
   attach children from outside the signal/directive pipeline.
@@ -762,7 +762,7 @@ defmodule Jido.AgentServer do
   @doc """
   Requests graceful termination of a tracked child agent.
 
-  This is the runtime counterpart to `Directive.stop_child/2`.
+  This is the runtime counterpart to `Directives.stop_child/2`.
   """
   @spec stop_child(server(), term(), term()) :: :ok | {:error, term()}
   def stop_child(server, tag, reason \\ :normal) do
@@ -1829,7 +1829,7 @@ defmodule Jido.AgentServer do
     State.add_child(state, tag, child_info)
   end
 
-  # Cascade for `Jido.Agent.Directive.Cron`'s synthetic
+  # Cascade for `Jido.Directives.Cron`'s synthetic
   # `jido.agent.cron.registered` signal. The directive does all the I/O
   # (start the scheduler job, monitor it, persist the spec) and casts
   # this signal carrying the resulting pid + monitor_ref + spec; the
@@ -2091,7 +2091,7 @@ defmodule Jido.AgentServer do
   # error, `cmd/2` returns the input agent unchanged, which is exactly
   # `ctx.agent` at this layer (containing prior middleware mutations).
   #
-  # `%Directive.Error{}` is no longer manufactured by the cmd reducer or
+  # `%Directives.Error{}` is no longer manufactured by the cmd reducer or
   # by routing failures. User code is free to emit one on the success
   # path for log/audit purposes.
   defp core_next(%Signal{} = signal, ctx) do
@@ -2129,7 +2129,7 @@ defmodule Jido.AgentServer do
   end
 
   # Concrete routing failures (invalid pattern, missing route, ...)
-  # previously emitted a `%Directive.Error{}` that `DirectiveExec.Error`
+  # previously emitted a `%Directives.Error{}` that `DirectiveExec.Error`
   # logged on its success-path execution. The chain now short-circuits
   # before directives run, so log inline to preserve the operator-visible
   # signal.
@@ -2391,7 +2391,7 @@ defmodule Jido.AgentServer do
   # turns yet. On failure we drop the persisted spec so a broken entry
   # doesn't block boot.
   defp register_restored_cron_runtime(state, job_id, cron_expr, message, timezone) do
-    case Directive.Cron.register_io(state, cron_expr, message, job_id, timezone) do
+    case Directives.Cron.register_io(state, cron_expr, message, job_id, timezone) do
       {:ok, io_result} ->
         commit_cron_io_result(state, io_result, cron_expr)
 

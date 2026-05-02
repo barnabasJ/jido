@@ -175,8 +175,8 @@ Changes:
 - **`Jido.Plugin.Persister`** (new in C5) owns thaw AND hibernate through the full Plugin shape:
   - **Slice** at `path: :persister`: schema has `storage`, `persistence_key`, `transforms`, `status`. Seeded with per-instance config via auto-merge when declared in `plugins:` (compile-time or via `Options.plugins:`).
   - **Middleware half**: thin bridge. Principle applies: "middleware has whole-agent-state visibility; slices only their own." For Persister specifically the middleware half might be near-empty pass-through since config auto-merges into the slice at construction; kept for future extensibility.
-  - **Actions** `Thaw`, `Hibernate`: routed on `jido.agent.lifecycle.starting` / `lifecycle.stopping`. Read the slice, emit `%Directive.Thaw{}` / `%Directive.Hibernate{}` directives.
-  - **Directives**: `%Directive.Thaw{}` + `%Directive.Hibernate{}` structs, executors in `AgentServer.directive_executors` do the `Jido.Persist.thaw/3` / `.hibernate/4` IO and emit completion signals (`jido.persist.thaw.completed|failed`, etc.).
+  - **Actions** `Thaw`, `Hibernate`: routed on `jido.agent.lifecycle.starting` / `lifecycle.stopping`. Read the slice, emit `%Directives.Thaw{}` / `%Directives.Hibernate{}` directives.
+  - **Directives**: `%Directives.Thaw{}` + `%Directives.Hibernate{}` structs, executors in `AgentServer.directive_executors` do the `Jido.Persist.thaw/3` / `.hibernate/4` IO and emit completion signals (`jido.persist.thaw.completed|failed`, etc.).
 - **InstanceManager** passes `plugins: [{Jido.Plugin.Persister, %{storage: ..., persistence_key: ...}}]` via `Options.plugins:`. Runtime slice registration + config auto-merge handles the rest.
 
 Ownership patterns separate cleanly:
@@ -263,12 +263,12 @@ Accepts that these guides describe pre-refactor internals until a follow-up PR r
 
 Existing `test/examples/react/react_plugin_test.exs` is a 167-line skipped design-sketch moduledoc (pseudocode only, `@moduletag :skip`). References retired ADRs 0011/0012 but no code depends on it. Rewriting to an executable example depends on Retry middleware + SpawnTask directive + LoopTimeout middleware — all deferred. Leave the file alone in this PR; post-refactor PR decides rewrite/update/delete.
 
-### S5 — Persister uses directives (`%Directive.Thaw{}`, `%Directive.Hibernate{}`) — ✅ resolved
+### S5 — Persister uses directives (`%Directives.Thaw{}`, `%Directives.Hibernate{}`) — ✅ resolved
 
 Per the refined Persister architecture in W7: persistence is done via directives, not sync calls in middleware. Two new directive structs + executors:
 
-- `lib/jido/agent/directive/thaw.ex` — `%Directive.Thaw{storage, persistence_key, agent_module, transforms, on_complete, on_error}`
-- `lib/jido/agent/directive/hibernate.ex` — `%Directive.Hibernate{storage, persistence_key, agent, transforms, on_complete, on_error}`
+- `lib/jido/agent/directive/thaw.ex` — `%Directives.Thaw{storage, persistence_key, agent_module, transforms, on_complete, on_error}`
+- `lib/jido/agent/directive/hibernate.ex` — `%Directives.Hibernate{storage, persistence_key, agent, transforms, on_complete, on_error}`
 - Executor modules under `lib/jido/agent_server/directive_executors/` (matching the existing pattern at [lib/jido/agent_server/directive_executors.ex](../../lib/jido/agent_server/directive_executors.ex))
 
 Executors call `Jido.Persist.thaw/3` and `Jido.Persist.hibernate/4` respectively, merge result back into agent state (thaw case), and emit the `on_complete` / `on_error` signals.

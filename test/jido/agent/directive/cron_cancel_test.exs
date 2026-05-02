@@ -1,8 +1,8 @@
-defmodule JidoTest.Agent.Directive.CronCancelTest do
+defmodule JidoTest.Agent.Directives.CronCancelTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Agent.Directive
-  alias Jido.Agent.Directive.CronCancel
+  alias Jido.Directives
+  alias Jido.Directives.CronCancel
 
   describe "CronCancel directive creation" do
     test "creates cron cancel directive with atom job_id" do
@@ -32,23 +32,23 @@ defmodule JidoTest.Agent.Directive.CronCancelTest do
     end
   end
 
-  describe "Directive.cron_cancel/1 helper" do
+  describe "Directives.cron_cancel/1 helper" do
     test "creates cron cancel directive with atom" do
-      directive = Directive.cron_cancel(:heartbeat)
+      directive = Directives.cron_cancel(:heartbeat)
 
       assert %CronCancel{} = directive
       assert directive.job_id == :heartbeat
     end
 
     test "creates cron cancel directive with string" do
-      directive = Directive.cron_cancel("daily_cleanup")
+      directive = Directives.cron_cancel("daily_cleanup")
 
       assert directive.job_id == "daily_cleanup"
     end
 
     test "creates cron cancel directive with reference" do
       ref = make_ref()
-      directive = Directive.cron_cancel(ref)
+      directive = Directives.cron_cancel(ref)
 
       assert directive.job_id == ref
     end
@@ -64,7 +64,7 @@ defmodule JidoTest.Agent.Directive.CronCancelTest do
       ]
 
       for id <- test_ids do
-        directive = Directive.cron_cancel(id)
+        directive = Directives.cron_cancel(id)
         assert %CronCancel{} = directive
         assert directive.job_id == id
       end

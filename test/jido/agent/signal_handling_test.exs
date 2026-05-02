@@ -10,7 +10,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
   """
   use JidoTest.Case, async: true
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Signal
   alias JidoTest.TestActions
 
@@ -25,7 +25,7 @@ defmodule JidoTest.Agent.SignalHandlingTest do
 
     def run(_signal, _slice, _opts, _ctx) do
       signal = Signal.new!("test.emitted", %{from: "agent"}, source: "/test")
-      {:ok, %{}, [%Directive.Emit{signal: signal}]}
+      {:ok, %{}, [%Directives.Emit{signal: signal}]}
     end
   end
 

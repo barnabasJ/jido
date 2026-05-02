@@ -76,19 +76,19 @@ Each error type includes specific fields:
 }
 ```
 
-### Directive.Error
+### Directives.Error
 
-The `Directive.Error` struct wraps errors for directive-based processing. Agents emit this directive from `cmd/2` when errors occur during command handling.
+The `Directives.Error` struct wraps errors for directive-based processing. Agents emit this directive from `cmd/2` when errors occur during command handling.
 
 ```elixir
-alias Jido.Agent.Directive
+alias Jido.Directives
 
 # Create an error directive
-Directive.error(Jido.Error.validation_error("Invalid input"))
+Directives.error(Jido.Error.validation_error("Invalid input"))
 
 # With context (where the error occurred)
-Directive.error(error, :normalize)
-Directive.error(error, :instruction)
+Directives.error(error, :normalize)
+Directives.error(error, :instruction)
 ```
 
 The `context` field indicates where the error originated:
@@ -158,7 +158,7 @@ When an action fails, the agent's strategy wraps it in an `Error` directive:
 
 ```elixir
 # Inside agent cmd/2, if action fails:
-{agent, [%Directive.Error{error: error, context: :instruction}]}
+{agent, [%Directives.Error{error: error, context: :instruction}]}
 ```
 
 ### 2. Agent → AgentServer
@@ -208,7 +208,7 @@ error_policy: {:max_errors, 5}
 error_policy: {:emit_signal, {:pubsub, topic: "errors"}}
 
 # Custom error handler
-error_policy: fn %Directive.Error{error: error, context: ctx}, state ->
+error_policy: fn %Directives.Error{error: error, context: ctx}, state ->
   Logger.error("Custom handler: #{inspect(error)}")
   
   case ctx do
@@ -226,7 +226,7 @@ Custom policies receive the error directive and server state, returning:
 
 ```elixir
 error_policy: fn error_directive, state ->
-  %Directive.Error{error: error, context: context} = error_directive
+  %Directives.Error{error: error, context: context} = error_directive
   
   # Track errors in state
   state = Jido.AgentServer.State.increment_error_count(state)
@@ -294,7 +294,7 @@ defmodule MyAgentTest do
 
     {_agent, directives} = MyAgent.cmd(agent, {InvalidAction, %{}})
 
-    assert [%Jido.Agent.Directive.Error{context: :instruction}] = directives
+    assert [%Jido.Directives.Error{context: :instruction}] = directives
   end
 
   test "error includes original error struct" do
@@ -302,7 +302,7 @@ defmodule MyAgentTest do
 
     {_agent, [error_directive]} = MyAgent.cmd(agent, {FailingAction, %{}})
 
-    assert %Jido.Agent.Directive.Error{error: error} = error_directive
+    assert %Jido.Directives.Error{error: error} = error_directive
     assert %Jido.Error.ExecutionError{} = error
   end
 end

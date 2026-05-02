@@ -1,7 +1,7 @@
 defmodule JidoTest.AgentServer.TracePropagationTest do
   use JidoTest.Case, async: false
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Signal
   alias Jido.Tracing.Trace
@@ -18,7 +18,7 @@ defmodule JidoTest.AgentServer.TracePropagationTest do
 
     def run(_signal, _slice, _opts, _ctx) do
       signal = Signal.new!("test.emitted", %{value: 42}, source: "/test")
-      {:ok, %{}, [%Directive.Emit{signal: signal}]}
+      {:ok, %{}, [%Directives.Emit{signal: signal}]}
     end
   end
 

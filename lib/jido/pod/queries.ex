@@ -2,7 +2,7 @@ defmodule Jido.Pod.Queries do
   @moduledoc """
   Reply builders for pod introspection queries.
 
-  These functions are invoked by the `%Jido.Agent.Directive.Reply{}`
+  These functions are invoked by the `%Jido.Directives.Reply{}`
   executor and run with full `%Jido.AgentServer.State{}` access — so they
   can resolve running pids, parent bindings, and anything else that
   lives server-side.

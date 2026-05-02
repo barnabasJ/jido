@@ -3,7 +3,7 @@ defmodule JidoTest.AgentServerTest do
 
   @moduletag :capture_log
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Signal
   alias JidoTest.TestActions
@@ -20,7 +20,7 @@ defmodule JidoTest.AgentServerTest do
 
     def run(_signal, _slice, _opts, _ctx) do
       signal = Signal.new!("test.emitted", %{from: "agent"}, source: "/test")
-      {:ok, %{}, [%Directive.Emit{signal: signal}]}
+      {:ok, %{}, [%Directives.Emit{signal: signal}]}
     end
   end
 
@@ -35,7 +35,7 @@ defmodule JidoTest.AgentServerTest do
 
     def run(_signal, _slice, _opts, _ctx) do
       scheduled_signal = Signal.new!("scheduled.ping", %{}, source: "/test")
-      {:ok, %{}, [%Directive.Schedule{delay_ms: 50, message: scheduled_signal}]}
+      {:ok, %{}, [%Directives.Schedule{delay_ms: 50, message: scheduled_signal}]}
     end
   end
 
@@ -49,7 +49,7 @@ defmodule JidoTest.AgentServerTest do
     end
 
     def run(_signal, _slice, _opts, _ctx) do
-      {:ok, %{}, [%Directive.Stop{reason: :normal}]}
+      {:ok, %{}, [%Directives.Stop{reason: :normal}]}
     end
   end
 
@@ -64,7 +64,7 @@ defmodule JidoTest.AgentServerTest do
 
     def run(_signal, _slice, _opts, _ctx) do
       error = Jido.Error.validation_error("Test error", %{field: :test})
-      {:ok, %{}, [%Directive.Error{error: error, context: :test}]}
+      {:ok, %{}, [%Directives.Error{error: error, context: :test}]}
     end
   end
 
@@ -667,7 +667,7 @@ defmodule JidoTest.AgentServerTest do
 
         def run(_signal, slice, _opts, _ctx) do
           scheduled = Signal.new!("scheduled.ping", %{}, source: "/test")
-          {:ok, slice, [%Directive.Schedule{delay_ms: 50, message: scheduled}]}
+          {:ok, slice, [%Directives.Schedule{delay_ms: 50, message: scheduled}]}
         end
       end
 
@@ -737,7 +737,7 @@ defmodule JidoTest.AgentServerTest do
           directives =
             for i <- 1..3 do
               sig = Signal.new!("tick", %{n: i}, source: "/test")
-              %Directive.Schedule{delay_ms: i * 20, message: sig}
+              %Directives.Schedule{delay_ms: i * 20, message: sig}
             end
 
           {:ok, slice, directives}
@@ -807,7 +807,7 @@ defmodule JidoTest.AgentServerTest do
         end
 
         def run(_signal, slice, _opts, _ctx) do
-          {:ok, slice, [%Directive.Schedule{delay_ms: 10, message: :timeout}]}
+          {:ok, slice, [%Directives.Schedule{delay_ms: 10, message: :timeout}]}
         end
       end
 

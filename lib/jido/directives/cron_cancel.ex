@@ -1,4 +1,4 @@
-defmodule Jido.Agent.Directive.CronCancel do
+defmodule Jido.Directives.CronCancel do
   @moduledoc """
   Cancel a previously registered cron job for this agent by job_id.
 
@@ -28,7 +28,7 @@ defmodule Jido.Agent.Directive.CronCancel do
   def schema, do: @schema
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.Agent.Directive.CronCancel do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.CronCancel do
   @moduledoc false
 
   require Logger

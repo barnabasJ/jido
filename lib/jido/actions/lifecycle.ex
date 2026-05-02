@@ -22,7 +22,7 @@ defmodule Jido.Actions.Lifecycle do
       end
   """
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Signal
 
   defmodule NotifyParent do
@@ -69,7 +69,7 @@ defmodule Jido.Actions.Lifecycle do
       directive =
         case Map.get(ctx, :parent) do
           %Jido.AgentServer.ParentRef{pid: pid} when is_pid(pid) ->
-            Directive.emit_to_pid(signal, pid)
+            Directives.emit_to_pid(signal, pid)
 
           _ ->
             nil
@@ -131,7 +131,7 @@ defmodule Jido.Actions.Lifecycle do
           _ctx
         ) do
       signal = Signal.new!(type, payload, source: source)
-      directive = Directive.emit_to_pid(signal, pid, delivery_mode: mode)
+      directive = Directives.emit_to_pid(signal, pid, delivery_mode: mode)
       {:ok, %{sent_to: pid}, [directive]}
     end
   end
@@ -142,7 +142,7 @@ defmodule Jido.Actions.Lifecycle do
 
     The spawned agent will have its `ctx.parent` populated so its actions
     can address the parent directly via
-    `%Directive.Emit{dispatch: {:pid, target: ctx.parent.pid}}`.
+    `%Directives.Emit{dispatch: {:pid, target: ctx.parent.pid}}`.
 
     ## Schema
 
@@ -175,7 +175,7 @@ defmodule Jido.Actions.Lifecycle do
              initial_state: [type: :map, default: %{}, doc: "Initial state for child"],
              meta: [type: :map, default: %{}, doc: "Metadata to pass to child"],
              restart: [
-               type: {:in, Directive.valid_restart_policies()},
+               type: {:in, Directives.valid_restart_policies()},
                default: :transient,
                doc: "Restart policy for the child"
              ]
@@ -196,7 +196,7 @@ defmodule Jido.Actions.Lifecycle do
           _ctx
         ) do
       opts = if state == %{}, do: %{}, else: %{initial_state: state}
-      directive = Directive.spawn_agent(mod, tag, opts: opts, meta: meta, restart: restart)
+      directive = Directives.spawn_agent(mod, tag, opts: opts, meta: meta, restart: restart)
       {:ok, %{spawning: tag}, [directive]}
     end
   end
@@ -226,7 +226,7 @@ defmodule Jido.Actions.Lifecycle do
     end
 
     def run(%Jido.Signal{data: %{reason: reason}}, _slice, _opts, _ctx) do
-      directive = Directive.stop(reason)
+      directive = Directives.stop(reason)
       {:ok, %{stopping: true, reason: reason}, [directive]}
     end
   end
@@ -257,7 +257,7 @@ defmodule Jido.Actions.Lifecycle do
     end
 
     def run(%Jido.Signal{data: %{tag: tag, reason: reason}}, _slice, _opts, _ctx) do
-      directive = Directive.stop_child(tag, reason)
+      directive = Directives.stop_child(tag, reason)
       {:ok, %{stopping_child: tag, reason: reason}, [directive]}
     end
   end

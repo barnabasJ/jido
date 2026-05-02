@@ -22,7 +22,7 @@ defmodule MyApp.Actions.CreateOrder do
     ]
   end
 
-  alias Jido.Agent.Directive
+  alias Jido.Directives
   alias Jido.Signal
 
   def run(params, context) do
@@ -43,7 +43,7 @@ defmodule MyApp.Actions.CreateOrder do
     )
 
     {:ok, %{orders: [order | orders], last_order_id: order.id},
-     %Directive.Emit{signal: signal}}
+     %Directives.Emit{signal: signal}}
   end
 end
 ```
@@ -97,7 +97,7 @@ The returned map is deep-merged into agent state.
 def run(params, context) do
   signal = Signal.new!("task.completed", %{id: params.id}, source: "/worker")
   
-  {:ok, %{status: :done}, %Directive.Emit{signal: signal}}
+  {:ok, %{status: :done}, %Directives.Emit{signal: signal}}
 end
 ```
 
@@ -105,8 +105,8 @@ Return a single directive or a list:
 
 ```elixir
 {:ok, %{triggered: true}, [
-  Directive.emit(%{type: "event.1"}),
-  Directive.schedule(1000, :check)
+  Directives.emit(%{type: "event.1"}),
+  Directives.schedule(1000, :check)
 ]}
 ```
 
@@ -154,36 +154,36 @@ end
 Import the Directive module and return directive structs:
 
 ```elixir
-alias Jido.Agent.Directive
+alias Jido.Directives
 
 # Emit a signal
-{:ok, state, %Directive.Emit{signal: my_signal}}
+{:ok, state, %Directives.Emit{signal: my_signal}}
 
 # Schedule a delayed message
-{:ok, state, %Directive.Schedule{delay_ms: 5000, message: :timeout}}
+{:ok, state, %Directives.Schedule{delay_ms: 5000, message: :timeout}}
 
 # Spawn a child agent
-{:ok, state, Directive.spawn_agent(WorkerAgent, :worker_1)}
+{:ok, state, Directives.spawn_agent(WorkerAgent, :worker_1)}
 
 # Multiple directives
 {:ok, state, [
-  %Directive.Emit{signal: signal},
-  %Directive.Schedule{delay_ms: 1000, message: :check}
+  %Directives.Emit{signal: signal},
+  %Directives.Schedule{delay_ms: 1000, message: :check}
 ]}
 ```
 
 ### Common directive helpers
 
 ```elixir
-alias Jido.Agent.Directive
+alias Jido.Directives
 
-Directive.emit(signal)                           # Emit via default dispatch
-Directive.emit_to_pid(signal, pid)              # Emit to specific process
-Directive.emit_to_parent(agent, signal)         # Child → parent communication
-Directive.spawn_agent(Module, :tag)              # Spawn child agent
-Directive.stop_child(:tag, :normal)              # Stop tracked child
-Directive.schedule(delay_ms, message)            # Delayed message
-Directive.stop(:normal)                          # Stop self
+Directives.emit(signal)                           # Emit via default dispatch
+Directives.emit_to_pid(signal, pid)              # Emit to specific process
+Directives.emit_to_parent(agent, signal)         # Child → parent communication
+Directives.spawn_agent(Module, :tag)              # Spawn child agent
+Directives.stop_child(:tag, :normal)              # Stop tracked child
+Directives.schedule(delay_ms, message)            # Delayed message
+Directives.stop(:normal)                          # Stop self
 ```
 
 ## State Scope
