@@ -95,7 +95,7 @@ defmodule JidoExampleTest.ReactPluginTest do
         use Jido.Agent,
           extensions: [
             Jido.Middleware.Logger,
-            {Jido.Middleware.Retry, [on: ["tool.result"], max: 3, backoff: :exp]},
+            {Jido.Middlewares.Retry, [on: ["tool.result"], max: 3, backoff: :exp]},
             {MyApp.Middleware.LoopTimeout, [budget: 30000]},
             Jido.Middleware.LogErrors,
             Jido.Plugin.ReAct

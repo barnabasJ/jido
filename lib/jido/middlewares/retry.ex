@@ -1,4 +1,4 @@
-defmodule Jido.Middleware.Retry do
+defmodule Jido.Middlewares.Retry do
   @moduledoc """
   Retries signals whose pipeline returns `{:error, _}`.
 

@@ -70,7 +70,7 @@ defmodule MyApp.Agent do
   use Jido.Agent,
     extensions: [
       MyApp.Audit,
-      {Jido.Middleware.Retry, %{max_attempts: 3, pattern: "work.**"}}
+      {Jido.Middlewares.Retry, %{max_attempts: 3, pattern: "work.**"}}
     ]
 
   agent do
@@ -149,20 +149,20 @@ end
 
 ### Persist
 
-`Jido.Middleware.Persister` runs hibernate/thaw IO synchronously around
+`Jido.Middlewares.Persister` runs hibernate/thaw IO synchronously around
 `jido.agent.lifecycle.starting` / `stopping` signals. It mutates `ctx.agent`
 in place after thaw, so the rest of the pipeline sees the rehydrated
 struct. See [the source](../lib/jido/middleware/persister.ex).
 
 ### Retry
 
-[`Jido.Middleware.Retry`](../lib/jido/middleware/retry.ex) re-invokes `next`
+[`Jido.Middlewares.Retry`](../lib/jido/middleware/retry.ex) re-invokes `next`
 when the chain returns `%Directive.Error{}`. Configurable max attempts
 and an optional `Jido.Signal.Router` pattern to scope which signals retry.
 
 ```elixir
 extensions: [
-  {Jido.Middleware.Retry, %{max_attempts: 5, pattern: "work.**"}}
+  {Jido.Middlewares.Retry, %{max_attempts: 5, pattern: "work.**"}}
 ]
 ```
 
@@ -201,7 +201,7 @@ session caches), either:
   `next.(signal, %{ctx | agent: %{ctx.agent | state: new_state}})`.
   This is the documented `ctx.agent`-staging exception to "directives
   mutate no state". See
-  [`Jido.Middleware.Persister`](../lib/jido/middleware/persister.ex) for
+  [`Jido.Middlewares.Persister`](../lib/jido/middleware/persister.ex) for
   the canonical example (it stages a thawed agent on
   `jido.agent.lifecycle.starting`).
 
@@ -249,8 +249,8 @@ A reasonable default order, outermost first:
 
 ## See also
 
-- [`Jido.Middleware.Persister`](../lib/jido/middleware/persister.ex) — reference implementation (hibernate / thaw)
-- [`Jido.Middleware.Retry`](../lib/jido/middleware/retry.ex) — reference implementation (retry on `%Error{}`)
+- [`Jido.Middlewares.Persister`](../lib/jido/middleware/persister.ex) — reference implementation (hibernate / thaw)
+- [`Jido.Middlewares.Retry`](../lib/jido/middleware/retry.ex) — reference implementation (retry on `%Error{}`)
 - [Slices guide](slices.md) — the data tier
 - [Plugins guide](plugins.md) — when you need both
 - [Migration: keyword form to Spark DSL](migration-spark-dsl.md) — recipes for older code

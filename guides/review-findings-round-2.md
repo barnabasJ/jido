@@ -34,7 +34,7 @@ Decisions lines 17 + S6 already overrode this. Should list only `lib/jido/middle
 
 [atomic-whistling-graham.md:163](~/.claude/plans/atomic-whistling-graham.md):
 
-> `instance_manager.ex:382-402`: delete `maybe_thaw/3`; … Instead pass `middleware: [{Jido.Middleware.Persister, %{…}}]` via the new `Options.middleware:` field.
+> `instance_manager.ex:382-402`: delete `maybe_thaw/3`; … Instead pass `middleware: [{Jido.Middlewares.Persister, %{…}}]` via the new `Options.middleware:` field.
 
 Should be `plugins: [{Jido.Plugin.Persister, %{…}}]` via `Options.plugins:`. The up-top decision at line 42 is correct; the C6 section wasn't updated.
 
@@ -46,9 +46,9 @@ Should be `plugins: [{Jido.Plugin.Persister, %{…}}]` via `Options.plugins:`. T
 
 [atomic-whistling-graham.md:208](~/.claude/plans/atomic-whistling-graham.md): `lib/jido/await.ex | Rewired as thin wrappers (C7)` — should be `Deleted (C7)` per W6.
 
-### D6 — Plan verification step 2 references `Jido.Middleware.Persister` — ✅ resolved
+### D6 — Plan verification step 2 references `Jido.Middlewares.Persister` — ✅ resolved
 
-[atomic-whistling-graham.md:231](~/.claude/plans/atomic-whistling-graham.md): "Attach `Jido.Middleware.Persister`; hibernate + thaw…" — should be `Jido.Plugin.Persister`.
+[atomic-whistling-graham.md:231](~/.claude/plans/atomic-whistling-graham.md): "Attach `Jido.Middlewares.Persister`; hibernate + thaw…" — should be `Jido.Plugin.Persister`.
 
 ### D7 — `tasks/README.md` row for 0004 lists retired middlewares — ✅ resolved
 
@@ -64,17 +64,17 @@ Should be: "Single-tier middleware pipeline; retire legacy plugin hooks; ship Re
 
 [tasks/0004-middleware-pipeline.md:7](tasks/0004-middleware-pipeline.md:7): "in-tree plugins still use **Legacy** until C5" — the Legacy shim was dissolved per W1. Should read "in-tree plugins still use the old `Jido.Plugin` macro until C5".
 
-[tasks/0004-middleware-pipeline.md:11-13](tasks/0004-middleware-pipeline.md:11): "Ship a **minimal standard middleware library to cover the retired capabilities**" — `Retry` doesn't cover the retired `error_policy` capability; migration-guide self-roll snippet does. Rephrase to "Ship `Jido.Middleware.Retry`; error-handling replacement deferred to follow-up PR".
+[tasks/0004-middleware-pipeline.md:11-13](tasks/0004-middleware-pipeline.md:11): "Ship a **minimal standard middleware library to cover the retired capabilities**" — `Retry` doesn't cover the retired `error_policy` capability; migration-guide self-roll snippet does. Rephrase to "Ship `Jido.Middlewares.Retry`; error-handling replacement deferred to follow-up PR".
 
-### D10 — Task 0005 `Jido.Middleware.Persister` references (transforms config) — ✅ resolved
+### D10 — Task 0005 `Jido.Middlewares.Persister` references (transforms config) — ✅ resolved
 
 Three spots in [tasks/0005-migrate-intree-plugins.md](tasks/0005-migrate-intree-plugins.md) still use the old module name:
 
-- [line 60](tasks/0005-migrate-intree-plugins.md:60): "persistence shape is handled by `Jido.Middleware.Persister` config"
-- [line 80](tasks/0005-migrate-intree-plugins.md:80): config block `{Jido.Middleware.Persister, %{…}}`
-- [line 355](tasks/0005-migrate-intree-plugins.md:355): "referenced by the agent's Persister middleware config. Called by `Jido.Middleware.Persister`"
+- [line 60](tasks/0005-migrate-intree-plugins.md:60): "persistence shape is handled by `Jido.Middlewares.Persister` config"
+- [line 80](tasks/0005-migrate-intree-plugins.md:80): config block `{Jido.Middlewares.Persister, %{…}}`
+- [line 355](tasks/0005-migrate-intree-plugins.md:355): "referenced by the agent's Persister middleware config. Called by `Jido.Middlewares.Persister`"
 
-Should all be `Jido.Plugin.Persister`. (Line 199 correctly reflects the refinement: "replacing the earlier idea of a `Jido.Middleware.Persister` module.")
+Should all be `Jido.Plugin.Persister`. (Line 199 correctly reflects the refinement: "replacing the earlier idea of a `Jido.Middlewares.Persister` module.")
 
 ### D11 — Task 0006 `init/1` sketch missing `options.plugins` — ✅ resolved
 
@@ -112,11 +112,11 @@ The module is deleted in this same commit. Delete the bullet, or replace with a 
 
 [tasks/0008-tests-guides-adr-status.md:81-89](tasks/0008-tests-guides-adr-status.md:81): the "deferred to follow-up PR" paragraphs start at 81, but lines 87-89 are stale hold-over text ("Purpose: demonstrate the combo shape… Roughly 200-300 lines") describing the original, non-deferred plan. Delete 87-89.
 
-### D17 — Task 0008 test rewrites reference `Jido.Middleware.Persister` — ✅ resolved
+### D17 — Task 0008 test rewrites reference `Jido.Middlewares.Persister` — ✅ resolved
 
 Two lines still point at the old module name:
 
-- [tasks/0008-tests-guides-adr-status.md:50](tasks/0008-tests-guides-adr-status.md:50): "rewrite against `Jido.Middleware.Persister`" → `Jido.Plugin.Persister`
+- [tasks/0008-tests-guides-adr-status.md:50](tasks/0008-tests-guides-adr-status.md:50): "rewrite against `Jido.Middlewares.Persister`" → `Jido.Plugin.Persister`
 - [tasks/0008-tests-guides-adr-status.md:73](tasks/0008-tests-guides-adr-status.md:73): test path `test/jido/middleware/persister_test.exs` → `test/jido/plugin/persister_test.exs`
 
 ### D18 — Task 0008 ADR hash count — ✅ resolved
@@ -155,7 +155,7 @@ Per the stated rule (error on duplicate) — raises. Which means InstanceManager
 
 Approach (β) — inline-edit ADR body to match shipped reality, with an "Alternatives considered" addendum for the rejected shape. Updated in both 0014 and 0015: Persister rewritten as a Plugin, example uses `plugins:` not `middleware:`, chain sketch drops Logger, error-policy line reworded to note only `Retry` ships with explicit deferral of `LogErrors`/`StopOnError`/`Logger`/`CircuitBreaker`. Two new alternatives entries capture the Persister-as-middleware and error-handling-middleware-in-this-PR rejections.
 
-ADRs 0014 and 0015 describe `Jido.Middleware.Persister` as a middleware module and list `LogErrors`/`StopOnError` in the standard library. C8 flips them to Implemented but doesn't rewrite their body text. Readers hitting the implemented ADRs will see a description that doesn't match shipped code.
+ADRs 0014 and 0015 describe `Jido.Middlewares.Persister` as a middleware module and list `LogErrors`/`StopOnError` in the standard library. C8 flips them to Implemented but doesn't rewrite their body text. Readers hitting the implemented ADRs will see a description that doesn't match shipped code.
 
 Options:
 - **(α)** Add an "Implementation refinements" addendum section to each ADR describing the divergences (Persister is Plugin not Middleware; LogErrors/StopOnError dropped; Options.plugins + Options.middleware added).

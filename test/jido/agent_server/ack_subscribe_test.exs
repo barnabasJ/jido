@@ -82,7 +82,7 @@ defmodule JidoTest.AgentServer.AckSubscribeTest do
   defmodule RetryingAgent do
     @moduledoc false
     use Jido.Agent,
-      middleware: [{Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}]
+      middleware: [{Jido.Middlewares.Retry, %{max_attempts: 3, pattern: "flaky"}}]
 
     agent do
       name "retrying_agent"

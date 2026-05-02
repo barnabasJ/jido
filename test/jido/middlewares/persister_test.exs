@@ -1,7 +1,7 @@
 defmodule JidoTest.Middleware.PersisterTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Middleware.Persister
+  alias Jido.Middlewares.Persister
   alias Jido.Storage.ETS
 
   defmodule TestAgent do

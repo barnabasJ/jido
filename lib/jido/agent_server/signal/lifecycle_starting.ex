@@ -4,7 +4,7 @@ defmodule Jido.AgentServer.Signal.LifecycleStarting do
   struct is constructed via `agent_module.new/1` and before any plugin
   children, subscriptions, schedules, or routers are wired up.
 
-  Routed through the middleware chain. `Jido.Middleware.Persister`, when
+  Routed through the middleware chain. `Jido.Middlewares.Persister`, when
   configured, observes this signal and synchronously thaws the agent from
   storage, replacing `ctx.agent` before delegating downstream.
 

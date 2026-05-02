@@ -3,7 +3,7 @@ defmodule Jido.AgentServer.Lifecycle.Keyed do
   Lifecycle implementation for keyed/pooled agents.
 
   Handles attachment tracking and idle timeout. Storage-backed
-  hibernate/thaw is no longer a lifecycle concern — `Jido.Middleware.Persister`
+  hibernate/thaw is no longer a lifecycle concern — `Jido.Middlewares.Persister`
   observes `jido.agent.lifecycle.{starting, stopping}` and performs the IO
   inline through the middleware chain.
 

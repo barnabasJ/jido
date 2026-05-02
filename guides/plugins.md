@@ -9,7 +9,7 @@ a single capability needs both:
 
 If you don't need the wrap, use [`Jido.Slice`](slices.md) directly. If you
 don't need the data, use [`Jido.Middleware`](middleware.md) directly. Plugin
-exists for the combo case — `Jido.Middleware.Persister` + the in-tree
+exists for the combo case — `Jido.Middlewares.Persister` + the in-tree
 combo plugins are the canonical examples.
 
 ## Hello Plugin
@@ -164,4 +164,4 @@ When to use the contribution mechanism vs. plain `extensions: [Mod]`:
 - [Migration guide — keyword form to Spark DSL](migration-spark-dsl.md) —
   conversion recipes for older code
 - [`Jido.Slices.Thread`](../lib/jido/thread/slice.ex) — in-tree slice example
-- [`Jido.Middleware.Persister`](../lib/jido/middleware/persister.ex) — in-tree middleware example
+- [`Jido.Middlewares.Persister`](../lib/jido/middleware/persister.ex) — in-tree middleware example

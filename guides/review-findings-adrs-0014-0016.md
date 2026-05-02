@@ -108,7 +108,7 @@ Task 0005 showed two approaches and recommended MFA but had mixed examples. Now 
 
 ```elixir
 middleware: [
-  {Jido.Middleware.Persister, %{
+  {Jido.Middlewares.Persister, %{
     transforms: %{
       thread: {Jido.Slices.Thread.State.Persister, :externalize, :reinstate}
     }
@@ -275,7 +275,7 @@ Executors call `Jido.Persist.thaw/3` and `Jido.Persist.hibernate/4` respectively
 
 ### S6 — Retry middleware — ✅ resolved (shipped)
 
-`Jido.Middleware.Retry` ships in C4 (not deferred). Minimal first-pass implementation: `:max_attempts` config, optional `:pattern` for signal filtering, immediate retry (no backoff). Backoff/jitter deferred to follow-up.
+`Jido.Middlewares.Retry` ships in C4 (not deferred). Minimal first-pass implementation: `:max_attempts` config, optional `:pattern` for signal filtering, immediate retry (no backoff). Backoff/jitter deferred to follow-up.
 
 The C7 ack-once-on-retry test uses the real Retry module — no test stub needed. Separate unit test at `test/jido/middleware/retry_test.exs` covers retry-on-error, retry-until-success, max-attempts-exceeded, and pattern filtering.
 

@@ -154,13 +154,13 @@ IO.inspect(chain.(sig, %{}), label: "Swallow turns chain error into success")
 
 ### Retry middleware — happy path
 
-`Jido.Middleware.Retry` is the bundled retry-on-error middleware. Its `opts`
+`Jido.Middlewares.Retry` is the bundled retry-on-error middleware. Its `opts`
 take `:max_attempts` and an optional `:pattern` to filter by signal type.
 Below: a `next` that succeeds on the first try; Retry returns the success
 verbatim without retrying.
 
 ```elixir
-alias Jido.Middleware.Retry
+alias Jido.Middlewares.Retry
 alias Jido.Agent.Directive
 
 next_ok = fn _sig, ctx ->
@@ -293,7 +293,7 @@ end
 defmodule RetryingAgent do
   use Jido.Agent,
     extensions: [
-      {Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}
+      {Jido.Middlewares.Retry, %{max_attempts: 3, pattern: "flaky"}}
     ]
 
   agent do

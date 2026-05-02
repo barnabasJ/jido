@@ -17,10 +17,10 @@ sectioned **Spark DSL** surface that Jido ships today.
 > ```elixir
 > # Before:
 > use Jido.Agent,
->   extensions: [Jido.Slices.Memory, Jido.Plugin.FSM, Jido.Middleware.Retry]
+>   extensions: [Jido.Slices.Memory, Jido.Plugin.FSM, Jido.Middlewares.Retry]
 >
 > # After:
-> use Jido.Agent, middleware: [Jido.Plugin.FSM, Jido.Middleware.Retry]
+> use Jido.Agent, middleware: [Jido.Plugin.FSM, Jido.Middlewares.Retry]
 >
 > agent do
 >   name "my_agent"
@@ -57,7 +57,7 @@ use Jido.Agent,
   schema: [...],
   plugins: [Jido.Slices.Identity],
   slices: [{Jido.Slices.AiReact, ...}],
-  middleware: [Jido.Middleware.Persister],
+  middleware: [Jido.Middlewares.Persister],
   signal_routes: [{"counter.inc", IncAction}],
   schedules: [{"@daily", "report.run", job_id: :daily}]
 ```

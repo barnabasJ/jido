@@ -818,7 +818,7 @@ end
 
 ### Retry middleware vs Persister IO failures
 
-`Jido.Middleware.Retry` *can* cover Persister IO failures — *if* Retry is
+`Jido.Middlewares.Retry` *can* cover Persister IO failures — *if* Retry is
 positioned outside Persister in the middleware chain. Persister blocks on
 thaw/hibernate IO synchronously; if it raises, Retry (when wrapping)
 catches the exception and re-invokes `next`.
@@ -827,7 +827,7 @@ Chain ordering is user-declared. Put Retry first if you want
 retry-on-thaw:
 
 ```elixir
-middleware: [Jido.Middleware.Retry, Jido.Middleware.Persister, ...]
+middleware: [Jido.Middlewares.Retry, Jido.Middlewares.Persister, ...]
 ```
 
 The error-handling model is otherwise user-owned in this PR; the

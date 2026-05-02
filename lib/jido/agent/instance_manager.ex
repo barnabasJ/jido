@@ -371,7 +371,7 @@ defmodule Jido.Agent.InstanceManager do
 
   defp build_persister_middleware(%{storage: storage, name: name}, key, partition) do
     [
-      {Jido.Middleware.Persister,
+      {Jido.Middlewares.Persister,
        %{
          storage: storage,
          persistence_key: manager_persistence_key(name, key, partition)

@@ -3,7 +3,7 @@ defmodule Jido.Persist.Transform do
   Opt-in behaviour for Slice / Plugin modules that need a custom on-disk
   shape distinct from their in-memory representation.
 
-  `Jido.Middleware.Persister` walks every declared slice/plugin at hibernate
+  `Jido.Middlewares.Persister` walks every declared slice/plugin at hibernate
   and thaw time. Modules that declare `@behaviour Jido.Persist.Transform`
   have `externalize/1` applied at hibernate (to produce the serialized form,
   typically a small pointer or summary) and `reinstate/1` at thaw (to

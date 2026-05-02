@@ -1,4 +1,4 @@
-defmodule Jido.Middleware.Persister do
+defmodule Jido.Middlewares.Persister do
   @moduledoc """
   Hibernate / thaw middleware.
 
@@ -27,7 +27,7 @@ defmodule Jido.Middleware.Persister do
   Pass options as a per-registration map:
 
       middleware: [
-        {Jido.Middleware.Persister, %{
+        {Jido.Middlewares.Persister, %{
           storage: {MyStorage, my_opts},
           persistence_key: "my-agent"
         }}

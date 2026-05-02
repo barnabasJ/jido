@@ -4,7 +4,7 @@ defmodule Jido.AgentServer.State.Lifecycle do
 
   Tracks attachment and idle timeout for agents managed by
   `Jido.Agent.InstanceManager`. Storage is no longer a lifecycle
-  concern — hibernate/thaw is handled by `Jido.Middleware.Persister`
+  concern — hibernate/thaw is handled by `Jido.Middlewares.Persister`
   observing `jido.agent.lifecycle.{starting, stopping}` signals.
   """
 

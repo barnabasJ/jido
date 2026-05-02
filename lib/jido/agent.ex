@@ -32,7 +32,7 @@ defmodule Jido.Agent do
   ```elixir
   defmodule MyAgent do
     use Jido.Agent,
-      middleware: [Jido.Middleware.Retry]
+      middleware: [Jido.Middlewares.Retry]
 
     agent do
       name "my_agent"

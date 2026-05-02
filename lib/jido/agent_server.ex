@@ -1525,7 +1525,7 @@ defmodule Jido.AgentServer do
   @impl true
   def terminate(reason, state) do
     # Emit lifecycle.stopping at the top so middleware (notably
-    # Jido.Middleware.Persister) can perform synchronous hibernate IO
+    # Jido.Middlewares.Persister) can perform synchronous hibernate IO
     # before any other shutdown work runs.
     state =
       if clean_shutdown?(reason) do

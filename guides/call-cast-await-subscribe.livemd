@@ -405,7 +405,7 @@ end
 
 defmodule RetryingAgent do
   use Jido.Agent,
-    extensions: [{Jido.Middleware.Retry, %{max_attempts: 3, pattern: "flaky"}}]
+    extensions: [{Jido.Middlewares.Retry, %{max_attempts: 3, pattern: "flaky"}}]
 
   agent do
     name "ccas_retrying"

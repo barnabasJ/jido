@@ -2,7 +2,7 @@ defmodule Jido.AgentServer.Signal.LifecycleStopping do
   @moduledoc """
   Emitted at the top of `terminate/2` before any other shutdown work.
 
-  Routed through the middleware chain. `Jido.Middleware.Persister`, when
+  Routed through the middleware chain. `Jido.Middlewares.Persister`, when
   configured, observes this signal and synchronously hibernates the
   current agent state to storage. Hibernate IO must complete within the
   supervisor's `shutdown:` timeout (default 5_000 ms) — slow storage
