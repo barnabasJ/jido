@@ -1,8 +1,8 @@
-defmodule Jido.AI.Directive.ToolExec do
+defmodule Jido.Slices.AiReact.Directives.ToolExec do
   @moduledoc """
   Side-effect directive: runs one tool call.
 
-  Emitted by `Jido.AI.Actions.LLMTurn`, one per tool call in a turn that
+  Emitted by `Jido.Slices.AiReact.Actions.LLMTurn`, one per tool call in a turn that
   asked for tools. The executor spawns a Task that resolves the tool by
   name, coerces arguments through the action's schema, runs the action
   via `Jido.Exec.run/4`, and casts back an `"ai.react.tool.completed"`
@@ -26,13 +26,13 @@ defmodule Jido.AI.Directive.ToolExec do
             request_id: nil
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.AI.Directive.ToolExec do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Slices.AiReact.Directives.ToolExec do
   @moduledoc false
 
   alias Jido.Action.Tool, as: ActionTool
   alias Jido.AgentServer
-  alias Jido.AI.Directive.ToolExec
-  alias Jido.AI.ToolAdapter
+  alias Jido.Slices.AiReact.Directives.ToolExec
+  alias Jido.Slices.AiReact.ToolAdapter
   alias Jido.Signal
 
   @impl true

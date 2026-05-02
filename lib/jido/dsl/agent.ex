@@ -25,7 +25,7 @@ defmodule Jido.Dsl.Agent do
   The `extensions: […]` keyword on `use Jido.Agent` is reserved for
   modules that contribute a typed DSL section to the host agent (the
   `Jido.Slice.Extension` host-section mechanism, e.g. `react do … end`
-  for `Jido.AI.ReAct`). It is **not** the channel for slice/plugin
+  for `Jido.Slices.AiReact`). It is **not** the channel for slice/plugin
   enumeration anymore.
   """
 

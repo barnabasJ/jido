@@ -12,7 +12,7 @@ Mix.install([
 A working LLM agent in five cells. The model spec is a `Kino.Input` —
 you pick the provider (local OpenAI-compat / Anthropic / OpenAI). Two
 inline `Jido.Action` modules become the agent's tools. A `use Jido.Agent`
-attaches `Jido.AI.ReAct` via `slices:` — that's the whole agent
+attaches `Jido.Slices.AiReact` via `slices:` — that's the whole agent
 declaration, no AI-specific macro.
 
 The headline cell streams **ReAct steps live** into a `Kino.Frame`: you
@@ -73,7 +73,7 @@ to spin up a fresh server.
 ## Define the tools
 
 Two inline `use Jido.Action` modules — the agent's tools. The slice
-converts each one into a `ReqLLM.Tool` via `Jido.AI.ToolAdapter` and
+converts each one into a `ReqLLM.Tool` via `Jido.Slices.AiReact.ToolAdapter` and
 exposes them to the LLM.
 
 ```elixir
@@ -116,7 +116,7 @@ end
 
 A regular `use Jido.Agent`. It declares `name:`, a `path:` for its own
 user-domain slice (unused — the AI slice owns its own `:ai` key), and
-`slices: [{Jido.AI.ReAct, ...}]` carrying every LLM-specific value.
+`slices: [{Jido.Slices.AiReact, ...}]` carrying every LLM-specific value.
 
 The slice's `config_schema/0` validates the keys at compile time; if you
 typo `tools:` or pass an unknown field, `defmodule` raises `CompileError`
@@ -156,7 +156,7 @@ api_key_opt =
   end
 
 defmodule LivebookAgent do
-  use Jido.Agent, extensions: [Jido.AI.ReAct]
+  use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
   agent do
     name "livebook_ai"
@@ -496,7 +496,7 @@ Kino.Layout.grid([sync_form, sync_frame])
 
 ## Where to next
 
-* [Slices](slices.md) — what `slices: [{Jido.AI.ReAct, ...}]` actually
+* [Slices](slices.md) — what `slices: [{Jido.Slices.AiReact, ...}]` actually
   attaches: declarative state, action set, and signal-route table.
 * [Observability](observability.md) — telemetry, traces, and
   selector-based reads as the no-polling pattern that powers the

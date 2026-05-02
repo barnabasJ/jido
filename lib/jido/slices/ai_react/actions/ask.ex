@@ -1,4 +1,4 @@
-defmodule Jido.AI.Actions.Ask do
+defmodule Jido.Slices.AiReact.Actions.Ask do
   @moduledoc """
   Handles `"ai.react.ask"` — opens a ReAct run.
 
@@ -7,7 +7,7 @@ defmodule Jido.AI.Actions.Ask do
   `ReqLLM.Context`, transitions to `:running`, stores the run config
   (model / tools / system_prompt / llm_opts) so subsequent `LLMCall`
   directives in the same run can reuse it, and emits the first
-  `Jido.AI.Directive.LLMCall` to start the conversation.
+  `Jido.Slices.AiReact.Directives.LLMCall` to start the conversation.
 
   Per-call signal data fields override the slice's seeded config; when a
   field is omitted from the signal the action falls back to the slice's
@@ -22,7 +22,7 @@ defmodule Jido.AI.Actions.Ask do
 
   action do
     name "ai_ask"
-    description "Open a ReAct run on a Jido.AI.ReAct-equipped agent."
+    description "Open a ReAct run on a Jido.Slices.AiReact-equipped agent."
 
     schema query: [type: :string, required: true],
            request_id: [type: :string, required: true],
@@ -33,7 +33,7 @@ defmodule Jido.AI.Actions.Ask do
            llm_opts: [type: {:or, [:keyword_list, nil]}, default: nil]
   end
 
-  alias Jido.AI.Directive.LLMCall
+  alias Jido.Slices.AiReact.Directives.LLMCall
   alias ReqLLM.Context
 
   @impl true

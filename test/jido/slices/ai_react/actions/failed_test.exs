@@ -1,7 +1,7 @@
-defmodule Jido.AI.Actions.FailedTest do
+defmodule Jido.Slices.AiReact.Actions.FailedTest do
   use ExUnit.Case, async: true
 
-  alias Jido.AI.Actions.Failed
+  alias Jido.Slices.AiReact.Actions.Failed
 
   defp signal(request_id, reason) do
     Jido.Signal.new!("ai.react.failed", %{reason: reason, request_id: request_id})

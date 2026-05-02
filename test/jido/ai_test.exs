@@ -8,18 +8,18 @@ defmodule Jido.AITest do
 
   import Jido.AI.Test.ResponseFixtures
 
-  alias Jido.AI.ReAct
+  alias Jido.Slices.AiReact
 
   defmodule MathAgent do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.AI.ReAct]
+    use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
     agent do
       name "math"
     end
 
     slices do
-      slice(:ai, Jido.AI.ReAct)
+      slice(:ai, Jido.Slices.AiReact)
     end
 
     react do
@@ -48,14 +48,14 @@ defmodule Jido.AITest do
 
   defmodule FailingAgent do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.AI.ReAct]
+    use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
     agent do
       name "failing"
     end
 
     slices do
-      slice(:ai, Jido.AI.ReAct)
+      slice(:ai, Jido.Slices.AiReact)
     end
 
     react do
@@ -68,14 +68,14 @@ defmodule Jido.AITest do
 
   defmodule TightAgent do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.AI.ReAct]
+    use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
     agent do
       name "tight"
     end
 
     slices do
-      slice(:ai, Jido.AI.ReAct)
+      slice(:ai, Jido.Slices.AiReact)
     end
 
     react do
@@ -88,14 +88,14 @@ defmodule Jido.AITest do
 
   defmodule NoModelAgent do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.AI.ReAct]
+    use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
     agent do
       name "no_model"
     end
 
     slices do
-      slice(:ai, Jido.AI.ReAct)
+      slice(:ai, Jido.Slices.AiReact)
     end
 
     react do
@@ -242,7 +242,7 @@ defmodule Jido.AITest do
             text = Map.get(entry, :text),
             do: text
 
-      assert Enum.any?(texts, &(&1 == ReAct.cycle_warning()))
+      assert Enum.any?(texts, &(&1 == AiReact.cycle_warning()))
     end
 
     test "tool errors are returned as JSON in tool.completed (not as :failed)", ctx do
@@ -442,14 +442,14 @@ defmodule Jido.AITest do
     test ":api_key in slice config llm_opts is propagated to ReqLLM", ctx do
       defmodule SliceKeyAgent do
         @moduledoc false
-        use Jido.Agent, extensions: [Jido.AI.ReAct]
+        use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
         agent do
           name "slice_key"
         end
 
         slices do
-          slice(:ai, Jido.AI.ReAct)
+          slice(:ai, Jido.Slices.AiReact)
         end
 
         react do
@@ -474,14 +474,14 @@ defmodule Jido.AITest do
     test ":api_key per-call llm_opts overrides the slice default", ctx do
       defmodule SliceKeyOverrideAgent do
         @moduledoc false
-        use Jido.Agent, extensions: [Jido.AI.ReAct]
+        use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
         agent do
           name "slice_key_override"
         end
 
         slices do
-          slice(:ai, Jido.AI.ReAct)
+          slice(:ai, Jido.Slices.AiReact)
         end
 
         react do

@@ -1,4 +1,4 @@
-defmodule Jido.AI.ReAct do
+defmodule Jido.Slices.AiReact do
   @moduledoc """
   ReAct strategy as a configured `Jido.Slice`.
 
@@ -6,7 +6,7 @@ defmodule Jido.AI.ReAct do
   configured through the contributed `react do … end` section:
 
       defmodule MyApp.SupportAgent do
-        use Jido.Agent, extensions: [Jido.AI.ReAct]
+        use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
         agent do
           name "support"
@@ -20,7 +20,7 @@ defmodule Jido.AI.ReAct do
         end
 
         slices do
-          slice :ai, Jido.AI.ReAct
+          slice :ai, Jido.Slices.AiReact
         end
       end
 
@@ -60,7 +60,7 @@ defmodule Jido.AI.ReAct do
       user message before the next LLMCall.
     * `:model`, `:tools`, `:system_prompt`, `:llm_opts` — run config
       seeded from the slice's `slices:` config (validated through
-      `config_schema/0`); `Jido.AI.Actions.Ask` falls back to these
+      `config_schema/0`); `Jido.Slices.AiReact.Actions.Ask` falls back to these
       values when the opening signal omits them.
 
   ## Config keys (`config_schema/0`)
@@ -78,7 +78,7 @@ defmodule Jido.AI.ReAct do
       (last-write-wins over `:max_tokens` / `:temperature`).
   """
 
-  alias Jido.AI.Actions
+  alias Jido.Slices.AiReact.Actions
 
   @cycle_warning "You already called the same tool(s) with identical parameters in the previous iteration and got the same results. Do NOT repeat the same calls. Either use the results you already have to form a final answer, or try a different approach."
 
@@ -174,7 +174,7 @@ defmodule Jido.AI.ReAct do
 
   use Spark.Dsl.Extension,
     sections: [@react_section],
-    transformers: [Jido.AI.ReAct.Transformers.RegisterContribution]
+    transformers: [Jido.Slices.AiReact.Transformers.RegisterContribution]
 
   @doc false
   # Folds the convenience keys `:max_tokens` and `:temperature` into

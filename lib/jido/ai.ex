@@ -1,8 +1,8 @@
 defmodule Jido.AI do
   @moduledoc """
-  Public API for ReAct agents built on `Jido.AI.ReAct`.
+  Public API for ReAct agents built on `Jido.Slices.AiReact`.
 
-  Works against any `pid` whose agent attached `Jido.AI.ReAct` via
+  Works against any `pid` whose agent attached `Jido.Slices.AiReact` via
   `slices:`. The slice is the source of truth for run config (model,
   tools, system_prompt, max_iterations, llm_opts) seeded from the
   agent's `slices:` declaration; per-call opts override.
@@ -27,7 +27,7 @@ defmodule Jido.AI do
   ## Example
 
       defmodule MyApp.SupportAgent do
-        use Jido.Agent, extensions: [Jido.AI.ReAct]
+        use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
         agent do
           name "support"
@@ -41,7 +41,7 @@ defmodule Jido.AI do
         end
 
         slices do
-          slice :ai, Jido.AI.ReAct
+          slice :ai, Jido.Slices.AiReact
         end
       end
 

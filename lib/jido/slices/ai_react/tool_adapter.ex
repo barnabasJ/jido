@@ -1,4 +1,4 @@
-defmodule Jido.AI.ToolAdapter do
+defmodule Jido.Slices.AiReact.ToolAdapter do
   @moduledoc """
   Adapts Jido Actions into ReqLLM.Tool structs for LLM consumption.
 
@@ -14,13 +14,13 @@ defmodule Jido.AI.ToolAdapter do
   ## Usage
 
       # Convert action modules to ReqLLM tools
-      tools = Jido.AI.ToolAdapter.from_actions([
+      tools = Jido.Slices.AiReact.ToolAdapter.from_actions([
         MyApp.Actions.Calculator,
         MyApp.Actions.Search
       ])
 
       # With options
-      tools = Jido.AI.ToolAdapter.from_actions(actions,
+      tools = Jido.Slices.AiReact.ToolAdapter.from_actions(actions,
         prefix: "myapp_",
         filter: fn mod -> Jido.Dsl.Action.Info.category(mod) == :search end
       )
@@ -60,14 +60,14 @@ defmodule Jido.AI.ToolAdapter do
   ## Examples
 
       # Basic usage
-      tools = Jido.AI.ToolAdapter.from_actions([MyApp.Actions.Add, MyApp.Actions.Search])
+      tools = Jido.Slices.AiReact.ToolAdapter.from_actions([MyApp.Actions.Add, MyApp.Actions.Search])
 
       # With prefix
-      tools = Jido.AI.ToolAdapter.from_actions(actions, prefix: "calc_")
+      tools = Jido.Slices.AiReact.ToolAdapter.from_actions(actions, prefix: "calc_")
       # Tool names become "calc_add", "calc_search", etc.
 
       # With filter
-      tools = Jido.AI.ToolAdapter.from_actions(actions,
+      tools = Jido.Slices.AiReact.ToolAdapter.from_actions(actions,
         filter: fn mod -> Jido.Dsl.Action.Info.category(mod) == :math end
       )
   """
@@ -125,7 +125,7 @@ defmodule Jido.AI.ToolAdapter do
 
   ## Example
 
-      tool = Jido.AI.ToolAdapter.from_action(MyApp.Actions.Calculator, prefix: "v2_")
+      tool = Jido.Slices.AiReact.ToolAdapter.from_action(MyApp.Actions.Calculator, prefix: "v2_")
       # => %ReqLLM.Tool{name: "v2_calculator", ...}
   """
   @spec from_action(module(), keyword()) :: ReqLLM.Tool.t()

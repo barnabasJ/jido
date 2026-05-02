@@ -1,11 +1,11 @@
-defmodule Jido.AI.Turn do
+defmodule Jido.Slices.AiReact.Turn do
   @moduledoc """
   Normalized projection of a `ReqLLM.Response`.
 
   Classifies the response as either a tool-calling turn (the model wants
   the host to run one or more tools and call back) or a final-answer turn
-  (the model is done). Consumed by `Jido.AI.Actions.LLMTurn` after
-  `Jido.AI.Directive.LLMCall`'s executor packages a `ReqLLM.Response`.
+  (the model is done). Consumed by `Jido.Slices.AiReact.Actions.LLMTurn` after
+  `Jido.Slices.AiReact.Directives.LLMCall`'s executor packages a `ReqLLM.Response`.
 
   `ReqLLM.Response.classify/1` does the heavy lifting — finish-reason
   normalization, tool-call extraction, and text/thinking split. This

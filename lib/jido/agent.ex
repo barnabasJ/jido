@@ -65,7 +65,7 @@ defmodule Jido.Agent do
   list so their position in the wrap chain is explicit.
 
   The `extensions: […]` keyword stays available for modules whose typed
-  DSL section the host wants to call into (e.g. `extensions: [Jido.AI.ReAct]`
+  DSL section the host wants to call into (e.g. `extensions: [Jido.Slices.AiReact]`
   unlocks `react do … end`). It is **not** the channel for slice/plugin
   enumeration — that role moves entirely into `slices do … end`.
   """
@@ -79,7 +79,7 @@ defmodule Jido.Agent do
         default: [],
         doc:
           "Modules whose typed DSL section the host wants to call into " <>
-            "(e.g. `Jido.AI.ReAct` to unlock `react do … end`). " <>
+            "(e.g. `Jido.Slices.AiReact` to unlock `react do … end`). " <>
             "Slice / plugin enumeration goes in `slices do … end`."
       ],
       middleware: [

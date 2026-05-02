@@ -1,7 +1,7 @@
-defmodule Jido.AI.TurnTest do
+defmodule Jido.Slices.AiReact.TurnTest do
   use ExUnit.Case, async: true
 
-  alias Jido.AI.Turn
+  alias Jido.Slices.AiReact.Turn
   alias ReqLLM.Context
   alias ReqLLM.Message.{ContentPart, ReasoningDetails}
   alias ReqLLM.{Response, ToolCall}

@@ -1,11 +1,11 @@
-defmodule Jido.AI.ReActE2ETest do
+defmodule Jido.Slices.AiReactE2ETest do
   @moduledoc """
-  End-to-end tests for the `Jido.AI.ReAct` slice against a local LM
+  End-to-end tests for the `Jido.Slices.AiReact` slice against a local LM
   Studio server.
 
   These exercise the real `ReqLLM.Generation.generate_text/3` path — no
   Mimic stubs — through the full slice composition pattern: a regular
-  `Jido.Agent` with `Jido.AI.ReAct` attached via `extensions:`, started
+  `Jido.Agent` with `Jido.Slices.AiReact` attached via `extensions:`, started
   under `Jido.AgentServer`, queried via `Jido.AI.ask_sync/3`. Requires a
   model running at the configured base URL.
 
@@ -36,14 +36,14 @@ defmodule Jido.AI.ReActE2ETest do
   defmodule NoToolsAgent do
     @moduledoc false
 
-    use Jido.Agent, extensions: [Jido.AI.ReAct]
+    use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
     agent do
       name "react_e2e_no_tools"
     end
 
     slices do
-      slice(:ai, Jido.AI.ReAct)
+      slice(:ai, Jido.Slices.AiReact)
     end
 
     react do
@@ -63,14 +63,14 @@ defmodule Jido.AI.ReActE2ETest do
   defmodule EchoAgent do
     @moduledoc false
 
-    use Jido.Agent, extensions: [Jido.AI.ReAct]
+    use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
     agent do
       name "react_e2e_echo"
     end
 
     slices do
-      slice(:ai, Jido.AI.ReAct)
+      slice(:ai, Jido.Slices.AiReact)
     end
 
     react do
@@ -90,14 +90,14 @@ defmodule Jido.AI.ReActE2ETest do
   defmodule AddAgent do
     @moduledoc false
 
-    use Jido.Agent, extensions: [Jido.AI.ReAct]
+    use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
     agent do
       name "react_e2e_add"
     end
 
     slices do
-      slice(:ai, Jido.AI.ReAct)
+      slice(:ai, Jido.Slices.AiReact)
     end
 
     react do

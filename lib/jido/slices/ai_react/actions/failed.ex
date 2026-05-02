@@ -1,4 +1,4 @@
-defmodule Jido.AI.Actions.Failed do
+defmodule Jido.Slices.AiReact.Actions.Failed do
   @moduledoc """
   Handles `"ai.react.failed"` — the in-flight LLM call hit a hard
   transport / API error.

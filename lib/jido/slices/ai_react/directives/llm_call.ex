@@ -1,8 +1,8 @@
-defmodule Jido.AI.Directive.LLMCall do
+defmodule Jido.Slices.AiReact.Directives.LLMCall do
   @moduledoc """
   Side-effect directive: makes one call to `ReqLLM.Generation.generate_text/3`.
 
-  Emitted by `Jido.AI.Actions.Ask` (first turn) and `Jido.AI.Actions.ToolResult`
+  Emitted by `Jido.Slices.AiReact.Actions.Ask` (first turn) and `Jido.Slices.AiReact.Actions.ToolResult`
   (subsequent turns, once all tool results in a batch have come back).
   The executor spawns a Task under the agent's task supervisor — the Task
   is the *only* place a blocking ReqLLM call lives, so the agent process
@@ -10,7 +10,7 @@ defmodule Jido.AI.Directive.LLMCall do
 
   Outcomes are reported back as signals to the originating agent:
 
-    * `"ai.react.llm.completed"` with `%{turn: %Jido.AI.Turn{}, request_id: id}`
+    * `"ai.react.llm.completed"` with `%{turn: %Jido.Slices.AiReact.Turn{}, request_id: id}`
       on success.
     * `"ai.react.failed"` with `%{reason: term, request_id: id}` on
       transport / API error.
@@ -35,12 +35,12 @@ defmodule Jido.AI.Directive.LLMCall do
             llm_opts: []
 end
 
-defimpl Jido.AgentServer.DirectiveExec, for: Jido.AI.Directive.LLMCall do
+defimpl Jido.AgentServer.DirectiveExec, for: Jido.Slices.AiReact.Directives.LLMCall do
   @moduledoc false
 
   alias Jido.AgentServer
-  alias Jido.AI.Directive.LLMCall
-  alias Jido.AI.{ToolAdapter, Turn}
+  alias Jido.Slices.AiReact.Directives.LLMCall
+  alias Jido.Slices.AiReact.{ToolAdapter, Turn}
   alias Jido.Signal
   alias ReqLLM.Context
 

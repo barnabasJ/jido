@@ -1,8 +1,8 @@
-defmodule Jido.AI.Actions.AskTest do
+defmodule Jido.Slices.AiReact.Actions.AskTest do
   use ExUnit.Case, async: true
 
-  alias Jido.AI.Actions.Ask
-  alias Jido.AI.Directive.LLMCall
+  alias Jido.Slices.AiReact.Actions.Ask
+  alias Jido.Slices.AiReact.Directives.LLMCall
   alias Jido.AI.TestActions.TestAdd
   alias ReqLLM.Context
 

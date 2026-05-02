@@ -1,15 +1,15 @@
-defmodule Jido.AI.Actions.ToolResult do
+defmodule Jido.Slices.AiReact.Actions.ToolResult do
   @moduledoc """
   Handles `"ai.react.tool.completed"` — one tool call just finished.
 
-  Each `Jido.AI.Directive.ToolExec` produces one of these signals. The
+  Each `Jido.Slices.AiReact.Directives.ToolExec` produces one of these signals. The
   action appends the result message to `:context` and accumulates the
   result in `:tool_results_received`. When the count matches the
   `:pending_tool_calls` batch, the in-flight batch is complete: the
   action runs cycle detection (comparing the just-finished batch's
   signature against `:previous_tool_signature`), prepends the cycle
   warning to the context if they match, updates the signature, clears
-  the batch bookkeeping, and emits the next `Jido.AI.Directive.LLMCall`.
+  the batch bookkeeping, and emits the next `Jido.Slices.AiReact.Directives.LLMCall`.
 
   Stale signals (`request_id` mismatch) and signals received after the
   slice has already terminated are dropped.
@@ -29,8 +29,8 @@ defmodule Jido.AI.Actions.ToolResult do
            request_id: [type: :string, required: true]
   end
 
-  alias Jido.AI.Directive.LLMCall
-  alias Jido.AI.ReAct
+  alias Jido.Slices.AiReact.Directives.LLMCall
+  alias Jido.Slices.AiReact
   alias ReqLLM.Context
 
   @impl true
@@ -60,7 +60,7 @@ defmodule Jido.AI.Actions.ToolResult do
   end
 
   defp finalize_batch(slice, new_context) do
-    current_signature = ReAct.tool_call_signature(slice.pending_tool_calls)
+    current_signature = AiReact.tool_call_signature(slice.pending_tool_calls)
 
     {warned_context, _} =
       maybe_append_cycle_warning(new_context, slice.previous_tool_signature, current_signature)
@@ -86,7 +86,7 @@ defmodule Jido.AI.Actions.ToolResult do
 
   defp maybe_append_cycle_warning(context, previous_signature, current_signature)
        when is_binary(previous_signature) and previous_signature == current_signature do
-    {Context.append(context, Context.user(ReAct.cycle_warning())), :warned}
+    {Context.append(context, Context.user(AiReact.cycle_warning())), :warned}
   end
 
   defp maybe_append_cycle_warning(context, _previous, _current), do: {context, :no_warning}

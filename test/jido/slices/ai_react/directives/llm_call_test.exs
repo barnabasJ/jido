@@ -1,4 +1,4 @@
-defmodule Jido.AI.Directive.LLMCallTest do
+defmodule Jido.Slices.AiReact.Directives.LLMCallTest do
   # async: false because the directive's executor spawns a Task that
   # calls `ReqLLM.Generation.generate_text/3`. The Mimic stub on that
   # function must be visible from the spawned process — `set_mimic_global/0`
@@ -8,9 +8,9 @@ defmodule Jido.AI.Directive.LLMCallTest do
 
   import Jido.AI.Test.ResponseFixtures
 
-  alias Jido.AI.Directive.LLMCall
+  alias Jido.Slices.AiReact.Directives.LLMCall
   alias Jido.AI.TestActions.TestAdd
-  alias Jido.AI.Turn
+  alias Jido.Slices.AiReact.Turn
   alias ReqLLM.Context
 
   setup :set_mimic_global

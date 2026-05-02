@@ -1,7 +1,7 @@
-defmodule Jido.AI.ToolAdapterTest do
+defmodule Jido.Slices.AiReact.ToolAdapterTest do
   use ExUnit.Case, async: true
 
-  alias Jido.AI.ToolAdapter
+  alias Jido.Slices.AiReact.ToolAdapter
 
   defmodule EmptySchemaAction do
     @moduledoc false

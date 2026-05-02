@@ -11,7 +11,7 @@ sectioned **Spark DSL** surface that Jido ships today.
 > `use Jido.Agent` (ordering matters and a flat ordered list is the
 > right shape). The `extensions: […]` keyword stays available for
 > modules that contribute a typed DSL section to the host (e.g.
-> `Jido.AI.ReAct` to unlock `react do … end`) — it is no longer the
+> `Jido.Slices.AiReact` to unlock `react do … end`) — it is no longer the
 > channel for slice/plugin enumeration.
 >
 > ```elixir
@@ -56,7 +56,7 @@ use Jido.Agent,
   path: :support,
   schema: [...],
   plugins: [Jido.Slices.Identity],
-  slices: [{Jido.AI.ReAct, ...}],
+  slices: [{Jido.Slices.AiReact, ...}],
   middleware: [Jido.Middleware.Persister],
   signal_routes: [{"counter.inc", IncAction}],
   schedules: [{"@daily", "report.run", job_id: :daily}]
@@ -349,7 +349,7 @@ When the slice opts in via `use Jido.Slice.Extension, host_section: :foo`,
 the host gets a typed `foo do … end` block on the agent itself:
 
 ```elixir
-defmodule Jido.AI.ReAct do
+defmodule Jido.Slices.AiReact do
   use Jido.Plugin
   use Jido.Slice.Extension, host_section: :react
 
@@ -365,12 +365,12 @@ defmodule Jido.AI.ReAct do
   end
 
   signal_routes do
-    route "react.start", Jido.AI.Actions.Start
+    route "react.start", Jido.Slices.AiReact.Actions.Start
   end
 end
 
 defmodule MyApp.LLMAgent do
-  use Jido.Agent, extensions: [Jido.AI.ReAct]
+  use Jido.Agent, extensions: [Jido.Slices.AiReact]
 
   agent do
     name "llm_agent"
@@ -399,7 +399,7 @@ the agent's reference page.
 | Slice has a richer config + you want compile-time validation + IDE autocomplete | Mode 3 — `host_section: :foo` + `foo do … end` |
 
 The third mode is preferred for first-party extensions you ship as part
-of an opinionated stack (`Jido.AI.ReAct`, `Jido.Slices.Memory`,
+of an opinionated stack (`Jido.Slices.AiReact`, `Jido.Slices.Memory`,
 `Jido.Slices.Identity`), since it produces the cleanest call sites.
 
 ### Renaming the mount path on a host

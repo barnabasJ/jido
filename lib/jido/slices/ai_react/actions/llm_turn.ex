@@ -1,4 +1,4 @@
-defmodule Jido.AI.Actions.LLMTurn do
+defmodule Jido.Slices.AiReact.Actions.LLMTurn do
   @moduledoc """
   Handles `"ai.react.llm.completed"` — one LLM turn just finished.
 
@@ -11,13 +11,13 @@ defmodule Jido.AI.Actions.LLMTurn do
       `:result`.
     * `tool_calls` turn → append the assistant message (with tool calls)
       to the context, store the calls in `:pending_tool_calls`, and emit
-      one `Jido.AI.Directive.ToolExec` per call. If continuing would
+      one `Jido.Slices.AiReact.Directives.ToolExec` per call. If continuing would
       exceed `:max_iterations` the slice is settled as `:completed`
       *without* tool execution — the run is truncated.
 
   The `:iteration` counter is incremented when each LLM turn lands here,
   so it tracks the number of LLM calls *completed*. Cycle detection is
-  the responsibility of `Jido.AI.Actions.ToolResult` — this action only
+  the responsibility of `Jido.Slices.AiReact.Actions.ToolResult` — this action only
   records the in-flight batch in `:pending_tool_calls`; the comparison
   to `:previous_tool_signature` happens at the boundary where the *next*
   LLMCall fires.
@@ -35,8 +35,8 @@ defmodule Jido.AI.Actions.LLMTurn do
            request_id: [type: :string, required: true]
   end
 
-  alias Jido.AI.Directive.ToolExec
-  alias Jido.AI.Turn
+  alias Jido.Slices.AiReact.Directives.ToolExec
+  alias Jido.Slices.AiReact.Turn
   alias ReqLLM.Context
 
   @impl true

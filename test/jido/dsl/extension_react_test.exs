@@ -1,6 +1,6 @@
 defmodule Jido.Dsl.ExtensionReactTest do
   @moduledoc """
-  End-to-end test for `Jido.AI.ReAct` contributing a `react do … end`
+  End-to-end test for `Jido.Slices.AiReact` contributing a `react do … end`
   block to a host agent. Covers:
 
     * single-extension contribution (the basic case)
@@ -14,19 +14,19 @@ defmodule Jido.Dsl.ExtensionReactTest do
 
   use ExUnit.Case, async: true
 
-  alias Jido.AI.ReAct
+  alias Jido.Slices.AiReact
   alias Jido.Dsl.Agent.Info, as: AgentInfo
 
   defmodule SupportAgent do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.AI.ReAct], default_slices: false
+    use Jido.Agent, extensions: [Jido.Slices.AiReact], default_slices: false
 
     agent do
       name "support"
     end
 
     slices do
-      slice(:ai, Jido.AI.ReAct)
+      slice(:ai, Jido.Slices.AiReact)
     end
 
     react do
@@ -40,7 +40,7 @@ defmodule Jido.Dsl.ExtensionReactTest do
   describe "single contribution: ReAct + react do … end" do
     test "produces a slice instance for ReAct mounted at :ai" do
       instances = AgentInfo.slice_instances(SupportAgent)
-      react_instance = Enum.find(instances, &(&1.module == ReAct))
+      react_instance = Enum.find(instances, &(&1.module == AiReact))
 
       assert react_instance
       assert react_instance.path == :ai
@@ -48,7 +48,7 @@ defmodule Jido.Dsl.ExtensionReactTest do
 
     test "applies the typed-block config to the slice instance" do
       instances = AgentInfo.slice_instances(SupportAgent)
-      %{config: config} = Enum.find(instances, &(&1.module == ReAct))
+      %{config: config} = Enum.find(instances, &(&1.module == AiReact))
 
       assert config[:model] == "anthropic:claude-haiku-4-5-20251001"
       assert config[:tools] == [Jido.AI.TestActions.TestAdd]
@@ -59,14 +59,14 @@ defmodule Jido.Dsl.ExtensionReactTest do
 
   defmodule RenamedReactAgent do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.AI.ReAct], default_slices: false
+    use Jido.Agent, extensions: [Jido.Slices.AiReact], default_slices: false
 
     agent do
       name "renamed_react"
     end
 
     slices do
-      slice(:reasoning, Jido.AI.ReAct)
+      slice(:reasoning, Jido.Slices.AiReact)
     end
 
     react do
@@ -78,7 +78,7 @@ defmodule Jido.Dsl.ExtensionReactTest do
   describe "agent-declared mount path for ReAct" do
     test "the slice mounts at the agent-declared path even when the typed `react do` block is present" do
       instances = AgentInfo.slice_instances(RenamedReactAgent)
-      react_instance = Enum.find(instances, &(&1.module == ReAct))
+      react_instance = Enum.find(instances, &(&1.module == AiReact))
 
       assert react_instance.path == :reasoning
     end
