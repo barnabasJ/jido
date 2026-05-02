@@ -55,7 +55,7 @@ use Jido.Agent,
   name: "support_agent",
   path: :support,
   schema: [...],
-  plugins: [Jido.Identity.Slice],
+  plugins: [Jido.Slices.Identity],
   slices: [{Jido.AI.ReAct, ...}],
   middleware: [Jido.Middleware.Persister],
   signal_routes: [{"counter.inc", IncAction}],
@@ -316,7 +316,7 @@ agent.
 ### Mode 1 — `extensions: [Mod]` (no per-host config needed)
 
 ```elixir
-use Jido.Agent, extensions: [Jido.Identity.Slice]
+use Jido.Agent, extensions: [Jido.Slices.Identity]
 
 agent do
   name "support_agent"
@@ -400,7 +400,7 @@ the agent's reference page.
 
 The third mode is preferred for first-party extensions you ship as part
 of an opinionated stack (`Jido.AI.ReAct`, `Jido.Slices.Memory`,
-`Jido.Identity.Slice`), since it produces the cleanest call sites.
+`Jido.Slices.Identity`), since it produces the cleanest call sites.
 
 ### Renaming the mount path on a host
 

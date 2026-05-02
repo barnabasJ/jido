@@ -1,10 +1,10 @@
-defmodule Jido.Identity.Actions.Evolve do
+defmodule Jido.Slices.Identity.Actions.Evolve do
   @moduledoc """
   Evolves agent identity over simulated time.
 
   Advances the identity slice through simulated time, accumulating
   experiences and changes over days or years. Operates on the `:identity`
-  slice — see `Jido.Identity.Slice`.
+  slice — see `Jido.Slices.Identity`.
   """
 
   use Jido.Action
@@ -18,8 +18,8 @@ defmodule Jido.Identity.Actions.Evolve do
   end
 
   def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
-    identity = slice || Jido.Identity.new()
-    evolved = Jido.Identity.evolve(identity, Map.to_list(params))
+    identity = slice || Jido.Slices.Identity.State.new()
+    evolved = Jido.Slices.Identity.State.evolve(identity, Map.to_list(params))
     {:ok, evolved, []}
   end
 end

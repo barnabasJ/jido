@@ -119,7 +119,7 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
       modules = Jido.Dsl.Agent.Info.slices(DefaultAgent)
 
       assert Jido.Thread.Slice in modules
-      assert Jido.Identity.Slice in modules
+      assert Jido.Slices.Identity in modules
     end
   end
 

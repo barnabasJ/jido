@@ -1,13 +1,13 @@
-defmodule Jido.Identity.Actions.UpdateProfile do
+defmodule Jido.Slices.Identity.Actions.UpdateProfile do
   @moduledoc """
   Merges a partial profile map into the identity, bumping the revision.
-  Materializes the slice via `Jido.Identity.new/0` when it has not been
+  Materializes the slice via `Jido.Slices.Identity.State.new/0` when it has not been
   initialized yet.
   """
 
   use Jido.Action
 
-  alias Jido.Identity
+  alias Jido.Slices.Identity.State
 
   action do
     name "identity_update_profile"
@@ -23,9 +23,9 @@ defmodule Jido.Identity.Actions.UpdateProfile do
   @impl true
   def run(%Jido.Signal{data: %{profile: profile}}, slice, _opts, _ctx) do
     identity = ensure_identity(slice)
-    {:ok, Identity.update_profile(identity, profile), []}
+    {:ok, State.update_profile(identity, profile), []}
   end
 
-  defp ensure_identity(%Identity{} = identity), do: identity
-  defp ensure_identity(_), do: Identity.new()
+  defp ensure_identity(%State{} = identity), do: identity
+  defp ensure_identity(_), do: State.new()
 end

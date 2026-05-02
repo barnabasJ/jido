@@ -18,7 +18,7 @@ defmodule Jido.Dsl.InstanceTest do
     slices = TestInstance.__default_slices__()
     modules = Enum.map(slices, &Jido.Agent.DefaultSlices.module_of/1)
     assert Jido.Slices.Memory in modules
-    assert Jido.Identity.Slice in modules
+    assert Jido.Slices.Identity in modules
     assert Jido.Thread.Slice in modules
   end
 

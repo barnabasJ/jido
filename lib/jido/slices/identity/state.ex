@@ -1,4 +1,4 @@
-defmodule Jido.Identity do
+defmodule Jido.Slices.Identity.State do
   @moduledoc """
   A first-class agent primitive representing who the agent is.
 

@@ -1,13 +1,13 @@
-defmodule Jido.Identity.Actions.Ensure do
+defmodule Jido.Slices.Identity.Actions.Ensure do
   @moduledoc """
-  Ensures the agent has a `%Jido.Identity{}` mounted at the `:identity`
-  slice. Materializes a fresh `Jido.Identity.new/1` when the slice is
+  Ensures the agent has a `%Jido.Slices.Identity.State{}` mounted at the `:identity`
+  slice. Materializes a fresh `Jido.Slices.Identity.State.new/1` when the slice is
   empty; otherwise no-op.
   """
 
   use Jido.Action
 
-  alias Jido.Identity
+  alias Jido.Slices.Identity.State
 
   action do
     name "identity_ensure"
@@ -23,8 +23,8 @@ defmodule Jido.Identity.Actions.Ensure do
   @impl true
   def run(%Jido.Signal{data: data}, slice, _opts, _ctx) do
     case slice do
-      %Identity{} = identity -> {:ok, identity, []}
-      _ -> {:ok, Identity.new(Map.to_list(data)), []}
+      %State{} = identity -> {:ok, identity, []}
+      _ -> {:ok, State.new(Map.to_list(data)), []}
     end
   end
 end

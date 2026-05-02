@@ -3,11 +3,11 @@ defmodule JidoExampleTest.IdentitySliceTest do
   Example test demonstrating Identity as a default slice.
 
   This test shows:
-  - Every agent gets `Jido.Identity.Slice` automatically (default slice)
-  - Initializing identity through `Jido.Identity.Actions.Ensure` via `cmd/2`
+  - Every agent gets `Jido.Slices.Identity` automatically (default slice)
+  - Initializing identity through `Jido.Slices.Identity.Actions.Ensure` via `cmd/2`
   - Reading identity directly off `agent.state[:identity]`
   - Snapshot for sharing identity with other agents
-  - Evolving identity over simulated time via `Jido.Identity.evolve/2` and the Evolve action
+  - Evolving identity over simulated time via `Jido.Slices.Identity.State.evolve/2` and the Evolve action
   - Replacing the default Identity.Slice with a custom implementation
   - Disabling the identity slice with `default_slices: %{identity: false}`
 
@@ -18,7 +18,7 @@ defmodule JidoExampleTest.IdentitySliceTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
-  alias Jido.Identity
+  alias Jido.Slices.Identity.State
 
   # ===========================================================================
   # CUSTOM IDENTITY SLICE
@@ -53,7 +53,7 @@ defmodule JidoExampleTest.IdentitySliceTest do
     end
 
     signal_routes do
-      route "evolve", Jido.Identity.Actions.Evolve
+      route "evolve", Jido.Slices.Identity.Actions.Evolve
     end
   end
 
@@ -100,10 +100,10 @@ defmodule JidoExampleTest.IdentitySliceTest do
       {:ok, agent, []} =
         WebCrawlerAgent.cmd(
           agent,
-          {Jido.Identity.Actions.Ensure, %{profile: %{age: 0, origin: :configured}}}
+          {Jido.Slices.Identity.Actions.Ensure, %{profile: %{age: 0, origin: :configured}}}
         )
 
-      assert %Identity{} = agent.state[:identity]
+      assert %State{} = agent.state[:identity]
       assert agent.state.identity.profile[:age] == 0
       assert agent.state.identity.profile[:origin] == :configured
     end
@@ -116,10 +116,11 @@ defmodule JidoExampleTest.IdentitySliceTest do
       {:ok, agent, []} =
         WebCrawlerAgent.cmd(
           agent,
-          {Jido.Identity.Actions.Ensure, %{profile: %{age: 3, generation: 2, origin: :spawned}}}
+          {Jido.Slices.Identity.Actions.Ensure,
+           %{profile: %{age: 3, generation: 2, origin: :spawned}}}
         )
 
-      snapshot = Identity.snapshot(agent.state.identity)
+      snapshot = State.snapshot(agent.state.identity)
 
       assert snapshot.profile[:age] == 3
       assert snapshot.profile[:generation] == 2
@@ -134,13 +135,13 @@ defmodule JidoExampleTest.IdentitySliceTest do
 
   describe "evolution" do
     test "evolve identity with pure function" do
-      identity = Identity.new(profile: %{age: 0})
+      identity = State.new(profile: %{age: 0})
 
-      evolved = Identity.evolve(identity, years: 2)
+      evolved = State.evolve(identity, years: 2)
       assert evolved.profile[:age] == 2
       assert evolved.rev == 1
 
-      evolved = Identity.evolve(evolved, days: 730)
+      evolved = State.evolve(evolved, days: 730)
       assert evolved.profile[:age] == 4
       assert evolved.rev == 2
     end
@@ -151,11 +152,11 @@ defmodule JidoExampleTest.IdentitySliceTest do
       {:ok, agent, []} =
         WebCrawlerAgent.cmd(
           agent,
-          {Jido.Identity.Actions.Ensure, %{profile: %{age: 0}}}
+          {Jido.Slices.Identity.Actions.Ensure, %{profile: %{age: 0}}}
         )
 
       {:ok, agent, []} =
-        WebCrawlerAgent.cmd(agent, {Jido.Identity.Actions.Evolve, %{years: 3}})
+        WebCrawlerAgent.cmd(agent, {Jido.Slices.Identity.Actions.Evolve, %{years: 3}})
 
       assert agent.state.identity.profile[:age] == 3
     end
@@ -166,11 +167,11 @@ defmodule JidoExampleTest.IdentitySliceTest do
       {:ok, agent, []} =
         WebCrawlerAgent.cmd(
           agent,
-          {Jido.Identity.Actions.Ensure, %{profile: %{age: 0, origin: :test}}}
+          {Jido.Slices.Identity.Actions.Ensure, %{profile: %{age: 0, origin: :test}}}
         )
 
       {:ok, agent, []} =
-        WebCrawlerAgent.cmd(agent, {Jido.Identity.Actions.Evolve, %{years: 5}})
+        WebCrawlerAgent.cmd(agent, {Jido.Slices.Identity.Actions.Evolve, %{years: 5}})
 
       assert agent.state.identity.profile[:age] == 5
       assert agent.state.identity.profile[:origin] == :test
@@ -182,7 +183,7 @@ defmodule JidoExampleTest.IdentitySliceTest do
       modules = Jido.Dsl.Agent.Info.slices(PreConfiguredAgent)
 
       assert CustomIdentitySlice in modules
-      refute Jido.Identity.Slice in modules
+      refute Jido.Slices.Identity in modules
     end
   end
 
@@ -194,7 +195,7 @@ defmodule JidoExampleTest.IdentitySliceTest do
       refute Map.has_key?(agent.state, :identity)
 
       modules = Jido.Dsl.Agent.Info.slices(NoIdentityAgent)
-      refute Jido.Identity.Slice in modules
+      refute Jido.Slices.Identity in modules
     end
   end
 end

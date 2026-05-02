@@ -59,7 +59,7 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
       {:ok, agent, []} =
         FullAgent.cmd(
           agent,
-          {Jido.Identity.Actions.Ensure, %{profile: %{age: 5, origin: :test}}}
+          {Jido.Slices.Identity.Actions.Ensure, %{profile: %{age: 5, origin: :test}}}
         )
 
       agent = %{
@@ -124,7 +124,7 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
       {:ok, agent, []} =
         FullAgent.cmd(
           agent,
-          {Jido.Identity.Actions.Ensure, %{profile: %{age: 3, origin: :spawned}}}
+          {Jido.Slices.Identity.Actions.Ensure, %{profile: %{age: 3, origin: :spawned}}}
         )
 
       {:ok, agent, []} = FullAgent.cmd(agent, {Jido.Slices.Memory.Actions.Ensure, %{}})

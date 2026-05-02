@@ -50,7 +50,7 @@ defmodule Jido.Dsl.AgentTest do
       assert AgentInfo.plugins(SimpleAgent) == []
       # Framework default slices are auto-attached.
       assert Jido.Slices.Memory in AgentInfo.slices(SimpleAgent)
-      assert Jido.Identity.Slice in AgentInfo.slices(SimpleAgent)
+      assert Jido.Slices.Identity in AgentInfo.slices(SimpleAgent)
       assert Jido.Thread.Slice in AgentInfo.slices(SimpleAgent)
       assert AgentInfo.middleware(SimpleAgent) == []
     end

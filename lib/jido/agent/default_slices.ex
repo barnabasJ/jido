@@ -26,7 +26,7 @@ defmodule Jido.Agent.DefaultSlices do
 
       [
         {:thread, Jido.Thread.Slice},
-        {:identity, Jido.Identity.Slice},
+        {:identity, Jido.Slices.Identity},
         {:memory, Jido.Slices.Memory}
       ]
 
@@ -50,7 +50,7 @@ defmodule Jido.Agent.DefaultSlices do
 
   @package_defaults [
     {:thread, Jido.Thread.Slice},
-    {:identity, Jido.Identity.Slice},
+    {:identity, Jido.Slices.Identity},
     {:memory, Jido.Slices.Memory}
   ]
 

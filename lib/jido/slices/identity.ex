@@ -1,13 +1,13 @@
-defmodule Jido.Identity.Slice do
+defmodule Jido.Slices.Identity do
   @moduledoc """
   Identity slice — owns the `:identity` key in agent state, mounted as a
-  `%Jido.Identity{}` self-model.
+  `%Jido.Slices.Identity.State{}` self-model.
 
   ## State shape
 
-  Bound to `Jido.Identity.schema/0`. The slice starts as `nil` (lazy-init);
+  Bound to `Jido.Slices.Identity.State.schema/0`. The slice starts as `nil` (lazy-init);
   the first inbound `jido.identity.*` signal materializes a fresh
-  `%Jido.Identity{}` via the relevant action.
+  `%Jido.Slices.Identity.State{}` via the relevant action.
 
   ## Routes
 
@@ -27,15 +27,15 @@ defmodule Jido.Identity.Slice do
       end
   """
 
-  alias Jido.Identity
-  alias Jido.Identity.Actions
+  alias Jido.Slices.Identity.State
+  alias Jido.Slices.Identity.Actions
 
   use Jido.Slice
 
   slice do
     name "identity"
     description "Identity self-model for agent (lifecycle facts, profile)."
-    schema Identity.schema()
+    schema State.schema()
   end
 
   signal_routes do
@@ -50,11 +50,11 @@ defmodule Jido.Identity.Slice do
 
   @identity_section %Spark.Dsl.Section{
     name: :identity,
-    describe: "Configuration block contributed by Jido.Identity.Slice.",
+    describe: "Configuration block contributed by Jido.Slices.Identity.",
     schema: []
   }
 
   use Spark.Dsl.Extension,
     sections: [@identity_section],
-    transformers: [Jido.Identity.Slice.Transformers.RegisterContribution]
+    transformers: [Jido.Slices.Identity.Transformers.RegisterContribution]
 end

@@ -287,7 +287,7 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
   # ===========================================================================
 
   describe "renamed framework singletons" do
-    test "Jido.Identity.Slice attaches via the default-slices path" do
+    test "Jido.Slices.Identity attaches via the default-slices path" do
       defmodule AgentDefaultSlices do
         use Jido.Agent
 
@@ -297,7 +297,7 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
       end
 
       modules = AgentInfo.slices(AgentDefaultSlices)
-      assert Jido.Identity.Slice in modules
+      assert Jido.Slices.Identity in modules
       assert Jido.Slices.Memory in modules
       assert Jido.Thread.Slice in modules
     end

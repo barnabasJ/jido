@@ -3,9 +3,9 @@ defmodule JidoTest.Identity.SliceTest do
 
   alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
-  alias Jido.Identity
-  alias Jido.Identity.Actions
-  alias Jido.Identity.Slice, as: IdentitySlice
+  alias Jido.Slices.Identity.State
+  alias Jido.Slices.Identity.Actions
+  alias Jido.Slices.Identity, as: IdentitySlice
 
   describe "slice metadata" do
     test "name is identity" do
@@ -28,8 +28,8 @@ defmodule JidoTest.Identity.SliceTest do
              )
     end
 
-    test "schema is bound to Jido.Identity.schema/0" do
-      assert SliceInfo.schema(IdentitySlice) == Identity.schema()
+    test "schema is bound to Jido.Slices.Identity.State.schema/0" do
+      assert SliceInfo.schema(IdentitySlice) == State.schema()
     end
 
     test "exposes one signal route per action" do
@@ -66,7 +66,7 @@ defmodule JidoTest.Identity.SliceTest do
     end
 
     test "agent includes identity slice by default" do
-      assert Jido.Identity.Slice in AgentInfo.slices(AgentWithIdentity)
+      assert Jido.Slices.Identity in AgentInfo.slices(AgentWithIdentity)
     end
 
     test "agent.state[:identity] starts nil (lazy init)" do
@@ -75,13 +75,13 @@ defmodule JidoTest.Identity.SliceTest do
     end
 
     test "agent can disable identity slice" do
-      refute Jido.Identity.Slice in AgentInfo.slices(AgentWithoutIdentity)
+      refute Jido.Slices.Identity in AgentInfo.slices(AgentWithoutIdentity)
     end
 
     test "identity can be attached after creation via Ensure action" do
       agent = AgentWithIdentity.new()
-      {:ok, agent, []} = AgentWithIdentity.cmd(agent, {Jido.Identity.Actions.Ensure, %{}})
-      assert %Identity{} = agent.state[:identity]
+      {:ok, agent, []} = AgentWithIdentity.cmd(agent, {Jido.Slices.Identity.Actions.Ensure, %{}})
+      assert %State{} = agent.state[:identity]
     end
 
     test "UpdateProfile action mutates agent.state.identity" do

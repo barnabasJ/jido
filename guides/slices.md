@@ -69,7 +69,7 @@ agent.state == %{
   domain: %{...},      # the agent's own slice (declared on use Jido.Agent)
   chat: %{...},        # MyApp.ChatSlice
   thread: %{...},      # Jido.Thread.Slice
-  identity: %{...}     # Jido.Identity.Slice
+  identity: %{...}     # Jido.Slices.Identity
 }
 ```
 
