@@ -1,4 +1,4 @@
-defmodule Jido.Memory.Actions.AppendToSpace do
+defmodule Jido.Slices.Memory.Actions.AppendToSpace do
   @moduledoc """
   Appends `item` to the end of an ordered (list) space. Raises when the
   named space is missing or not a list space.
@@ -6,7 +6,7 @@ defmodule Jido.Memory.Actions.AppendToSpace do
 
   use Jido.Action
 
-  alias Jido.Memory
+  alias Jido.Slices.Memory.State
 
   action do
     name "memory_append_to_space"
@@ -19,9 +19,9 @@ defmodule Jido.Memory.Actions.AppendToSpace do
   @impl true
   def run(%Jido.Signal{data: %{space: name, item: item}}, slice, _opts, _ctx) do
     memory = ensure_memory(slice)
-    {:ok, Memory.append_to_space(memory, name, item), []}
+    {:ok, State.append_to_space(memory, name, item), []}
   end
 
-  defp ensure_memory(%Memory{} = memory), do: memory
-  defp ensure_memory(_), do: Memory.new()
+  defp ensure_memory(%State{} = memory), do: memory
+  defp ensure_memory(_), do: State.new()
 end

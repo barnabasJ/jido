@@ -3,9 +3,9 @@ defmodule JidoTest.Memory.SliceTest do
 
   alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
-  alias Jido.Memory
-  alias Jido.Memory.Actions
-  alias Jido.Memory.Slice, as: MemorySlice
+  alias Jido.Slices.Memory.State
+  alias Jido.Slices.Memory.Actions
+  alias Jido.Slices.Memory, as: MemorySlice
 
   describe "slice metadata" do
     test "name is memory" do
@@ -19,7 +19,7 @@ defmodule JidoTest.Memory.SliceTest do
       assert :memory in SliceInfo.capabilities(MemorySlice)
     end
 
-    test "exposes the eight Jido.Memory.Actions.* modules via actions/1" do
+    test "exposes the eight Jido.Slices.Memory.Actions.* modules via actions/1" do
       action_set = MapSet.new(SliceInfo.actions(MemorySlice))
 
       assert MapSet.equal?(
@@ -37,8 +37,8 @@ defmodule JidoTest.Memory.SliceTest do
              )
     end
 
-    test "schema is bound to Jido.Memory.schema/0" do
-      assert SliceInfo.schema(MemorySlice) == Memory.schema()
+    test "schema is bound to Jido.Slices.Memory.State.schema/0" do
+      assert SliceInfo.schema(MemorySlice) == State.schema()
     end
 
     test "exposes one signal route per action" do
@@ -80,17 +80,17 @@ defmodule JidoTest.Memory.SliceTest do
     end
 
     test "agent includes memory slice by default" do
-      assert Jido.Memory.Slice in AgentInfo.slices(AgentWithMemory)
+      assert Jido.Slices.Memory in AgentInfo.slices(AgentWithMemory)
     end
 
     test "agent can disable memory slice" do
-      refute Jido.Memory.Slice in AgentInfo.slices(AgentWithoutMemory)
+      refute Jido.Slices.Memory in AgentInfo.slices(AgentWithoutMemory)
     end
 
     test "memory can be attached after creation via Ensure action" do
       agent = AgentWithMemory.new()
-      {:ok, agent, []} = AgentWithMemory.cmd(agent, {Jido.Memory.Actions.Ensure, %{}})
-      assert %Memory{} = agent.state[:memory]
+      {:ok, agent, []} = AgentWithMemory.cmd(agent, {Jido.Slices.Memory.Actions.Ensure, %{}})
+      assert %State{} = agent.state[:memory]
     end
 
     test "PutInSpace action mutates agent.state.memory.spaces[:world]" do

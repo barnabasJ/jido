@@ -1,15 +1,15 @@
-defmodule Jido.Memory.Slice.Transformers.RegisterContribution do
+defmodule Jido.Slices.Memory.Transformers.RegisterContribution do
   @moduledoc """
-  Registers `Jido.Memory.Slice` as the slice module that owns the contributed
+  Registers `Jido.Slices.Memory` as the slice module that owns the contributed
   `memory do … end` section in the host agent's `:jido_contributed_sections`
   map.
 
   `Jido.Dsl.Agent.Transformers.WalkExtensions.read_contributed_block/2`
   reads this map to know which contributed-section opts to merge into a
   given slice's instance config. By persisting
-  `%{Jido.Memory.Slice => :memory}`, this transformer makes the
+  `%{Jido.Slices.Memory => :memory}`, this transformer makes the
   `memory do … end` block opts flow into the Memory slice's instance
-  config when the user mounts `slices do slice :memory, Jido.Memory.Slice end`.
+  config when the user mounts `slices do slice :memory, Jido.Slices.Memory end`.
 
   Pure `Spark.Dsl.Transformer.persist/3` — no Jido-custom callbacks.
   """
@@ -30,7 +30,7 @@ defmodule Jido.Memory.Slice.Transformers.RegisterContribution do
      Transformer.persist(
        dsl_state,
        :jido_contributed_sections,
-       Map.put(contributed, Jido.Memory.Slice, :memory)
+       Map.put(contributed, Jido.Slices.Memory, :memory)
      )}
   end
 end

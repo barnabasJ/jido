@@ -1,17 +1,17 @@
-defmodule Jido.Memory.Actions.UpdateSpace do
+defmodule Jido.Slices.Memory.Actions.UpdateSpace do
   @moduledoc """
   Replaces an existing space's value while bumping its revision.
 
-  Unlike `Jido.Memory.Actions.PutSpace`, this action raises when the named
+  Unlike `Jido.Slices.Memory.Actions.PutSpace`, this action raises when the named
   space is not present — it is the wire-level analogue of
-  `Jido.Memory.update_space/4` for a value-shaped (rather than function-shaped)
+  `Jido.Slices.Memory.State.update_space/4` for a value-shaped (rather than function-shaped)
   signal payload.
   """
 
   use Jido.Action
 
-  alias Jido.Memory
-  alias Jido.Memory.Space
+  alias Jido.Slices.Memory.State
+  alias Jido.Slices.Memory.Space
 
   action do
     name "memory_update_space"
@@ -21,16 +21,16 @@ defmodule Jido.Memory.Actions.UpdateSpace do
            value: [
              type: :any,
              required: true,
-             doc: "Replacement %Jido.Memory.Space{} value."
+             doc: "Replacement %Jido.Slices.Memory.Space{} value."
            ]
   end
 
   @impl true
   def run(%Jido.Signal{data: %{space: name, value: %Space{} = new_space}}, slice, _opts, _ctx) do
     memory = ensure_memory(slice)
-    {:ok, Memory.update_space(memory, name, fn _existing -> new_space end), []}
+    {:ok, State.update_space(memory, name, fn _existing -> new_space end), []}
   end
 
-  defp ensure_memory(%Memory{} = memory), do: memory
-  defp ensure_memory(_), do: Memory.new()
+  defp ensure_memory(%State{} = memory), do: memory
+  defp ensure_memory(_), do: State.new()
 end

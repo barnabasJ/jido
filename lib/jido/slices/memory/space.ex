@@ -1,4 +1,4 @@
-defmodule Jido.Memory.Space do
+defmodule Jido.Slices.Memory.Space do
   @moduledoc """
   The unit of memory — a named container with typed data and revision tracking.
 

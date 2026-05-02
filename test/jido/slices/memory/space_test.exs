@@ -1,7 +1,7 @@
 defmodule JidoTest.Memory.SpaceTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Memory.Space
+  alias Jido.Slices.Memory.Space
 
   describe "new/1" do
     test "creates space with default values" do
@@ -85,7 +85,7 @@ defmodule JidoTest.Memory.SpaceTest do
   describe "schema/0" do
     test "returns Zoi schema" do
       schema = Space.schema()
-      assert %Zoi.Types.Struct{module: Jido.Memory.Space} = schema
+      assert %Zoi.Types.Struct{module: Jido.Slices.Memory.Space} = schema
     end
   end
 end

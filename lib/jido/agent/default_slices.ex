@@ -27,7 +27,7 @@ defmodule Jido.Agent.DefaultSlices do
       [
         {:thread, Jido.Thread.Slice},
         {:identity, Jido.Identity.Slice},
-        {:memory, Jido.Memory.Slice}
+        {:memory, Jido.Slices.Memory}
       ]
 
   ## Agent-level override
@@ -51,7 +51,7 @@ defmodule Jido.Agent.DefaultSlices do
   @package_defaults [
     {:thread, Jido.Thread.Slice},
     {:identity, Jido.Identity.Slice},
-    {:memory, Jido.Memory.Slice}
+    {:memory, Jido.Slices.Memory}
   ]
 
   @type default_entry ::

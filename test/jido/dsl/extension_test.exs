@@ -79,7 +79,7 @@ defmodule Jido.Dsl.ExtensionTest do
       Code.compile_string("""
       defmodule Jido.Dsl.ExtensionTest.HostValidMemory do
         use Jido.Agent,
-          extensions: [Jido.Memory.Slice],
+          extensions: [Jido.Slices.Memory],
           default_slices: false
 
         agent do
@@ -87,7 +87,7 @@ defmodule Jido.Dsl.ExtensionTest do
         end
 
         slices do
-          slice :short_term, Jido.Memory.Slice
+          slice :short_term, Jido.Slices.Memory
         end
       end
       """)

@@ -1,4 +1,4 @@
-defmodule Jido.Memory.Actions.DeleteSpace do
+defmodule Jido.Slices.Memory.Actions.DeleteSpace do
   @moduledoc """
   Deletes a non-reserved space. Raises `ArgumentError` for reserved spaces
   (`:tasks`, `:world`).
@@ -6,7 +6,7 @@ defmodule Jido.Memory.Actions.DeleteSpace do
 
   use Jido.Action
 
-  alias Jido.Memory
+  alias Jido.Slices.Memory.State
 
   action do
     name "memory_delete_space"
@@ -18,9 +18,9 @@ defmodule Jido.Memory.Actions.DeleteSpace do
   @impl true
   def run(%Jido.Signal{data: %{space: name}}, slice, _opts, _ctx) do
     memory = ensure_memory(slice)
-    {:ok, Memory.delete_space(memory, name), []}
+    {:ok, State.delete_space(memory, name), []}
   end
 
-  defp ensure_memory(%Memory{} = memory), do: memory
-  defp ensure_memory(_), do: Memory.new()
+  defp ensure_memory(%State{} = memory), do: memory
+  defp ensure_memory(_), do: State.new()
 end

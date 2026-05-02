@@ -17,7 +17,7 @@ sectioned **Spark DSL** surface that Jido ships today.
 > ```elixir
 > # Before:
 > use Jido.Agent,
->   extensions: [Jido.Memory.Slice, Jido.Plugin.FSM, Jido.Middleware.Retry]
+>   extensions: [Jido.Slices.Memory, Jido.Plugin.FSM, Jido.Middleware.Retry]
 >
 > # After:
 > use Jido.Agent, middleware: [Jido.Plugin.FSM, Jido.Middleware.Retry]
@@ -28,7 +28,7 @@ sectioned **Spark DSL** surface that Jido ships today.
 > end
 >
 > slices do
->   slice :memory, Jido.Memory.Slice
+>   slice :memory, Jido.Slices.Memory
 >   slice :fsm, Jido.Plugin.FSM
 > end
 > ```
@@ -92,16 +92,16 @@ framework defaults. We'll use `MyApp.SupportAgent` as the example.
 defmodule MyApp.SupportAgent do
   use Jido.Agent,
     name: "support_agent",
-    description: "Agent backed by Jido.Memory.Slice",
+    description: "Agent backed by Jido.Slices.Memory",
     path: :state,
     schema: [
       messages: [type: {:list, :map}, default: []],
       memory_kind: [type: :atom, default: :ephemeral]
     ],
-    slices: [Jido.Memory.Slice],
+    slices: [Jido.Slices.Memory],
     signal_routes: [
-      {"memory.store", Jido.Memory.Actions.Store},
-      {"memory.recall", Jido.Memory.Actions.Recall}
+      {"memory.store", Jido.Slices.Memory.Actions.Store},
+      {"memory.recall", Jido.Slices.Memory.Actions.Recall}
     ]
 end
 ```
@@ -110,11 +110,11 @@ end
 
 ```elixir
 defmodule MyApp.SupportAgent do
-  use Jido.Agent, extensions: [Jido.Memory.Slice]
+  use Jido.Agent, extensions: [Jido.Slices.Memory]
 
   agent do
     name "support_agent"
-    description "Agent backed by Jido.Memory.Slice"
+    description "Agent backed by Jido.Slices.Memory"
     path :state
     schema [
       messages: [type: {:list, :map}, default: []],
@@ -123,8 +123,8 @@ defmodule MyApp.SupportAgent do
   end
 
   signal_routes do
-    route "memory.store", Jido.Memory.Actions.Store
-    route "memory.recall", Jido.Memory.Actions.Recall
+    route "memory.store", Jido.Slices.Memory.Actions.Store
+    route "memory.recall", Jido.Slices.Memory.Actions.Recall
   end
 end
 ```
@@ -172,13 +172,13 @@ Info.signal_routes(MyApp.SupportAgent)
 
 ## One slice module migration
 
-`Jido.Memory.Slice` is a working in-tree slice — declares a name, path,
+`Jido.Slices.Memory` is a working in-tree slice — declares a name, path,
 schema, routes, and capabilities.
 
 ### Before
 
 ```elixir
-defmodule Jido.Memory.Slice do
+defmodule Jido.Slices.Memory do
   use Jido.Slice,
     name: "memory",
     path: :memory,
@@ -190,8 +190,8 @@ defmodule Jido.Memory.Slice do
     config_schema: Zoi.object(%{kind: Zoi.atom() |> Zoi.default(:ephemeral)}),
     capabilities: [:memory],
     signal_routes: [
-      {"memory.store", Jido.Memory.Actions.Store},
-      {"memory.recall", Jido.Memory.Actions.Recall}
+      {"memory.store", Jido.Slices.Memory.Actions.Store},
+      {"memory.recall", Jido.Slices.Memory.Actions.Recall}
     ]
 end
 ```
@@ -199,7 +199,7 @@ end
 ### After
 
 ```elixir
-defmodule Jido.Memory.Slice do
+defmodule Jido.Slices.Memory do
   use Jido.Slice
 
   slice do
@@ -214,8 +214,8 @@ defmodule Jido.Memory.Slice do
   end
 
   signal_routes do
-    route "memory.store", Jido.Memory.Actions.Store
-    route "memory.recall", Jido.Memory.Actions.Recall
+    route "memory.store", Jido.Slices.Memory.Actions.Store
+    route "memory.recall", Jido.Slices.Memory.Actions.Recall
   end
 
   capabilities do
@@ -336,7 +336,7 @@ override:
 
 ```elixir
 use Jido.Agent, extensions: [
-  {Jido.Memory.Slice, %{kind: :persistent}}
+  {Jido.Slices.Memory, %{kind: :persistent}}
 ]
 ```
 
@@ -399,7 +399,7 @@ the agent's reference page.
 | Slice has a richer config + you want compile-time validation + IDE autocomplete | Mode 3 — `host_section: :foo` + `foo do … end` |
 
 The third mode is preferred for first-party extensions you ship as part
-of an opinionated stack (`Jido.AI.ReAct`, `Jido.Memory.Slice`,
+of an opinionated stack (`Jido.AI.ReAct`, `Jido.Slices.Memory`,
 `Jido.Identity.Slice`), since it produces the cleanest call sites.
 
 ### Renaming the mount path on a host

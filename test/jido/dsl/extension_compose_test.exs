@@ -22,7 +22,7 @@ defmodule Jido.Dsl.ExtensionComposeTest do
     end
 
     slices do
-      slice(:short_term, Jido.Memory.Slice)
+      slice(:short_term, Jido.Slices.Memory)
       slice(:who, Jido.Identity.Slice)
       slice(:history, Jido.Thread.Slice)
     end
@@ -32,7 +32,7 @@ defmodule Jido.Dsl.ExtensionComposeTest do
     test "all three slices mount at the agent-declared paths" do
       instances = AgentInfo.slice_instances(MultiHost)
 
-      memory = Enum.find(instances, &(&1.module == Jido.Memory.Slice))
+      memory = Enum.find(instances, &(&1.module == Jido.Slices.Memory))
       identity = Enum.find(instances, &(&1.module == Jido.Identity.Slice))
       thread = Enum.find(instances, &(&1.module == Jido.Thread.Slice))
 
@@ -51,7 +51,7 @@ defmodule Jido.Dsl.ExtensionComposeTest do
     end
 
     slices do
-      slice(:memory, Jido.Memory.Slice)
+      slice(:memory, Jido.Slices.Memory)
       slice(:identity, Jido.Identity.Slice)
     end
   end
@@ -60,7 +60,7 @@ defmodule Jido.Dsl.ExtensionComposeTest do
     test "still produce slice instances at the slice's declared path" do
       instances = AgentInfo.slice_instances(HostNoBlocks)
 
-      memory = Enum.find(instances, &(&1.module == Jido.Memory.Slice))
+      memory = Enum.find(instances, &(&1.module == Jido.Slices.Memory))
       identity = Enum.find(instances, &(&1.module == Jido.Identity.Slice))
 
       assert memory.path == :memory

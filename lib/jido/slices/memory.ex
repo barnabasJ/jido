@@ -1,18 +1,18 @@
-defmodule Jido.Memory.Slice do
+defmodule Jido.Slices.Memory do
   @moduledoc """
   Memory slice — owns the `:memory` key in agent state, mounted as a
-  `%Jido.Memory{}` value with named map / list spaces.
+  `%Jido.Slices.Memory.State{}` value with named map / list spaces.
 
   ## State shape
 
-  Bound to `Jido.Memory.schema/0`. The slice starts as `nil` (lazy-init);
+  Bound to `Jido.Slices.Memory.State.schema/0`. The slice starts as `nil` (lazy-init);
   the first inbound `jido.memory.*` signal materializes a fresh
-  `%Jido.Memory{}` via the relevant action.
+  `%Jido.Slices.Memory.State{}` via the relevant action.
 
   ## Routes
 
   Each `jido.memory.*` signal type maps to a single action under
-  `Jido.Memory.Actions.*`:
+  `Jido.Slices.Memory.Actions.*`:
 
       # ensure / put / update / delete
       route "jido.memory.ensure",            Actions.Ensure
@@ -47,15 +47,15 @@ defmodule Jido.Memory.Slice do
   override `default_slices: %{memory: MyApp.MyMemorySlice}`.
   """
 
-  alias Jido.Memory
-  alias Jido.Memory.Actions
+  alias Jido.Slices.Memory.State
+  alias Jido.Slices.Memory.Actions
 
   use Jido.Slice
 
   slice do
     name "memory"
     description "Memory state for agent cognition — named map / list spaces."
-    schema Memory.schema()
+    schema State.schema()
   end
 
   signal_routes do
@@ -75,11 +75,11 @@ defmodule Jido.Memory.Slice do
 
   @memory_section %Spark.Dsl.Section{
     name: :memory,
-    describe: "Configuration block contributed by Jido.Memory.Slice.",
+    describe: "Configuration block contributed by Jido.Slices.Memory.",
     schema: []
   }
 
   use Spark.Dsl.Extension,
     sections: [@memory_section],
-    transformers: [Jido.Memory.Slice.Transformers.RegisterContribution]
+    transformers: [Jido.Slices.Memory.Transformers.RegisterContribution]
 end

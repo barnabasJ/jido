@@ -1,4 +1,4 @@
-defmodule Jido.Memory.Actions.EnsureSpace do
+defmodule Jido.Slices.Memory.Actions.EnsureSpace do
   @moduledoc """
   Ensures a named space exists with the supplied default data. The data
   shape selects the space kind: a `map` produces a key-value space, a
@@ -8,7 +8,7 @@ defmodule Jido.Memory.Actions.EnsureSpace do
 
   use Jido.Action
 
-  alias Jido.Memory
+  alias Jido.Slices.Memory.State
 
   action do
     name "memory_ensure_space"
@@ -25,9 +25,9 @@ defmodule Jido.Memory.Actions.EnsureSpace do
   @impl true
   def run(%Jido.Signal{data: %{space: name, default: default}}, slice, _opts, _ctx) do
     memory = ensure_memory(slice)
-    {:ok, Memory.ensure_space(memory, name, default), []}
+    {:ok, State.ensure_space(memory, name, default), []}
   end
 
-  defp ensure_memory(%Memory{} = memory), do: memory
-  defp ensure_memory(_), do: Memory.new()
+  defp ensure_memory(%State{} = memory), do: memory
+  defp ensure_memory(_), do: State.new()
 end

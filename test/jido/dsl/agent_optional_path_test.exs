@@ -53,11 +53,11 @@ defmodule Jido.Dsl.AgentOptionalPathTest do
       end
 
       slices do
-        slice(:memory, Jido.Memory.Slice)
+        slice(:memory, Jido.Slices.Memory)
       end
     end
 
-    test "with extensions: [Jido.Memory.Slice], slice_instances/1 contains the contributed slice" do
+    test "with extensions: [Jido.Slices.Memory], slice_instances/1 contains the contributed slice" do
       assert AgentInfo.path(CompositionAgent) == nil
       paths = Enum.map(AgentInfo.slice_instances(CompositionAgent), & &1.path)
       assert :memory in paths

@@ -17,7 +17,7 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
-  alias Jido.Memory
+  alias Jido.Slices.Memory.State
   alias Jido.Persist
   alias Jido.Storage.ETS
   alias Jido.Thread
@@ -84,18 +84,19 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
       table = unique_table()
 
       agent = FullAgent.new(id: "memory-1")
-      {:ok, agent, []} = FullAgent.cmd(agent, {Jido.Memory.Actions.Ensure, %{}})
+      {:ok, agent, []} = FullAgent.cmd(agent, {Jido.Slices.Memory.Actions.Ensure, %{}})
 
       {:ok, agent, []} =
         FullAgent.cmd(
           agent,
-          {Jido.Memory.Actions.PutInSpace, %{space: :world, key: :temperature, value: 22}}
+          {Jido.Slices.Memory.Actions.PutInSpace, %{space: :world, key: :temperature, value: 22}}
         )
 
       {:ok, agent, []} =
         FullAgent.cmd(
           agent,
-          {Jido.Memory.Actions.AppendToSpace, %{space: :tasks, item: %{id: "t1", text: "check"}}}
+          {Jido.Slices.Memory.Actions.AppendToSpace,
+           %{space: :tasks, item: %{id: "t1", text: "check"}}}
         )
 
       agent = %{agent | state: %{agent.state | domain: %{agent.state.domain | counter: 5}}}
@@ -104,9 +105,9 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
       {:ok, restored} = Persist.thaw(storage(table), FullAgent, "memory-1")
 
       assert restored.state[:memory] != nil
-      assert Memory.get_in_space(restored.state.memory, :world, :temperature) == 22
+      assert State.get_in_space(restored.state.memory, :world, :temperature) == 22
 
-      tasks_space = Memory.space(restored.state.memory, :tasks)
+      tasks_space = State.space(restored.state.memory, :tasks)
       assert length(tasks_space.data) == 1
       assert Enum.at(tasks_space.data, 0).id == "t1"
 
@@ -126,18 +127,19 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
           {Jido.Identity.Actions.Ensure, %{profile: %{age: 3, origin: :spawned}}}
         )
 
-      {:ok, agent, []} = FullAgent.cmd(agent, {Jido.Memory.Actions.Ensure, %{}})
+      {:ok, agent, []} = FullAgent.cmd(agent, {Jido.Slices.Memory.Actions.Ensure, %{}})
 
       {:ok, agent, []} =
         FullAgent.cmd(
           agent,
-          {Jido.Memory.Actions.PutInSpace, %{space: :world, key: :temperature, value: 18}}
+          {Jido.Slices.Memory.Actions.PutInSpace, %{space: :world, key: :temperature, value: 18}}
         )
 
       {:ok, agent, []} =
         FullAgent.cmd(
           agent,
-          {Jido.Memory.Actions.AppendToSpace, %{space: :tasks, item: %{id: "t1", text: "deploy"}}}
+          {Jido.Slices.Memory.Actions.AppendToSpace,
+           %{space: :tasks, item: %{id: "t1", text: "deploy"}}}
         )
 
       {:ok, agent, []} = FullAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{}})
@@ -172,8 +174,8 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
 
       # Memory preserved
       assert restored.state[:memory] != nil
-      assert Memory.get_in_space(restored.state.memory, :world, :temperature) == 18
-      tasks_space = Memory.space(restored.state.memory, :tasks)
+      assert State.get_in_space(restored.state.memory, :world, :temperature) == 18
+      tasks_space = State.space(restored.state.memory, :tasks)
       assert length(tasks_space.data) == 1
       assert Enum.at(tasks_space.data, 0).id == "t1"
 

@@ -17,7 +17,7 @@ defmodule Jido.Dsl.InstanceTest do
   test "__default_slices__/0 returns the framework default slices as {path, module} pairs" do
     slices = TestInstance.__default_slices__()
     modules = Enum.map(slices, &Jido.Agent.DefaultSlices.module_of/1)
-    assert Jido.Memory.Slice in modules
+    assert Jido.Slices.Memory in modules
     assert Jido.Identity.Slice in modules
     assert Jido.Thread.Slice in modules
   end

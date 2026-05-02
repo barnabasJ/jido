@@ -1,4 +1,4 @@
-defmodule Jido.Memory do
+defmodule Jido.Slices.Memory.State do
   @moduledoc """
   An agent's mutable cognitive substrate — what the agent currently believes and wants.
 
@@ -12,12 +12,12 @@ defmodule Jido.Memory do
 
   ## Examples
 
-      memory = Memory.new()
+      memory = State.new()
       memory.spaces.world  #=> %Space{data: %{}, rev: 0}
       memory.spaces.tasks  #=> %Space{data: [], rev: 0}
   """
 
-  alias Jido.Memory.Space
+  alias Jido.Slices.Memory.Space
 
   @schema Zoi.struct(
             __MODULE__,

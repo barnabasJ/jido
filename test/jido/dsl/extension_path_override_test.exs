@@ -5,7 +5,7 @@ defmodule Jido.Dsl.ExtensionPathOverrideTest do
 
   The override lets a host rename a contributed slice's mount path:
 
-      use Jido.Agent, extensions: [Jido.Memory.Slice]
+      use Jido.Agent, extensions: [Jido.Slices.Memory]
 
       memory do
         path :short_term
@@ -33,7 +33,7 @@ defmodule Jido.Dsl.ExtensionPathOverrideTest do
     end
 
     slices do
-      slice(:short_term, Jido.Memory.Slice)
+      slice(:short_term, Jido.Slices.Memory)
     end
   end
 
@@ -46,14 +46,14 @@ defmodule Jido.Dsl.ExtensionPathOverrideTest do
     end
 
     slices do
-      slice(:memory, Jido.Memory.Slice)
+      slice(:memory, Jido.Slices.Memory)
     end
   end
 
   describe "agent-declared mount path" do
     test "renames the slice's mount path when the agent picks a non-default" do
       instances = AgentInfo.slice_instances(HostWithMemoryOverride)
-      memory = Enum.find(instances, &(&1.module == Jido.Memory.Slice))
+      memory = Enum.find(instances, &(&1.module == Jido.Slices.Memory))
 
       assert memory
       assert memory.path == :short_term
@@ -61,7 +61,7 @@ defmodule Jido.Dsl.ExtensionPathOverrideTest do
 
     test "uses the path the agent declared in `slices do …`" do
       instances = AgentInfo.slice_instances(HostWithoutMemoryOverride)
-      memory = Enum.find(instances, &(&1.module == Jido.Memory.Slice))
+      memory = Enum.find(instances, &(&1.module == Jido.Slices.Memory))
 
       assert memory
       assert memory.path == :memory
@@ -70,15 +70,15 @@ defmodule Jido.Dsl.ExtensionPathOverrideTest do
 
   describe "Slice.Instance.new/2 path arg" do
     test "uses the supplied path" do
-      instance = SliceInstance.new(Jido.Memory.Slice, :short_term)
+      instance = SliceInstance.new(Jido.Slices.Memory, :short_term)
 
       assert instance.path == :short_term
-      assert instance.module == Jido.Memory.Slice
+      assert instance.module == Jido.Slices.Memory
     end
 
     test "strips the legacy :__path_override__ override key from config" do
       instance =
-        SliceInstance.new({Jido.Memory.Slice, %{__path_override__: :renamed}}, :memory)
+        SliceInstance.new({Jido.Slices.Memory, %{__path_override__: :renamed}}, :memory)
 
       refute Map.has_key?(instance.config, :__path_override__)
     end

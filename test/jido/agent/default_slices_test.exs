@@ -65,7 +65,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
       assert DefaultSlices.package_defaults() == [
                {:thread, Jido.Thread.Slice},
                {:identity, Jido.Identity.Slice},
-               {:memory, Jido.Memory.Slice}
+               {:memory, Jido.Slices.Memory}
              ]
     end
   end
@@ -174,7 +174,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
       modules = Enum.map(instances, & &1.module)
       assert Jido.Thread.Slice in modules
       assert Jido.Identity.Slice in modules
-      assert Jido.Memory.Slice in modules
+      assert Jido.Slices.Memory in modules
     end
 
     test "agent with default_slices: false gets no defaults" do
