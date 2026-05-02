@@ -2,8 +2,8 @@ defmodule JidoTest.Storage.FileTest do
   use ExUnit.Case, async: false
 
   alias Jido.Storage.File, as: FileStorage
-  alias Jido.Thread
-  alias Jido.Thread.Entry
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Entry
 
   @moduletag :storage
 
@@ -199,7 +199,9 @@ defmodule JidoTest.Storage.FileTest do
                FileStorage.append_thread(thread_id, [entry2], opts_with_wrong_rev)
     end
 
-    test "load_thread/2 returns correct %Jido.Thread{} with all entries", %{opts: opts} do
+    test "load_thread/2 returns correct %Jido.Slices.Thread.State{} with all entries", %{
+      opts: opts
+    } do
       thread_id = "load_test_#{:erlang.unique_integer([:positive])}"
 
       entries =
@@ -217,7 +219,7 @@ defmodule JidoTest.Storage.FileTest do
       {:ok, _thread} = FileStorage.append_thread(thread_id, entries, opts)
       {:ok, loaded} = FileStorage.load_thread(thread_id, opts)
 
-      assert %Thread{} = loaded
+      assert %State{} = loaded
       assert loaded.id == thread_id
       assert loaded.rev == 3
       assert length(loaded.entries) == 3

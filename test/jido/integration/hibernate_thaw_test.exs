@@ -2,7 +2,7 @@ defmodule JidoTest.Integration.HibernateThawTest do
   use ExUnit.Case, async: true
 
   alias Jido.Storage.ETS
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State
 
   defmodule WorkflowAgent do
     use Jido.Agent
@@ -68,12 +68,13 @@ defmodule JidoTest.Integration.HibernateThawTest do
       agent = WorkflowAgent.new(id: "thread-test-1")
 
       {:ok, agent, []} =
-        WorkflowAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{id: "thread-for-agent-1"}})
+        WorkflowAgent.cmd(agent, {Jido.Slices.Thread.Actions.Ensure, %{id: "thread-for-agent-1"}})
 
       {:ok, agent, []} =
         WorkflowAgent.cmd(
           agent,
-          {Jido.Thread.Actions.Append, %{entry: %{kind: :message, payload: %{content: "hello"}}}}
+          {Jido.Slices.Thread.Actions.Append,
+           %{entry: %{kind: :message, payload: %{content: "hello"}}}}
         )
 
       :ok = Jido.Persist.hibernate(jido, agent)
@@ -88,12 +89,12 @@ defmodule JidoTest.Integration.HibernateThawTest do
       agent = WorkflowAgent.new(id: "thread-test-2")
 
       {:ok, agent, []} =
-        WorkflowAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{id: "thread-rev-test"}})
+        WorkflowAgent.cmd(agent, {Jido.Slices.Thread.Actions.Ensure, %{id: "thread-rev-test"}})
 
       {:ok, agent, []} =
         WorkflowAgent.cmd(
           agent,
-          {Jido.Thread.Actions.Append,
+          {Jido.Slices.Thread.Actions.Append,
            %{
              entry: [
                %{kind: :message, payload: %{content: "one"}},
@@ -108,7 +109,7 @@ defmodule JidoTest.Integration.HibernateThawTest do
 
       rehydrated = thawed.state[:thread]
       assert rehydrated.rev == 3
-      assert Thread.entry_count(rehydrated) == 3
+      assert State.entry_count(rehydrated) == 3
     end
 
     test "entry seq numbers are correct and ordered" do
@@ -116,12 +117,12 @@ defmodule JidoTest.Integration.HibernateThawTest do
       agent = WorkflowAgent.new(id: "thread-test-3")
 
       {:ok, agent, []} =
-        WorkflowAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{id: "seq-test-thread"}})
+        WorkflowAgent.cmd(agent, {Jido.Slices.Thread.Actions.Ensure, %{id: "seq-test-thread"}})
 
       {:ok, agent, []} =
         WorkflowAgent.cmd(
           agent,
-          {Jido.Thread.Actions.Append,
+          {Jido.Slices.Thread.Actions.Append,
            %{
              entry: [
                %{kind: :user_message, payload: %{role: "user", content: "query"}},
@@ -136,7 +137,7 @@ defmodule JidoTest.Integration.HibernateThawTest do
       {:ok, thawed} = Jido.Persist.thaw(jido, WorkflowAgent, "thread-test-3")
 
       rehydrated = thawed.state[:thread]
-      entry_list = Thread.to_list(rehydrated)
+      entry_list = State.to_list(rehydrated)
 
       assert length(entry_list) == 4
       assert Enum.at(entry_list, 0).seq == 0
@@ -150,12 +151,15 @@ defmodule JidoTest.Integration.HibernateThawTest do
       agent = WorkflowAgent.new(id: "thread-test-4")
 
       {:ok, agent, []} =
-        WorkflowAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{id: "payload-test-thread"}})
+        WorkflowAgent.cmd(
+          agent,
+          {Jido.Slices.Thread.Actions.Ensure, %{id: "payload-test-thread"}}
+        )
 
       {:ok, agent, []} =
         WorkflowAgent.cmd(
           agent,
-          {Jido.Thread.Actions.Append,
+          {Jido.Slices.Thread.Actions.Append,
            %{
              entry: %{
                kind: :message,
@@ -168,7 +172,7 @@ defmodule JidoTest.Integration.HibernateThawTest do
       {:ok, thawed} = Jido.Persist.thaw(jido, WorkflowAgent, "thread-test-4")
 
       rehydrated = thawed.state[:thread]
-      [entry] = Thread.to_list(rehydrated)
+      [entry] = State.to_list(rehydrated)
 
       assert entry.payload.complex == %{nested: "data"}
       assert entry.payload.list == [1, 2, 3]
@@ -298,23 +302,25 @@ defmodule JidoTest.Integration.HibernateThawTest do
       agent1 = WorkflowAgent.new(id: "multi-thread-1")
 
       {:ok, agent1, []} =
-        WorkflowAgent.cmd(agent1, {Jido.Thread.Actions.Ensure, %{id: "thread-multi-1"}})
+        WorkflowAgent.cmd(agent1, {Jido.Slices.Thread.Actions.Ensure, %{id: "thread-multi-1"}})
 
       {:ok, agent1, []} =
         WorkflowAgent.cmd(
           agent1,
-          {Jido.Thread.Actions.Append, %{entry: %{kind: :note, payload: %{text: "agent1"}}}}
+          {Jido.Slices.Thread.Actions.Append,
+           %{entry: %{kind: :note, payload: %{text: "agent1"}}}}
         )
 
       agent2 = WorkflowAgent.new(id: "multi-thread-2")
 
       {:ok, agent2, []} =
-        WorkflowAgent.cmd(agent2, {Jido.Thread.Actions.Ensure, %{id: "thread-multi-2"}})
+        WorkflowAgent.cmd(agent2, {Jido.Slices.Thread.Actions.Ensure, %{id: "thread-multi-2"}})
 
       {:ok, agent2, []} =
         WorkflowAgent.cmd(
           agent2,
-          {Jido.Thread.Actions.Append, %{entry: %{kind: :note, payload: %{text: "agent2"}}}}
+          {Jido.Slices.Thread.Actions.Append,
+           %{entry: %{kind: :note, payload: %{text: "agent2"}}}}
         )
 
       :ok = Jido.Persist.hibernate(jido, agent1)
@@ -326,8 +332,8 @@ defmodule JidoTest.Integration.HibernateThawTest do
       assert thawed1.state[:thread].id == "thread-multi-1"
       assert thawed2.state[:thread].id == "thread-multi-2"
 
-      [entry1] = Thread.to_list(thawed1.state[:thread])
-      [entry2] = Thread.to_list(thawed2.state[:thread])
+      [entry1] = State.to_list(thawed1.state[:thread])
+      [entry2] = State.to_list(thawed2.state[:thread])
 
       assert entry1.payload.text == "agent1"
       assert entry2.payload.text == "agent2"
@@ -396,23 +402,24 @@ defmodule JidoTest.Integration.HibernateThawTest do
       agent = WorkflowAgent.new(id: "overwrite-3")
 
       {:ok, agent, []} =
-        WorkflowAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{id: "overwrite-thread"}})
+        WorkflowAgent.cmd(agent, {Jido.Slices.Thread.Actions.Ensure, %{id: "overwrite-thread"}})
 
       {:ok, agent, []} =
         WorkflowAgent.cmd(
           agent,
-          {Jido.Thread.Actions.Append, %{entry: %{kind: :message, payload: %{content: "first"}}}}
+          {Jido.Slices.Thread.Actions.Append,
+           %{entry: %{kind: :message, payload: %{content: "first"}}}}
         )
 
       :ok = Jido.Persist.hibernate(jido, agent)
 
       {:ok, thawed1} = Jido.Persist.thaw(jido, WorkflowAgent, "overwrite-3")
-      assert Thread.entry_count(thawed1.state[:thread]) == 1
+      assert State.entry_count(thawed1.state[:thread]) == 1
 
       {:ok, updated, []} =
         WorkflowAgent.cmd(
           thawed1,
-          {Jido.Thread.Actions.Append,
+          {Jido.Slices.Thread.Actions.Append,
            %{
              entry: [
                %{kind: :message, payload: %{content: "new first"}},
@@ -426,7 +433,7 @@ defmodule JidoTest.Integration.HibernateThawTest do
       {:ok, thawed2} = Jido.Persist.thaw(jido, WorkflowAgent, "overwrite-3")
 
       assert thawed2.state[:thread].id == "overwrite-thread"
-      assert Thread.entry_count(thawed2.state[:thread]) == 3
+      assert State.entry_count(thawed2.state[:thread]) == 3
       assert thawed2.state[:thread].rev == 3
     end
   end
@@ -438,19 +445,20 @@ defmodule JidoTest.Integration.HibernateThawTest do
       agent = WorkflowAgent.new(id: "invariant-1")
 
       {:ok, agent, []} =
-        WorkflowAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{id: "invariant-thread"}})
+        WorkflowAgent.cmd(agent, {Jido.Slices.Thread.Actions.Ensure, %{id: "invariant-thread"}})
 
       {:ok, agent, []} =
         WorkflowAgent.cmd(
           agent,
-          {Jido.Thread.Actions.Append, %{entry: %{kind: :message, payload: %{content: "test"}}}}
+          {Jido.Slices.Thread.Actions.Append,
+           %{entry: %{kind: :message, payload: %{content: "test"}}}}
         )
 
       :ok = Jido.Persist.hibernate(jido, agent)
 
       {:ok, checkpoint} = ETS.get_checkpoint({WorkflowAgent, "invariant-1"}, table: table)
 
-      refute is_struct(checkpoint.thread, Thread)
+      refute is_struct(checkpoint.thread, State)
       assert checkpoint.thread == %{id: "invariant-thread", rev: 1}
       refute Map.has_key?(checkpoint.state, :thread)
     end
@@ -471,12 +479,12 @@ defmodule JidoTest.Integration.HibernateThawTest do
       agent = WorkflowAgent.new(id: "kind-test")
 
       {:ok, agent, []} =
-        WorkflowAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{id: "kind-test-thread"}})
+        WorkflowAgent.cmd(agent, {Jido.Slices.Thread.Actions.Ensure, %{id: "kind-test-thread"}})
 
       {:ok, agent, []} =
         WorkflowAgent.cmd(
           agent,
-          {Jido.Thread.Actions.Append,
+          {Jido.Slices.Thread.Actions.Append,
            %{
              entry: [
                %{kind: :user_input, payload: %{}},
@@ -489,7 +497,7 @@ defmodule JidoTest.Integration.HibernateThawTest do
       :ok = Jido.Persist.hibernate(jido, agent)
       {:ok, thawed} = Jido.Persist.thaw(jido, WorkflowAgent, "kind-test")
 
-      entries = Thread.to_list(thawed.state[:thread])
+      entries = State.to_list(thawed.state[:thread])
       assert Enum.at(entries, 0).kind == :user_input
       assert Enum.at(entries, 1).kind == :system_response
       assert Enum.at(entries, 2).kind == :tool_call

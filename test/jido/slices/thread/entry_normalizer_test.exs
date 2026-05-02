@@ -1,8 +1,8 @@
 defmodule JidoTest.Thread.EntryNormalizerTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Thread.Entry
-  alias Jido.Thread.EntryNormalizer
+  alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.EntryNormalizer
 
   describe "normalize/4" do
     test "applies consistent defaults for Entry structs" do

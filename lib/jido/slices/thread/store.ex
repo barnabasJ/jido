@@ -1,4 +1,4 @@
-defmodule Jido.Thread.Store do
+defmodule Jido.Slices.Thread.Store do
   @moduledoc """
   Persistence behavior for Thread storage.
 
@@ -9,14 +9,14 @@ defmodule Jido.Thread.Store do
 
       {:ok, store} = Thread.Store.new()
 
-      thread = Thread.new(id: "t1")
+      thread = State.new(id: "t1")
       {:ok, store} = Thread.Store.save(store, thread)
 
       {:ok, store, loaded} = Thread.Store.load(store, "t1")
   """
 
-  alias Jido.Thread
-  alias Jido.Thread.Entry
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Entry
 
   @type adapter_state :: term()
   @type t :: %__MODULE__{adapter: module(), adapter_state: adapter_state()}
@@ -28,15 +28,15 @@ defmodule Jido.Thread.Store do
 
   @doc "Load thread by ID"
   @callback load(adapter_state(), thread_id :: String.t()) ::
-              {:ok, adapter_state(), Thread.t()} | {:error, adapter_state(), :not_found | term()}
+              {:ok, adapter_state(), State.t()} | {:error, adapter_state(), :not_found | term()}
 
   @doc "Save thread"
-  @callback save(adapter_state(), Thread.t()) ::
+  @callback save(adapter_state(), State.t()) ::
               {:ok, adapter_state()} | {:error, adapter_state(), term()}
 
   @doc "Append entries to thread"
   @callback append(adapter_state(), thread_id :: String.t(), [Entry.t()]) ::
-              {:ok, adapter_state(), Thread.t()} | {:error, adapter_state(), term()}
+              {:ok, adapter_state(), State.t()} | {:error, adapter_state(), term()}
 
   @doc "Create new store with adapter"
   @spec new(module(), keyword()) :: {:ok, t()} | {:error, term()}
@@ -48,7 +48,7 @@ defmodule Jido.Thread.Store do
   end
 
   @doc "Load thread from store"
-  @spec load(t(), String.t()) :: {:ok, t(), Thread.t()} | {:error, t(), term()}
+  @spec load(t(), String.t()) :: {:ok, t(), State.t()} | {:error, t(), term()}
   def load(%__MODULE__{adapter: adapter, adapter_state: state} = store, thread_id) do
     case adapter.load(state, thread_id) do
       {:ok, new_state, thread} -> {:ok, %{store | adapter_state: new_state}, thread}
@@ -57,7 +57,7 @@ defmodule Jido.Thread.Store do
   end
 
   @doc "Save thread to store"
-  @spec save(t(), Thread.t()) :: {:ok, t()} | {:error, t(), term()}
+  @spec save(t(), State.t()) :: {:ok, t()} | {:error, t(), term()}
   def save(%__MODULE__{adapter: adapter, adapter_state: state} = store, thread) do
     case adapter.save(state, thread) do
       {:ok, new_state} -> {:ok, %{store | adapter_state: new_state}}
@@ -67,7 +67,7 @@ defmodule Jido.Thread.Store do
 
   @doc "Append entries to thread in store"
   @spec append(t(), String.t(), Entry.t() | [Entry.t()]) ::
-          {:ok, t(), Thread.t()} | {:error, t(), term()}
+          {:ok, t(), State.t()} | {:error, t(), term()}
   def append(%__MODULE__{adapter: adapter, adapter_state: state} = store, thread_id, entries) do
     entries = List.wrap(entries)
 

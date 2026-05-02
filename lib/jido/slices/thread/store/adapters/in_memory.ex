@@ -1,4 +1,4 @@
-defmodule Jido.Thread.Store.Adapters.InMemory do
+defmodule Jido.Slices.Thread.Store.Adapters.InMemory do
   @moduledoc """
   Pure in-memory adapter storing threads in a map.
 
@@ -6,9 +6,9 @@ defmodule Jido.Thread.Store.Adapters.InMemory do
   Thread is auto-created on append if it doesn't exist.
   """
 
-  @behaviour Jido.Thread.Store
+  @behaviour Jido.Slices.Thread.Store
 
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State
 
   @impl true
   def init(_opts) do
@@ -24,14 +24,14 @@ defmodule Jido.Thread.Store.Adapters.InMemory do
   end
 
   @impl true
-  def save(%{threads: threads} = state, %Thread{id: id} = thread) do
+  def save(%{threads: threads} = state, %State{id: id} = thread) do
     {:ok, %{state | threads: Map.put(threads, id, thread)}}
   end
 
   @impl true
   def append(%{threads: threads} = state, thread_id, entries) do
-    thread = Map.get(threads, thread_id) || Thread.new(id: thread_id)
-    thread = Thread.append(thread, entries)
+    thread = Map.get(threads, thread_id) || State.new(id: thread_id)
+    thread = State.append(thread, entries)
     new_state = %{state | threads: Map.put(threads, thread_id, thread)}
     {:ok, new_state, thread}
   end

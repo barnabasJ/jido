@@ -24,7 +24,7 @@ defmodule Jido.Dsl.ExtensionComposeTest do
     slices do
       slice(:short_term, Jido.Slices.Memory)
       slice(:who, Jido.Slices.Identity)
-      slice(:history, Jido.Thread.Slice)
+      slice(:history, Jido.Slices.Thread)
     end
   end
 
@@ -34,7 +34,7 @@ defmodule Jido.Dsl.ExtensionComposeTest do
 
       memory = Enum.find(instances, &(&1.module == Jido.Slices.Memory))
       identity = Enum.find(instances, &(&1.module == Jido.Slices.Identity))
-      thread = Enum.find(instances, &(&1.module == Jido.Thread.Slice))
+      thread = Enum.find(instances, &(&1.module == Jido.Slices.Thread))
 
       assert memory.path == :short_term
       assert identity.path == :who

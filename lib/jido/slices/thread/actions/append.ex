@@ -1,13 +1,13 @@
-defmodule Jido.Thread.Actions.Append do
+defmodule Jido.Slices.Thread.Actions.Append do
   @moduledoc """
   Appends one entry (or a list of entries) to the conversation thread.
-  Materializes the slice via `Jido.Thread.new/0` when it has not been
+  Materializes the slice via `Jido.Slices.Thread.State.new/0` when it has not been
   initialized yet.
   """
 
   use Jido.Action
 
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State
 
   action do
     name "thread_append"
@@ -23,9 +23,9 @@ defmodule Jido.Thread.Actions.Append do
   @impl true
   def run(%Jido.Signal{data: %{entry: entry}}, slice, _opts, _ctx) do
     thread = ensure_thread(slice)
-    {:ok, Thread.append(thread, entry), []}
+    {:ok, State.append(thread, entry), []}
   end
 
-  defp ensure_thread(%Thread{} = thread), do: thread
-  defp ensure_thread(_), do: Thread.new()
+  defp ensure_thread(%State{} = thread), do: thread
+  defp ensure_thread(_), do: State.new()
 end

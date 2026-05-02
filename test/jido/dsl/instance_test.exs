@@ -19,7 +19,7 @@ defmodule Jido.Dsl.InstanceTest do
     modules = Enum.map(slices, &Jido.Agent.DefaultSlices.module_of/1)
     assert Jido.Slices.Memory in modules
     assert Jido.Slices.Identity in modules
-    assert Jido.Thread.Slice in modules
+    assert Jido.Slices.Thread in modules
   end
 
   test "config/1 reads the runtime config and merges overrides" do

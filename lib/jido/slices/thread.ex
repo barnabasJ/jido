@@ -1,13 +1,13 @@
-defmodule Jido.Thread.Slice do
+defmodule Jido.Slices.Thread do
   @moduledoc """
   Thread slice — owns the `:thread` key in agent state, mounted as a
-  `%Jido.Thread{}` append-only conversation log.
+  `%Jido.Slices.Thread.State{}` append-only conversation log.
 
   ## State shape
 
-  Bound to `Jido.Thread.schema/0`. The slice starts as `nil` (lazy-init);
+  Bound to `Jido.Slices.Thread.State.schema/0`. The slice starts as `nil` (lazy-init);
   the first inbound `jido.thread.*` signal materializes a fresh
-  `%Jido.Thread{}` via the relevant action.
+  `%Jido.Slices.Thread.State{}` via the relevant action.
 
   ## Routes
 
@@ -34,15 +34,15 @@ defmodule Jido.Thread.Slice do
       end
   """
 
-  alias Jido.Thread
-  alias Jido.Thread.Actions
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Actions
 
   use Jido.Slice
 
   slice do
     name "thread"
     description "Append-only conversation history thread for the agent."
-    schema Thread.schema()
+    schema State.schema()
   end
 
   signal_routes do
@@ -57,18 +57,18 @@ defmodule Jido.Thread.Slice do
 
   @thread_section %Spark.Dsl.Section{
     name: :thread,
-    describe: "Configuration block contributed by Jido.Thread.Slice.",
+    describe: "Configuration block contributed by Jido.Slices.Thread.",
     schema: []
   }
 
   use Spark.Dsl.Extension,
     sections: [@thread_section],
-    transformers: [Jido.Thread.Slice.Transformers.RegisterContribution]
+    transformers: [Jido.Slices.Thread.Transformers.RegisterContribution]
 
   @behaviour Jido.Persist.Transform
 
   @impl Jido.Persist.Transform
-  def externalize(%Thread{id: id, rev: rev}), do: %{id: id, rev: rev}
+  def externalize(%State{id: id, rev: rev}), do: %{id: id, rev: rev}
   def externalize(nil), do: nil
   def externalize(other), do: other
 

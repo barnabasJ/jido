@@ -1,18 +1,18 @@
-defmodule Jido.Thread.EntryNormalizer do
+defmodule Jido.Slices.Thread.EntryNormalizer do
   @moduledoc """
   Shared entry normalization for thread and storage append paths.
 
   Ensures all adapters apply the same defaults and attribute extraction for
-  `%Jido.Thread.Entry{}` structs and plain maps.
+  `%Jido.Slices.Thread.Entry{}` structs and plain maps.
   """
 
-  alias Jido.Thread.Entry
+  alias Jido.Slices.Thread.Entry
 
   @type entry_input :: Entry.t() | map()
   @type opts :: [id_generator: (-> String.t())]
 
   @doc """
-  Normalize a single entry input into `%Jido.Thread.Entry{}`.
+  Normalize a single entry input into `%Jido.Slices.Thread.Entry{}`.
   """
   @spec normalize(entry_input(), non_neg_integer(), integer(), opts()) :: Entry.t()
   def normalize(entry, seq, now, opts \\ [])

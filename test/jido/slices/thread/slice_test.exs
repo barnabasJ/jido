@@ -3,9 +3,9 @@ defmodule JidoTest.Thread.SliceTest do
 
   alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
-  alias Jido.Thread
-  alias Jido.Thread.Actions
-  alias Jido.Thread.Slice, as: ThreadSlice
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Actions
+  alias Jido.Slices.Thread, as: ThreadSlice
 
   describe "slice metadata" do
     test "name is thread" do
@@ -28,8 +28,8 @@ defmodule JidoTest.Thread.SliceTest do
              )
     end
 
-    test "schema is bound to Jido.Thread.schema/0" do
-      assert SliceInfo.schema(ThreadSlice) == Thread.schema()
+    test "schema is bound to Jido.Slices.Thread.State.schema/0" do
+      assert SliceInfo.schema(ThreadSlice) == State.schema()
     end
 
     test "exposes one signal route per action" do
@@ -50,8 +50,8 @@ defmodule JidoTest.Thread.SliceTest do
   describe "Persist.Transform implementation" do
     test "externalize/1 strips a Thread struct to a {id, rev} pointer" do
       thread =
-        Thread.new(id: "t-1")
-        |> Thread.append(%{kind: :message, payload: %{text: "hello"}})
+        State.new(id: "t-1")
+        |> State.append(%{kind: :message, payload: %{text: "hello"}})
 
       assert %{id: "t-1", rev: 1} = ThreadSlice.externalize(thread)
     end
@@ -62,10 +62,10 @@ defmodule JidoTest.Thread.SliceTest do
 
     test "externalize/1 reflects rev count for multi-entry threads" do
       thread =
-        Thread.new(id: "t-2")
-        |> Thread.append(%{kind: :message, payload: %{text: "one"}})
-        |> Thread.append(%{kind: :message, payload: %{text: "two"}})
-        |> Thread.append(%{kind: :message, payload: %{text: "three"}})
+        State.new(id: "t-2")
+        |> State.append(%{kind: :message, payload: %{text: "one"}})
+        |> State.append(%{kind: :message, payload: %{text: "two"}})
+        |> State.append(%{kind: :message, payload: %{text: "three"}})
 
       assert %{id: "t-2", rev: 3} = ThreadSlice.externalize(thread)
     end
@@ -95,7 +95,7 @@ defmodule JidoTest.Thread.SliceTest do
     end
 
     test "agent includes thread slice by default" do
-      assert Jido.Thread.Slice in AgentInfo.slices(AgentWithThread)
+      assert Jido.Slices.Thread in AgentInfo.slices(AgentWithThread)
     end
 
     test "agent.state[:thread] starts nil (lazy init)" do
@@ -104,13 +104,13 @@ defmodule JidoTest.Thread.SliceTest do
     end
 
     test "agent can disable thread slice" do
-      refute Jido.Thread.Slice in AgentInfo.slices(AgentWithoutThread)
+      refute Jido.Slices.Thread in AgentInfo.slices(AgentWithoutThread)
     end
 
     test "thread can be attached after creation via Ensure action" do
       agent = AgentWithThread.new()
-      {:ok, agent, []} = AgentWithThread.cmd(agent, {Jido.Thread.Actions.Ensure, %{}})
-      assert %Thread{} = agent.state[:thread]
+      {:ok, agent, []} = AgentWithThread.cmd(agent, {Jido.Slices.Thread.Actions.Ensure, %{}})
+      assert %State{} = agent.state[:thread]
     end
 
     test "Append action mutates agent.state.thread" do
@@ -122,7 +122,7 @@ defmodule JidoTest.Thread.SliceTest do
           {Actions.Append, %{entry: %{kind: :message, payload: %{text: "hi"}}}}
         )
 
-      assert Thread.entry_count(agent.state.thread) == 1
+      assert State.entry_count(agent.state.thread) == 1
     end
   end
 end

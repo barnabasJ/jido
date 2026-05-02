@@ -47,8 +47,8 @@ defmodule Jido.Storage do
   when the current revision doesn't match the expected value.
   """
 
-  alias Jido.Thread
-  alias Jido.Thread.Entry
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Entry
 
   @doc """
   Retrieve a checkpoint by key.
@@ -79,7 +79,7 @@ defmodule Jido.Storage do
   has no entries.
   """
   @callback load_thread(thread_id :: String.t(), opts :: keyword()) ::
-              {:ok, Thread.t()} | :not_found | {:error, term()}
+              {:ok, State.t()} | :not_found | {:error, term()}
 
   @doc """
   Append entries to a thread.
@@ -93,7 +93,7 @@ defmodule Jido.Storage do
   Returns `{:ok, updated_thread}` on success.
   """
   @callback append_thread(thread_id :: String.t(), entries :: [Entry.t()], opts :: keyword()) ::
-              {:ok, Thread.t()} | {:error, term()}
+              {:ok, State.t()} | {:error, term()}
 
   @doc """
   Delete a thread and all its entries.
@@ -137,7 +137,7 @@ defmodule Jido.Storage do
 
   Converts adapter-level `:not_found` into `{:error, :not_found}`.
   """
-  @spec fetch_thread(module(), String.t(), keyword()) :: {:ok, Thread.t()} | {:error, term()}
+  @spec fetch_thread(module(), String.t(), keyword()) :: {:ok, State.t()} | {:error, term()}
   def fetch_thread(adapter, thread_id, opts) when is_atom(adapter) and is_list(opts) do
     case adapter.load_thread(thread_id, opts) do
       {:ok, thread} -> {:ok, thread}

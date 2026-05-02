@@ -17,10 +17,10 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
-  alias Jido.Slices.Memory.State
+  alias Jido.Slices.Memory.State, as: MemoryState
   alias Jido.Persist
   alias Jido.Storage.ETS
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State, as: ThreadState
 
   # ===========================================================================
   # AGENT
@@ -105,9 +105,9 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
       {:ok, restored} = Persist.thaw(storage(table), FullAgent, "memory-1")
 
       assert restored.state[:memory] != nil
-      assert State.get_in_space(restored.state.memory, :world, :temperature) == 22
+      assert MemoryState.get_in_space(restored.state.memory, :world, :temperature) == 22
 
-      tasks_space = State.space(restored.state.memory, :tasks)
+      tasks_space = MemoryState.space(restored.state.memory, :tasks)
       assert length(tasks_space.data) == 1
       assert Enum.at(tasks_space.data, 0).id == "t1"
 
@@ -142,12 +142,12 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
            %{space: :tasks, item: %{id: "t1", text: "deploy"}}}
         )
 
-      {:ok, agent, []} = FullAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{}})
+      {:ok, agent, []} = FullAgent.cmd(agent, {Jido.Slices.Thread.Actions.Ensure, %{}})
 
       {:ok, agent, []} =
         FullAgent.cmd(
           agent,
-          {Jido.Thread.Actions.Append,
+          {Jido.Slices.Thread.Actions.Append,
            %{
              entry: [
                %{kind: :message, payload: %{role: "user", content: "hello"}},
@@ -174,14 +174,14 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
 
       # Memory preserved
       assert restored.state[:memory] != nil
-      assert State.get_in_space(restored.state.memory, :world, :temperature) == 18
-      tasks_space = State.space(restored.state.memory, :tasks)
+      assert MemoryState.get_in_space(restored.state.memory, :world, :temperature) == 18
+      tasks_space = MemoryState.space(restored.state.memory, :tasks)
       assert length(tasks_space.data) == 1
       assert Enum.at(tasks_space.data, 0).id == "t1"
 
       # Thread rehydrated from external storage
       assert restored.state[:thread] != nil
-      assert Thread.entry_count(restored.state.thread) == 2
+      assert ThreadState.entry_count(restored.state.thread) == 2
 
       # Regular state preserved
       assert restored.state.domain.counter == 42

@@ -4,7 +4,7 @@ defmodule JidoTest.InstanceTest do
   import JidoTest.Eventually
 
   alias Jido.Storage.Redis
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State
   alias JidoTest.TestAgents.Minimal
 
   defmodule TestInstance do
@@ -150,8 +150,8 @@ defmodule JidoTest.InstanceTest do
         end)
         |> then(fn agent ->
           thread =
-            Thread.new(id: "redis-thread")
-            |> Thread.append(%{kind: :note, payload: %{text: "saved"}})
+            State.new(id: "redis-thread")
+            |> State.append(%{kind: :note, payload: %{text: "saved"}})
 
           %{agent | state: Map.put(agent.state, :thread, thread)}
         end)
@@ -160,7 +160,7 @@ defmodule JidoTest.InstanceTest do
       assert {:ok, thawed} = module.thaw(RedisTestAgent, "redis-instance-agent")
       assert thawed.state.domain.counter == 42
       assert thawed.state[:thread].id == "redis-thread"
-      assert Thread.entry_count(thawed.state[:thread]) == 1
+      assert State.entry_count(thawed.state[:thread]) == 1
     end
 
     test "partitioned and unpartitioned checkpoints coexist through an instance module" do

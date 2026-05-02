@@ -299,7 +299,7 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
       modules = AgentInfo.slices(AgentDefaultSlices)
       assert Jido.Slices.Identity in modules
       assert Jido.Slices.Memory in modules
-      assert Jido.Thread.Slice in modules
+      assert Jido.Slices.Thread in modules
     end
   end
 end

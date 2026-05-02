@@ -18,7 +18,7 @@ defmodule JidoExampleTest.PersistenceStorageTest do
 
   alias Jido.Persist
   alias Jido.Storage.ETS
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State
 
   # ===========================================================================
   # AGENT: Persistable agent with typed schema
@@ -98,9 +98,9 @@ defmodule JidoExampleTest.PersistenceStorageTest do
       agent = PersistableAgent.new(id: "thread-1")
 
       thread =
-        Thread.new(id: "thread-flush-1")
-        |> Thread.append(%{kind: :message, payload: %{content: "hello"}})
-        |> Thread.append(%{kind: :message, payload: %{content: "world"}})
+        State.new(id: "thread-flush-1")
+        |> State.append(%{kind: :message, payload: %{content: "hello"}})
+        |> State.append(%{kind: :message, payload: %{content: "world"}})
 
       agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
@@ -111,7 +111,7 @@ defmodule JidoExampleTest.PersistenceStorageTest do
       assert checkpoint.thread == %{id: "thread-flush-1", rev: 2}
 
       {:ok, stored_thread} = ETS.load_thread("thread-flush-1", table: table)
-      assert Thread.entry_count(stored_thread) == 2
+      assert State.entry_count(stored_thread) == 2
     end
 
     test "thaw restores thread from storage" do
@@ -120,9 +120,9 @@ defmodule JidoExampleTest.PersistenceStorageTest do
       agent = %{agent | state: %{agent.state | counter: 7}}
 
       thread =
-        Thread.new(id: "thread-restore-1")
-        |> Thread.append(%{kind: :message, payload: %{role: "user", content: "question"}})
-        |> Thread.append(%{kind: :message, payload: %{role: "assistant", content: "answer"}})
+        State.new(id: "thread-restore-1")
+        |> State.append(%{kind: :message, payload: %{role: "user", content: "question"}})
+        |> State.append(%{kind: :message, payload: %{role: "assistant", content: "answer"}})
 
       agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
@@ -133,7 +133,7 @@ defmodule JidoExampleTest.PersistenceStorageTest do
 
       rehydrated = restored.state[:thread]
       assert rehydrated.id == "thread-restore-1"
-      assert Thread.entry_count(rehydrated) == 2
+      assert State.entry_count(rehydrated) == 2
     end
   end
 

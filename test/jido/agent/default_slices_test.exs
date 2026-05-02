@@ -63,7 +63,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
   describe "package_defaults/0" do
     test "returns list of {path, module} tuples for Thread / Identity / Memory slices" do
       assert DefaultSlices.package_defaults() == [
-               {:thread, Jido.Thread.Slice},
+               {:thread, Jido.Slices.Thread},
                {:identity, Jido.Slices.Identity},
                {:memory, Jido.Slices.Memory}
              ]
@@ -172,7 +172,7 @@ defmodule JidoTest.Agent.DefaultSlicesTest do
       instances = AgentInfo.slice_instances(AgentNoDefaults)
       assert length(instances) == 3
       modules = Enum.map(instances, & &1.module)
-      assert Jido.Thread.Slice in modules
+      assert Jido.Slices.Thread in modules
       assert Jido.Slices.Identity in modules
       assert Jido.Slices.Memory in modules
     end

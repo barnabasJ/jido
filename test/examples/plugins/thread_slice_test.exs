@@ -3,10 +3,10 @@ defmodule JidoExampleTest.ThreadSliceTest do
   Example test demonstrating Thread as a default slice and conversation history patterns.
 
   This test shows:
-  - Every agent gets `Jido.Thread.Slice` automatically (default singleton slice)
-  - Initializing and appending to thread through `Jido.Thread.Actions.{Ensure,
+  - Every agent gets `Jido.Slices.Thread` automatically (default singleton slice)
+  - Initializing and appending to thread through `Jido.Slices.Thread.Actions.{Ensure,
     Append}` via `cmd/2`
-  - Reading thread directly off `agent.state[:thread]` and via `Jido.Thread`
+  - Reading thread directly off `agent.state[:thread]` and via `Jido.Slices.Thread.State`
     read-only functions
   - Disabling the thread slice with `default_slices: %{thread: false}`
   - The strategy layer auto-tracks instruction_start/instruction_end when thread exists
@@ -19,7 +19,7 @@ defmodule JidoExampleTest.ThreadSliceTest do
   @moduletag timeout: 15_000
 
   alias Jido.AgentServer
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State
 
   # ===========================================================================
   # ACTIONS: Conversation history via Thread
@@ -37,12 +37,12 @@ defmodule JidoExampleTest.ThreadSliceTest do
     def run(%Jido.Signal{data: %{role: role, content: content}}, slice, _opts, _ctx) do
       thread =
         case slice do
-          %Thread{} = t -> t
-          _ -> Thread.new()
+          %State{} = t -> t
+          _ -> State.new()
         end
 
       entry = %{kind: :message, payload: %{role: role, content: content}}
-      {:ok, Thread.append(thread, entry), []}
+      {:ok, State.append(thread, entry), []}
     end
   end
 
@@ -61,7 +61,7 @@ defmodule JidoExampleTest.ThreadSliceTest do
       message_count =
         case thread do
           nil -> 0
-          t -> length(Thread.filter_by_kind(t, :message))
+          t -> length(State.filter_by_kind(t, :message))
         end
 
       {:ok, Map.put(slice, :summary, "#{message_count} messages in thread"), []}
@@ -117,11 +117,11 @@ defmodule JidoExampleTest.ThreadSliceTest do
       agent = ChatAgent.new()
 
       {:ok, agent, []} =
-        ChatAgent.cmd(agent, {Jido.Thread.Actions.Ensure, %{metadata: %{user_id: "u1"}}})
+        ChatAgent.cmd(agent, {Jido.Slices.Thread.Actions.Ensure, %{metadata: %{user_id: "u1"}}})
 
-      assert %Thread{} = agent.state[:thread]
+      assert %State{} = agent.state[:thread]
       assert agent.state.thread.metadata == %{user_id: "u1"}
-      assert Thread.entry_count(agent.state.thread) == 0
+      assert State.entry_count(agent.state.thread) == 0
     end
   end
 
@@ -132,9 +132,9 @@ defmodule JidoExampleTest.ThreadSliceTest do
       {:ok, agent, []} =
         ChatAgent.cmd(agent, {RecordMessageAction, %{role: "user", content: "hello"}})
 
-      assert %Thread{} = agent.state[:thread]
+      assert %State{} = agent.state[:thread]
 
-      messages = Thread.filter_by_kind(agent.state.thread, :message)
+      messages = State.filter_by_kind(agent.state.thread, :message)
       assert length(messages) == 1
 
       [entry] = messages
@@ -155,14 +155,14 @@ defmodule JidoExampleTest.ThreadSliceTest do
       {:ok, agent, []} =
         ChatAgent.cmd(agent, {RecordMessageAction, %{role: "user", content: "how are you?"}})
 
-      messages = Thread.filter_by_kind(agent.state.thread, :message)
+      messages = State.filter_by_kind(agent.state.thread, :message)
       assert length(messages) == 3
 
       roles = Enum.map(messages, & &1.payload.role)
       assert roles == ["user", "assistant", "user"]
 
       thread = agent.state.thread
-      assert Thread.entry_count(thread) == 3
+      assert State.entry_count(thread) == 3
 
       {:ok, agent, []} = ChatAgent.cmd(agent, SummarizeAction)
       assert agent.state.domain.summary == "3 messages in thread"
@@ -185,17 +185,17 @@ defmodule JidoExampleTest.ThreadSliceTest do
       {:ok, agent, []} =
         ChatAgent.cmd(
           agent,
-          {Jido.Thread.Actions.Append,
+          {Jido.Slices.Thread.Actions.Append,
            %{entry: %{kind: :message, payload: %{role: "system", content: "init"}}}}
         )
 
-      assert %Thread{} = agent.state[:thread]
-      assert Thread.entry_count(agent.state.thread) == 1
+      assert %State{} = agent.state[:thread]
+      assert State.entry_count(agent.state.thread) == 1
 
       {:ok, agent, []} =
         ChatAgent.cmd(
           agent,
-          {Jido.Thread.Actions.Append,
+          {Jido.Slices.Thread.Actions.Append,
            %{
              entry: [
                %{kind: :message, payload: %{role: "user", content: "q1"}},
@@ -205,9 +205,9 @@ defmodule JidoExampleTest.ThreadSliceTest do
         )
 
       thread = agent.state.thread
-      assert Thread.entry_count(thread) == 3
+      assert State.entry_count(thread) == 3
 
-      entries = Thread.to_list(thread)
+      entries = State.to_list(thread)
       contents = Enum.map(entries, & &1.payload.content)
       assert contents == ["init", "q1", "a1"]
     end

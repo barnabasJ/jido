@@ -3,7 +3,7 @@ defmodule JidoTest.Storage.RedisTest do
 
   alias Jido.Storage
   alias Jido.Storage.Redis
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State
 
   @moduletag :unit
 
@@ -161,7 +161,7 @@ defmodule JidoTest.Storage.RedisTest do
       {:ok, _thread} =
         Redis.append_thread("th-1", [%{kind: :message, payload: %{content: "hi"}}], opts)
 
-      assert {:ok, %Thread{id: "th-1", rev: 1}} = Redis.load_thread("th-1", opts)
+      assert {:ok, %State{id: "th-1", rev: 1}} = Redis.load_thread("th-1", opts)
     end
 
     test "returns {:error, :invalid_term} for corrupt thread data" do
@@ -189,7 +189,7 @@ defmodule JidoTest.Storage.RedisTest do
         %{kind: :message, payload: %{role: "assistant", content: "hi"}}
       ]
 
-      assert {:ok, %Thread{} = thread} = Redis.append_thread("new-th", entries, opts)
+      assert {:ok, %State{} = thread} = Redis.append_thread("new-th", entries, opts)
       assert thread.id == "new-th"
       assert thread.rev == 2
       assert length(thread.entries) == 2
@@ -223,7 +223,7 @@ defmodule JidoTest.Storage.RedisTest do
 
       {:ok, _} = Redis.append_thread("rev-th", [%{kind: :note}], opts)
 
-      assert {:ok, %Thread{rev: 2}} =
+      assert {:ok, %State{rev: 2}} =
                Redis.append_thread(
                  "rev-th",
                  [%{kind: :note}],
@@ -249,7 +249,7 @@ defmodule JidoTest.Storage.RedisTest do
       pid = start_mock_redis()
       opts = redis_opts(pid)
 
-      assert {:ok, %Thread{rev: 1}} =
+      assert {:ok, %State{rev: 1}} =
                Redis.append_thread(
                  "fresh-th",
                  [%{kind: :note}],

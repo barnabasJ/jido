@@ -60,7 +60,7 @@ defmodule Jido.Persist do
   require Logger
 
   alias Jido.Scheduler
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State
 
   @type storage_config :: {module(), keyword()}
   @type agent :: struct()
@@ -216,19 +216,19 @@ defmodule Jido.Persist do
     end
   end
 
-  @spec flush_journal(module(), keyword(), Thread.t() | nil) :: :ok | {:error, term()}
+  @spec flush_journal(module(), keyword(), State.t() | nil) :: :ok | {:error, term()}
   defp flush_journal(_adapter, _opts, nil), do: :ok
-  defp flush_journal(_adapter, _opts, %Thread{entries: []}), do: :ok
+  defp flush_journal(_adapter, _opts, %State{entries: []}), do: :ok
 
-  defp flush_journal(adapter, opts, %Thread{} = thread) do
+  defp flush_journal(adapter, opts, %State{} = thread) do
     with :ok <- validate_local_thread(thread),
          {:ok, stored_rev} <- get_stored_thread_rev(adapter, opts, thread.id) do
       append_missing_entries(adapter, opts, thread, stored_rev)
     end
   end
 
-  @spec validate_local_thread(Thread.t()) :: :ok | {:error, term()}
-  defp validate_local_thread(%Thread{} = thread) do
+  @spec validate_local_thread(State.t()) :: :ok | {:error, term()}
+  defp validate_local_thread(%State{} = thread) do
     entry_count = length(thread.entries)
 
     if thread.rev == entry_count do
@@ -246,7 +246,7 @@ defmodule Jido.Persist do
           {:ok, non_neg_integer()} | {:error, term()}
   defp get_stored_thread_rev(adapter, opts, thread_id) do
     case Jido.Storage.fetch_thread(adapter, thread_id, opts) do
-      {:ok, %Thread{rev: stored_rev}} ->
+      {:ok, %State{rev: stored_rev}} ->
         {:ok, stored_rev}
 
       {:error, :not_found} ->
@@ -257,9 +257,9 @@ defmodule Jido.Persist do
     end
   end
 
-  @spec append_missing_entries(module(), keyword(), Thread.t(), non_neg_integer()) ::
+  @spec append_missing_entries(module(), keyword(), State.t(), non_neg_integer()) ::
           :ok | {:error, term()}
-  defp append_missing_entries(adapter, opts, %Thread{} = thread, stored_rev) do
+  defp append_missing_entries(adapter, opts, %State{} = thread, stored_rev) do
     local_rev = thread.rev
     entry_count = length(thread.entries)
 
@@ -321,14 +321,14 @@ defmodule Jido.Persist do
           :ok | {:error, term()}
   defp handle_thread_append_conflict(adapter, opts, thread_id, local_rev) do
     case Jido.Storage.fetch_thread(adapter, thread_id, opts) do
-      {:ok, %Thread{rev: stored_rev}} when stored_rev >= local_rev ->
+      {:ok, %State{rev: stored_rev}} when stored_rev >= local_rev ->
         Logger.debug(
           "Persist: append conflict resolved for #{thread_id}; stored_rev=#{stored_rev} >= local_rev=#{local_rev}"
         )
 
         :ok
 
-      {:ok, %Thread{rev: stored_rev}} ->
+      {:ok, %State{rev: stored_rev}} ->
         Logger.error(
           "Persist: append conflict for #{thread_id}; stored_rev=#{stored_rev}, local_rev=#{local_rev}"
         )
@@ -344,7 +344,7 @@ defmodule Jido.Persist do
     end
   end
 
-  @spec create_checkpoint(agent_module(), agent(), Thread.t() | nil) ::
+  @spec create_checkpoint(agent_module(), agent(), State.t() | nil) ::
           {:ok, checkpoint()} | {:error, term()}
   defp create_checkpoint(agent_module, agent, thread) do
     ctx = %{}
@@ -356,7 +356,7 @@ defmodule Jido.Persist do
     end
   end
 
-  @spec enforce_checkpoint_invariants(map(), Thread.t() | nil, map()) :: checkpoint()
+  @spec enforce_checkpoint_invariants(map(), State.t() | nil, map()) :: checkpoint()
   defp enforce_checkpoint_invariants(checkpoint, thread, scheduler_manifest) do
     scheduler_key = Scheduler.cron_specs_state_key()
 
@@ -370,7 +370,7 @@ defmodule Jido.Persist do
     thread_pointer =
       case thread do
         nil -> nil
-        %Thread{id: id, rev: rev} -> %{id: id, rev: rev}
+        %State{id: id, rev: rev} -> %{id: id, rev: rev}
       end
 
     checkpoint
@@ -378,12 +378,12 @@ defmodule Jido.Persist do
     |> Map.put(:thread, thread_pointer)
   end
 
-  @spec default_checkpoint(agent_module(), agent(), Thread.t() | nil) :: checkpoint()
+  @spec default_checkpoint(agent_module(), agent(), State.t() | nil) :: checkpoint()
   defp default_checkpoint(agent_module, agent, thread) do
     thread_pointer =
       case thread do
         nil -> nil
-        %Thread{id: id, rev: rev} -> %{id: id, rev: rev}
+        %State{id: id, rev: rev} -> %{id: id, rev: rev}
       end
 
     %{
@@ -442,11 +442,11 @@ defmodule Jido.Persist do
     Logger.debug("Persist: rehydrating thread #{thread_id} with expected rev=#{expected_rev}")
 
     case Jido.Storage.fetch_thread(adapter, thread_id, opts) do
-      {:ok, %Thread{rev: ^expected_rev} = thread} ->
+      {:ok, %State{rev: ^expected_rev} = thread} ->
         agent_with_thread = attach_thread(agent, thread)
         {:ok, agent_with_thread}
 
-      {:ok, %Thread{rev: actual_rev}} ->
+      {:ok, %State{rev: actual_rev}} ->
         Logger.error(
           "Persist: thread rev mismatch for #{thread_id}: expected=#{expected_rev}, actual=#{actual_rev}"
         )
@@ -507,11 +507,11 @@ defmodule Jido.Persist do
   defp resolve_agent_identity(%{id: nil}), do: {:error, :missing_agent_id}
   defp resolve_agent_identity(_), do: {:error, :invalid_agent}
 
-  @spec get_thread(agent()) :: Thread.t() | nil
-  defp get_thread(%{state: %{thread: thread}}) when is_struct(thread, Thread), do: thread
+  @spec get_thread(agent()) :: State.t() | nil
+  defp get_thread(%{state: %{thread: thread}}) when is_struct(thread, State), do: thread
   defp get_thread(_agent), do: nil
 
-  @spec attach_thread(agent(), Thread.t()) :: agent()
+  @spec attach_thread(agent(), State.t()) :: agent()
   defp attach_thread(agent, thread) do
     %{agent | state: Map.put(agent.state, :thread, thread)}
   end
@@ -524,7 +524,7 @@ defmodule Jido.Persist do
 
   defp maybe_put_scheduler_manifest(state, key, _scheduler_manifest), do: Map.delete(state, key)
 
-  @spec checkpoint_payload(agent_module(), agent(), Thread.t() | nil, map()) ::
+  @spec checkpoint_payload(agent_module(), agent(), State.t() | nil, map()) ::
           {:ok, checkpoint()} | {:error, term()}
   defp checkpoint_payload(agent_module, agent, thread, ctx) do
     if function_exported?(agent_module, :checkpoint, 2) do

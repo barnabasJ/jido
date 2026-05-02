@@ -3,7 +3,7 @@ defmodule JidoTest.StorageNormalizationTest do
 
   alias Jido.Storage
   alias Jido.Storage.ETS
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State
 
   defp unique_table(test_name) do
     :"test_storage_norm_#{test_name}_#{System.unique_integer([:positive])}"
@@ -36,7 +36,7 @@ defmodule JidoTest.StorageNormalizationTest do
       thread_id = "thread_#{System.unique_integer([:positive])}"
 
       assert {:ok, _thread} = ETS.append_thread(thread_id, [%{kind: :note}], opts)
-      assert {:ok, %Thread{id: ^thread_id}} = Storage.fetch_thread(ETS, thread_id, opts)
+      assert {:ok, %State{id: ^thread_id}} = Storage.fetch_thread(ETS, thread_id, opts)
     end
   end
 end

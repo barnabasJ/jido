@@ -3,8 +3,8 @@ defmodule JidoTest.Storage.ETSTest do
 
   alias Jido.Storage
   alias Jido.Storage.ETS
-  alias Jido.Thread
-  alias Jido.Thread.Entry
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Entry
 
   defp unique_table(test_name) do
     :"test_storage_#{test_name}_#{System.unique_integer([:positive])}"
@@ -89,7 +89,7 @@ defmodule JidoTest.Storage.ETSTest do
         %{kind: :message, payload: %{role: "user", content: "Hello"}}
       ]
 
-      assert {:ok, %Thread{} = thread} = ETS.append_thread(thread_id, entries, opts)
+      assert {:ok, %State{} = thread} = ETS.append_thread(thread_id, entries, opts)
       assert thread.id == thread_id
       assert thread.rev == 1
       assert length(thread.entries) == 1
@@ -140,7 +140,7 @@ defmodule JidoTest.Storage.ETSTest do
                ETS.append_thread(thread_id, [%{kind: :note}], Keyword.put(opts, :expected_rev, 5))
     end
 
-    test "load_thread/2 returns correct %Jido.Thread{} with all entries" do
+    test "load_thread/2 returns correct %Jido.Slices.Thread.State{} with all entries" do
       opts = [table: unique_table(:load_thread)]
       thread_id = "thread_#{System.unique_integer([:positive])}"
 
@@ -152,7 +152,7 @@ defmodule JidoTest.Storage.ETSTest do
 
       {:ok, _} = ETS.append_thread(thread_id, entries, opts)
 
-      assert {:ok, %Thread{} = thread} = ETS.load_thread(thread_id, opts)
+      assert {:ok, %State{} = thread} = ETS.load_thread(thread_id, opts)
       assert thread.id == thread_id
       assert thread.rev == 3
       assert length(thread.entries) == 3
@@ -397,7 +397,7 @@ defmodule JidoTest.Storage.ETSTest do
       {:ok, _} = ETS.append_thread("key1", [%{kind: :note}], opts)
 
       assert {:ok, :checkpoint_data} = ETS.get_checkpoint("key1", opts)
-      assert {:ok, %Thread{}} = ETS.load_thread("key1", opts)
+      assert {:ok, %State{}} = ETS.load_thread("key1", opts)
     end
   end
 end

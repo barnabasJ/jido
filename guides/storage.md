@@ -152,7 +152,7 @@ entry_id = "entry_" <> Jido.Util.generate_id()
 {:ok, agent, _} =
   MyAgent.cmd(
     agent,
-    {Jido.Thread.Actions.Append,
+    {Jido.Slices.Thread.Actions.Append,
      %{
        entry: %{
          id: entry_id,
@@ -165,7 +165,7 @@ entry_id = "entry_" <> Jido.Util.generate_id()
 {:ok, agent, _} =
   MyAgent.cmd(
     agent,
-    {Jido.Thread.Actions.Append,
+    {Jido.Slices.Thread.Actions.Append,
      %{
        entry: %{
          kind: :message_committed,
@@ -182,7 +182,7 @@ You can also model this as a more generic annotation entry:
 {:ok, agent, _} =
   MyAgent.cmd(
     agent,
-    {Jido.Thread.Actions.Append,
+    {Jido.Slices.Thread.Actions.Append,
      %{
        entry: %{
          kind: :annotation,
@@ -236,11 +236,11 @@ end
 
 # Create an agent with a thread
 {:ok, agent} = MyAgent.new(id: "user-123")
-thread = Jido.Thread.new()
+thread = Jido.Slices.Thread.State.new()
 agent = put_in(agent.state[:__thread__], thread)
 
 # Do some work, add entries to the thread...
-thread = Jido.Thread.append(thread, :message, %{content: "Hello!"})
+thread = Jido.Slices.Thread.State.append(thread, :message, %{content: "Hello!"})
 agent = put_in(agent.state[:__thread__], thread)
 
 # Hibernate - agent can now be garbage collected
@@ -654,13 +654,13 @@ defmodule MyApp.Storage do
 
   @impl true
   def load_thread(thread_id, opts) do
-    # Return {:ok, %Jido.Thread{}} | :not_found | {:error, reason}
+    # Return {:ok, %Jido.Slices.Thread.State{}} | :not_found | {:error, reason}
   end
 
   @impl true
   def append_thread(thread_id, entries, opts) do
     # Handle opts[:expected_rev] for optimistic concurrency
-    # Return {:ok, %Jido.Thread{}} | {:error, :conflict} | {:error, reason}
+    # Return {:ok, %Jido.Slices.Thread.State{}} | {:error, :conflict} | {:error, reason}
   end
 
   @impl true
@@ -708,8 +708,8 @@ defmodule MyApp.JidoStorage do
   import Ecto.Query
   alias MyApp.Repo
   alias MyApp.Jido.{Checkpoint, ThreadEntry}
-  alias Jido.Thread
-  alias Jido.Thread.Entry
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Entry
 
   # Checkpoint operations
 
@@ -841,8 +841,8 @@ For Ash, create a similar adapter using `Ash.read/2` and `Ash.create/2` instead 
 defmodule MyApp.JidoStorageTest do
   use ExUnit.Case
 
-  alias Jido.Thread
-  alias Jido.Thread.Entry
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Entry
 
   @storage {MyApp.JidoStorage, []}
 

@@ -163,5 +163,5 @@ When to use the contribution mechanism vs. plain `extensions: [Mod]`:
 - [Middleware guide](middleware.md) — the wrap tier
 - [Migration guide — keyword form to Spark DSL](migration-spark-dsl.md) —
   conversion recipes for older code
-- [`Jido.Thread.Slice`](../lib/jido/thread/slice.ex) — in-tree slice example
+- [`Jido.Slices.Thread`](../lib/jido/thread/slice.ex) — in-tree slice example
 - [`Jido.Middleware.Persister`](../lib/jido/middleware/persister.ex) — in-tree middleware example

@@ -3,7 +3,7 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
   Example test demonstrating how to override, replace, or disable default slices.
 
   This test shows:
-  - Default slices (like Jido.Thread.Slice) are auto-included in all agents
+  - Default slices (like Jido.Slices.Thread) are auto-included in all agents
   - Replacing a default slice with a custom implementation via `default_slices: %{}`
   - Passing config to a replacement slice
   - Disabling a specific default slice
@@ -17,7 +17,7 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
   @moduletag timeout: 15_000
 
   # ===========================================================================
-  # SLICES: Custom replacement for Jido.Thread.Slice
+  # SLICES: Custom replacement for Jido.Slices.Thread
   # ===========================================================================
 
   defmodule CustomThreadSlice do
@@ -118,7 +118,7 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
     test "default agent includes Thread.Slice and Identity.Slice in slices" do
       modules = Jido.Dsl.Agent.Info.slices(DefaultAgent)
 
-      assert Jido.Thread.Slice in modules
+      assert Jido.Slices.Thread in modules
       assert Jido.Slices.Identity in modules
     end
   end
@@ -129,7 +129,7 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
       modules = Jido.Dsl.Agent.Info.slices(OverriddenAgent)
 
       assert CustomThreadSlice in modules
-      refute Jido.Thread.Slice in modules
+      refute Jido.Slices.Thread in modules
       assert agent.state.thread.custom_initialized == true
       assert agent.state.thread.max_entries == 500
     end
@@ -147,7 +147,7 @@ defmodule JidoExampleTest.DefaultSliceOverrideTest do
       agent = DisabledAgent.new()
       modules = Jido.Dsl.Agent.Info.slices(DisabledAgent)
 
-      refute Jido.Thread.Slice in modules
+      refute Jido.Slices.Thread in modules
       refute Map.has_key?(agent.state, :thread)
     end
 

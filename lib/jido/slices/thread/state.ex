@@ -1,4 +1,4 @@
-defmodule Jido.Thread do
+defmodule Jido.Slices.Thread.State do
   @moduledoc """
   An append-only log of interaction entries.
 
@@ -21,8 +21,8 @@ defmodule Jido.Thread do
       Thread.last(thread).kind    # => :message
   """
 
-  alias Jido.Thread.Entry
-  alias Jido.Thread.EntryNormalizer
+  alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.EntryNormalizer
 
   @schema Zoi.struct(
             __MODULE__,

@@ -1,8 +1,8 @@
-defmodule Jido.Thread.StoreTest do
+defmodule Jido.Slices.Thread.State.StoreTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Thread
-  alias Jido.Thread.Store
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Store
 
   describe "Store.new/0" do
     test "creates store with InMemory adapter" do
@@ -13,7 +13,7 @@ defmodule Jido.Thread.StoreTest do
   describe "Store.save/2 and Store.load/2" do
     test "roundtrip correctly" do
       {:ok, store} = Store.new()
-      thread = Thread.new(id: "t1", metadata: %{user: "alice"})
+      thread = State.new(id: "t1", metadata: %{user: "alice"})
 
       {:ok, store} = Store.save(store, thread)
       {:ok, _store, loaded} = Store.load(store, "t1")
@@ -39,12 +39,12 @@ defmodule Jido.Thread.StoreTest do
       {:ok, store, thread} = Store.append(store, "t2", entry)
 
       assert thread.id == "t2"
-      assert Thread.entry_count(thread) == 1
-      assert Thread.last(thread).kind == :message
+      assert State.entry_count(thread) == 1
+      assert State.last(thread).kind == :message
 
       {:ok, _store, loaded} = Store.load(store, "t2")
       assert loaded.id == "t2"
-      assert Thread.entry_count(loaded) == 1
+      assert State.entry_count(loaded) == 1
     end
 
     test "appends to existing thread with correct seq" do
@@ -56,20 +56,20 @@ defmodule Jido.Thread.StoreTest do
       entry2 = %{kind: :message, payload: %{role: "assistant", content: "Second"}}
       {:ok, store, thread} = Store.append(store, "t3", entry2)
 
-      assert Thread.entry_count(thread) == 2
-      assert Thread.last(thread).seq == 1
-      assert Thread.get_entry(thread, 0).payload.content == "First"
-      assert Thread.get_entry(thread, 1).payload.content == "Second"
+      assert State.entry_count(thread) == 2
+      assert State.last(thread).seq == 1
+      assert State.get_entry(thread, 0).payload.content == "First"
+      assert State.get_entry(thread, 1).payload.content == "Second"
 
       {:ok, _store, loaded} = Store.load(store, "t3")
-      assert Thread.entry_count(loaded) == 2
+      assert State.entry_count(loaded) == 2
     end
   end
 
   describe "Store.delete/2" do
     test "removes thread" do
       {:ok, store} = Store.new()
-      thread = Thread.new(id: "t4")
+      thread = State.new(id: "t4")
 
       {:ok, store} = Store.save(store, thread)
       {:ok, store, _loaded} = Store.load(store, "t4")
@@ -86,9 +86,9 @@ defmodule Jido.Thread.StoreTest do
       {:ok, store, ids} = Store.list(store)
       assert ids == []
 
-      {:ok, store} = Store.save(store, Thread.new(id: "t5"))
-      {:ok, store} = Store.save(store, Thread.new(id: "t6"))
-      {:ok, store} = Store.save(store, Thread.new(id: "t7"))
+      {:ok, store} = Store.save(store, State.new(id: "t5"))
+      {:ok, store} = Store.save(store, State.new(id: "t6"))
+      {:ok, store} = Store.save(store, State.new(id: "t7"))
 
       {:ok, _store, ids} = Store.list(store)
       assert Enum.sort(ids) == ["t5", "t6", "t7"]

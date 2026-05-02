@@ -110,13 +110,13 @@ Task 0005 showed two approaches and recommended MFA but had mixed examples. Now 
 middleware: [
   {Jido.Middleware.Persister, %{
     transforms: %{
-      thread: {Jido.Thread.Persister, :externalize, :reinstate}
+      thread: {Jido.Slices.Thread.State.Persister, :externalize, :reinstate}
     }
   }}
 ]
 ```
 
-`Jido.Thread.Slice` becomes `Jido.Thread.Slice` (no middleware half needed). `Jido.Thread.Persister` is a new module holding `externalize/1` and `reinstate/2`. Task 0005 updated accordingly.
+`Jido.Slices.Thread` becomes `Jido.Slices.Thread` (no middleware half needed). `Jido.Slices.Thread.State.Persister` is a new module holding `externalize/1` and `reinstate/2`. Task 0005 updated accordingly.
 
 ### W6 — `child_waiters` migration; `Jido.Await` fate; selector contract refinement — ✅ resolved
 

@@ -1,4 +1,4 @@
-defmodule Jido.Thread.Store.Adapters.JournalBacked do
+defmodule Jido.Slices.Thread.Store.Adapters.JournalBacked do
   @moduledoc """
   Thread persistence adapter backed by Jido.Signal.Journal.
 
@@ -13,22 +13,22 @@ defmodule Jido.Thread.Store.Adapters.JournalBacked do
 
   ## Usage
 
-      {:ok, store} = Jido.Thread.Store.new(Jido.Thread.Store.Adapters.JournalBacked)
+      {:ok, store} = Jido.Slices.Thread.Store.new(Jido.Slices.Thread.Store.Adapters.JournalBacked)
 
       # With custom journal adapter
-      {:ok, store} = Jido.Thread.Store.new(
-        Jido.Thread.Store.Adapters.JournalBacked,
+      {:ok, store} = Jido.Slices.Thread.Store.new(
+        Jido.Slices.Thread.Store.Adapters.JournalBacked,
         journal_adapter: Jido.Signal.Journal.Adapters.ETS
       )
   """
 
-  @behaviour Jido.Thread.Store
+  @behaviour Jido.Slices.Thread.Store
 
   alias Jido.Signal
   alias Jido.Signal.Journal
-  alias Jido.Thread
-  alias Jido.Thread.Entry
-  alias Jido.Thread.EntryNormalizer
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.EntryNormalizer
 
   @signal_type "jido.thread.entry"
 
@@ -61,7 +61,7 @@ defmodule Jido.Thread.Store.Adapters.JournalBacked do
   end
 
   @impl true
-  def save(%{journal: journal} = state, %Thread{} = thread) do
+  def save(%{journal: journal} = state, %State{} = thread) do
     result =
       thread.entries
       |> Enum.reduce_while({:ok, journal}, fn entry, {:ok, j} ->
@@ -164,7 +164,7 @@ defmodule Jido.Thread.Store.Adapters.JournalBacked do
     timestamps = Enum.map(entries, & &1.at)
     now = System.system_time(:millisecond)
 
-    %Thread{
+    %State{
       id: thread_id,
       rev: length(entries),
       entries: entries,

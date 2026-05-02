@@ -47,9 +47,9 @@ defmodule Jido.Storage.Redis do
 
   @behaviour Jido.Storage
 
-  alias Jido.Thread
-  alias Jido.Thread.Entry
-  alias Jido.Thread.EntryNormalizer
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.EntryNormalizer
 
   @default_prefix "jido"
 
@@ -115,7 +115,7 @@ defmodule Jido.Storage.Redis do
   # =============================================================================
 
   @impl true
-  @spec load_thread(String.t(), opts()) :: {:ok, Thread.t()} | :not_found | {:error, term()}
+  @spec load_thread(String.t(), opts()) :: {:ok, State.t()} | :not_found | {:error, term()}
   def load_thread(thread_id, opts) do
     command_fn = fetch_command_fn!(opts)
     redis_key = thread_key(thread_id, opts)
@@ -135,7 +135,7 @@ defmodule Jido.Storage.Redis do
   end
 
   @impl true
-  @spec append_thread(String.t(), [term()], opts()) :: {:ok, Thread.t()} | {:error, term()}
+  @spec append_thread(String.t(), [term()], opts()) :: {:ok, State.t()} | {:error, term()}
   def append_thread(thread_id, entries, opts) do
     expected_rev = Keyword.get(opts, :expected_rev)
     now = System.system_time(:millisecond)
@@ -231,7 +231,7 @@ defmodule Jido.Storage.Redis do
   defp reconstruct_thread(thread_id, stored_thread) do
     entry_count = length(stored_thread.entries)
 
-    %Thread{
+    %State{
       id: thread_id,
       rev: stored_thread.rev,
       entries: stored_thread.entries,

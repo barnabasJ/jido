@@ -34,9 +34,9 @@ defmodule Jido.Storage.File do
 
   @behaviour Jido.Storage
 
-  alias Jido.Thread
-  alias Jido.Thread.Entry
-  alias Jido.Thread.EntryNormalizer
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.EntryNormalizer
 
   @type key :: term()
   @type opts :: keyword()
@@ -120,11 +120,11 @@ defmodule Jido.Storage.File do
   @doc """
   Load a thread from disk.
 
-  Reads the meta file and entries log, reconstructing a `%Jido.Thread{}`.
+  Reads the meta file and entries log, reconstructing a `%Jido.Slices.Thread.State{}`.
   Returns `:not_found` if the thread directory doesn't exist.
   """
   @impl true
-  @spec load_thread(String.t(), opts()) :: {:ok, Thread.t()} | :not_found | {:error, term()}
+  @spec load_thread(String.t(), opts()) :: {:ok, State.t()} | :not_found | {:error, term()}
   def load_thread(thread_id, opts) do
     path = Keyword.fetch!(opts, :path)
     thread_dir = thread_path(path, thread_id)
@@ -136,7 +136,7 @@ defmodule Jido.Storage.File do
          {:ok, entries} <- decode_entries(entries_binary) do
       {rev, created_at, updated_at, metadata} = :erlang.binary_to_term(meta_binary, [:safe])
 
-      thread = %Thread{
+      thread = %State{
         id: thread_id,
         rev: rev,
         entries: entries,
@@ -166,7 +166,7 @@ defmodule Jido.Storage.File do
   """
   @impl true
   @spec append_thread(String.t(), [Entry.t()], opts()) ::
-          {:ok, Thread.t()} | {:error, term()}
+          {:ok, State.t()} | {:error, term()}
   def append_thread(thread_id, entries, opts) do
     path = Keyword.fetch!(opts, :path)
     expected_rev = Keyword.get(opts, :expected_rev)
@@ -271,7 +271,7 @@ defmodule Jido.Storage.File do
 
     with :ok <- File.write(tmp_meta, meta_binary),
          :ok <- File.rename(tmp_meta, meta_file) do
-      thread = %Thread{
+      thread = %State{
         id: thread_id,
         rev: new_rev,
         entries: all_entries,

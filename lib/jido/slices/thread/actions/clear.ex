@@ -1,4 +1,4 @@
-defmodule Jido.Thread.Actions.Clear do
+defmodule Jido.Slices.Thread.Actions.Clear do
   @moduledoc """
   Clears all entries from the thread while preserving its identity
   (`id`, `metadata`) and bumping the revision. No-op when the slice has
@@ -7,7 +7,7 @@ defmodule Jido.Thread.Actions.Clear do
 
   use Jido.Action
 
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State
 
   action do
     name "thread_clear"
@@ -19,8 +19,8 @@ defmodule Jido.Thread.Actions.Clear do
   @impl true
   def run(%Jido.Signal{}, slice, _opts, _ctx) do
     case slice do
-      %Thread{} = thread -> {:ok, Thread.clear(thread), []}
-      _ -> {:ok, Thread.new(), []}
+      %State{} = thread -> {:ok, State.clear(thread), []}
+      _ -> {:ok, State.new(), []}
     end
   end
 end

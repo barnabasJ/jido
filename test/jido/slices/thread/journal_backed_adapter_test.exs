@@ -1,10 +1,10 @@
-defmodule Jido.Thread.Store.Adapters.JournalBackedTest do
+defmodule Jido.Slices.Thread.Store.Adapters.JournalBackedTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Thread
-  alias Jido.Thread.Entry
-  alias Jido.Thread.Store
-  alias Jido.Thread.Store.Adapters.JournalBacked
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.Store
+  alias Jido.Slices.Thread.Store.Adapters.JournalBacked
 
   describe "init/1" do
     test "initializes with Journal and default InMemory adapter" do
@@ -25,18 +25,18 @@ defmodule Jido.Thread.Store.Adapters.JournalBackedTest do
       {:ok, store} = Store.new(JournalBacked)
 
       thread =
-        Thread.new(id: "t1")
-        |> Thread.append(%{kind: :message, payload: %{role: "user", content: "First"}})
-        |> Thread.append(%{kind: :message, payload: %{role: "assistant", content: "Second"}})
-        |> Thread.append(%{kind: :tool_call, payload: %{name: "search", args: %{}}})
+        State.new(id: "t1")
+        |> State.append(%{kind: :message, payload: %{role: "user", content: "First"}})
+        |> State.append(%{kind: :message, payload: %{role: "assistant", content: "Second"}})
+        |> State.append(%{kind: :tool_call, payload: %{name: "search", args: %{}}})
 
       {:ok, store} = Store.save(store, thread)
       {:ok, _store, loaded} = Store.load(store, "t1")
 
       assert loaded.id == "t1"
-      assert Thread.entry_count(loaded) == 3
+      assert State.entry_count(loaded) == 3
 
-      entries = Thread.to_list(loaded)
+      entries = State.to_list(loaded)
       assert Enum.at(entries, 0).seq == 0
       assert Enum.at(entries, 1).seq == 1
       assert Enum.at(entries, 2).seq == 2
@@ -49,8 +49,8 @@ defmodule Jido.Thread.Store.Adapters.JournalBackedTest do
       {:ok, store} = Store.new(JournalBacked)
 
       thread =
-        Thread.new(id: "meta-test")
-        |> Thread.append(%{
+        State.new(id: "meta-test")
+        |> State.append(%{
           kind: :message,
           payload: %{role: "user", content: "Hello"},
           refs: %{signal_id: "sig_123", agent_id: "agent_456"}
@@ -59,7 +59,7 @@ defmodule Jido.Thread.Store.Adapters.JournalBackedTest do
       {:ok, store} = Store.save(store, thread)
       {:ok, _store, loaded} = Store.load(store, "meta-test")
 
-      entry = Thread.last(loaded)
+      entry = State.last(loaded)
       assert entry.refs == %{signal_id: "sig_123", agent_id: "agent_456"}
     end
   end
@@ -80,11 +80,11 @@ defmodule Jido.Thread.Store.Adapters.JournalBackedTest do
       {:ok, store, thread} = Store.append(store, "new-thread", entry)
 
       assert thread.id == "new-thread"
-      assert Thread.entry_count(thread) == 1
-      assert Thread.last(thread).kind == :message
+      assert State.entry_count(thread) == 1
+      assert State.last(thread).kind == :message
 
       {:ok, _store, loaded} = Store.load(store, "new-thread")
-      assert Thread.entry_count(loaded) == 1
+      assert State.entry_count(loaded) == 1
     end
 
     test "appends to existing thread with correct seq" do
@@ -96,14 +96,14 @@ defmodule Jido.Thread.Store.Adapters.JournalBackedTest do
       entry2 = %{kind: :message, payload: %{role: "assistant", content: "Second"}}
       {:ok, store, thread} = Store.append(store, "t2", entry2)
 
-      assert Thread.entry_count(thread) == 2
-      assert Thread.get_entry(thread, 0).seq == 0
-      assert Thread.get_entry(thread, 1).seq == 1
-      assert Thread.get_entry(thread, 0).payload.content == "First"
-      assert Thread.get_entry(thread, 1).payload.content == "Second"
+      assert State.entry_count(thread) == 2
+      assert State.get_entry(thread, 0).seq == 0
+      assert State.get_entry(thread, 1).seq == 1
+      assert State.get_entry(thread, 0).payload.content == "First"
+      assert State.get_entry(thread, 1).payload.content == "Second"
 
       {:ok, _store, loaded} = Store.load(store, "t2")
-      assert Thread.entry_count(loaded) == 2
+      assert State.entry_count(loaded) == 2
     end
 
     test "handles multiple entries in single append" do
@@ -117,10 +117,10 @@ defmodule Jido.Thread.Store.Adapters.JournalBackedTest do
 
       {:ok, _store, thread} = Store.append(store, "batch", entries)
 
-      assert Thread.entry_count(thread) == 3
-      assert Thread.get_entry(thread, 0).payload.content == "One"
-      assert Thread.get_entry(thread, 1).payload.content == "Two"
-      assert Thread.get_entry(thread, 2).payload.content == "Three"
+      assert State.entry_count(thread) == 3
+      assert State.get_entry(thread, 0).payload.content == "One"
+      assert State.get_entry(thread, 1).payload.content == "Two"
+      assert State.get_entry(thread, 2).payload.content == "Three"
     end
   end
 
@@ -140,14 +140,14 @@ defmodule Jido.Thread.Store.Adapters.JournalBackedTest do
       ]
 
       thread =
-        Enum.reduce(kinds, Thread.new(id: "kinds-test"), fn kind, t ->
-          Thread.append(t, %{kind: kind, payload: %{test: true}})
+        Enum.reduce(kinds, State.new(id: "kinds-test"), fn kind, t ->
+          State.append(t, %{kind: kind, payload: %{test: true}})
         end)
 
       {:ok, store} = Store.save(store, thread)
       {:ok, _store, loaded} = Store.load(store, "kinds-test")
 
-      loaded_kinds = loaded |> Thread.to_list() |> Enum.map(& &1.kind)
+      loaded_kinds = loaded |> State.to_list() |> Enum.map(& &1.kind)
       assert loaded_kinds == kinds
     end
 
@@ -164,7 +164,7 @@ defmodule Jido.Thread.Store.Adapters.JournalBackedTest do
 
       {:ok, _store, loaded} = Store.load(store, "string-kind-test")
 
-      [entry] = Thread.to_list(loaded)
+      [entry] = State.to_list(loaded)
       assert entry.kind == :unknown
 
       assert_raise ArgumentError, fn ->
@@ -189,10 +189,10 @@ defmodule Jido.Thread.Store.Adapters.JournalBackedTest do
       {:ok, store, thread_a} = Store.load(store, "thread-a")
       {:ok, _store, thread_b} = Store.load(store, "thread-b")
 
-      assert Thread.entry_count(thread_a) == 2
-      assert Thread.entry_count(thread_b) == 1
-      assert Thread.last(thread_a).payload.content == "A2"
-      assert Thread.last(thread_b).payload.content == "B"
+      assert State.entry_count(thread_a) == 2
+      assert State.entry_count(thread_b) == 1
+      assert State.last(thread_a).payload.content == "A2"
+      assert State.last(thread_b).payload.content == "B"
     end
   end
 
@@ -203,8 +203,8 @@ defmodule Jido.Thread.Store.Adapters.JournalBackedTest do
       entry = Entry.new(kind: :message, payload: %{role: "user", content: "Test"})
       {:ok, _store, thread} = Store.append(store, "entry-struct", [entry])
 
-      assert Thread.entry_count(thread) == 1
-      assert Thread.last(thread).kind == :message
+      assert State.entry_count(thread) == 1
+      assert State.last(thread).kind == :message
     end
   end
 end

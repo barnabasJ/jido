@@ -28,9 +28,9 @@ defmodule Jido.Storage.ETS do
 
   @behaviour Jido.Storage
 
-  alias Jido.Thread
-  alias Jido.Thread.Entry
-  alias Jido.Thread.EntryNormalizer
+  alias Jido.Slices.Thread.State
+  alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.EntryNormalizer
 
   @default_table :jido_storage
 
@@ -89,7 +89,7 @@ defmodule Jido.Storage.ETS do
 
   Returns `{:ok, thread}` if entries exist, `:not_found` otherwise.
   """
-  @spec load_thread(String.t(), opts()) :: {:ok, Thread.t()} | :not_found | {:error, term()}
+  @spec load_thread(String.t(), opts()) :: {:ok, State.t()} | :not_found | {:error, term()}
   def load_thread(thread_id, opts) do
     threads_table = threads_table(opts)
     meta_table = meta_table(opts)
@@ -125,7 +125,7 @@ defmodule Jido.Storage.ETS do
   - `:metadata` - Thread metadata to merge (only used when creating new thread).
   """
   @spec append_thread(String.t(), [Entry.t()], opts()) ::
-          {:ok, Thread.t()} | {:error, term()}
+          {:ok, State.t()} | {:error, term()}
   def append_thread(thread_id, entries, opts) do
     threads_table = threads_table(opts)
     meta_table = meta_table(opts)
@@ -268,7 +268,7 @@ defmodule Jido.Storage.ETS do
   defp reconstruct_thread(thread_id, entries, meta) do
     entry_count = length(entries)
 
-    %Thread{
+    %State{
       id: thread_id,
       rev: entry_count,
       entries: entries,

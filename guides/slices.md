@@ -68,7 +68,7 @@ The agent struct's `state` is flat: each slice owns one key.
 agent.state == %{
   domain: %{...},      # the agent's own slice (declared on use Jido.Agent)
   chat: %{...},        # MyApp.ChatSlice
-  thread: %{...},      # Jido.Thread.Slice
+  thread: %{...},      # Jido.Slices.Thread
   identity: %{...}     # Jido.Slices.Identity
 }
 ```
@@ -95,7 +95,7 @@ defmodule MyApp.Agent do
   use Jido.Agent,
     extensions: [
       MyApp.ChatSlice,
-      Jido.Thread.Slice
+      Jido.Slices.Thread
     ]
 
   agent do

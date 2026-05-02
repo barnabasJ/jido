@@ -5,7 +5,7 @@ defmodule JidoTest.PersistTest do
   alias Jido.Scheduler
   alias Jido.Signal
   alias Jido.Storage.ETS
-  alias Jido.Thread
+  alias Jido.Slices.Thread.State
   alias JidoTest.PersistTest.CustomAgent
   alias JidoTest.PersistTest.RuntimeStateCheckpointAgent
   alias JidoTest.PersistTest.TestAgent
@@ -175,16 +175,16 @@ defmodule JidoTest.PersistTest do
       agent = TestAgent.new(id: "agent-2")
 
       thread =
-        Thread.new(id: "thread-2")
-        |> Thread.append(%{kind: :message, payload: %{content: "hello"}})
-        |> Thread.append(%{kind: :message, payload: %{content: "world"}})
+        State.new(id: "thread-2")
+        |> State.append(%{kind: :message, payload: %{content: "hello"}})
+        |> State.append(%{kind: :message, payload: %{content: "world"}})
 
       agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
       assert :ok = Persist.hibernate(storage(table), agent)
 
       {:ok, loaded_thread} = ETS.load_thread("thread-2", table: table)
-      assert Thread.entry_count(loaded_thread) == 2
+      assert State.entry_count(loaded_thread) == 2
 
       {:ok, checkpoint} = ETS.get_checkpoint({TestAgent, "agent-2"}, table: table)
       assert checkpoint.thread == %{id: "thread-2", rev: 2}
@@ -257,8 +257,8 @@ defmodule JidoTest.PersistTest do
       agent = TestAgent.new(id: "agent-3")
 
       thread =
-        Thread.new(id: "thread-3")
-        |> Thread.append(%{kind: :message, payload: %{content: "test"}})
+        State.new(id: "thread-3")
+        |> State.append(%{kind: :message, payload: %{content: "test"}})
 
       agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
@@ -266,7 +266,7 @@ defmodule JidoTest.PersistTest do
 
       {:ok, checkpoint} = ETS.get_checkpoint({TestAgent, "agent-3"}, table: table)
 
-      refute is_struct(checkpoint.thread, Thread)
+      refute is_struct(checkpoint.thread, State)
       refute Map.has_key?(checkpoint.state, :thread)
     end
 
@@ -275,10 +275,10 @@ defmodule JidoTest.PersistTest do
       agent = TestAgent.new(id: "agent-4")
 
       thread =
-        Thread.new(id: "thread-4")
-        |> Thread.append(%{kind: :message, payload: %{content: "one"}})
-        |> Thread.append(%{kind: :message, payload: %{content: "two"}})
-        |> Thread.append(%{kind: :message, payload: %{content: "three"}})
+        State.new(id: "thread-4")
+        |> State.append(%{kind: :message, payload: %{content: "one"}})
+        |> State.append(%{kind: :message, payload: %{content: "two"}})
+        |> State.append(%{kind: :message, payload: %{content: "three"}})
 
       agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
@@ -333,9 +333,9 @@ defmodule JidoTest.PersistTest do
       agent = TestAgent.new(id: "thaw-2")
 
       thread =
-        Thread.new(id: "thaw-thread-2")
-        |> Thread.append(%{kind: :message, payload: %{role: "user", content: "hello"}})
-        |> Thread.append(%{kind: :message, payload: %{role: "assistant", content: "hi"}})
+        State.new(id: "thaw-thread-2")
+        |> State.append(%{kind: :message, payload: %{role: "user", content: "hello"}})
+        |> State.append(%{kind: :message, payload: %{role: "assistant", content: "hi"}})
 
       agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
@@ -346,7 +346,7 @@ defmodule JidoTest.PersistTest do
 
       rehydrated_thread = thawed.state[:thread]
       assert rehydrated_thread.id == "thaw-thread-2"
-      assert Thread.entry_count(rehydrated_thread) == 2
+      assert State.entry_count(rehydrated_thread) == 2
     end
 
     test "uses custom restore callback when implemented" do
@@ -526,8 +526,8 @@ defmodule JidoTest.PersistTest do
       ]
 
       thread =
-        Thread.new(id: "roundtrip-thread-3")
-        |> Thread.append(entries)
+        State.new(id: "roundtrip-thread-3")
+        |> State.append(entries)
 
       agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
@@ -536,9 +536,9 @@ defmodule JidoTest.PersistTest do
 
       rehydrated = thawed.state[:thread]
       assert rehydrated.id == "roundtrip-thread-3"
-      assert Thread.entry_count(rehydrated) == 4
+      assert State.entry_count(rehydrated) == 4
 
-      entry_list = Thread.to_list(rehydrated)
+      entry_list = State.to_list(rehydrated)
       assert Enum.at(entry_list, 0).kind == :message
       assert Enum.at(entry_list, 0).payload.role == "user"
       assert Enum.at(entry_list, 1).kind == :tool_call
@@ -632,8 +632,8 @@ defmodule JidoTest.PersistTest do
       agent = TestAgent.new(id: "jido-instance-2")
 
       thread =
-        Thread.new(id: "jido-instance-thread")
-        |> Thread.append(%{kind: :message, payload: %{content: "via jido"}})
+        State.new(id: "jido-instance-thread")
+        |> State.append(%{kind: :message, payload: %{content: "via jido"}})
 
       agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
@@ -641,7 +641,7 @@ defmodule JidoTest.PersistTest do
       {:ok, thawed} = Persist.thaw(jido_instance, TestAgent, "jido-instance-2")
 
       assert thawed.state[:thread].id == "jido-instance-thread"
-      assert Thread.entry_count(thawed.state[:thread]) == 1
+      assert State.entry_count(thawed.state[:thread]) == 1
     end
   end
 
@@ -722,7 +722,7 @@ defmodule JidoTest.PersistTest do
       table = unique_table()
       agent = TestAgent.new(id: "empty-thread-1")
 
-      thread = Thread.new(id: "empty-thread")
+      thread = State.new(id: "empty-thread")
       agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
       :ok = Persist.hibernate(storage(table), agent)
@@ -735,8 +735,8 @@ defmodule JidoTest.PersistTest do
       agent = TestAgent.new(id: "conflict-1")
 
       thread =
-        Thread.new(id: "conflict-thread")
-        |> Thread.append(%{kind: :message, payload: %{content: "test"}})
+        State.new(id: "conflict-thread")
+        |> State.append(%{kind: :message, payload: %{content: "test"}})
 
       agent = %{agent | state: Map.put(agent.state, :thread, thread)}
 
@@ -744,7 +744,7 @@ defmodule JidoTest.PersistTest do
       :ok = Persist.hibernate(storage(table), agent)
 
       {:ok, loaded} = ETS.load_thread("conflict-thread", table: table)
-      assert Thread.entry_count(loaded) == 1
+      assert State.entry_count(loaded) == 1
     end
 
     test "checkpoint with thread enforces invariants and injects scheduler manifest" do
@@ -754,8 +754,8 @@ defmodule JidoTest.PersistTest do
       agent = put_in(agent.state.domain.value, "with_thread")
 
       thread =
-        Thread.new(id: "custom-thread")
-        |> Thread.append(%{kind: :note, payload: %{text: "custom note"}})
+        State.new(id: "custom-thread")
+        |> State.append(%{kind: :note, payload: %{text: "custom note"}})
 
       scheduler_manifest = %{
         durable: Jido.Scheduler.build_cron_spec("* * * * *", :tick, nil)

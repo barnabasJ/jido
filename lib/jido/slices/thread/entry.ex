@@ -1,4 +1,4 @@
-defmodule Jido.Thread.Entry do
+defmodule Jido.Slices.Thread.Entry do
   @moduledoc """
   A single entry in a Thread. Typed by `kind` with kind-specific payload.
 
