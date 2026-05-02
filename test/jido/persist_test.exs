@@ -4,8 +4,8 @@ defmodule JidoTest.PersistTest do
   alias Jido.Persist
   alias Jido.Scheduler
   alias Jido.Signal
-  alias Jido.Storage.ETS
   alias Jido.Slices.Thread.State
+  alias Jido.Storage.ETS
   alias JidoTest.PersistTest.CustomAgent
   alias JidoTest.PersistTest.RuntimeStateCheckpointAgent
   alias JidoTest.PersistTest.TestAgent

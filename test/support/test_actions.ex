@@ -33,8 +33,8 @@ defmodule JidoTest.TestActions do
   Shared test actions for Jido test suite.
   """
 
-  alias Jido.Directives
   alias Jido.Agent.SliceUpdate
+  alias Jido.Directives
 
   defmodule BasicAction do
     @moduledoc false

@@ -8,8 +8,8 @@ defmodule Jido.Slices.AiReact.Directives.LLMCallTest do
 
   import Jido.AI.Test.ResponseFixtures
 
-  alias Jido.Slices.AiReact.Directives.LLMCall
   alias Jido.AI.TestActions.TestAdd
+  alias Jido.Slices.AiReact.Directives.LLMCall
   alias Jido.Slices.AiReact.Turn
   alias ReqLLM.Context
 

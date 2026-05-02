@@ -7,8 +7,8 @@ defmodule Jido.Slices.Memory.Actions.PutSpace do
 
   use Jido.Action
 
-  alias Jido.Slices.Memory.State
   alias Jido.Slices.Memory.Space
+  alias Jido.Slices.Memory.State
 
   action do
     name "memory_put_space"

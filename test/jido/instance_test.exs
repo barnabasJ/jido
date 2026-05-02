@@ -3,8 +3,8 @@ defmodule JidoTest.InstanceTest do
 
   import JidoTest.Eventually
 
-  alias Jido.Storage.Redis
   alias Jido.Slices.Thread.State
+  alias Jido.Storage.Redis
   alias JidoTest.TestAgents.Minimal
 
   defmodule TestInstance do

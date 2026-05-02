@@ -1,8 +1,8 @@
 defmodule JidoTest.AgentServer.TracePropagationTest do
   use JidoTest.Case, async: false
 
-  alias Jido.Directives
   alias Jido.AgentServer
+  alias Jido.Directives
   alias Jido.Signal
   alias Jido.Tracing.Trace
   alias JidoTest.TestActions

@@ -27,8 +27,8 @@ defmodule Jido.Slices.Identity do
       end
   """
 
-  alias Jido.Slices.Identity.State
   alias Jido.Slices.Identity.Actions
+  alias Jido.Slices.Identity.State
 
   use Jido.Slice
 

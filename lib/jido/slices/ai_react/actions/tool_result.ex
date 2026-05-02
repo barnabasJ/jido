@@ -29,8 +29,8 @@ defmodule Jido.Slices.AiReact.Actions.ToolResult do
            request_id: [type: :string, required: true]
   end
 
-  alias Jido.Slices.AiReact.Directives.LLMCall
   alias Jido.Slices.AiReact
+  alias Jido.Slices.AiReact.Directives.LLMCall
   alias ReqLLM.Context
 
   @impl true

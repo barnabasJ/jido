@@ -102,8 +102,8 @@ defmodule Jido.Agent do
     ]
 
   alias Jido.Agent
-  alias Jido.Directives
   alias Jido.Agent.State, as: StateHelper
+  alias Jido.Directives
   alias Jido.Error
   alias Jido.Instruction
   alias Jido.Plugin.Instance, as: PluginInstance
@@ -259,9 +259,9 @@ defmodule Jido.Agent do
       @behaviour Jido.Agent
 
       alias Jido.Agent
-      alias Jido.Directives, as: AgentDirective
       alias Jido.Agent.SliceUpdate
       alias Jido.Agent.State, as: AgentState
+      alias Jido.Directives, as: AgentDirective
       alias Jido.Instruction
       alias Jido.Observe.Config, as: ObserveConfig
       alias Jido.Plugin.Requirements, as: PluginRequirements

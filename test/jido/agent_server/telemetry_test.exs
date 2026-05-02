@@ -3,9 +3,9 @@ defmodule JidoTest.AgentServer.TelemetryTest do
 
   import ExUnit.CaptureLog
 
-  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.Debug
+  alias Jido.Directives
   alias Jido.Signal
   alias JidoTest.TestActions
 

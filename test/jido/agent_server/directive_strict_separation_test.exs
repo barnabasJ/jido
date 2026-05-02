@@ -22,9 +22,9 @@ defmodule JidoTest.AgentServer.DirectiveStrictSeparationTest do
   """
   use JidoTest.Case, async: true
 
-  alias Jido.Directives
   alias Jido.AgentServer
   alias Jido.AgentServer.DirectiveExec
+  alias Jido.Directives
   alias Jido.Signal
 
   defmodule EmitDirectiveAction do

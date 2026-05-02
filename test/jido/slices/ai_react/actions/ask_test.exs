@@ -1,9 +1,9 @@
 defmodule Jido.Slices.AiReact.Actions.AskTest do
   use ExUnit.Case, async: true
 
+  alias Jido.AI.TestActions.TestAdd
   alias Jido.Slices.AiReact.Actions.Ask
   alias Jido.Slices.AiReact.Directives.LLMCall
-  alias Jido.AI.TestActions.TestAdd
   alias ReqLLM.Context
 
   defp ask_signal(overrides \\ %{}) do

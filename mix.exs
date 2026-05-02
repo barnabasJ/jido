@@ -110,7 +110,8 @@ defmodule Jido.MixProject do
         ],
         Extending: [
           "guides/sensors.md",
-          "guides/discovery.md"
+          "guides/discovery.md",
+          "guides/layout.md"
         ],
         Integrations: [
           "guides/phoenix-integration.md",
@@ -134,7 +135,6 @@ defmodule Jido.MixProject do
           "documentation/dsls/DSL-Jido.Dsl.Middleware.md",
           "documentation/dsls/DSL-Jido.Dsl.Action.md",
           "documentation/dsls/DSL-Jido.Dsl.Sensor.md",
-          "documentation/dsls/DSL-Jido.Dsl.Pod.md",
           "documentation/dsls/DSL-Jido.Dsl.Instance.md"
         ],
         Project: [
@@ -181,6 +181,7 @@ defmodule Jido.MixProject do
         # Extending
         {"guides/sensors.md", title: "Sensors"},
         {"guides/discovery.md", title: "Discovery"},
+        {"guides/layout.md", title: "Layout"},
 
         # Integrations
         {"guides/phoenix-integration.md", title: "Phoenix Integration"},
@@ -204,7 +205,6 @@ defmodule Jido.MixProject do
         {"documentation/dsls/DSL-Jido.Dsl.Middleware.md", title: "Jido.Middleware DSL"},
         {"documentation/dsls/DSL-Jido.Dsl.Action.md", title: "Jido.Action DSL"},
         {"documentation/dsls/DSL-Jido.Dsl.Sensor.md", title: "Jido.Sensor DSL"},
-        {"documentation/dsls/DSL-Jido.Dsl.Pod.md", title: "Jido.Pod DSL"},
         {"documentation/dsls/DSL-Jido.Dsl.Instance.md", title: "Jido instance DSL"},
 
         # Project

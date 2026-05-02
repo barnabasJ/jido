@@ -1,8 +1,8 @@
 defmodule JidoTest.Memory.MemoryTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Slices.Memory.State
   alias Jido.Slices.Memory.Space
+  alias Jido.Slices.Memory.State
 
   describe "new/0,1" do
     test "creates memory with default spaces" do

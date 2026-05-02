@@ -26,9 +26,9 @@ defmodule Jido.Slices.Thread.Store.Adapters.JournalBacked do
 
   alias Jido.Signal
   alias Jido.Signal.Journal
-  alias Jido.Slices.Thread.State
   alias Jido.Slices.Thread.Entry
   alias Jido.Slices.Thread.EntryNormalizer
+  alias Jido.Slices.Thread.State
 
   @signal_type "jido.thread.entry"
 

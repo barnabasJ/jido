@@ -14,8 +14,8 @@ defmodule Jido.Dsl.ExtensionReactTest do
 
   use ExUnit.Case, async: true
 
-  alias Jido.Slices.AiReact
   alias Jido.Dsl.Agent.Info, as: AgentInfo
+  alias Jido.Slices.AiReact
 
   defmodule SupportAgent do
     @moduledoc false

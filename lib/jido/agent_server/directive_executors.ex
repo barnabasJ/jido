@@ -199,8 +199,8 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.SpawnAgent do
 
   require Logger
 
-  alias Jido.Directives
   alias Jido.AgentServer
+  alias Jido.Directives
   alias Jido.RuntimeStore
 
   @relationship_hive :relationships

@@ -1,9 +1,9 @@
 defmodule JidoTest.Identity.Actions.EvolveTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Slices.Identity.State
-  alias Jido.Slices.Identity.Actions.Evolve
   alias Jido.Signal
+  alias Jido.Slices.Identity.Actions.Evolve
+  alias Jido.Slices.Identity.State
 
   defp sig(data) do
     Signal.new!(%{type: "identity_evolve", source: "/test", data: data})

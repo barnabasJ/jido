@@ -2,8 +2,8 @@ defmodule JidoTest.Actions.LifecycleTest do
   use ExUnit.Case, async: true
 
   alias Jido.Actions.Lifecycle
-  alias Jido.Directives
   alias Jido.AgentServer.ParentRef
+  alias Jido.Directives
   alias Jido.Signal
 
   defp sig(type, data) do

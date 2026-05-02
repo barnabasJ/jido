@@ -18,8 +18,8 @@ defmodule JidoExampleTest.MemorySliceTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
-  alias Jido.Slices.Memory.State
   alias Jido.Slices.Memory.Space
+  alias Jido.Slices.Memory.State
 
   # ===========================================================================
   # ACTIONS
@@ -35,8 +35,8 @@ defmodule JidoExampleTest.MemorySliceTest do
     end
 
     def run(%Jido.Signal{data: %{key: key, value: value}}, slice, _opts, _ctx) do
-      alias Jido.Slices.Memory.State
       alias Jido.Slices.Memory.Space
+      alias Jido.Slices.Memory.State
 
       memory =
         case slice do

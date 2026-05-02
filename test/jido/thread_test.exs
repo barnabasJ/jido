@@ -1,8 +1,8 @@
 defmodule JidoTest.ThreadTest do
   use JidoTest.Case, async: true
 
-  alias Jido.Slices.Thread.State
   alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.State
 
   describe "Entry.new/1" do
     test "creates entry with defaults" do

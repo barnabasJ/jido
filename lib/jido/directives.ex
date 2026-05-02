@@ -70,17 +70,17 @@ defmodule Jido.Directives do
   """
 
   alias Jido.Directives.{
+    AdoptChild,
+    Cron,
+    CronCancel,
     Emit,
     Error,
+    RunInstruction,
+    Schedule,
     Spawn,
     SpawnAgent,
-    AdoptChild,
-    StopChild,
-    Schedule,
-    RunInstruction,
     Stop,
-    Cron,
-    CronCancel
+    StopChild
   }
 
   @typedoc """

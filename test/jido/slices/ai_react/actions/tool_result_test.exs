@@ -1,10 +1,10 @@
 defmodule Jido.Slices.AiReact.Actions.ToolResultTest do
   use ExUnit.Case, async: true
 
+  alias Jido.AI.TestActions.TestAdd
+  alias Jido.Slices.AiReact
   alias Jido.Slices.AiReact.Actions.ToolResult
   alias Jido.Slices.AiReact.Directives.LLMCall
-  alias Jido.Slices.AiReact
-  alias Jido.AI.TestActions.TestAdd
   alias ReqLLM.Context
 
   defp slice_with_pending(calls, opts \\ []) do

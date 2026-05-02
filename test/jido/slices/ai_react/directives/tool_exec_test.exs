@@ -1,8 +1,8 @@
 defmodule Jido.Slices.AiReact.Directives.ToolExecTest do
   use JidoTest.Case, async: true
 
-  alias Jido.Slices.AiReact.Directives.ToolExec
   alias Jido.AI.TestActions.{TestAdd, TestFails}
+  alias Jido.Slices.AiReact.Directives.ToolExec
 
   defp directive(opts \\ []) do
     call =

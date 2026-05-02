@@ -1,8 +1,8 @@
 defmodule JidoTest.Integration.HibernateThawTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Storage.ETS
   alias Jido.Slices.Thread.State
+  alias Jido.Storage.ETS
 
   defmodule WorkflowAgent do
     use Jido.Agent

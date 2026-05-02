@@ -1,10 +1,10 @@
 defmodule JidoTest.Storage.ETSTest do
   use ExUnit.Case, async: true
 
+  alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.State
   alias Jido.Storage
   alias Jido.Storage.ETS
-  alias Jido.Slices.Thread.State
-  alias Jido.Slices.Thread.Entry
 
   defp unique_table(test_name) do
     :"test_storage_#{test_name}_#{System.unique_integer([:positive])}"

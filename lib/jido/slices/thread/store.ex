@@ -15,8 +15,8 @@ defmodule Jido.Slices.Thread.Store do
       {:ok, store, loaded} = Thread.Store.load(store, "t1")
   """
 
-  alias Jido.Slices.Thread.State
   alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.State
 
   @type adapter_state :: term()
   @type t :: %__MODULE__{adapter: module(), adapter_state: adapter_state()}

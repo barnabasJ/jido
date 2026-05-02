@@ -47,9 +47,9 @@ defmodule Jido.Storage.Redis do
 
   @behaviour Jido.Storage
 
-  alias Jido.Slices.Thread.State
   alias Jido.Slices.Thread.Entry
   alias Jido.Slices.Thread.EntryNormalizer
+  alias Jido.Slices.Thread.State
 
   @default_prefix "jido"
 

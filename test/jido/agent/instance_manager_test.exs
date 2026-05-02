@@ -7,9 +7,9 @@ defmodule JidoTest.Agent.InstanceManagerTest do
   # Tests with timing-based assertions (idle timeout behavior)
   @moduletag :integration
 
-  alias Jido.Directives
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
+  alias Jido.Directives
   alias Jido.Scheduler
   alias Jido.Signal
   alias Jido.Storage.ETS

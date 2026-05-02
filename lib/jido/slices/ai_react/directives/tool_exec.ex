@@ -31,9 +31,9 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Slices.AiReact.Directives.Tool
 
   alias Jido.Action.Tool, as: ActionTool
   alias Jido.AgentServer
+  alias Jido.Signal
   alias Jido.Slices.AiReact.Directives.ToolExec
   alias Jido.Slices.AiReact.ToolAdapter
-  alias Jido.Signal
 
   @impl true
   def exec(%ToolExec{} = directive, _input_signal, state) do

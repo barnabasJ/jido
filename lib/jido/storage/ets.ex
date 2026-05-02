@@ -28,9 +28,9 @@ defmodule Jido.Storage.ETS do
 
   @behaviour Jido.Storage
 
-  alias Jido.Slices.Thread.State
   alias Jido.Slices.Thread.Entry
   alias Jido.Slices.Thread.EntryNormalizer
+  alias Jido.Slices.Thread.State
 
   @default_table :jido_storage
 

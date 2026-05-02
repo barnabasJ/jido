@@ -3,9 +3,9 @@ defmodule JidoTest.Memory.SliceTest do
 
   alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
-  alias Jido.Slices.Memory.State
-  alias Jido.Slices.Memory.Actions
   alias Jido.Slices.Memory, as: MemorySlice
+  alias Jido.Slices.Memory.Actions
+  alias Jido.Slices.Memory.State
 
   describe "slice metadata" do
     test "name is memory" do

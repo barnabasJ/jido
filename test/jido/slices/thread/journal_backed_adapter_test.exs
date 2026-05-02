@@ -1,8 +1,8 @@
 defmodule Jido.Slices.Thread.Store.Adapters.JournalBackedTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Slices.Thread.State
   alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.State
   alias Jido.Slices.Thread.Store
   alias Jido.Slices.Thread.Store.Adapters.JournalBacked
 

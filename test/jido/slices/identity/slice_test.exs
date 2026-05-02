@@ -3,9 +3,9 @@ defmodule JidoTest.Identity.SliceTest do
 
   alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
-  alias Jido.Slices.Identity.State
-  alias Jido.Slices.Identity.Actions
   alias Jido.Slices.Identity, as: IdentitySlice
+  alias Jido.Slices.Identity.Actions
+  alias Jido.Slices.Identity.State
 
   describe "slice metadata" do
     test "name is identity" do

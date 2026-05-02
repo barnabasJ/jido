@@ -47,8 +47,8 @@ defmodule Jido.Storage do
   when the current revision doesn't match the expected value.
   """
 
-  alias Jido.Slices.Thread.State
   alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.State
 
   @doc """
   Retrieve a checkpoint by key.

@@ -1,9 +1,9 @@
 defmodule Jido.Slices.AiReact.Actions.LLMTurnTest do
   use ExUnit.Case, async: true
 
+  alias Jido.AI.TestActions.TestAdd
   alias Jido.Slices.AiReact.Actions.LLMTurn
   alias Jido.Slices.AiReact.Directives.ToolExec
-  alias Jido.AI.TestActions.TestAdd
   alias Jido.Slices.AiReact.Turn
   alias ReqLLM.Context
 

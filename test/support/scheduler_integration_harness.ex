@@ -1,8 +1,8 @@
 defmodule JidoTest.Support.SchedulerIntegrationHarness do
   @moduledoc false
 
-  alias Jido.Directives
   alias Jido.AgentServer
+  alias Jido.Directives
   alias Jido.Scheduler
   alias Jido.Signal
 

@@ -10,8 +10,8 @@ defmodule Jido.Slices.Memory.Actions.UpdateSpace do
 
   use Jido.Action
 
-  alias Jido.Slices.Memory.State
   alias Jido.Slices.Memory.Space
+  alias Jido.Slices.Memory.State
 
   action do
     name "memory_update_space"

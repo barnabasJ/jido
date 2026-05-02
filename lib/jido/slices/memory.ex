@@ -47,8 +47,8 @@ defmodule Jido.Slices.Memory do
   override `default_slices: %{memory: MyApp.MyMemorySlice}`.
   """
 
-  alias Jido.Slices.Memory.State
   alias Jido.Slices.Memory.Actions
+  alias Jido.Slices.Memory.State
 
   use Jido.Slice
 

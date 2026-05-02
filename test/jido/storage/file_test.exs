@@ -1,9 +1,9 @@
 defmodule JidoTest.Storage.FileTest do
   use ExUnit.Case, async: false
 
-  alias Jido.Storage.File, as: FileStorage
-  alias Jido.Slices.Thread.State
   alias Jido.Slices.Thread.Entry
+  alias Jido.Slices.Thread.State
+  alias Jido.Storage.File, as: FileStorage
 
   @moduletag :storage
 

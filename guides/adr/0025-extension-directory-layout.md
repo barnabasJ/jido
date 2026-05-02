@@ -1,10 +1,10 @@
 # 0025. Extension directory layout: `slices/` `middlewares/` `plugins/` `directives/`
 
-- Status: Proposed
-- Implementation: Pending
+- Status: Accepted
+- Implementation: Complete
 - Date: 2026-04-30
 - Related ADRs: [0014](0014-slice-middleware-plugin.md) (slice / middleware / plugin split), [0019](0019-actions-mutate-state-directives-do-side-effects.md) (actions mutate, directives are side effects), [0023](0023-spark-dsl-and-registerable-extensions.md) (Spark DSL for extension surfaces).
-- Related commits: — (proposed; implementation tasks [0043–0052](../tasks/README.md))
+- Related commits: implementation tasks [0043–0052](../tasks/README.md)
 
 ## Context
 

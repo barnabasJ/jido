@@ -34,8 +34,8 @@ defmodule Jido.Slices.Thread do
       end
   """
 
-  alias Jido.Slices.Thread.State
   alias Jido.Slices.Thread.Actions
+  alias Jido.Slices.Thread.State
 
   use Jido.Slice
 

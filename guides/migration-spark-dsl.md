@@ -666,4 +666,3 @@ moves.
 - [Jido.Middleware DSL reference](../documentation/dsls/DSL-Jido.Dsl.Middleware.md)
 - [Jido.Action DSL reference](../documentation/dsls/DSL-Jido.Dsl.Action.md)
 - [Jido.Sensor DSL reference](../documentation/dsls/DSL-Jido.Dsl.Sensor.md)
-- [Jido.Pod DSL reference](../documentation/dsls/DSL-Jido.Dsl.Pod.md)

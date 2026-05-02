@@ -17,10 +17,10 @@ defmodule JidoExampleTest.DefaultSlicesPersistenceTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
-  alias Jido.Slices.Memory.State, as: MemoryState
   alias Jido.Persist
-  alias Jido.Storage.ETS
+  alias Jido.Slices.Memory.State, as: MemoryState
   alias Jido.Slices.Thread.State, as: ThreadState
+  alias Jido.Storage.ETS
 
   # ===========================================================================
   # AGENT

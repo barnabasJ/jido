@@ -3,8 +3,8 @@ defmodule JidoTest.AgentServerStopLogTest do
 
   import ExUnit.CaptureLog
 
-  alias Jido.Directives
   alias Jido.AgentServer
+  alias Jido.Directives
   alias Jido.Signal
 
   defmodule StopTestAction do

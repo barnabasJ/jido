@@ -3,9 +3,9 @@ defmodule JidoTest.Thread.SliceTest do
 
   alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
-  alias Jido.Slices.Thread.State
-  alias Jido.Slices.Thread.Actions
   alias Jido.Slices.Thread, as: ThreadSlice
+  alias Jido.Slices.Thread.Actions
+  alias Jido.Slices.Thread.State
 
   describe "slice metadata" do
     test "name is thread" do

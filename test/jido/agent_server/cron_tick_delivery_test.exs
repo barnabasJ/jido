@@ -11,8 +11,8 @@ defmodule JidoTest.AgentServer.CronTickDeliveryTest do
   @moduletag :integration
   @moduletag capture_log: true
 
-  alias Jido.Directives
   alias Jido.AgentServer
+  alias Jido.Directives
   alias Jido.Signal
 
   # ---------------------------------------------------------------------------

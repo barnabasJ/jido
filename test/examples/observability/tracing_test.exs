@@ -22,8 +22,8 @@ defmodule JidoExampleTest.TracingTest do
   @moduletag :example
   @moduletag timeout: 15_000
 
-  alias Jido.Directives
   alias Jido.AgentServer
+  alias Jido.Directives
   alias Jido.Signal
   alias Jido.Tracing.Trace
   alias JidoTest.SignalCollector

@@ -1,9 +1,9 @@
 defmodule JidoTest.Storage.RedisTest do
   use ExUnit.Case, async: true
 
+  alias Jido.Slices.Thread.State
   alias Jido.Storage
   alias Jido.Storage.Redis
-  alias Jido.Slices.Thread.State
 
   @moduletag :unit
 

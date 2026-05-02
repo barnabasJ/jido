@@ -50,9 +50,9 @@ defmodule Jido.Signal.Call do
     `Application.get_env(:jido, :call_timeout_ms, 5_000)`.
   """
 
+  alias Jido.AgentServer
   alias Jido.Directives.Emit
   alias Jido.Directives.Reply
-  alias Jido.AgentServer
   alias Jido.Signal
 
   @default_timeout 5_000

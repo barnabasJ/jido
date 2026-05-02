@@ -1,9 +1,9 @@
 defmodule JidoTest.StorageNormalizationTest do
   use ExUnit.Case, async: true
 
+  alias Jido.Slices.Thread.State
   alias Jido.Storage
   alias Jido.Storage.ETS
-  alias Jido.Slices.Thread.State
 
   defp unique_table(test_name) do
     :"test_storage_norm_#{test_name}_#{System.unique_integer([:positive])}"

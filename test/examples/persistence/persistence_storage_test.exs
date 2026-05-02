@@ -17,8 +17,8 @@ defmodule JidoExampleTest.PersistenceStorageTest do
   @moduletag timeout: 15_000
 
   alias Jido.Persist
-  alias Jido.Storage.ETS
   alias Jido.Slices.Thread.State
+  alias Jido.Storage.ETS
 
   # ===========================================================================
   # AGENT: Persistable agent with typed schema

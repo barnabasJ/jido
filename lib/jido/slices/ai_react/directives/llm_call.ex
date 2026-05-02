@@ -39,9 +39,9 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Slices.AiReact.Directives.LLMC
   @moduledoc false
 
   alias Jido.AgentServer
+  alias Jido.Signal
   alias Jido.Slices.AiReact.Directives.LLMCall
   alias Jido.Slices.AiReact.{ToolAdapter, Turn}
-  alias Jido.Signal
   alias ReqLLM.Context
 
   @impl true
