@@ -208,7 +208,7 @@ defmodule Jido.Telemetry do
   Handles telemetry events for agent and strategy operations.
 
   Uses intelligent filtering to reduce noise while preserving actionable information.
-  Events are logged based on "interestingness" criteria configured via `Jido.Telemetry.Config`.
+  Events are logged based on "interestingness" criteria configured via `Jido.Observe.Config`.
   """
   @spec handle_event(event_name(), measurements(), metadata(), config :: term()) :: :ok
 
