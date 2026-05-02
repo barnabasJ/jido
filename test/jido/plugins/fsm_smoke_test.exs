@@ -3,14 +3,14 @@ defmodule Jido.Plugin.FSMSmokeTest do
   Narrow smoke coverage for the FSM port from strategy → plugin (C3 of
   ADR 0014). The full FSM test suite at
   `test/jido/agent/strategy_fsm_test.exs` is red until C8 rewrites it
-  against `Jido.Plugin.FSM`; these tests give the C3 commit a green gate
+  against `Jido.Plugins.FSM`; these tests give the C3 commit a green gate
   so a port bug doesn't masquerade as a test-rewrite bug later.
   """
 
   use ExUnit.Case, async: true
 
-  alias Jido.Plugin.FSM
-  alias Jido.Plugin.FSM.Transition
+  alias Jido.Plugins.FSM
+  alias Jido.Plugins.FSM.Transition
 
   defmodule DefaultFSMAgent do
     @moduledoc false
@@ -50,7 +50,7 @@ defmodule Jido.Plugin.FSMSmokeTest do
   end
 
   describe "agent boot" do
-    test "an agent with `plugins: [Jido.Plugin.FSM]` starts with default slice state" do
+    test "an agent with `plugins: [Jido.Plugins.FSM]` starts with default slice state" do
       agent = DefaultFSMAgent.new()
 
       assert agent.state.fsm.state == "idle"

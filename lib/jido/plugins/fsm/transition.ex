@@ -1,4 +1,4 @@
-defmodule Jido.Plugin.FSM.Transition do
+defmodule Jido.Plugins.FSM.Transition do
   @moduledoc """
   Transitions the FSM slice to a new state.
 

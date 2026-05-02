@@ -1,8 +1,8 @@
-defmodule Jido.Plugin.FSM do
+defmodule Jido.Plugins.FSM do
   @moduledoc """
   Finite-state-machine slice.
 
-  An agent declaring `plugins: [Jido.Plugin.FSM]` gains an `:fsm` slice on
+  An agent declaring `plugins: [Jido.Plugins.FSM]` gains an `:fsm` slice on
   `agent.state` containing:
 
       %{
@@ -14,7 +14,7 @@ defmodule Jido.Plugin.FSM do
         initial_state: String.t()
       }
 
-  Transitions are driven by signals routed to `Jido.Plugin.FSM.Transition`.
+  Transitions are driven by signals routed to `Jido.Plugins.FSM.Transition`.
   Send a `jido.fsm.transition` signal with `data: %{to: "<next_state>"}` to
   attempt a transition.
 
@@ -23,7 +23,7 @@ defmodule Jido.Plugin.FSM do
   Per-agent configuration is a map merged into the slice at
   `Jido.Agent.new/1`:
 
-      use Jido.Agent, middleware: [Jido.Plugin.FSM]
+      use Jido.Agent, middleware: [Jido.Plugins.FSM]
 
       agent do
         name "my_agent"
@@ -31,7 +31,7 @@ defmodule Jido.Plugin.FSM do
       end
 
       slices do
-        slice :fsm, Jido.Plugin.FSM,
+        slice :fsm, Jido.Plugins.FSM,
           options: [
             initial_state: "ready",
             transitions: %{
@@ -84,7 +84,7 @@ defmodule Jido.Plugin.FSM do
   end
 
   signal_routes do
-    route "jido.fsm.transition", Jido.Plugin.FSM.Transition
+    route "jido.fsm.transition", Jido.Plugins.FSM.Transition
   end
 
   @doc false
