@@ -456,6 +456,7 @@ defmodule Jido.MixProject do
       {:mock, "~> 0.3.0", only: :test},
       {:mimic, "~> 2.0", only: :test},
       {:stream_data, "~> 1.0", only: [:dev, :test]},
+      {:mix_test_interactive, "~> 5.1", only: :dev, runtime: false},
 
       # Code generation
       {:igniter, "~> 0.7", optional: true}
