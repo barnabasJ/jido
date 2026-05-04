@@ -106,72 +106,6 @@ defmodule Jido.Agent do
   alias Jido.Directives
   alias Jido.Error
   alias Jido.Instruction
-  alias Jido.Plugin.Instance, as: PluginInstance
-  alias Jido.Slice.Instance, as: SliceInstance
-
-  @doc false
-  def expand_aliases_in_ast(ast, caller_env) do
-    Macro.prewalk(ast, fn
-      {:__aliases__, _, _} = alias_node -> Macro.expand(alias_node, caller_env)
-      other -> other
-    end)
-  end
-
-  @doc false
-  def expand_and_eval_literal_option(value, caller_env) do
-    case value do
-      nil ->
-        nil
-
-      value when is_atom(value) or is_binary(value) or is_number(value) ->
-        value
-
-      %_{} = struct ->
-        struct
-
-      {:__aliases__, _, _} = alias_node ->
-        Macro.expand(alias_node, caller_env)
-
-      value when is_list(value) ->
-        Enum.map(value, fn
-          {key, nested_value} ->
-            {
-              expand_and_eval_literal_option(key, caller_env),
-              expand_and_eval_literal_option(nested_value, caller_env)
-            }
-
-          nested_value ->
-            expand_and_eval_literal_option(nested_value, caller_env)
-        end)
-
-      value when is_map(value) ->
-        Map.new(value, fn {key, nested_value} ->
-          {
-            expand_and_eval_literal_option(key, caller_env),
-            expand_and_eval_literal_option(nested_value, caller_env)
-          }
-        end)
-
-      value when is_tuple(value) ->
-        if ast_node?(value) do
-          value
-          |> expand_aliases_in_ast(caller_env)
-          |> Code.eval_quoted([], caller_env)
-          |> elem(0)
-        else
-          value
-          |> Tuple.to_list()
-          |> Enum.map(&expand_and_eval_literal_option(&1, caller_env))
-          |> List.to_tuple()
-        end
-
-      other ->
-        other
-    end
-  end
-
-  defp ast_node?({_, meta, _}) when is_list(meta), do: true
-  defp ast_node?(_other), do: false
 
   require OK
 
@@ -275,21 +209,6 @@ defmodule Jido.Agent do
   end
 
   @doc false
-  @spec __resolve_default_slices__(map()) :: [module() | {module(), map()}]
-  def __resolve_default_slices__(agent_opts) do
-    jido_module = agent_opts[:jido]
-
-    base_defaults =
-      if jido_module != nil and function_exported?(jido_module, :__default_slices__, 0) do
-        jido_module.__default_slices__()
-      else
-        Jido.Agent.DefaultSlices.package_defaults()
-      end
-
-    Jido.Agent.DefaultSlices.apply_agent_overrides(base_defaults, agent_opts[:default_slices])
-  end
-
-  @doc false
   @spec __seed_own_slice__(term(), map()) :: map()
   def __seed_own_slice__([], user_value), do: user_value
 
@@ -343,34 +262,6 @@ defmodule Jido.Agent do
           module: plugin_module,
           errors: errors
     end
-  end
-
-  @doc false
-  @spec __normalize_plugin_instances__([{atom(), module()} | {atom(), module(), map()}]) ::
-          [PluginInstance.t()]
-  def __normalize_plugin_instances__(plugins) do
-    Enum.map(plugins, &normalize_default_decl(&1, PluginInstance))
-  end
-
-  @doc false
-  @spec __normalize_slice_instances__([{atom(), module()} | {atom(), module(), map()}]) ::
-          [SliceInstance.t()]
-  def __normalize_slice_instances__(slices) do
-    Enum.map(slices, &normalize_default_decl(&1, SliceInstance))
-  end
-
-  defp normalize_default_decl({path, module}, instance_mod) when is_atom(path) do
-    instance_mod.new({module, %{}}, path)
-  end
-
-  defp normalize_default_decl({path, module, config}, instance_mod)
-       when is_atom(path) and is_map(config) do
-    instance_mod.new({module, config}, path)
-  end
-
-  defp normalize_default_decl({path, module, config}, instance_mod)
-       when is_atom(path) and is_list(config) do
-    instance_mod.new({module, Map.new(config)}, path)
   end
 
   # ---------------------------------------------------------------------------
