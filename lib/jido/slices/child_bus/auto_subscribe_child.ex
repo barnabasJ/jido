@@ -1,24 +1,24 @@
-defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
+defmodule Jido.Slices.ChildBus.AutoSubscribeChild do
   @moduledoc """
-  Action invoked by `Jido.Pod.BusPlugin` on every `jido.agent.child.started`
-  signal the pod receives.
+  Action invoked by `Jido.Slices.ChildBus` on every `jido.agent.child.started`
+  signal the host agent receives.
 
   Reads the child's module and pid out of the signal data, pulls the
-  target bus out of the `:pod_bus` slice, and calls
+  target bus out of the `:child_bus` slice, and calls
   `Jido.Signal.Bus.subscribe/3` once per path declared by the child's
   `signal_routes/0`. The returned subscription ids are written back into
   the slice so `AutoUnsubscribeChild` can undo them when the child exits.
 
-  The pod's own `maybe_track_child_started/2` still runs on the same
-  signal and is responsible for putting the child in
-  `state.children` — this action is purely additive.
+  When the host is a pod, the pod's own `maybe_track_child_started/2`
+  still runs on the same signal and is responsible for putting the
+  child in `state.children` — this action is purely additive.
   """
 
   use Jido.Action
 
   action do
-    name "pod_auto_subscribe_child"
-    description "Subscribe a pod child's pid to its signal_routes paths on the pod bus."
+    name "child_bus_auto_subscribe_child"
+    description "Subscribe a child's pid to its signal_routes paths on the configured bus."
 
     schema pid: [type: :any, required: true],
            child_module: [type: :atom, required: true],
@@ -43,14 +43,14 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
           case Bus.subscribe(bus, path, dispatch: {:pid, target: params.pid}) do
             {:ok, sub_id} ->
               Logger.debug(
-                "pod_bus: subscribed #{inspect(params.child_module)}/#{inspect(params.tag)} to #{inspect(path)} on #{inspect(bus)}"
+                "child_bus: subscribed #{inspect(params.child_module)}/#{inspect(params.tag)} to #{inspect(path)} on #{inspect(bus)}"
               )
 
               [sub_id | acc]
 
             {:error, reason} ->
               Logger.warning(
-                "pod_bus: failed to subscribe #{inspect(params.child_module)} to #{inspect(path)} on #{inspect(bus)}: #{inspect(reason)}"
+                "child_bus: failed to subscribe #{inspect(params.child_module)} to #{inspect(path)} on #{inspect(bus)}: #{inspect(reason)}"
               )
 
               acc
@@ -61,7 +61,7 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
       {:ok, Map.put(slice, :subscriptions, subscriptions), []}
     else
       {:error, reason} ->
-        Logger.warning("pod_bus: skipped auto-subscribe — #{reason}")
+        Logger.warning("child_bus: skipped auto-subscribe — #{reason}")
         {:ok, slice, []}
     end
   end
@@ -69,7 +69,7 @@ defmodule Jido.Pod.BusPlugin.AutoSubscribeChild do
   defp fetch_bus(slice) do
     case Map.get(slice, :bus) do
       bus when is_atom(bus) and not is_nil(bus) -> {:ok, bus}
-      _ -> {:error, "no :bus configured under :pod_bus slice"}
+      _ -> {:error, "no :bus configured under :child_bus slice"}
     end
   end
 

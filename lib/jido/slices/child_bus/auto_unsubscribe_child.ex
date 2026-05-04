@@ -1,20 +1,21 @@
-defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
+defmodule Jido.Slices.ChildBus.AutoUnsubscribeChild do
   @moduledoc """
-  Action invoked by `Jido.Pod.BusPlugin` on every `jido.agent.child.exit`
-  signal the pod receives (emitted by `AgentServer.handle_child_down/3`
-  when a monitored child process dies).
+  Action invoked by `Jido.Slices.ChildBus` on every `jido.agent.child.exit`
+  signal the host agent receives (emitted by
+  `AgentServer.handle_child_down/3` when a monitored child process
+  dies).
 
   Reads the subscription ids previously stored by
-  `Jido.Pod.BusPlugin.AutoSubscribeChild` for this tag, unsubscribes
-  each from the pod's bus, and removes the entry from the slice so
-  subscriptions don't accumulate across spawn/exit cycles.
+  `Jido.Slices.ChildBus.AutoSubscribeChild` for this tag, unsubscribes
+  each from the configured bus, and removes the entry from the slice
+  so subscriptions don't accumulate across spawn/exit cycles.
   """
 
   use Jido.Action
 
   action do
-    name "pod_auto_unsubscribe_child"
-    description "Unsubscribe a pod child from the pod bus on child.exit."
+    name "child_bus_auto_unsubscribe_child"
+    description "Unsubscribe a child from the configured bus on child.exit."
 
     schema tag: [type: :any, required: true],
            pid: [type: :any, required: false],
@@ -31,11 +32,11 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
       for sub_id <- sub_ids do
         case Bus.unsubscribe(bus, sub_id) do
           :ok ->
-            Logger.debug("pod_bus: unsubscribed #{inspect(tag)} sub=#{inspect(sub_id)}")
+            Logger.debug("child_bus: unsubscribed #{inspect(tag)} sub=#{inspect(sub_id)}")
 
           {:error, reason} ->
             Logger.warning(
-              "pod_bus: failed to unsubscribe #{inspect(tag)} sub=#{inspect(sub_id)}: #{inspect(reason)}"
+              "child_bus: failed to unsubscribe #{inspect(tag)} sub=#{inspect(sub_id)}: #{inspect(reason)}"
             )
         end
       end
@@ -44,7 +45,7 @@ defmodule Jido.Pod.BusPlugin.AutoUnsubscribeChild do
       {:ok, Map.put(slice, :subscriptions, subscriptions), []}
     else
       _ ->
-        Logger.debug("pod_bus: no subscriptions tracked for #{inspect(tag)}, skipping")
+        Logger.debug("child_bus: no subscriptions tracked for #{inspect(tag)}, skipping")
         {:ok, slice, []}
     end
   end
