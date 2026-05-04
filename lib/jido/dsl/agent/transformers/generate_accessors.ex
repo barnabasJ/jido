@@ -82,7 +82,7 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
           merged_input = Map.merge(instance.config || %{}, user_for_slice)
 
           slice =
-            Jido.Agent.__seed_plugin_slice__(instance.module, merged_input, instance.path)
+            Jido.Dsl.Agent.Seeder.seed_mount(instance.module, merged_input, instance.path)
 
           Map.put(acc, instance.path, slice)
         end)
@@ -131,7 +131,7 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
         leftover = Map.drop(user_state, known_slice_paths)
 
         own_user = Map.get(user_state, unquote(own_path), %{})
-        own_slice = Jido.Agent.__seed_own_slice__(unquote(own_schema_escaped), own_user)
+        own_slice = Jido.Dsl.Agent.Seeder.seed_own(unquote(own_schema_escaped), own_user)
 
         leftover
         |> Map.merge(plugin_slices)

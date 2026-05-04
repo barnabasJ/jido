@@ -208,62 +208,6 @@ defmodule Jido.Agent do
     end
   end
 
-  @doc false
-  @spec __seed_own_slice__(term(), map()) :: map()
-  def __seed_own_slice__([], user_value), do: user_value
-
-  def __seed_own_slice__(nil, user_value), do: user_value
-
-  def __seed_own_slice__(schema, user_value) when is_list(schema) do
-    defaults = Jido.Agent.State.defaults_from_schema(schema)
-    Map.merge(defaults, user_value)
-  end
-
-  def __seed_own_slice__(schema, user_value) do
-    case Zoi.parse(schema, user_value) do
-      {:ok, validated} ->
-        validated
-
-      {:error, errors} ->
-        raise Jido.Agent.SliceValidationError,
-          path: nil,
-          module: nil,
-          errors: errors
-    end
-  end
-
-  @doc false
-  @spec __seed_plugin_slice__(module(), map(), atom()) :: term()
-  def __seed_plugin_slice__(plugin_module, %{} = merged_input, mount_path)
-      when is_atom(mount_path) do
-    case Jido.Dsl.Slice.Info.schema(plugin_module) do
-      nil ->
-        if map_size(merged_input) == 0, do: nil, else: merged_input
-
-      schema ->
-        seed_plugin_slice_from_schema(plugin_module, schema, merged_input, mount_path)
-    end
-  end
-
-  defp seed_plugin_slice_from_schema(plugin_module, schema, merged_input, mount_path) do
-    case Zoi.parse(schema, merged_input) do
-      {:ok, validated} ->
-        validated
-
-      {:error, _errors} when map_size(merged_input) == 0 ->
-        # Schema has required fields without defaults and the user supplied
-        # nothing — preserve the lazy-init contract: the slice starts as nil
-        # and an action (typically `Ensure`) materializes it on demand.
-        nil
-
-      {:error, errors} ->
-        raise Jido.Agent.SliceValidationError,
-          path: mount_path,
-          module: plugin_module,
-          errors: errors
-    end
-  end
-
   # ---------------------------------------------------------------------------
   # Base module functions (for direct use without `use`)
   # ---------------------------------------------------------------------------
