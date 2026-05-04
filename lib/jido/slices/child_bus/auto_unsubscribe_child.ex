@@ -5,17 +5,20 @@ defmodule Jido.Slices.ChildBus.AutoUnsubscribeChild do
   `AgentServer.handle_child_down/3` when a monitored child process
   dies).
 
-  Reads the subscription ids previously stored by
-  `Jido.Slices.ChildBus.AutoSubscribeChild` for this tag, unsubscribes
-  each from the configured bus, and removes the entry from the slice
-  so subscriptions don't accumulate across spawn/exit cycles.
+  Looks up the subscription ids previously stored by
+  `Jido.Slices.ChildBus.RecordSubscription` for this tag, removes the
+  entry from the slice, and emits one
+  `Jido.Slices.ChildBus.Directives.UnsubscribeChild` directive per
+  sub_id. The directive performs the actual `Jido.Signal.Bus.unsubscribe/2`
+  I/O. This action itself is pure — its only outputs are its return
+  value (slice with the tag removed + directive list).
   """
 
   use Jido.Action
 
   action do
     name "child_bus_auto_unsubscribe_child"
-    description "Unsubscribe a child from the configured bus on child.exit."
+    description "Drop a child's subscription tracking and emit unsubscribe directives."
 
     schema tag: [type: :any, required: true],
            pid: [type: :any, required: false],
@@ -24,25 +27,14 @@ defmodule Jido.Slices.ChildBus.AutoUnsubscribeChild do
 
   require Logger
 
-  alias Jido.Signal.Bus
+  alias Jido.Slices.ChildBus.Directives.UnsubscribeChild
 
   def run(%Jido.Signal{data: %{tag: tag}}, slice, _opts, _ctx) do
     with {:ok, bus} <- fetch_bus(slice),
          sub_ids when is_list(sub_ids) <- get_in(slice, [:subscriptions, tag]) do
-      for sub_id <- sub_ids do
-        case Bus.unsubscribe(bus, sub_id) do
-          :ok ->
-            Logger.debug("child_bus: unsubscribed #{inspect(tag)} sub=#{inspect(sub_id)}")
-
-          {:error, reason} ->
-            Logger.warning(
-              "child_bus: failed to unsubscribe #{inspect(tag)} sub=#{inspect(sub_id)}: #{inspect(reason)}"
-            )
-        end
-      end
-
+      directives = Enum.map(sub_ids, &%UnsubscribeChild{bus: bus, sub_id: &1, tag: tag})
       subscriptions = Map.delete(Map.get(slice, :subscriptions, %{}), tag)
-      {:ok, Map.put(slice, :subscriptions, subscriptions), []}
+      {:ok, Map.put(slice, :subscriptions, subscriptions), directives}
     else
       _ ->
         Logger.debug("child_bus: no subscriptions tracked for #{inspect(tag)}, skipping")

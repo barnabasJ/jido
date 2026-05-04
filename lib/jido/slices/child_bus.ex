@@ -40,13 +40,22 @@ defmodule Jido.Slices.ChildBus do
 
   Bare slices register their `signal_routes/0` with **absolute** paths;
   slice-declared routes do not get a per-instance prefix (see
-  `Jido.Slice.Instance`). The two routes here
+  `Jido.Slice.Instance`). The two inbound routes
   (`jido.agent.child.started`, `jido.agent.child.exit`) are
-  framework-emitted child lifecycle signals.
+  framework-emitted child lifecycle signals; the two cascade routes
+  (`child_bus.subscribed`, `child_bus.subscribe_failed`) are
+  self-emitted by `Jido.Slices.ChildBus.Directives.SubscribeChild`
+  when the underlying `Jido.Signal.Bus.subscribe/3` returns. The
+  cascade actions then settle the result onto slice state per
+  ADR 0019: the action returns directives only, the directive does
+  the I/O and casts a result signal, the cascade action mutates the
+  slice.
   """
 
   alias Jido.Slices.ChildBus.AutoSubscribeChild
   alias Jido.Slices.ChildBus.AutoUnsubscribeChild
+  alias Jido.Slices.ChildBus.RecordSubscription
+  alias Jido.Slices.ChildBus.RecordSubscriptionFailure
 
   use Jido.Slice
 
@@ -62,6 +71,12 @@ defmodule Jido.Slices.ChildBus do
                Zoi.map(
                  description: "Per-tag subscription-id lists, used for cleanup on child.exit."
                )
+               |> Zoi.default(%{}),
+             failed_subscriptions:
+               Zoi.map(
+                 description:
+                   "Per-tag list of subscription failures (path/reason/at) surfaced by the bus."
+               )
                |> Zoi.default(%{})
            })
   end
@@ -69,6 +84,8 @@ defmodule Jido.Slices.ChildBus do
   signal_routes do
     route "jido.agent.child.started", AutoSubscribeChild
     route "jido.agent.child.exit", AutoUnsubscribeChild
+    route "child_bus.subscribed", RecordSubscription
+    route "child_bus.subscribe_failed", RecordSubscriptionFailure
   end
 
   capabilities do

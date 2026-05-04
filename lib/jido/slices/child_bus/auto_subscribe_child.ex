@@ -4,10 +4,16 @@ defmodule Jido.Slices.ChildBus.AutoSubscribeChild do
   signal the host agent receives.
 
   Reads the child's module and pid out of the signal data, pulls the
-  target bus out of the `:child_bus` slice, and calls
-  `Jido.Signal.Bus.subscribe/3` once per path declared by the child's
-  `signal_routes/0`. The returned subscription ids are written back into
-  the slice so `AutoUnsubscribeChild` can undo them when the child exits.
+  target bus out of the `:child_bus` slice, and emits one
+  `Jido.Slices.ChildBus.Directives.SubscribeChild` directive per path
+  declared by the child's `signal_routes/0`. The directive performs
+  the actual `Jido.Signal.Bus.subscribe/3` I/O and casts a
+  `"child_bus.subscribed"` (or `"child_bus.subscribe_failed"`) signal
+  back to the agent; the cascade actions
+  `Jido.Slices.ChildBus.RecordSubscription` /
+  `RecordSubscriptionFailure` settle the result onto the slice. This
+  action itself is pure — it returns the slice unchanged and a
+  directive list.
 
   When the host is a pod, the pod's own `maybe_track_child_started/2`
   still runs on the same signal and is responsible for putting the
@@ -18,7 +24,7 @@ defmodule Jido.Slices.ChildBus.AutoSubscribeChild do
 
   action do
     name "child_bus_auto_subscribe_child"
-    description "Subscribe a child's pid to its signal_routes paths on the configured bus."
+    description "Emit subscribe directives for each of a child's signal_routes."
 
     schema pid: [type: :any, required: true],
            child_module: [type: :atom, required: true],
@@ -31,34 +37,23 @@ defmodule Jido.Slices.ChildBus.AutoSubscribeChild do
 
   require Logger
 
-  alias Jido.Signal.Bus
+  alias Jido.Slices.ChildBus.Directives.SubscribeChild
 
   def run(%Jido.Signal{data: params}, slice, _opts, _ctx) do
     with {:ok, bus} <- fetch_bus(slice),
          {:ok, routes} <- fetch_routes(params.child_module) do
-      sub_ids =
-        Enum.reduce(routes, [], fn route, acc ->
-          path = elem(route, 0)
-
-          case Bus.subscribe(bus, path, dispatch: {:pid, target: params.pid}) do
-            {:ok, sub_id} ->
-              Logger.debug(
-                "child_bus: subscribed #{inspect(params.child_module)}/#{inspect(params.tag)} to #{inspect(path)} on #{inspect(bus)}"
-              )
-
-              [sub_id | acc]
-
-            {:error, reason} ->
-              Logger.warning(
-                "child_bus: failed to subscribe #{inspect(params.child_module)} to #{inspect(path)} on #{inspect(bus)}: #{inspect(reason)}"
-              )
-
-              acc
-          end
+      directives =
+        Enum.map(routes, fn route ->
+          %SubscribeChild{
+            bus: bus,
+            tag: params.tag,
+            path: elem(route, 0),
+            target_pid: params.pid,
+            child_module: params.child_module
+          }
         end)
 
-      subscriptions = Map.put(Map.get(slice, :subscriptions, %{}), params.tag, sub_ids)
-      {:ok, Map.put(slice, :subscriptions, subscriptions), []}
+      {:ok, slice, directives}
     else
       {:error, reason} ->
         Logger.warning("child_bus: skipped auto-subscribe — #{reason}")
