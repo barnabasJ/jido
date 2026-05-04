@@ -15,12 +15,12 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensionsSectionCollisionTest do
 
   use ExUnit.Case, async: true
 
-  test "raises when Jido.Pod is mounted alongside a slice that also picks `:pod`" do
+  test "raises when Jido.Slices.Pod is mounted alongside a slice that also picks `:pod`" do
     assert_raise Spark.Error.DslError, ~r/Section name collisions.*:pod/s, fn ->
       Code.compile_string("""
       defmodule Jido.Dsl.Agent.Transformers.WalkExtensionsSectionCollisionTest.PodCollidingHost do
         use Jido.Agent,
-          extensions: [Jido.Pod, JidoTest.Fixtures.CollidingPodExtension],
+          extensions: [Jido.Slices.Pod, JidoTest.Fixtures.CollidingPodExtension],
           default_slices: false
 
         agent do
@@ -28,7 +28,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensionsSectionCollisionTest do
         end
 
         slices do
-          slice :pod, Jido.Pod
+          slice :pod, Jido.Slices.Pod
           slice :other_pod, JidoTest.Fixtures.CollidingPodExtension
         end
       end
@@ -36,11 +36,11 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensionsSectionCollisionTest do
     end
   end
 
-  test "mounting just Jido.Pod compiles cleanly" do
+  test "mounting just Jido.Slices.Pod compiles cleanly" do
     Code.compile_string("""
     defmodule Jido.Dsl.Agent.Transformers.WalkExtensionsSectionCollisionTest.PodAloneHost do
       use Jido.Agent,
-        extensions: [Jido.Pod],
+        extensions: [Jido.Slices.Pod],
         default_slices: false
 
       agent do
@@ -48,7 +48,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensionsSectionCollisionTest do
       end
 
       slices do
-        slice :pod, Jido.Pod
+        slice :pod, Jido.Slices.Pod
       end
     end
     """)

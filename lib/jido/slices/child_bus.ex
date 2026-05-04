@@ -17,14 +17,14 @@ defmodule Jido.Slices.ChildBus do
   ## Usage
 
       defmodule MyApp.Fulfillment do
-        use Jido.Agent, extensions: [Jido.Pod]
+        use Jido.Agent, extensions: [Jido.Slices.Pod]
 
         agent do
           name "fulfillment"
         end
 
         slices do
-          slice :pod, Jido.Pod
+          slice :pod, Jido.Slices.Pod
           slice :child_bus, {Jido.Slices.ChildBus, %{bus: :my_bus}}
         end
 

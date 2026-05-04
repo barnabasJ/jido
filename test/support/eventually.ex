@@ -4,7 +4,7 @@ defmodule JidoTest.Eventually do
 
   For agent state changes, **subscribe** via `Jido.AgentServer.subscribe/4`
   or use one of the `await_*` helpers (`Jido.AgentServer.await_ready/2`,
-  `Jido.AgentServer.await_child/3`, `Jido.Pod.Mutable.mutate_and_wait/3`).
+  `Jido.AgentServer.await_child/3`, `Jido.Slices.Pod.Mutable.mutate_and_wait/3`).
   Polling agent state is forbidden by ADR 0021 — it hides race conditions
   and masks the signal that should be driving the wait.
 

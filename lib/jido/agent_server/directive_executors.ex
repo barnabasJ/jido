@@ -412,7 +412,7 @@ defimpl Jido.AgentServer.DirectiveExec, for: Jido.Directives.SpawnManagedAgent d
   # Delegate to SpawnManagedAgent.execute/2 (the single source of truth for
   # "spawn via InstanceManager with a parent ref") and discard the pid to
   # fit the DirectiveExec :ok contract. Non-directive callers like
-  # Jido.Pod.Runtime use execute/2 directly and keep the pid.
+  # Jido.Slices.Pod.Runtime use execute/2 directly and keep the pid.
   def exec(directive, _input_signal, state) do
     case SpawnManagedAgent.execute(directive, state) do
       {:ok, _pid} ->

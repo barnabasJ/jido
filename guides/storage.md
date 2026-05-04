@@ -32,7 +32,7 @@ team, start with [Choosing a Runtime Pattern](runtime-patterns.md).
 |----------|-------------|-----|
 | **Manual** | Explicit control over when to persist | `MyApp.Jido.hibernate/1`, `thaw/2` |
 | **Automatic** | Idle-based lifecycle for per-user/entity agents | `InstanceManager.get/3` with `idle_timeout` |
-| **Pod-managed topology** | Durable named teams with explicit reattachment after thaw | `Jido.Pod.get/3` or `InstanceManager.get/3` + `Jido.Pod.reconcile/2` |
+| **Pod-managed topology** | Durable named teams with explicit reattachment after thaw | `Jido.Slices.Pod.get/3` or `InstanceManager.get/3` + `Jido.Slices.Pod.reconcile/2` |
 | **None** | Stateless agents, cheap rebuilds, short-lived tasks | Skip storage config |
 
 Both manual and automatic approaches use the same underlying `Jido.Storage` behaviour.
@@ -57,8 +57,8 @@ The durability boundary is important:
 So thaw works like this:
 
 1. the pod agent thaws and immediately has its topology back
-2. eager roots and missing ownership edges are repaired by calling `Jido.Pod.reconcile/2`
-3. lazy roots or surviving nodes are reattached on demand via `Jido.Pod.ensure_node/3`
+2. eager roots and missing ownership edges are repaired by calling `Jido.Slices.Pod.reconcile/2`
+3. lazy roots or surviving nodes are reattached on demand via `Jido.Slices.Pod.ensure_node/3`
 
 If a node stayed alive independently while the pod manager was hibernated, it
 can show up in two different states:
@@ -68,12 +68,12 @@ can show up in two different states:
 - surviving nested pod managers follow the same rule, then reconcile their own
   eager topology once they are reattached
 
-`Jido.Pod.get/3` bundles the common path by calling
+`Jido.Slices.Pod.get/3` bundles the common path by calling
 `Jido.Agent.InstanceManager.get/3` and then reconciling eager nodes for you.
 Use the explicit two-step path when you need to inspect the restored topology
 before reattachment.
 
-If a running pod changes shape with `Jido.Pod.mutate/3`, that updated topology
+If a running pod changes shape with `Jido.Slices.Pod.mutate/3`, that updated topology
 is what later hibernate/thaw cycles restore. Storage still does not preserve a
 live process tree; it preserves the pod's latest durable topology plus each
 node's own durable agent state.

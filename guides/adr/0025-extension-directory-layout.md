@@ -42,7 +42,7 @@ Three more shape problems compound this:
    itself (`Emit`, `Error`, `Spawn`, `SpawnAgent`, `AdoptChild`, `StopChild`,
    `Schedule`, `RunInstruction`, `Stop`). Slice-owned directives live next to
    their slice (`lib/jido/ai/directive/{llm_call, tool_exec}.ex`,
-   `lib/jido/pod/directive/{start_node, stop_node}.ex`). The slice-owned
+   `lib/jido/slices/pod/directive/{start_node, stop_node}.ex`). The slice-owned
    placement is right; the framework-directive umbrella is buried under `agent/`
    and half its contents aren't files.
 
@@ -87,10 +87,9 @@ typespecs and module-doc.
 **Slice-owned directives ride along with their slice** in a `directives/`
 subdirectory: `Jido.AI.Directive.LLMCall` becomes
 `Jido.Slices.AiReact.Directives.LLMCall` at
-`lib/jido/slices/ai_react/directives/llm_call.ex`. Pod's directives stay under
-`lib/jido/pod/directive/` because pod itself is a special agent kind whose
-directives are tightly coupled to its runtime; the directive subdir parallels
-the AI ReAct slice's `directives/` subdir, just under pod's existing tree.
+`lib/jido/slices/ai_react/directives/llm_call.ex`. Pod's directives ride along
+under `lib/jido/slices/pod/directive/` (task 0065) — same convention as every
+other slice's `directives/` subdir.
 
 ### 3. The data-type module becomes `<Slice>.State`
 
@@ -154,18 +153,17 @@ this one.
   `alias Jido.Plugin.FSM` / `alias Jido.Agent.Directive.Emit` rewrites. The
   migration is mechanical (regex-driven) and we ship a section in
   `guides/migration-spark-dsl.md` walking through the most common renames.
-- **Pod stays at `lib/jido/pod/`.** Pod is a special agent kind whose pod-only
-  plugin (`Jido.Pod.Plugin`) and the surrounding runtime machinery (`actions/`,
-  `directive/`, `mutation/`, `topology*`, `runtime.ex`, `transformers/`) are
-  tightly coupled to pod runtime, topology, and mutation pipelines. Promoting
-  that pod-runtime-coupled code to `Jido.Plugins.Pod*` would split pod across
-  two trees for no win. The exception is scoped to runtime-coupled machinery
-  only — the auxiliary `BusPlugin` module that originally lived under
-  `lib/jido/pod/bus_plugin.ex` was reclassified to `Jido.Slices.ChildBus` (task
-  0064), since it depends on framework-level child-lifecycle signals
-  (`jido.agent.child.*`, emitted by `Jido.AgentServer` for any child-spawning
-  agent), not on pod runtime / topology / mutation, and so belongs in the same
-  bucket as the other built-in slices.
+- **The slice convention is universal.** Every built-in slice — Memory,
+  Identity, Thread, AiReact, FSM, ChildBus, **and Pod** — lives at
+  `lib/jido/slices/X.ex` with machinery under `lib/jido/slices/X/`, no
+  exceptions. Task 0061 collapsed Pod into a single `use Jido.Slice` module (the
+  `Jido.Pod.Plugin` agent kind no longer exists); task 0064 lifted
+  `Jido.Pod.BusPlugin` to `Jido.Slices.ChildBus`; task 0065 moved the rest of
+  the pod subtree to `lib/jido/slices/pod/`. Pod is bigger than the other slices
+  (15+ submodules across `actions/`, `directive/`, `mutation/`, `topology*`,
+  `runtime.ex`, `transformers/`), but bigger is a quantitative difference, not a
+  qualitative one — each slice's machinery stays under its own subdirectory, so
+  the slices/ tree is no harder to scan.
 - **`*.State` rename is the one contentious choice.** `Jido.Slices.Memory.State`
   reads cleanly to most readers; some may prefer `Jido.Slices.Memory.Data` or
   keeping the suffix-less form (the data type and the slice would share a
@@ -204,10 +202,10 @@ this one.
   `plugins/`.** One umbrella for all extension types. Costs an extra layer of
   nesting (`lib/jido/extensions/slices/memory.ex`) for one word of grouping.
   Rejected as not worth the depth.
-- **Promote pod-runtime-coupled plugins to `lib/jido/plugins/pod/`.** Splits pod
-  across `lib/jido/pod/` and `lib/jido/plugins/pod/` for the runtime-coupled
-  portion (the pod-only plugin behaviour plus the actions, directives, mutation,
-  topology, and runtime modules that share its data shape). Rejected for the
-  reasons listed in Consequences. The rejection is scoped to pod-runtime-coupled
-  code; the bus auxiliary that did **not** depend on pod runtime was
-  reclassified to `Jido.Slices.ChildBus` in task 0064.
+- **Promote pod plugins to `lib/jido/plugins/pod/`.** Pre-empted by tasks 0061
+  - 0064 + 0065: Pod is no longer a plugin or a special agent kind — it's a
+    slice (`use Jido.Slice`), and after task 0065 its full subtree lives at
+    `lib/jido/slices/pod/` like every other slice. The bus auxiliary that
+    originally rode along with pod was reclassified to `Jido.Slices.ChildBus` in
+    task 0064 because it depends on framework-level child-lifecycle signals, not
+    on pod runtime.

@@ -31,7 +31,7 @@ defmodule JidoExampleTest.NestedPodScaleTest do
 
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
-  alias Jido.Pod
+  alias Jido.Slices.Pod
   alias Jido.Storage.ETS
 
   @worker_manager :example_nested_scale_workers
@@ -56,7 +56,7 @@ defmodule JidoExampleTest.NestedPodScaleTest do
     @workers_per_lead 9
 
     def topology do
-      Jido.Pod.Topology.new!(
+      Jido.Slices.Pod.Topology.new!(
         name: "nested_scale_group_pod",
         nodes: nodes(),
         links: links()
@@ -125,14 +125,14 @@ defmodule JidoExampleTest.NestedPodScaleTest do
 
   defmodule WorkerGroupPod do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.Pod]
+    use Jido.Agent, extensions: [Jido.Slices.Pod]
 
     agent do
       name "worker_group_pod"
     end
 
     slices do
-      slice(:pod, Jido.Pod)
+      slice(:pod, Jido.Slices.Pod)
     end
 
     pod do
@@ -146,7 +146,7 @@ defmodule JidoExampleTest.NestedPodScaleTest do
     @group_count 10
 
     def topology do
-      Jido.Pod.Topology.new!(
+      Jido.Slices.Pod.Topology.new!(
         name: "nested_scale_root_pod",
         nodes: nodes(),
         links: links()
@@ -198,14 +198,14 @@ defmodule JidoExampleTest.NestedPodScaleTest do
 
   defmodule RootHierarchyPod do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.Pod]
+    use Jido.Agent, extensions: [Jido.Slices.Pod]
 
     agent do
       name "root_hierarchy_pod"
     end
 
     slices do
-      slice(:pod, Jido.Pod)
+      slice(:pod, Jido.Slices.Pod)
     end
 
     pod do

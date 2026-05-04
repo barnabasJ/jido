@@ -2,7 +2,7 @@
 
 <!-- covers: jido.pods.durable_topology jido.pods.reconcile_and_lazy_activation jido.pods.nested_pods jido.pods.live_mutation -->
 
-`Jido.Pod` is the simplest durable topology layer in core Jido: a pod is just an
+`Jido.Slices.Pod` is the simplest durable topology layer in core Jido: a pod is just an
 agent with a canonical topology snapshot and a reserved singleton plugin mounted
 under `:pod`.
 
@@ -13,7 +13,7 @@ start with [Choosing a Runtime Pattern](runtime-patterns.md).
 
 - A pod module is an ordinary `Jido.Agent` module.
 - The pod module itself is the durable manager for the topology.
-- `topology` is pure data, represented by `%Jido.Pod.Topology{}`.
+- `topology` is pure data, represented by `%Jido.Slices.Pod.Topology{}`.
 - Member nodes are durable collaborators acquired through ordinary
   `Jido.Agent.InstanceManager` registries.
 
@@ -24,7 +24,7 @@ Use the existing `Jido.Agent.InstanceManager` for the pod agent itself.
 
 ```elixir
 defmodule MyApp.OrderReviewPod do
-  use Jido.Agent, extensions: [Jido.Pod]
+  use Jido.Agent, extensions: [Jido.Slices.Pod]
 
   agent do
     name "order_review"
@@ -35,7 +35,7 @@ defmodule MyApp.OrderReviewPod do
   end
 
   slices do
-    slice :pod, Jido.Pod
+    slice :pod, Jido.Slices.Pod
   end
 
   pod do
@@ -47,8 +47,8 @@ defmodule MyApp.OrderReviewPod do
 end
 ```
 
-Listing `Jido.Pod` in `extensions:` opens the contributed `pod do … end`
-block on the host. Mounting `slice :pod, Jido.Pod` at the reserved `:pod`
+Listing `Jido.Slices.Pod` in `extensions:` opens the contributed `pod do … end`
+block on the host. Mounting `slice :pod, Jido.Slices.Pod` at the reserved `:pod`
 key wires the pod slice into agent state.
 
 The `pod do topology %{} end` block may be omitted to start with an empty
@@ -56,14 +56,14 @@ named topology:
 
 ```elixir
 defmodule MyApp.EmptyReviewPod do
-  use Jido.Agent, extensions: [Jido.Pod]
+  use Jido.Agent, extensions: [Jido.Slices.Pod]
 
   agent do
     name "empty_review"
   end
 
   slices do
-    slice :pod, Jido.Pod
+    slice :pod, Jido.Slices.Pod
   end
 end
 ```
@@ -75,12 +75,12 @@ and jump to [Running A Pod](#running-a-pod).
 
 Most users only need this flow:
 
-- define a pod with `use Jido.Agent, extensions: [Jido.Pod]` plus
-  `slices do slice :pod, Jido.Pod end`
+- define a pod with `use Jido.Agent, extensions: [Jido.Slices.Pod]` plus
+  `slices do slice :pod, Jido.Slices.Pod end`
 - run the pod manager through a normal `Jido.Agent.InstanceManager`
-- call `Jido.Pod.get/3` to load the durable team and reconcile eager members
-- call `Jido.Pod.ensure_node/3` for lazy members
-- call `Jido.Pod.mutate/3` only when the durable team needs to grow or shrink
+- call `Jido.Slices.Pod.get/3` to load the durable team and reconcile eager members
+- call `Jido.Slices.Pod.ensure_node/3` for lazy members
+- call `Jido.Slices.Pod.mutate/3` only when the durable team needs to grow or shrink
 
 If you only read one example, start with [Canonical Example](#canonical-example)
 below. The fully runnable example lives in
@@ -104,14 +104,14 @@ defmodule MyApp.ReviewWorkerAgent do
 end
 
 defmodule MyApp.ReviewPod do
-  use Jido.Agent, extensions: [Jido.Pod]
+  use Jido.Agent, extensions: [Jido.Slices.Pod]
 
   agent do
     name "review_pod"
   end
 
   slices do
-    slice :pod, Jido.Pod
+    slice :pod, Jido.Slices.Pod
   end
 end
 
@@ -128,19 +128,19 @@ children = [
   )
 ]
 
-{:ok, pod_pid} = Jido.Pod.get(:review_pods, "review-123")
+{:ok, pod_pid} = Jido.Slices.Pod.get(:review_pods, "review-123")
 
 {:ok, report} =
-  Jido.Pod.mutate(
+  Jido.Slices.Pod.mutate(
     pod_pid,
     [
-      Jido.Pod.Mutation.add_node("planner", %{
+      Jido.Slices.Pod.Mutation.add_node("planner", %{
         agent: MyApp.ReviewWorkerAgent,
         manager: :review_workers,
         activation: :eager,
         initial_state: %{role: "planner"}
       }),
-      Jido.Pod.Mutation.add_node(
+      Jido.Slices.Pod.Mutation.add_node(
         "reviewer",
         %{
           agent: MyApp.ReviewWorkerAgent,
@@ -154,7 +154,7 @@ children = [
     ]
   )
 
-{:ok, reviewer_pid} = Jido.Pod.ensure_node(pod_pid, "reviewer")
+{:ok, reviewer_pid} = Jido.Slices.Pod.ensure_node(pod_pid, "reviewer")
 ```
 
 What this demonstrates:
@@ -167,7 +167,7 @@ What this demonstrates:
 
 ## Pod Slice
 
-The reserved pod slice is `Jido.Pod` itself.
+The reserved pod slice is `Jido.Slices.Pod` itself.
 
 - It uses the reserved state key `:pod`.
 - It persists the resolved topology snapshot as ordinary agent state.
@@ -185,7 +185,7 @@ defmodule MyApp.CustomPod do
 
   slices do
     slice :pod, MyApp.CustomPodPlugin do
-      options topology: Jido.Pod.Topology.from_nodes!("custom_pod", %{
+      options topology: Jido.Slices.Pod.Topology.from_nodes!("custom_pod", %{
         worker: %{agent: MyApp.WorkerAgent, manager: :workers}
       })
     end
@@ -199,13 +199,13 @@ configure them through the `options` keyword on the slice mount.
 
 ## Topology
 
-`Jido.Pod.Topology` is the canonical topology data structure.
+`Jido.Slices.Pod.Topology` is the canonical topology data structure.
 
 - `name` is the stable topology name.
-- `nodes` is a map of logical node name to `%Jido.Pod.Topology.Node{}`.
-- `links` is a list of `%Jido.Pod.Topology.Link{}`.
+- `nodes` is a map of logical node name to `%Jido.Slices.Pod.Topology.Node{}`.
+- `links` is a list of `%Jido.Slices.Pod.Topology.Link{}`.
 - `version` is a simple topology version integer.
-  `Jido.Pod.put_topology/2` and `Jido.Pod.update_topology/2` advance it when
+  `Jido.Slices.Pod.put_topology/2` and `Jido.Slices.Pod.update_topology/2` advance it when
   the structural topology changes and preserve it for no-op rewrites.
 
 Node names may be atoms or strings. Static predefined pods can keep atom names,
@@ -216,25 +216,25 @@ The topology API is pure:
 
 ```elixir
 {:ok, topology} =
-  Jido.Pod.Topology.from_nodes("review", %{
+  Jido.Slices.Pod.Topology.from_nodes("review", %{
     planner: %{agent: MyApp.PlannerAgent, manager: :planner_members}
   })
 
 {:ok, topology} =
-  Jido.Pod.Topology.put_node(
+  Jido.Slices.Pod.Topology.put_node(
     topology,
     :reviewer,
     %{agent: MyApp.ReviewerAgent, manager: :reviewer_members}
   )
 
 {:ok, topology} =
-  Jido.Pod.Topology.put_link(
+  Jido.Slices.Pod.Topology.put_link(
     topology,
     {:depends_on, :reviewer, :planner}
   )
 ```
 
-Tuple shorthand links are normalized into canonical `%Jido.Pod.Topology.Link{}`
+Tuple shorthand links are normalized into canonical `%Jido.Slices.Pod.Topology.Link{}`
 structs for storage and inspection.
 
 In v1, links support a small fixed vocabulary:
@@ -257,11 +257,11 @@ children = [
 ```
 
 ```elixir
-{:ok, pod_pid} = Jido.Pod.get(:order_review_pods, "order-123")
-{:ok, reviewer_pid} = Jido.Pod.ensure_node(pod_pid, :reviewer)
+{:ok, pod_pid} = Jido.Slices.Pod.get(:order_review_pods, "order-123")
+{:ok, reviewer_pid} = Jido.Slices.Pod.ensure_node(pod_pid, :reviewer)
 ```
 
-`Jido.Pod.get/3` is the default happy path: it gets the pod manager through the
+`Jido.Slices.Pod.get/3` is the default happy path: it gets the pod manager through the
 ordinary `InstanceManager` and immediately reconciles eager nodes.
 
 `reconcile/2` eagerly acquires nodes marked `activation: :eager`.
@@ -279,18 +279,18 @@ Ownership matters at runtime:
   expansion
 
 If you need lower-level control, you can still call
-`Jido.Agent.InstanceManager.get/3` directly and then invoke `Jido.Pod.reconcile/2`
+`Jido.Agent.InstanceManager.get/3` directly and then invoke `Jido.Slices.Pod.reconcile/2`
 yourself.
 
 ## Core API
 
 Most applications only need these entry points:
 
-- `Jido.Pod.get/3` loads the durable pod and reconciles eager members
-- `Jido.Pod.ensure_node/3` starts or re-adopts one named member
-- `Jido.Pod.reconcile/2` repairs eager roots and ownership edges explicitly
-- `Jido.Pod.fetch_topology/1` reads the current durable topology snapshot
-- `Jido.Pod.mutate/3` changes the durable topology of a running pod
+- `Jido.Slices.Pod.get/3` loads the durable pod and reconciles eager members
+- `Jido.Slices.Pod.ensure_node/3` starts or re-adopts one named member
+- `Jido.Slices.Pod.reconcile/2` repairs eager roots and ownership edges explicitly
+- `Jido.Slices.Pod.fetch_topology/1` reads the current durable topology snapshot
+- `Jido.Slices.Pod.mutate/3` changes the durable topology of a running pod
 
 ## Partitioned Pods
 
@@ -307,8 +307,8 @@ In the shared-instance model, the pod is the durable unit and the partition is
 the namespace around it:
 
 ```elixir
-{:ok, alpha_pod} = Jido.Pod.get(:order_review_pods, "order-123", partition: :alpha)
-{:ok, beta_pod} = Jido.Pod.get(:order_review_pods, "order-123", partition: :beta)
+{:ok, alpha_pod} = Jido.Slices.Pod.get(:order_review_pods, "order-123", partition: :alpha)
+{:ok, beta_pod} = Jido.Slices.Pod.get(:order_review_pods, "order-123", partition: :beta)
 ```
 
 Those are two different pod runtimes, even though they share the same pod key.
@@ -324,7 +324,7 @@ Partition behavior is intentionally simple:
 So the normal mental model is:
 
 - `partition` isolates tenants or workspaces
-- `Jido.Pod` gives each tenant/workspace a durable structured runtime
+- `Jido.Slices.Pod` gives each tenant/workspace a durable structured runtime
 
 Cross-partition interaction is still explicit and exceptional. A pod tree is
 single-partition by default.
@@ -333,14 +333,14 @@ single-partition by default.
 
 Pods now support live add/remove topology mutation on a running pod manager.
 
-`Jido.Pod.mutate/3` is the external synchronous API:
+`Jido.Slices.Pod.mutate/3` is the external synchronous API:
 
 ```elixir
 {:ok, report} =
-  Jido.Pod.mutate(
+  Jido.Slices.Pod.mutate(
     pod_pid,
     [
-      Jido.Pod.Mutation.add_node(
+      Jido.Slices.Pod.Mutation.add_node(
         "reviewer",
         %{agent: MyApp.ReviewerAgent, manager: :reviewer_members, activation: :eager},
         owner: "planner",
@@ -371,14 +371,14 @@ Mutation semantics are persistence-first:
 
 1. the new topology snapshot is written into `agent.state[:pod]`
 2. runtime stop/start work runs against that new topology
-3. the returned `%Jido.Pod.Mutation.Report{}` records `added`, `removed`,
+3. the returned `%Jido.Slices.Pod.Mutation.Report{}` records `added`, `removed`,
    `started`, `stopped`, and `failures`
 
 If runtime work partially fails, the topology stays updated and the mutation
 returns `{:error, report}`. Recovery is explicit through later
-`Jido.Pod.reconcile/2`, `Jido.Pod.ensure_node/3`, or another mutation.
+`Jido.Slices.Pod.reconcile/2`, `Jido.Slices.Pod.ensure_node/3`, or another mutation.
 
-For in-turn pod code, `Jido.Pod.mutation_effects/3` returns the state ops and
+For in-turn pod code, `Jido.Slices.Pod.mutation_effects/3` returns the state ops and
 runtime directive for the same mutation path instead of executing the mutation
 immediately.
 
@@ -393,7 +393,7 @@ Pods support hierarchical runtime ownership for both `kind: :agent` and
 
 ```elixir
 topology =
-  Jido.Pod.Topology.new!(
+  Jido.Slices.Pod.Topology.new!(
     name: "editorial_pipeline",
     nodes: %{
       lead: %{agent: MyApp.LeadAgent, manager: :editorial_leads, activation: :eager},
@@ -421,7 +421,7 @@ manager:
 
 ```elixir
 topology =
-  Jido.Pod.Topology.new!(
+  Jido.Slices.Pod.Topology.new!(
     name: "program",
     nodes: %{
       coordinator: %{agent: MyApp.CoordinatorAgent, manager: :coordinators, activation: :eager},
@@ -478,15 +478,15 @@ That means pod thaw is a two-step story:
 Example:
 
 ```elixir
-{:ok, pod_pid} = Jido.Pod.get(:order_review_pods, "order-123")
+{:ok, pod_pid} = Jido.Slices.Pod.get(:order_review_pods, "order-123")
 
 # Later: the pod manager hibernates and is restored
 {:ok, restored_pid} = Jido.Agent.InstanceManager.get(:order_review_pods, "order-123")
-{:ok, topology} = Jido.Pod.fetch_topology(restored_pid)
-{:ok, snapshots} = Jido.Pod.nodes(restored_pid)
+{:ok, topology} = Jido.Slices.Pod.fetch_topology(restored_pid)
+{:ok, snapshots} = Jido.Slices.Pod.nodes(restored_pid)
 
 # Low-level: explicitly reconcile eager roots after thaw
-{:ok, report} = Jido.Pod.reconcile(restored_pid)
+{:ok, report} = Jido.Slices.Pod.reconcile(restored_pid)
 ```
 
 After thaw:
@@ -520,7 +520,7 @@ This first slice keeps the model deliberately small:
 - no reparenting of surviving nodes
 
 The extension seam for later work is the `:pod` plugin state and the
-canonical `%Jido.Pod.Topology{}` shape.
+canonical `%Jido.Slices.Pod.Topology{}` shape.
 
 ## See Also
 

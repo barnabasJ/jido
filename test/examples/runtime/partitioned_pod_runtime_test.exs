@@ -3,7 +3,7 @@ defmodule JidoExampleTest.PartitionedPodRuntimeTest do
   Example test demonstrating Pod-first logical multi-tenancy.
 
   This example keeps the runtime single-instance, but treats `partition` as the
-  tenant/workspace boundary and `Jido.Pod` as the durable unit inside that
+  tenant/workspace boundary and `Jido.Slices.Pod` as the durable unit inside that
   boundary.
 
   It proves:
@@ -23,8 +23,8 @@ defmodule JidoExampleTest.PartitionedPodRuntimeTest do
 
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
-  alias Jido.Pod
-  alias Jido.Pod.Topology
+  alias Jido.Slices.Pod
+  alias Jido.Slices.Pod.Topology
   alias Jido.Storage.ETS
 
   @worker_manager :example_partitioned_pod_workers
@@ -43,14 +43,14 @@ defmodule JidoExampleTest.PartitionedPodRuntimeTest do
 
   defmodule WorkspacePod do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.Pod]
+    use Jido.Agent, extensions: [Jido.Slices.Pod]
 
     agent do
       name "workspace_pod"
     end
 
     slices do
-      slice(:pod, Jido.Pod)
+      slice(:pod, Jido.Slices.Pod)
     end
 
     pod do

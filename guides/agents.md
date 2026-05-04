@@ -201,7 +201,7 @@ agent = MyAgent.new(state: %{counter: 10})
 ```
 
 If the module is primarily a durable coordinator for named collaborators, use
-`Jido.Pod` instead of `Jido.Agent`. `Jido.Pod` wraps the same agent model and
+`Jido.Slices.Pod` instead of `Jido.Agent`. `Jido.Slices.Pod` wraps the same agent model and
 adds a canonical topology plus a reserved singleton pod plugin.
 
 ## Further Reading

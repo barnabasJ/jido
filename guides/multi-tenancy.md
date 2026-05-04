@@ -16,7 +16,7 @@ to `InstanceManager` and `Pod`, start with
 In shared-instance deployments, the recommended unit is:
 
 - `partition` for tenant or workspace isolation
-- a root `Jido.Pod` inside that partition for the durable runtime shape
+- a root `Jido.Slices.Pod` inside that partition for the durable runtime shape
 
 That gives you a simple mental model:
 
@@ -48,14 +48,14 @@ of “partitioned durable teams.”
 
 ```elixir
 defmodule MyApp.WorkspacePod do
-  use Jido.Agent, extensions: [Jido.Pod]
+  use Jido.Agent, extensions: [Jido.Slices.Pod]
 
   agent do
     name "workspace"
   end
 
   slices do
-    slice :pod, Jido.Pod
+    slice :pod, Jido.Slices.Pod
   end
 
   pod do
@@ -79,14 +79,14 @@ Then acquire that pod inside a tenant partition:
 
 ```elixir
 {:ok, workspace_pid} =
-  Jido.Pod.get(:workspace_pods, "workspace-123", partition: :tenant_alpha)
+  Jido.Slices.Pod.get(:workspace_pods, "workspace-123", partition: :tenant_alpha)
 ```
 
 That same key can exist in another partition:
 
 ```elixir
 {:ok, other_workspace_pid} =
-  Jido.Pod.get(:workspace_pods, "workspace-123", partition: :tenant_beta)
+  Jido.Slices.Pod.get(:workspace_pods, "workspace-123", partition: :tenant_beta)
 ```
 
 Those are two different pod runtimes with two different child trees.
@@ -115,9 +115,9 @@ At runtime:
 
 ```elixir
 {:ok, pod_pid} =
-  Jido.Pod.get(:workspace_pods, "workspace-123", partition: :tenant_alpha)
+  Jido.Slices.Pod.get(:workspace_pods, "workspace-123", partition: :tenant_alpha)
 
-{:ok, reviewer_pid} = Jido.Pod.ensure_node(pod_pid, :reviewer)
+{:ok, reviewer_pid} = Jido.Slices.Pod.ensure_node(pod_pid, :reviewer)
 ```
 
 The worker manager is shared, but the runtime identity is not:
@@ -143,9 +143,9 @@ That means these operations stay isolated automatically:
 - `Jido.whereis/3`
 - `Jido.Agent.InstanceManager.get/3`
 - `Jido.Agent.InstanceManager.lookup/3`
-- `Jido.Pod.get/3`
-- `Jido.Pod.reconcile/2`
-- `Jido.Pod.ensure_node/3`
+- `Jido.Slices.Pod.get/3`
+- `Jido.Slices.Pod.reconcile/2`
+- `Jido.Slices.Pod.ensure_node/3`
 - hibernate/thaw for agents and pods
 
 ## Hierarchies And Nested Pods

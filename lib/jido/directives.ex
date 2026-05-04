@@ -41,7 +41,7 @@ defmodule Jido.Directives do
   - `Jido.Directives.Reply` — reply to a synchronous call
 
   Slice-owned directives live next to their slice (e.g.
-  `Jido.Slices.AiReact.Directives.LLMCall`, `Jido.Pod.Directive.StartNode`).
+  `Jido.Slices.AiReact.Directives.LLMCall`, `Jido.Slices.Pod.Directive.StartNode`).
 
   ## Usage
 

@@ -1,9 +1,9 @@
 defmodule JidoTest.PodTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Pod
-  alias Jido.Pod.Topology
-  alias Jido.Pod.Topology.Node
+  alias Jido.Slices.Pod
+  alias Jido.Slices.Pod.Topology
+  alias Jido.Slices.Pod.Topology.Node
   alias Jido.Storage.ETS
 
   defmodule WorkerAgent do
@@ -48,14 +48,14 @@ defmodule JidoTest.PodTest do
 
   defmodule ExamplePod do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.Pod]
+    use Jido.Agent, extensions: [Jido.Slices.Pod]
 
     agent do
       name "example_pod"
     end
 
     slices do
-      slice(:pod, Jido.Pod)
+      slice(:pod, Jido.Slices.Pod)
     end
 
     pod do
@@ -68,14 +68,14 @@ defmodule JidoTest.PodTest do
 
   defmodule EmptyPod do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.Pod]
+    use Jido.Agent, extensions: [Jido.Slices.Pod]
 
     agent do
       name "empty_pod"
     end
 
     slices do
-      slice(:pod, Jido.Pod)
+      slice(:pod, Jido.Slices.Pod)
     end
   end
 
@@ -91,7 +91,7 @@ defmodule JidoTest.PodTest do
       slice :pod, CustomPodPlugin do
         options(
           topology:
-            Jido.Pod.Topology.from_nodes!("custom_plugin_pod", %{
+            Jido.Slices.Pod.Topology.from_nodes!("custom_plugin_pod", %{
               worker: %{agent: WorkerAgent, manager: :worker_nodes}
             })
         )
@@ -99,24 +99,24 @@ defmodule JidoTest.PodTest do
     end
   end
 
-  test "Jido.Pod extension wraps an agent module with a canonical topology" do
-    assert Jido.Pod.Info.pod?(ExamplePod)
+  test "Jido.Slices.Pod extension wraps an agent module with a canonical topology" do
+    assert Jido.Slices.Pod.Info.pod?(ExamplePod)
 
     assert {:ok, %Topology{name: "example_pod"} = topology} =
-             Jido.Pod.Info.pod_topology(ExamplePod)
+             Jido.Slices.Pod.Info.pod_topology(ExamplePod)
 
     assert %Node{activation: :eager, module: WorkerAgent} = topology.nodes.planner
 
     assert Enum.any?(Jido.Dsl.Agent.Info.slice_instances(ExamplePod), fn instance ->
-             instance.module == Jido.Pod and instance.path == :pod
+             instance.module == Jido.Slices.Pod and instance.path == :pod
            end)
   end
 
-  test "Jido.Pod extension defaults omitted topology to an empty topology" do
-    assert Jido.Pod.Info.pod?(EmptyPod)
+  test "Jido.Slices.Pod extension defaults omitted topology to an empty topology" do
+    assert Jido.Slices.Pod.Info.pod?(EmptyPod)
 
     assert {:ok, %Topology{name: "empty_pod", nodes: %{}, links: []}} =
-             Jido.Pod.Info.pod_topology(EmptyPod)
+             Jido.Slices.Pod.Info.pod_topology(EmptyPod)
 
     agent = EmptyPod.new()
     assert {:ok, %Topology{name: "empty_pod", nodes: %{}}} = Pod.fetch_topology(agent)
@@ -143,14 +143,14 @@ defmodule JidoTest.PodTest do
       @moduledoc false
       alias #{inspect(UserPlugin)}, as: UserPlugin
 
-      use Jido.Agent, extensions: [Jido.Pod], middleware: [UserPlugin]
+      use Jido.Agent, extensions: [Jido.Slices.Pod], middleware: [UserPlugin]
 
       agent do
         name #{inspect(pod_name)}
       end
 
       slices do
-        slice :pod, Jido.Pod
+        slice :pod, Jido.Slices.Pod
         slice :pod_test_user_plugin, UserPlugin
       end
     end

@@ -93,19 +93,19 @@ hibernate/thaw. If you need durable agent lifecycle, use
 workflow concern.
 
 If the durable unit is a named team rather than a single agent, use
-`Jido.Pod`. A pod runs through ordinary `InstanceManager` lifecycle, persists
+`Jido.Slices.Pod`. A pod runs through ordinary `InstanceManager` lifecycle, persists
 its topology snapshot in `agent.state[:__pod__]`, and re-establishes live node
-attachments explicitly with `Jido.Pod.reconcile/2` and `Jido.Pod.ensure_node/3`
+attachments explicitly with `Jido.Slices.Pod.reconcile/2` and `Jido.Slices.Pod.ensure_node/3`
 after thaw. Root pod nodes are adopted into the pod manager, while owned nodes
 are adopted under their logical runtime owner. Nested `kind: :pod` nodes are
 acquired through their own `InstanceManager` and then reconciled recursively.
-`Jido.Pod.get/3` is the default happy path because it performs the initial eager
+`Jido.Slices.Pod.get/3` is the default happy path because it performs the initial eager
 reconciliation after `InstanceManager.get/3`.
 
 Running pods may also change their durable topology at runtime with
-`Jido.Pod.mutate/3`. That path persists the new topology snapshot first, then
+`Jido.Slices.Pod.mutate/3`. That path persists the new topology snapshot first, then
 applies runtime stop/start work and returns a mutation report. In-turn pod code
-uses the same runtime path through `Jido.Pod.mutation_effects/3`. See
+uses the same runtime path through `Jido.Slices.Pod.mutation_effects/3`. See
 [Pods](pods.md), especially [Canonical Example](pods.md#canonical-example).
 
 The parent:

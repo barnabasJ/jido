@@ -1,6 +1,6 @@
 defmodule JidoExampleTest.PodRuntimeTest do
   @moduledoc """
-  Example tests demonstrating the current `Jido.Pod` runtime contract.
+  Example tests demonstrating the current `Jido.Slices.Pod` runtime contract.
 
   This file has two goals:
 
@@ -10,8 +10,8 @@ defmodule JidoExampleTest.PodRuntimeTest do
 
   ## What This Covers
 
-  - `use Jido.Agent, extensions: [Jido.Pod]` wraps an ordinary agent module
-  - `Jido.Pod.get/3` is the happy path over `InstanceManager.get/3`
+  - `use Jido.Agent, extensions: [Jido.Slices.Pod]` wraps an ordinary agent module
+  - `Jido.Slices.Pod.get/3` is the happy path over `InstanceManager.get/3`
   - eager nodes start in ownership/dependency order during reconcile
   - lazy nodes are materialized on demand with `ensure_node/3`
   - pod topology persists, but live root attachments do not
@@ -36,7 +36,7 @@ defmodule JidoExampleTest.PodRuntimeTest do
 
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
-  alias Jido.Pod
+  alias Jido.Slices.Pod
   alias Jido.Storage.ETS
 
   @worker_manager :example_pod_runtime_workers
@@ -53,25 +53,25 @@ defmodule JidoExampleTest.PodRuntimeTest do
     end
 
     slices do
-      slice(:pod, Jido.Pod)
+      slice(:pod, Jido.Slices.Pod)
     end
   end
 
   defmodule ReviewPipelinePod do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.Pod]
+    use Jido.Agent, extensions: [Jido.Slices.Pod]
 
     agent do
       name "review_pipeline"
     end
 
     slices do
-      slice(:pod, Jido.Pod)
+      slice(:pod, Jido.Slices.Pod)
     end
 
     pod do
       topology(
-        Jido.Pod.Topology.new!(
+        Jido.Slices.Pod.Topology.new!(
           name: "review_pipeline",
           nodes: %{
             planner: %{

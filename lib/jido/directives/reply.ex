@@ -36,7 +36,7 @@ defmodule Jido.Directives.Reply do
         input_signal: sig,
         reply_type: "jido.pod.query.nodes.reply",
         error_type: "jido.pod.query.nodes.error",
-        build: {Jido.Pod.Queries, :build_nodes_reply, []}
+        build: {Jido.Slices.Pod.Queries, :build_nodes_reply, []}
       }
 
   `Jido.Signal.Call.reply_from_state/4` is the recommended builder.

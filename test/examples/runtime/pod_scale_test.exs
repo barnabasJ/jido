@@ -27,7 +27,7 @@ defmodule JidoExampleTest.PodScaleTest do
   ## Important Boundary
 
   This is a hierarchical agent runtime, not a recursive nested-pod runtime. The
-  current `Jido.Pod` implementation still has one durable pod manager, but only
+  current `Jido.Slices.Pod` implementation still has one durable pod manager, but only
   root members are adopted directly into it.
   """
   use JidoTest.Case, async: false
@@ -37,7 +37,7 @@ defmodule JidoExampleTest.PodScaleTest do
 
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
-  alias Jido.Pod
+  alias Jido.Slices.Pod
   alias Jido.Storage.ETS
 
   @worker_manager :example_pod_scale_workers
@@ -62,7 +62,7 @@ defmodule JidoExampleTest.PodScaleTest do
     @workers_per_squad 10
 
     def topology do
-      Jido.Pod.Topology.new!(
+      Jido.Slices.Pod.Topology.new!(
         name: "hierarchy_shaped_scale_pod",
         nodes: nodes(),
         links: links()
@@ -179,14 +179,14 @@ defmodule JidoExampleTest.PodScaleTest do
 
   defmodule HierarchyShapedScalePod do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.Pod]
+    use Jido.Agent, extensions: [Jido.Slices.Pod]
 
     agent do
       name "hierarchy_shaped_scale_pod"
     end
 
     slices do
-      slice(:pod, Jido.Pod)
+      slice(:pod, Jido.Slices.Pod)
     end
 
     pod do

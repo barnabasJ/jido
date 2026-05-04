@@ -4,25 +4,30 @@
 
 **After:** You can upgrade from Jido 1.x with minimal surprises.
 
-This guide helps you migrate existing Jido applications to version 2.0. The migration can be done incrementally—start with the minimum changes to get running, then adopt new patterns as needed.
+This guide helps you migrate existing Jido applications to version 2.0. The
+migration can be done incrementally—start with the minimum changes to get
+running, then adopt new patterns as needed.
 
 ## Breaking Changes Summary
 
-| Area | V1 | V2 | Migration Effort |
-|------|----|----|------------------|
-| Runtime | Global singleton | Instance-scoped supervisor | Small |
-| Agent Lifecycle | `AgentServer.start/1` | `Jido.start_agent/3` | Small-Medium |
-| Side Effects | Mixed in callbacks | Directive-based | Medium |
-| Messaging | `Jido.Instruction` | CloudEvents Signals | Medium-Large |
-| Orchestration | Runners (Simple/Chain) | Strategies + Plans | Medium |
-| Actions | `Jido.Actions.*` | `Jido.Tools.*` | Small |
-| Validation | NimbleOptions | Zoi schemas | Small-Medium |
-| Errors | Ad hoc tuples | Splode structured errors | Small-Medium |
-| State Layout | Flat `agent.state.counter` | Scoped `agent.state.__domain__.counter` | Small |
+| Area            | V1                         | V2                                      | Migration Effort |
+| --------------- | -------------------------- | --------------------------------------- | ---------------- |
+| Runtime         | Global singleton           | Instance-scoped supervisor              | Small            |
+| Agent Lifecycle | `AgentServer.start/1`      | `Jido.start_agent/3`                    | Small-Medium     |
+| Side Effects    | Mixed in callbacks         | Directive-based                         | Medium           |
+| Messaging       | `Jido.Instruction`         | CloudEvents Signals                     | Medium-Large     |
+| Orchestration   | Runners (Simple/Chain)     | Strategies + Plans                      | Medium           |
+| Actions         | `Jido.Actions.*`           | `Jido.Tools.*`                          | Small            |
+| Validation      | NimbleOptions              | Zoi schemas                             | Small-Medium     |
+| Errors          | Ad hoc tuples              | Splode structured errors                | Small-Medium     |
+| State Layout    | Flat `agent.state.counter` | Scoped `agent.state.__domain__.counter` | Small            |
 
 ### State Layout: `:__domain__` slice
 
-User-domain state lives under `agent.state.__domain__` by default. Plugin state continues to live under its own slice (`:__pod__`, `:__bus_wiring__`, etc.). Schema-backed fields declared via `use Jido.Agent, schema: [...]` are seeded under `:__domain__`.
+User-domain state lives under `agent.state.__domain__` by default. Plugin state
+continues to live under its own slice (`:__pod__`, `:__bus_wiring__`, etc.).
+Schema-backed fields declared via `use Jido.Agent, schema: [...]` are seeded
+under `:__domain__`.
 
 **Rewrites needed for agents declared with the legacy flat layout:**
 
@@ -31,16 +36,22 @@ User-domain state lives under `agent.state.__domain__` by default. Plugin state 
   agent.state.counter        # old
   agent.state.__domain__.counter  # new
   ```
-- Writing user-domain fields via map-update (rare — prefer `set/2` or action returns):
+- Writing user-domain fields via map-update (rare — prefer `set/2` or action
+  returns):
   ```elixir
   %{agent | state: %{agent.state | counter: 42}}  # old
   %{agent | state: %{agent.state | __domain__: %{agent.state.__domain__ | counter: 42}}}  # new
   # or:
   %{agent | state: put_in(agent.state, [:__domain__, :counter], 42)}
   ```
-- `new(state: ...)` and `set/2` **auto-wrap** flat attrs into `:__domain__`, so common constructor calls (`new(state: %{counter: 10})`) keep working.
-- State-op directives (`%SetPath{}`, `%DeletePath{}`, etc.) still operate on full `agent.state` — prefix paths with `:__domain__` to target user-domain fields.
-- Scoped actions (`use Jido.Agent.ScopedAction, state_key: :__domain__`) receive just their slice as `ctx.state` and return `{:ok, new_slice}` with wholesale-replace semantics.
+- `new(state: ...)` and `set/2` **auto-wrap** flat attrs into `:__domain__`, so
+  common constructor calls (`new(state: %{counter: 10})`) keep working.
+- State-op directives (`%SetPath{}`, `%DeletePath{}`, etc.) still operate on
+  full `agent.state` — prefix paths with `:__domain__` to target user-domain
+  fields.
+- Scoped actions (`use Jido.Agent.ScopedAction, state_key: :__domain__`) receive
+  just their slice as `ctx.state` and return `{:ok, new_slice}` with
+  wholesale-replace semantics.
 
 ## Migration Path Overview
 
@@ -52,7 +63,8 @@ Choose your migration depth based on your timeline and needs:
 
 ## Step 1: Add Jido to Your Supervision Tree
 
-V2 uses instance-scoped supervisors instead of a global singleton. Define an instance module and add it to your supervision tree.
+V2 uses instance-scoped supervisors instead of a global singleton. Define an
+instance module and add it to your supervision tree.
 
 ```elixir
 # lib/my_app/jido.ex
@@ -77,7 +89,7 @@ defmodule MyApp.Application do
     children = [
       # Add Jido as a supervised child
       MyApp.Jido,
-      
+
       # Your other children...
       MyApp.Repo,
       MyAppWeb.Endpoint
@@ -89,7 +101,8 @@ defmodule MyApp.Application do
 end
 ```
 
-The instance module provides functions for managing agents that you'll use throughout your application.
+The instance module provides functions for managing agents that you'll use
+throughout your application.
 
 ## Step 2: Update Agent Starts
 
@@ -124,7 +137,8 @@ Replace direct `start_link` calls with your instance module's `start_agent/2`.
 
 ### Why This Matters
 
-- **Discovery**: Agents are automatically registered and discoverable via `MyApp.Jido.whereis/1`
+- **Discovery**: Agents are automatically registered and discoverable via
+  `MyApp.Jido.whereis/1`
 - **Lifecycle**: The supervisor handles restarts and cleanup
 - **Hierarchy**: Enables parent-child agent relationships
 
@@ -158,7 +172,8 @@ agents = MyApp.Jido.list_agents()
 
 ## Step 4: Adopt Directives for Side Effects
 
-V2 separates pure state transformations from side effects using Directives. This is the biggest conceptual change and can be adopted incrementally.
+V2 separates pure state transformations from side effects using Directives. This
+is the biggest conceptual change and can be adopted incrementally.
 
 ### Before (V1): Ad Hoc Side Effects
 
@@ -169,10 +184,10 @@ defmodule MyAgent do
   def handle_result(agent, result) do
     # Side effect mixed with state logic
     Phoenix.PubSub.broadcast(MyApp.PubSub, "events", result)
-    
+
     # External API call
     HTTPoison.post!("https://api.example.com/webhook", result)
-    
+
     # Update state
     %{agent | state: Map.put(agent.state, :last_result, result)}
   end
@@ -184,18 +199,18 @@ end
 ```elixir
 defmodule MyAgent do
   use Jido.Agent
-  
+
   alias Jido.Directives
   alias Jido.Signal
 
   def cmd(agent, %Signal{type: "result.received"} = signal) do
     result = signal.data
-    
+
     # Pure state update
-    updated_agent = %{agent | 
+    updated_agent = %{agent |
       state: Map.put(agent.state, :last_result, result)
     }
-    
+
     # Directives describe effects, don't execute them
     directives = [
       Directives.emit(
@@ -207,7 +222,7 @@ defmodule MyAgent do
         {:http, url: "https://api.example.com/webhook"}
       )
     ]
-    
+
     {updated_agent, directives}
   end
 end
@@ -215,15 +230,15 @@ end
 
 ### Core Directives
 
-| Directive | Purpose | Example |
-|-----------|---------|---------|
-| `Emit` | Dispatch a signal via adapters | `Directives.emit(signal, {:pubsub, topic: "events"})` |
-| `Spawn` | Spawn a generic BEAM process | `Directives.spawn({Task, fn -> work() end})` |
+| Directive    | Purpose                            | Example                                                                |
+| ------------ | ---------------------------------- | ---------------------------------------------------------------------- |
+| `Emit`       | Dispatch a signal via adapters     | `Directives.emit(signal, {:pubsub, topic: "events"})`                  |
+| `Spawn`      | Spawn a generic BEAM process       | `Directives.spawn({Task, fn -> work() end})`                           |
 | `SpawnAgent` | Spawn a child agent with hierarchy | `Directives.spawn_agent(ChildAgent, :child_1, opts: %{id: "child-1"})` |
-| `StopChild` | Stop a tracked child agent | `Directives.stop_child("child-1")` |
-| `Schedule` | Schedule a delayed message | `Directives.schedule(5_000, signal)` |
-| `Stop` | Stop the agent process | `Directives.stop(:normal)` |
-| `Error` | Signal an error | `Directives.error(:validation_failed)` |
+| `StopChild`  | Stop a tracked child agent         | `Directives.stop_child("child-1")`                                     |
+| `Schedule`   | Schedule a delayed message         | `Directives.schedule(5_000, signal)`                                   |
+| `Stop`       | Stop the agent process             | `Directives.stop(:normal)`                                             |
+| `Error`      | Signal an error                    | `Directives.error(:validation_failed)`                                 |
 
 ## Step 5: Use CloudEvents Signals
 
@@ -398,7 +413,7 @@ end
 
 defmodule MyApp.Errors.Validation.InvalidInput do
   use Splode.Error, fields: [:field, :reason], class: :validation
-  
+
   def message(%{field: field, reason: reason}) do
     "Invalid #{field}: #{reason}"
   end
@@ -407,11 +422,11 @@ end
 # Usage
 def process(data) do
   case validate(data) do
-    :ok -> 
+    :ok ->
       {:ok, result}
-    {:error, field, reason} -> 
+    {:error, field, reason} ->
       {:error, MyApp.Errors.Validation.InvalidInput.exception(
-        field: field, 
+        field: field,
         reason: reason
       )}
   end
@@ -427,7 +442,7 @@ These features are new in V2 and can be adopted as needed:
 ```elixir
 def cmd(agent, %Signal{type: "spawn.worker"} = signal) do
   {agent, [
-    Directives.spawn_agent(WorkerAgent, 
+    Directives.spawn_agent(WorkerAgent,
       id: "worker-#{signal.data.id}",
       parent: agent
     )
@@ -441,10 +456,14 @@ Directives.emit_to_parent(child_agent, signal)
 If you are adopting the newer orphan lifecycle in current Jido releases, note
 these semantics:
 
-- `on_parent_death: :continue` and `:emit_orphan` now clear stale current-parent refs
-- orphaned children keep former-parent provenance in `orphaned_from` / `__orphaned_from__`
-- `emit_to_parent/3` returns `nil` while orphaned until a new parent explicitly adopts the child
-- adopted child restarts now rehydrate the current parent binding from `Jido.RuntimeStore`
+- `on_parent_death: :continue` and `:emit_orphan` now clear stale current-parent
+  refs
+- orphaned children keep former-parent provenance in `orphaned_from` /
+  `__orphaned_from__`
+- `emit_to_parent/3` returns `nil` while orphaned until a new parent explicitly
+  adopts the child
+- adopted child restarts now rehydrate the current parent binding from
+  `Jido.RuntimeStore`
 
 That behavior is more correct for logical hierarchies, but code that relied on
 stale `state.parent` or `agent.state.__parent__` after parent death must be
@@ -470,12 +489,12 @@ end
 
 ```elixir
 # Direct execution (default)
-MyApp.Jido.start_agent(MyAgent, 
+MyApp.Jido.start_agent(MyAgent,
   strategy: Jido.Strategy.Direct
 )
 
 # FSM-based execution
-MyApp.Jido.start_agent(MyAgent, 
+MyApp.Jido.start_agent(MyAgent,
   strategy: Jido.Strategy.FSM,
   strategy_opts: [initial_state: :idle]
 )
@@ -500,16 +519,17 @@ V2 emits telemetry events for observability:
 
 ### Pattern 1: Gradual Directive Adoption
 
-You don't need to convert all side effects at once. Start with the most critical paths:
+You don't need to convert all side effects at once. Start with the most critical
+paths:
 
 ```elixir
 def cmd(agent, signal) do
   # New code uses directives
   result = process(signal)
-  
+
   # Legacy code still works (but should be migrated)
   LegacyNotifier.notify(result)
-  
+
   {%{agent | state: result}, [
     Directives.emit(Signal.new!("processed", result, source: "/agent"), :default)
   ]}
@@ -558,7 +578,8 @@ Jido.start_agent(MyApp.Jido, MyAgent, id: "test")
 
 ### Directives not executing
 
-Directives are only executed when returned from `cmd/2`. Ensure you're returning them:
+Directives are only executed when returned from `cmd/2`. Ensure you're returning
+them:
 
 ```elixir
 # Wrong - directive is created but not returned
@@ -591,10 +612,10 @@ If migrating from NimbleOptions, ensure required fields are marked:
 The refactor collapses the old plugin surface into three tiers (Slice /
 Middleware / Plugin), retires `Jido.Agent.Strategy`, and replaces the
 underscore-wrapped slice convention (`:__domain__`, `:__thread__`, …) with
-flat-atom paths declared by the agent and each plugin. Thaw is
-indistinguishable from fresh start. `await_completion/2` and the bare
-`AgentServer.call/2 → %State{}` are replaced with selector-based primitives.
-The migration recipes are below.
+flat-atom paths declared by the agent and each plugin. Thaw is indistinguishable
+from fresh start. `await_completion/2` and the bare
+`AgentServer.call/2 → %State{}` are replaced with selector-based primitives. The
+migration recipes are below.
 
 > **No migration shims ship.** Pre-refactor checkpoints are not forward-
 > compatible (no external users to migrate). Local-dev and test-fixture
@@ -602,25 +623,32 @@ The migration recipes are below.
 
 ### Plugin surface — the table
 
-| Old shape | New shape | Notes |
-|---|---|---|
-| `use Jido.Plugin, state_key: :x, …` | `use Jido.Plugin` + `slice do path :x end` | Move every option into the sectioned DSL. See [Migrating to the Spark DSL](migration-spark-dsl.md). |
-| `mount/2` callback | Schema defaults; per-agent config; or wrapper macro; or lifecycle action | See "`mount/2` retired — four replacement patterns" below. |
-| `handle_signal/2` callback | `on_signal/4` Middleware (before-next) | `next.(signal, ctx)` to pass through. |
-| `transform_result/3` callback | `on_signal/4` Middleware (after-next) | Walk directives returned from `next.(signal, ctx)`. |
-| `on_checkpoint/2` / `on_restore/2` | `Jido.Persist.Transform` behaviour (`externalize/1` / `reinstate/1`) | Persister middleware applies them automatically. |
-| Dynamic `signal_routes/1` callback | Static `signal_routes do route … end` section | Branch inside the action if conditional logic is needed. |
-| `Jido.Agent.ScopedAction` | `use Jido.Action` + `action do path :x end` | Path-required on every slice-scoped action. |
-| `Jido.Actions.Status.MarkCompleted` and friends | Inline a small action that writes `slice.status = :completed` | The convention isn't a framework concept anymore. |
+| Old shape                                       | New shape                                                                | Notes                                                                                               |
+| ----------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `use Jido.Plugin, state_key: :x, …`             | `use Jido.Plugin` + `slice do path :x end`                               | Move every option into the sectioned DSL. See [Migrating to the Spark DSL](migration-spark-dsl.md). |
+| `mount/2` callback                              | Schema defaults; per-agent config; or wrapper macro; or lifecycle action | See "`mount/2` retired — four replacement patterns" below.                                          |
+| `handle_signal/2` callback                      | `on_signal/4` Middleware (before-next)                                   | `next.(signal, ctx)` to pass through.                                                               |
+| `transform_result/3` callback                   | `on_signal/4` Middleware (after-next)                                    | Walk directives returned from `next.(signal, ctx)`.                                                 |
+| `on_checkpoint/2` / `on_restore/2`              | `Jido.Persist.Transform` behaviour (`externalize/1` / `reinstate/1`)     | Persister middleware applies them automatically.                                                    |
+| Dynamic `signal_routes/1` callback              | Static `signal_routes do route … end` section                            | Branch inside the action if conditional logic is needed.                                            |
+| `Jido.Agent.ScopedAction`                       | `use Jido.Action` + `action do path :x end`                              | Path-required on every slice-scoped action.                                                         |
+| `Jido.Actions.Status.MarkCompleted` and friends | Inline a small action that writes `slice.status = :completed`            | The convention isn't a framework concept anymore.                                                   |
 
 ### `mount/2` retired — four replacement patterns
 
 Pick whichever applies to your callback:
 
-1. **Nothing (`{:ok, nil}`)** — delete the callback. Schema defaults seed the slice automatically.
-2. **Echo per-agent config into the slice** — declare a `schema` in the slice DSL matching the config, and the per-agent `{Plugin, %{...}}` map merges in at `Jido.Agent.new/1`. Zero code.
-3. **Compile-time derivation from agent module** — wrap `Jido.Agent.new/1` in a macro (see [`Jido.Pod`](../lib/jido/pod.ex)). The wrapper computes state from `__MODULE__`'s metadata before delegating.
-4. **Runtime-derived (rare)** — declare a Slice action routed on `jido.agent.lifecycle.starting`. The lifecycle signal fires inside `AgentServer.init/1` before any user signal.
+1. **Nothing (`{:ok, nil}`)** — delete the callback. Schema defaults seed the
+   slice automatically.
+2. **Echo per-agent config into the slice** — declare a `schema` in the slice
+   DSL matching the config, and the per-agent `{Plugin, %{...}}` map merges in
+   at `Jido.Agent.new/1`. Zero code.
+3. **Compile-time derivation from agent module** — wrap `Jido.Agent.new/1` in a
+   macro (see [`Jido.Slices.Pod`](../lib/jido/slices/pod.ex)). The wrapper
+   computes state from `__MODULE__`'s metadata before delegating.
+4. **Runtime-derived (rare)** — declare a Slice action routed on
+   `jido.agent.lifecycle.starting`. The lifecycle signal fires inside
+   `AgentServer.init/1` before any user signal.
 
 ### Action callback shape
 
@@ -636,9 +664,9 @@ def run(%Jido.Signal{data: params}, slice, _opts, ctx) do
 end
 ```
 
-Four args, always. The action receives the full slice value (its
-declared `path:`'s state) as `slice` and returns the **complete new
-slice** — partial-map merging is gone.
+Four args, always. The action receives the full slice value (its declared
+`path:`'s state) as `slice` and returns the **complete new slice** — partial-map
+merging is gone.
 
 ### No more deep-merge
 
@@ -650,11 +678,11 @@ def run(_params, _context), do: {:ok, %{counter: 1}}
 def run(_signal, slice, _opts, _ctx), do: {:ok, %{slice | counter: 1}}
 ```
 
-If you need to update a nested field outside the action's declared
-slice, return a `%Jido.Agent.SliceUpdate{slices: %{other_slice: new_value}}`
-in place of the slice value. The action's `path:` stays single-valued
-(its primary slice); secondary slices listed in `slices:` are explicitly
-bridged. See [Actions — Multi-slice returns](actions.md#multi-slice-returns).
+If you need to update a nested field outside the action's declared slice, return
+a `%Jido.Agent.SliceUpdate{slices: %{other_slice: new_value}}` in place of the
+slice value. The action's `path:` stays single-valued (its primary slice);
+secondary slices listed in `slices:` are explicitly bridged. See
+[Actions — Multi-slice returns](actions.md#multi-slice-returns).
 
 ### Slice-scoped actions: declare `path:` in the action DSL
 
@@ -696,12 +724,11 @@ end
 
 ### `error_policy:` removed (no direct replacement in this PR)
 
-The old `error_policy: :log_only | :stop_on_error` agent option is gone;
-the error-handling model is deferred to a follow-up PR. In the meantime,
-either:
+The old `error_policy: :log_only | :stop_on_error` agent option is gone; the
+error-handling model is deferred to a follow-up PR. In the meantime, either:
 
 (a) **Roll your own middleware** — scan `%Error{}` directives after
-    `next.(signal, ctx)` and react:
+`next.(signal, ctx)` and react:
 
 ```elixir
 defmodule MyApp.LogOnly do
@@ -723,8 +750,8 @@ defmodule MyApp.LogOnly do
 end
 ```
 
-(b) **Translate error → stop** — append a `%Stop{}` directive when an
-    error appears:
+(b) **Translate error → stop** — append a `%Stop{}` directive when an error
+appears:
 
 ```elixir
 def on_signal(signal, ctx, _opts, next) do
@@ -740,9 +767,9 @@ end
 
 ### `Jido.Await` removed
 
-`Jido.Await.completion/3` and the `Jido.{await,await_child,...}`
-defdelegates are gone. Rewrite to `AgentServer.subscribe/4` with a
-selector matching whatever terminal-status convention you use:
+`Jido.Await.completion/3` and the `Jido.{await,await_child,...}` defdelegates
+are gone. Rewrite to `AgentServer.subscribe/4` with a selector matching whatever
+terminal-status convention you use:
 
 ```elixir
 {:ok, ref} =
@@ -779,10 +806,10 @@ state.agent.state[:work].status
 
 ### Ctx threading
 
-`current_user`, `trace_id`, tenant, and similar per-signal context now
-live on `signal.extensions[:jido_ctx]` on the wire and are promoted to an
-explicit `ctx` argument at action / middleware / directive-exec
-boundaries. The new ack/subscribe primitives accept a `ctx:` keyword:
+`current_user`, `trace_id`, tenant, and similar per-signal context now live on
+`signal.extensions[:jido_ctx]` on the wire and are promoted to an explicit `ctx`
+argument at action / middleware / directive-exec boundaries. The new
+ack/subscribe primitives accept a `ctx:` keyword:
 
 ```elixir
 {:ok, signal} = Jido.Signal.new(%{type: "submit", data: %{...}})
@@ -795,15 +822,15 @@ The agent and inner middleware see the merged ctx.
 
 ### Pre-refactor checkpoints are not forward-compatible
 
-Per ADR 0014's "no external users exist" assumption, no migration pass
-ships. Local dev or test-fixture checkpoints from before this PR should be
-regenerated by running the post-refactor code from fresh.
+Per ADR 0014's "no external users exist" assumption, no migration pass ships.
+Local dev or test-fixture checkpoints from before this PR should be regenerated
+by running the post-refactor code from fresh.
 
 ### `Directives.emit_to_parent/3` removed
 
-Use `Directives.emit_to_pid(signal, ctx.parent.pid, opts)` with the
-`ctx.parent` key seeded at signal receipt. Guard against the
-orphaned case (`ctx.parent == nil`):
+Use `Directives.emit_to_pid(signal, ctx.parent.pid, opts)` with the `ctx.parent`
+key seeded at signal receipt. Guard against the orphaned case
+(`ctx.parent == nil`):
 
 ```elixir
 def run(_signal, _slice, _opts, ctx) do
@@ -818,40 +845,37 @@ end
 
 ### Retry middleware vs Persister IO failures
 
-`Jido.Middlewares.Retry` *can* cover Persister IO failures — *if* Retry is
+`Jido.Middlewares.Retry` _can_ cover Persister IO failures — _if_ Retry is
 positioned outside Persister in the middleware chain. Persister blocks on
-thaw/hibernate IO synchronously; if it raises, Retry (when wrapping)
-catches the exception and re-invokes `next`.
+thaw/hibernate IO synchronously; if it raises, Retry (when wrapping) catches the
+exception and re-invokes `next`.
 
-Chain ordering is user-declared. Put Retry first if you want
-retry-on-thaw:
+Chain ordering is user-declared. Put Retry first if you want retry-on-thaw:
 
 ```elixir
 middleware: [Jido.Middlewares.Retry, Jido.Middlewares.Persister, ...]
 ```
 
-The error-handling model is otherwise user-owned in this PR; the
-follow-up PR formalizes it.
+The error-handling model is otherwise user-owned in this PR; the follow-up PR
+formalizes it.
 
 ### Hibernate-on-terminate vs supervisor shutdown timeout
 
-`jido.agent.lifecycle.stopping` emits at the top of `terminate/2`;
-Persister blocks on hibernate IO synchronously. If the IO exceeds the
-supervisor's `shutdown:` timeout (default 5_000 ms), the process is
-killed mid-write and the checkpoint is partial. The bound is the
-supervisor's timeout, not anything the framework enforces. If you have a
-slow storage adapter, bump `shutdown:` accordingly when configuring the
-agent's child_spec.
+`jido.agent.lifecycle.stopping` emits at the top of `terminate/2`; Persister
+blocks on hibernate IO synchronously. If the IO exceeds the supervisor's
+`shutdown:` timeout (default 5_000 ms), the process is killed mid-write and the
+checkpoint is partial. The bound is the supervisor's timeout, not anything the
+framework enforces. If you have a slow storage adapter, bump `shutdown:`
+accordingly when configuring the agent's child_spec.
 
 ### `InstanceManager.get/3` semantics change
 
-Previously `get/3` thawed synchronously before returning. Now it returns
-the pid as soon as the process is alive; thaw runs inside AgentServer's
-`init/1` via the Persister middleware reacting to
-`jido.agent.lifecycle.starting`.
+Previously `get/3` thawed synchronously before returning. Now it returns the pid
+as soon as the process is alive; thaw runs inside AgentServer's `init/1` via the
+Persister middleware reacting to `jido.agent.lifecycle.starting`.
 
-Callers that assumed "get returned pid ⇒ thawed state available" must
-insert `await_ready/2` between get and first signal send:
+Callers that assumed "get returned pid ⇒ thawed state available" must insert
+`await_ready/2` between get and first signal send:
 
 ```elixir
 {:ok, pid} = Jido.Agent.InstanceManager.get(:sessions, key)
@@ -859,8 +883,8 @@ insert `await_ready/2` between get and first signal send:
 :ok = Jido.AgentServer.cast(pid, signal)
 ```
 
-InstanceManager does not wrap `await_ready` automatically — liveness
-vs. readiness is the caller's concern.
+InstanceManager does not wrap `await_ready` automatically — liveness vs.
+readiness is the caller's concern.
 
 ## Tagged-tuple return shape (ADR 0018)
 
@@ -868,27 +892,30 @@ vs. readiness is the caller's concern.
 
 **Old:**
 
-- `run/4` returned `{:ok, slice} | {:ok, slice, directive | [directive]} | {:error, reason}`.
+- `run/4` returned
+  `{:ok, slice} | {:ok, slice, directive | [directive]} | {:error, reason}`.
 - `cmd/2` returned `{agent, directives}` regardless of outcome.
 - Errors went into `dirs` as `%Directives.Error{}` and were logged.
 
 **New:**
 
-- `run/4` returns `{:ok, slice, [directive]} | {:error, reason}` —
-  always a 3-tuple on success, list of directives even if empty.
+- `run/4` returns `{:ok, slice, [directive]} | {:error, reason}` — always a
+  3-tuple on success, list of directives even if empty.
 - `cmd/2` returns `{:ok, agent, [directive]} | {:error, reason}`.
-- Multi-instruction `cmd` is **all-or-nothing**: the first error halts
-  the batch, the input agent is returned via the error branch, and no
-  directives execute.
+- Multi-instruction `cmd` is **all-or-nothing**: the first error halts the
+  batch, the input agent is returned via the error branch, and no directives
+  execute.
 
 **Recipes:**
 
-- An action that did `{:ok, %{slice | x: 1}}` becomes `{:ok, %{slice | x: 1}, []}`.
-- An action that did `{:ok, slice, %Emit{...}}` becomes `{:ok, slice, [%Emit{...}]}`.
-- An action that did `{:error, reason}` is unchanged. Bare-atom and
-  binary `reason` values are wrapped into `%Jido.Error.ExecutionError{}`
-  by the framework via `Jido.Error.from_term/1`, so consumers always see
-  a structured error.
+- An action that did `{:ok, %{slice | x: 1}}` becomes
+  `{:ok, %{slice | x: 1}, []}`.
+- An action that did `{:ok, slice, %Emit{...}}` becomes
+  `{:ok, slice, [%Emit{...}]}`.
+- An action that did `{:error, reason}` is unchanged. Bare-atom and binary
+  `reason` values are wrapped into `%Jido.Error.ExecutionError{}` by the
+  framework via `Jido.Error.from_term/1`, so consumers always see a structured
+  error.
 - Callers that did `{agent, dirs} = MyAgent.cmd(agent, instructions)` now do:
 
   ```elixir
@@ -900,12 +927,12 @@ vs. readiness is the caller's concern.
 
 ### `cast_and_await/4` selectors no longer need to encode action errors
 
-**Old:** the selector had to read slice fields the action wrote on the
-failure path. If you forgot to write them, the caller hung until timeout.
+**Old:** the selector had to read slice fields the action wrote on the failure
+path. If you forgot to write them, the caller hung until timeout.
 
-**New:** the framework delivers `{:error, reason}` directly to the
-caller when the chain returns an error; the selector is skipped. Write
-the selector to handle the success path only.
+**New:** the framework delivers `{:error, reason}` directly to the caller when
+the chain returns an error; the selector is skipped. Write the selector to
+handle the success path only.
 
 ```elixir
 {:ok, value} =
@@ -920,9 +947,8 @@ the selector to handle the success path only.
 If the action errored, `result` is `{:error, %Jido.Error.ExecutionError{...}}`
 without the selector ever running.
 
-`AgentServer.call/2` is unchanged: it still returns `{:ok, agent}`
-regardless of chain outcome. Use `cast_and_await/4` when you need
-error-aware semantics.
+`AgentServer.call/2` is unchanged: it still returns `{:ok, agent}` regardless of
+chain outcome. Use `cast_and_await/4` when you need error-aware semantics.
 
 ### Middleware
 
@@ -932,12 +958,11 @@ error-aware semantics.
 {:ok, ctx, [directive]} | {:error, ctx, reason}
 ```
 
-The error tuple carries `ctx` so middleware-staged state mutations
-(e.g. `Persister` setting `ctx.agent` to the thawed agent) commit to
-`state.agent` regardless of the action's outcome. Action-level rollback
-lives inside `cmd/2` — the input agent flows back into ctx unchanged on
-error, so prior middleware mutations survive. Middleware that wrapped
-`next` should match on both branches:
+The error tuple carries `ctx` so middleware-staged state mutations (e.g.
+`Persister` setting `ctx.agent` to the thawed agent) commit to `state.agent`
+regardless of the action's outcome. Action-level rollback lives inside `cmd/2` —
+the input agent flows back into ctx unchanged on error, so prior middleware
+mutations survive. Middleware that wrapped `next` should match on both branches:
 
 ```elixir
 def on_signal(signal, ctx, _opts, next) do
@@ -951,24 +976,24 @@ end
 ### `Retry` middleware now triggers on `{:error, _}`, not on Error directives
 
 If you were relying on Retry firing because an action emitted
-`%Directives.Error{}` for logging, that behavior is gone. Retry now fires
-only on `{:error, _}` returns from the chain. To get
-logging-without-retry, emit the `%Error{}` from a different middleware
-on the success path (or use `Logger` directly).
+`%Directives.Error{}` for logging, that behavior is gone. Retry now fires only
+on `{:error, _}` returns from the chain. To get logging-without-retry, emit the
+`%Error{}` from a different middleware on the success path (or use `Logger`
+directly).
 
 ## Spark DSL migration (ADR 0023)
 
-Jido 2.x defines its agent / slice / plugin / middleware / action /
-sensor / pod / instance surfaces with a **Spark DSL**. Modules use a
-sectioned `agent do … end` / `slice do … end` etc. style instead of a
-flat `use Jido.X, name: "…", path: …, schema: …` keyword list. The
-extension list on `use Jido.Agent` is a single ordered
-`extensions: […]` keyword that classifies each entry by its DSL.
+Jido 2.x defines its agent / slice / plugin / middleware / action / sensor / pod
+/ instance surfaces with a **Spark DSL**. Modules use a sectioned
+`agent do … end` / `slice do … end` etc. style instead of a flat
+`use Jido.X, name: "…", path: …, schema: …` keyword list. The extension list on
+`use Jido.Agent` is a single ordered `extensions: […]` keyword that classifies
+each entry by its DSL.
 
 For the keyword-form → DSL conversion recipe, see
-[Migrating to the Spark DSL](migration-spark-dsl.md). It walks one
-in-tree agent, one in-tree slice, and one in-tree plugin through the
-mechanical conversion plus the common pitfalls.
+[Migrating to the Spark DSL](migration-spark-dsl.md). It walks one in-tree
+agent, one in-tree slice, and one in-tree plugin through the mechanical
+conversion plus the common pitfalls.
 
 ## Getting Help
 

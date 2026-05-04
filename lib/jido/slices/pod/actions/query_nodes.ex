@@ -1,0 +1,42 @@
+defmodule Jido.Slices.Pod.Actions.QueryNodes do
+  @moduledoc """
+  Routed to `jido.pod.query.nodes`. Translates the query signal into a
+  `%Jido.Directives.Reply{}` that — at directive execution time —
+  builds the reply from the full `%AgentServer.State{}` via
+  `Jido.Slices.Pod.Queries.build_nodes_reply/1`.
+
+  The action itself never reads server-level state. It only uses the
+  input signal's `id` + `jido_dispatch` (for correlation and the reply
+  channel), and leaves the actual introspection to the directive
+  executor — which has server state access by protocol.
+
+  Reply shapes:
+
+      jido.pod.query.nodes.reply → %{topology: ..., nodes: %{...}}
+      jido.pod.query.nodes.error → %{reason: term}
+  """
+
+  use Jido.Action
+
+  action do
+    name "pod_query_nodes"
+    schema []
+  end
+
+  alias Jido.Signal.Call
+
+  @impl true
+  def run(signal, slice, _opts, _ctx) do
+    directive =
+      Call.reply_from_state(
+        signal,
+        "jido.pod.query.nodes.reply",
+        "jido.pod.query.nodes.error",
+        {Jido.Slices.Pod.Queries, :build_nodes_reply, []}
+      )
+
+    # Read-only query: return the unchanged slice so the framework's
+    # slice-result handler doesn't overwrite agent.state[:pod] with `%{}`.
+    {:ok, slice, List.wrap(directive)}
+  end
+end

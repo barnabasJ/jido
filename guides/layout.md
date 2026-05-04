@@ -62,25 +62,29 @@ lib/jido/storage/       # storage adapters (ETS, Redis, file)
 These files are the framework. They're not registerable extensions themselves
 and don't move to a `*/` plural directory.
 
-## Pod is its own thing
+## Pod follows the slice convention
 
-Pod is a special agent kind whose pod-only plugin and directives are tightly
-coupled to its runtime. The pod-runtime-coupled tree stays under
-`lib/jido/pod/`:
+Pod is structurally a slice: `lib/jido/slices/pod.ex` does `use Jido.Slice` just
+like Memory, Identity, Thread, AiReact, and FSM. Its supporting machinery
+(actions, directives, mutation, topology, runtime, transformers) lives under
+`lib/jido/slices/pod/`:
 
 ```
-lib/jido/pod/                    # Jido.Pod and runtime
-lib/jido/pod/plugin.ex           # Jido.Pod.Plugin (pod-only plugin behaviour)
-lib/jido/pod/directive/          # Jido.Pod.Directive.* (slice-scoped directives)
+lib/jido/slices/pod.ex                  # Jido.Slices.Pod (slice DSL)
+lib/jido/slices/pod/runtime.ex          # Jido.Slices.Pod.Runtime
+lib/jido/slices/pod/topology.ex         # Jido.Slices.Pod.Topology
+lib/jido/slices/pod/mutation.ex         # Jido.Slices.Pod.Mutation
+lib/jido/slices/pod/directive/          # Jido.Slices.Pod.Directive.* (slice-scoped directives)
+lib/jido/slices/pod/actions/            # Jido.Slices.Pod.Actions.*
+lib/jido/slices/pod/transformers/       # Spark transformers
 ```
 
-The pod-only plugin behaviour and pod directives do **not** live in
-`lib/jido/plugins/` or `lib/jido/directives/` — splitting them across two trees
-buys nothing once the runtime / topology / mutation modules are right next door.
-The auxiliary that originally lived under `lib/jido/pod/bus_plugin.ex` was
-reclassified to `Jido.Slices.ChildBus` (task 0064) — it depends on
-framework-level child-lifecycle signals, not on pod runtime, so it belongs
-alongside the other built-in slices.
+Pod is bigger than the other slices, but bigger is a quantitative difference —
+the `slices/X.ex` + `slices/X/` shape scales because each slice's machinery
+stays under its own subdirectory. The auxiliary that originally lived under
+`lib/jido/pod/bus_plugin.ex` was reclassified to `Jido.Slices.ChildBus`
+(task 0064) — it depends on framework-level child-lifecycle signals, not on pod
+runtime.
 
 ## Out-of-tree authors mirror the convention
 
@@ -110,8 +114,8 @@ Two homes for directive structs, depending on who owns the side effect:
   - `Jido.Slices.AiReact.Directives.LLMCall`,
     `Jido.Slices.AiReact.Directives.ToolExec` — only the AI ReAct slice's
     actions emit these.
-  - `Jido.Pod.Directive.StartNode`, `Jido.Pod.Directive.StopNode` —
-    pod-runtime-specific.
+  - `Jido.Slices.Pod.Directive.StartNode`, `Jido.Slices.Pod.Directive.StopNode`
+    — pod-runtime-specific.
 
 The rule: if a directive's exec impl needs slice-private types or runtime, it's
 slice-owned. If it's a building block any agent can emit, it lifts to framework.

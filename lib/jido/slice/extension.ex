@@ -6,7 +6,7 @@ defmodule Jido.Slice.Extension do
 
   Each contributing slice declares its `@<name>_section` literal and
   `use Spark.Dsl.Extension, …` directly in its module body, mirroring
-  `Jido.Pod`. A small per-slice transformer
+  `Jido.Slices.Pod`. A small per-slice transformer
   (`<Slice>.Transformers.RegisterContribution`) calls
   `Spark.Dsl.Transformer.persist/3` to register the slice in the host's
   `:jido_contributed_sections` map.

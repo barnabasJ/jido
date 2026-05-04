@@ -21,7 +21,7 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
 
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
-  alias Jido.Pod
+  alias Jido.Slices.Pod
   alias Jido.Storage.ETS
 
   @worker_manager :example_nested_pod_workers
@@ -41,19 +41,19 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
 
   defmodule EditorialPod do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.Pod]
+    use Jido.Agent, extensions: [Jido.Slices.Pod]
 
     agent do
       name "editorial_pod"
     end
 
     slices do
-      slice(:pod, Jido.Pod)
+      slice(:pod, Jido.Slices.Pod)
     end
 
     pod do
       topology(
-        Jido.Pod.Topology.new!(
+        Jido.Slices.Pod.Topology.new!(
           name: "editorial_pod",
           nodes: %{
             editor: %{
@@ -77,19 +77,19 @@ defmodule JidoExampleTest.NestedPodRuntimeTest do
 
   defmodule ProgramPod do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.Pod]
+    use Jido.Agent, extensions: [Jido.Slices.Pod]
 
     agent do
       name "program_pod"
     end
 
     slices do
-      slice(:pod, Jido.Pod)
+      slice(:pod, Jido.Slices.Pod)
     end
 
     pod do
       topology(
-        Jido.Pod.Topology.new!(
+        Jido.Slices.Pod.Topology.new!(
           name: "program_pod",
           nodes: %{
             coordinator: %{

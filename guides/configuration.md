@@ -331,7 +331,7 @@ If you want logical multi-tenancy inside one shared Jido instance, use
 
 ```elixir
 {:ok, workspace_pid} =
-  Jido.Pod.get(MyApp.Jido.WorkspacePods, "workspace-123", partition: :tenant_alpha)
+  Jido.Slices.Pod.get(MyApp.Jido.WorkspacePods, "workspace-123", partition: :tenant_alpha)
 ```
 
 That keeps registry identity, persistence, runtime lineage, and pod telemetry

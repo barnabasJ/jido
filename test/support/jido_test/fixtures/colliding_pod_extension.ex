@@ -24,7 +24,7 @@ end
 defmodule JidoTest.Fixtures.CollidingPodExtension do
   @moduledoc """
   Test fixture: a slice that contributes the same `:pod` section name as
-  `Jido.Pod`. Mounting both on the same agent should be rejected at compile
+  `Jido.Slices.Pod`. Mounting both on the same agent should be rejected at compile
   time by `Jido.Dsl.Agent.Verifiers.NoSectionNameCollisions`.
   """
 
@@ -45,7 +45,7 @@ defmodule JidoTest.Fixtures.CollidingPodExtension do
 
   @section %Spark.Dsl.Section{
     name: :pod,
-    describe: "Test fixture section colliding with Jido.Pod's `pod do … end`.",
+    describe: "Test fixture section colliding with Jido.Slices.Pod's `pod do … end`.",
     schema: []
   }
 

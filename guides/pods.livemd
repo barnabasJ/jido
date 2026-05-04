@@ -62,14 +62,14 @@ defmodule WorkerAgent do
 end
 
 defmodule ReviewPod do
-  use Jido.Agent, extensions: [Jido.Pod]
+  use Jido.Agent, extensions: [Jido.Slices.Pod]
 
   agent do
     name "pods_demo_pod"
   end
 
   slices do
-    slice :pod, Jido.Pod
+    slice :pod, Jido.Slices.Pod
   end
 end
 ```
@@ -114,8 +114,8 @@ IO.puts("worker manager: #{worker_manager_name}; pod manager: #{pod_manager_name
 ```elixir
 pod_key = "pods-demo-#{System.unique_integer([:positive])}"
 
-{:ok, pod_pid} = Jido.Pod.get(pod_manager_name, pod_key)
-{:ok, topology} = Jido.Pod.fetch_topology(pod_pid)
+{:ok, pod_pid} = Jido.Slices.Pod.get(pod_manager_name, pod_key)
+{:ok, topology} = Jido.Slices.Pod.fetch_topology(pod_pid)
 
 IO.inspect(topology.nodes, label: "fresh pod — empty topology")
 ```
@@ -129,10 +129,10 @@ the planner. The pod runtime starts the planner immediately (eager) and
 leaves the reviewer dormant (lazy).
 
 ```elixir
-alias Jido.Pod.Mutation
+alias Jido.Slices.Pod.Mutation
 
 {:ok, report} =
-  Jido.Pod.mutate_and_wait(
+  Jido.Slices.Pod.mutate_and_wait(
     pod_pid,
     [
       Mutation.add_node("planner", %{
@@ -169,15 +169,15 @@ returns the full snapshot map — one node-snapshot per declared node, with
 the raw `state.children`.
 
 ```elixir
-{:ok, planner_pid} = Jido.Pod.lookup_node(pod_pid, "planner")
+{:ok, planner_pid} = Jido.Slices.Pod.lookup_node(pod_pid, "planner")
 IO.inspect({:ok, planner_pid}, label: "planner is running and adopted")
 
-case Jido.Pod.lookup_node(pod_pid, "reviewer") do
+case Jido.Slices.Pod.lookup_node(pod_pid, "reviewer") do
   {:ok, _pid} -> IO.puts("reviewer running")
   :error -> IO.puts("reviewer is :stopped (lazy node, not yet activated)")
 end
 
-{:ok, snapshots} = Jido.Pod.nodes(pod_pid)
+{:ok, snapshots} = Jido.Slices.Pod.nodes(pod_pid)
 
 snapshots
 |> Enum.map(fn {name, snap} -> {name, snap.status} end)
@@ -191,10 +191,10 @@ above; calling `ensure_node` starts it under the planner (its declared
 owner) and adopts it into the pod manager's children map.
 
 ```elixir
-{:ok, reviewer_pid} = Jido.Pod.ensure_node(pod_pid, "reviewer")
+{:ok, reviewer_pid} = Jido.Slices.Pod.ensure_node(pod_pid, "reviewer")
 IO.inspect(reviewer_pid, label: "reviewer pid — now adopted")
 
-{:ok, snapshots} = Jido.Pod.nodes(pod_pid)
+{:ok, snapshots} = Jido.Slices.Pod.nodes(pod_pid)
 IO.inspect(snapshots["reviewer"].status, label: "reviewer status after ensure_node")
 
 # The :owns link puts reviewer under planner's children map at runtime,
@@ -212,7 +212,7 @@ the slice or subscribe.
 
 ```elixir
 {:ok, ack} =
-  Jido.Pod.mutate(pod_pid, [
+  Jido.Slices.Pod.mutate(pod_pid, [
     Mutation.add_node("auditor", %{
       agent: WorkerAgent,
       manager: worker_manager_name,
@@ -240,7 +240,7 @@ The pod's topology lives in the `:pod` slice. `fetch_topology/1` projects
 it. Useful for tooling that needs to render the current pod shape.
 
 ```elixir
-{:ok, topology} = Jido.Pod.fetch_topology(pod_pid)
+{:ok, topology} = Jido.Slices.Pod.fetch_topology(pod_pid)
 
 topology.nodes
 |> Enum.map(fn {name, node} -> {name, node.activation} end)
@@ -257,7 +257,7 @@ error and the report comes back with `status: :failed`. The mutation
 slice carries the reason.
 
 ```elixir
-case Jido.Pod.mutate_and_wait(pod_pid, [Mutation.remove_node("nonexistent")]) do
+case Jido.Slices.Pod.mutate_and_wait(pod_pid, [Mutation.remove_node("nonexistent")]) do
   {:ok, report} ->
     IO.inspect(report, label: "completed report")
 
@@ -274,7 +274,7 @@ is started + adopted. Useful when you've just adopted a pod from
 `InstanceManager` directly (without the `Pod.get/3` happy path).
 
 ```elixir
-{:ok, reconcile_report} = Jido.Pod.reconcile(pod_pid)
+{:ok, reconcile_report} = Jido.Slices.Pod.reconcile(pod_pid)
 IO.inspect(reconcile_report, label: "reconcile report — fields: requested/waves/completed/failed")
 ```
 

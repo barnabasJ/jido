@@ -1,12 +1,12 @@
 defmodule JidoExampleTest.MutablePodRuntimeTest do
   @moduledoc """
-  Example test demonstrating the simplest mutable `Jido.Pod` story.
+  Example test demonstrating the simplest mutable `Jido.Slices.Pod` story.
 
   This example focuses on the happy path:
 
   - start with an empty durable pod
-  - add eager and lazy members with `Jido.Pod.mutate_and_wait/3`
-  - activate a lazy member with `Jido.Pod.ensure_node/3`
+  - add eager and lazy members with `Jido.Slices.Pod.mutate_and_wait/3`
+  - activate a lazy member with `Jido.Slices.Pod.ensure_node/3`
   - reacquire the pod later with the same durable topology
 
   ## Run
@@ -20,8 +20,8 @@ defmodule JidoExampleTest.MutablePodRuntimeTest do
 
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
-  alias Jido.Pod
-  alias Jido.Pod.Mutation
+  alias Jido.Slices.Pod
+  alias Jido.Slices.Pod.Mutation
   alias Jido.Storage.ETS
 
   @worker_manager :example_mutable_pod_workers
@@ -40,14 +40,14 @@ defmodule JidoExampleTest.MutablePodRuntimeTest do
 
   defmodule MutableReviewPod do
     @moduledoc false
-    use Jido.Agent, extensions: [Jido.Pod]
+    use Jido.Agent, extensions: [Jido.Slices.Pod]
 
     agent do
       name "example_mutable_review_pod"
     end
 
     slices do
-      slice(:pod, Jido.Pod)
+      slice(:pod, Jido.Slices.Pod)
     end
   end
 

@@ -165,7 +165,7 @@ defmodule Jido.Signal.Call do
             ctx.signal,
             "jido.pod.query.nodes.reply",
             "jido.pod.query.nodes.error",
-            {Jido.Pod.Queries, :build_nodes_reply, []}
+            {Jido.Slices.Pod.Queries, :build_nodes_reply, []}
           )
 
         {:ok, %{}, List.wrap(directive)}
@@ -173,8 +173,8 @@ defmodule Jido.Signal.Call do
 
       # Builder — sees the full %State{}
       def build_nodes_reply(%Jido.AgentServer.State{} = state) do
-        with {:ok, topology} <- Jido.Pod.TopologyState.fetch_topology(state) do
-          {:ok, %{topology: topology, nodes: Jido.Pod.Runtime.build_node_snapshots(state, topology)}}
+        with {:ok, topology} <- Jido.Slices.Pod.TopologyState.fetch_topology(state) do
+          {:ok, %{topology: topology, nodes: Jido.Slices.Pod.Runtime.build_node_snapshots(state, topology)}}
         end
       end
   """

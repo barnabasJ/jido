@@ -12,7 +12,7 @@ This guide is the short decision tree.
 - use `MyApp.Jido.start_agent/2` (or `Jido.start_agent/3`) or `Jido.AgentServer.start_link/1` for one live agent
 - use `Directives.SpawnAgent` for a live tracked child of the current parent
 - use `Jido.Agent.InstanceManager` for one named durable agent
-- use `Jido.Pod` for one named durable team of agents
+- use `Jido.Slices.Pod` for one named durable team of agents
 - use `partition` to namespace any of the above in a shared Jido instance
 
 The important boundary is this:
@@ -29,7 +29,7 @@ The important boundary is this:
 | A single live process right now | `MyApp.Jido.start_agent/2` (or `Jido.start_agent/3`) or `Jido.AgentServer.start_link/1` | Smallest runtime surface |
 | A child that should be tracked by the current parent during this live workflow | `Directives.SpawnAgent` | Logical hierarchy, child exit signals, parent-child routing |
 | A single named agent that may hibernate and thaw later | `Jido.Agent.InstanceManager` | Durable keyed lifecycle for one agent |
-| A named group of agents with a durable topology | `Jido.Pod` | Durable team/workspace/unit with explicit reconcile semantics |
+| A named group of agents with a durable topology | `Jido.Slices.Pod` | Durable team/workspace/unit with explicit reconcile semantics |
 | Many tenants or workspaces in one shared Jido instance | `partition` | Isolates registry identity, persistence, lineage, and telemetry |
 
 ## When To Use `SpawnAgent`
@@ -72,11 +72,11 @@ That gives you:
 - ordinary single-agent runtime semantics
 
 If the durable unit is a team or workspace with multiple named members, that is
-no longer “one durable agent.” That is where `Jido.Pod` starts to make sense.
+no longer “one durable agent.” That is where `Jido.Slices.Pod` starts to make sense.
 
 ## When To Use `Pod`
 
-Use `Jido.Pod` when the durable unit is a structured team:
+Use `Jido.Slices.Pod` when the durable unit is a structured team:
 
 - a workspace
 - a named pipeline
@@ -84,8 +84,8 @@ Use `Jido.Pod` when the durable unit is a structured team:
 - a durable agent tree with eager and lazy members
 
 ```elixir
-{:ok, pod_pid} = Jido.Pod.get(:workspace_pods, "workspace-123")
-{:ok, reviewer_pid} = Jido.Pod.ensure_node(pod_pid, :reviewer)
+{:ok, pod_pid} = Jido.Slices.Pod.get(:workspace_pods, "workspace-123")
+{:ok, reviewer_pid} = Jido.Slices.Pod.ensure_node(pod_pid, :reviewer)
 ```
 
 Pods are the right abstraction when you care about:
@@ -112,11 +112,11 @@ You can use it with:
 In practice, the most useful shared-instance model is:
 
 - `partition` isolates a tenant or workspace namespace
-- a root `Jido.Pod` is the durable unit inside that namespace
+- a root `Jido.Slices.Pod` is the durable unit inside that namespace
 
 ```elixir
-{:ok, alpha_pod} = Jido.Pod.get(:workspace_pods, "workspace-123", partition: :tenant_alpha)
-{:ok, beta_pod} = Jido.Pod.get(:workspace_pods, "workspace-123", partition: :tenant_beta)
+{:ok, alpha_pod} = Jido.Slices.Pod.get(:workspace_pods, "workspace-123", partition: :tenant_alpha)
+{:ok, beta_pod} = Jido.Slices.Pod.get(:workspace_pods, "workspace-123", partition: :tenant_beta)
 ```
 
 Same key, different tenant runtime.
