@@ -511,8 +511,8 @@ defmodule Jido do
   @doc "Lists discovered Sensors with optional filtering."
   defdelegate list_sensors(opts \\ []), to: Jido.Discovery
 
-  @doc "Lists discovered Plugins with optional filtering."
-  defdelegate list_plugins(opts \\ []), to: Jido.Discovery
+  @doc "Lists discovered Slices with optional filtering."
+  defdelegate list_slices(opts \\ []), to: Jido.Discovery
 
   @doc "Lists discovered Demos with optional filtering."
   defdelegate list_demos(opts \\ []), to: Jido.Discovery
@@ -523,8 +523,8 @@ defmodule Jido do
   @doc "Gets a Sensor by its slug."
   defdelegate get_sensor_by_slug(slug), to: Jido.Discovery
 
-  @doc "Gets a Plugin by its slug."
-  defdelegate get_plugin_by_slug(slug), to: Jido.Discovery
+  @doc "Gets a Slice by its slug."
+  defdelegate get_slice_by_slug(slug), to: Jido.Discovery
 
   @doc "Refreshes the Discovery catalog."
   defdelegate refresh_discovery(), to: Jido.Discovery, as: :refresh

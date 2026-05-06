@@ -1,6 +1,6 @@
-defmodule JidoExampleTest.ReactPluginTest do
+defmodule JidoExampleTest.ReactSliceTest do
   @moduledoc """
-  Reference sketch: ReAct-as-plugin under the ADR 0011/0012 model.
+  Reference sketch: ReAct-as-slice under the ADR 0011/0012 model.
 
   **This file is a design sketch, not an executable test.** It exists to
   demonstrate, ahead of implementation, that a ReAct-style LLM loop can be
@@ -15,7 +15,7 @@ defmodule JidoExampleTest.ReactPluginTest do
 
   ## Primitives used
 
-  - Plugin surface: `:react` slice, actions, `signal_routes/1`.
+  - Slice surface: `:react` slice, actions, `signal_routes/1`.
   - Self-dispatch: `%Jido.Directives.Emit{dispatch: nil}` falls back to
     `send(self(), {:signal, ...})` in `directive_executors`, re-entering the
     mailbox and re-routing via `signal_router`. Load-bearing for the loop.
@@ -63,10 +63,10 @@ defmodule JidoExampleTest.ReactPluginTest do
   Each hop is a signal → route → action → directive → signal chain. No
   continuations, no mid-handler blocking, no strategy escape hatches.
 
-  ## Plugin skeleton (pseudocode)
+  ## Slice skeleton (pseudocode)
 
-      defmodule Jido.Plugin.ReAct do
-        use Jido.Plugin
+      defmodule Jido.Slices.AiReact do
+        use Jido.Slice
 
         slice do
           name "react"
@@ -98,7 +98,7 @@ defmodule JidoExampleTest.ReactPluginTest do
             {Jido.Middlewares.Retry, [on: ["tool.result"], max: 3, backoff: :exp]},
             {MyApp.Middleware.LoopTimeout, [budget: 30000]},
             Jido.Middleware.LogErrors,
-            Jido.Plugin.ReAct
+            Jido.Slices.AiReact
           ]
 
         agent do
@@ -150,7 +150,7 @@ defmodule JidoExampleTest.ReactPluginTest do
 
   ## What this exercise confirms
 
-  - The plugin + middleware surface is sufficient for a non-trivial LLM
+  - The slice + middleware surface is sufficient for a non-trivial LLM
     control loop without reintroducing Strategy.
   - Self-dispatch via `Emit{dispatch: nil}` is load-bearing and must stay.
   - The task-spawning directive with timeout covers per-step deadlines

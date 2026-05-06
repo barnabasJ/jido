@@ -51,7 +51,6 @@ defmodule Jido.Slices.Pod do
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
   alias Jido.AgentServer.State
-  alias Jido.Plugin.Instance, as: PluginInstance
   alias Jido.Slices.Pod.Actions.Mutate, as: MutateAction
   alias Jido.Slices.Pod.Actions.MutateProgress
   alias Jido.Slices.Pod.Actions.QueryNodes
@@ -258,13 +257,13 @@ defmodule Jido.Slices.Pod do
   end
 
   @doc """
-  Returns the reserved pod plugin instance for a pod-extended agent module.
+  Returns the reserved pod slice instance for a pod-extended agent module.
   """
-  @spec pod_plugin_instance(module()) :: {:ok, PluginInstance.t()} | {:error, term()}
-  defdelegate pod_plugin_instance(agent_module), to: TopologyState
+  @spec pod_slice_instance(module()) :: {:ok, Jido.Slice.Instance.t()} | {:error, term()}
+  defdelegate pod_slice_instance(agent_module), to: TopologyState
 
   @doc """
-  Fetches pod plugin state from an agent or server state.
+  Fetches pod slice state from an agent or server state.
   """
   @spec fetch_state(Agent.t() | State.t()) :: {:ok, map()} | {:error, term()}
   defdelegate fetch_state(agent_or_state), to: TopologyState

@@ -5,9 +5,9 @@ conventions an out-of-tree extension author should mirror. The convention was
 established by ADR 0025 (`guides/adr/0025-extension-directory-layout.md`) and
 enforced by tasks 0043–0052 (`guides/tasks/README.md`).
 
-## The four extension surfaces
+## The three extension surfaces
 
-Jido has four kinds of registerable extensions. Each gets its own top-level
+Jido has three kinds of registerable extensions. Each gets its own top-level
 directory:
 
 ```
@@ -17,13 +17,10 @@ lib/jido/
 └── directives/    # framework-level directives (side-effect requests)
 ```
 
-A fourth surface — **plugins** (`Jido.Plugins.*`, at `lib/jido/plugins/`) — is
-part of the convention but currently has no in-tree members. A plugin is
-`Slice + Middleware` in one module; both prior in-tree plugins
-(`Jido.Plugin.FSM` and `Jido.Pod.BusPlugin`) were reduced to pure slices and now
-live at `lib/jido/slices/fsm.ex` and `lib/jido/slices/child_bus.ex`
-respectively. Out-of-tree plugin authors still mirror the shape under
-`MyOrg.Plugins.<Name>`.
+(Earlier versions also offered a fourth surface — `Jido.Plugin`, a
+`Slice + Middleware` combo. ADR 0028 retired the abstraction; combined behavior
+is expressed by declaring `use Jido.Slice` and `@behaviour Jido.Middleware` on
+the same module.)
 
 Each built-in extension is **one file at the top of its surface dir** (the entry
 point) plus a **same-named subdirectory** for supporting types and actions. For
@@ -43,14 +40,13 @@ subdirectory (Retry, Persister).
 
 ## Framework infrastructure stays put
 
-The directories _under_ `lib/jido/` (not the four surface dirs) hold framework
-code, not extensions:
+The directories _under_ `lib/jido/` (not the surface dirs) hold framework code,
+not extensions:
 
 ```
 lib/jido/agent/         # agent struct, instance manager, schema
 lib/jido/agent_server/  # the runtime GenServer (signal pipeline, lifecycle)
 lib/jido/slice/         # framework base for slices (DSL host module lives at lib/jido/slice.ex)
-lib/jido/plugin/        # framework plugin internals (Config, Instance, Requirements, …)
 lib/jido/middleware.ex  # framework middleware base (DSL host)
 lib/jido/dsl/           # Spark DSL definitions for every `use Jido.X` shape
 lib/jido/exec/          # action exec runtime
@@ -97,8 +93,8 @@ lib/my_org/slices/slack/state.ex          # MyOrg.Slices.Slack.State (data type)
 lib/my_org/slices/slack/actions/*.ex      # MyOrg.Slices.Slack.Actions.*
 ```
 
-Same pattern for middlewares (`MyOrg.Middlewares.<Name>`), plugins
-(`MyOrg.Plugins.<Name>`), and directives (`MyOrg.Directives.<Name>`).
+Same pattern for middlewares (`MyOrg.Middlewares.<Name>`) and directives
+(`MyOrg.Directives.<Name>`).
 
 ## Directives: framework vs slice-owned
 
@@ -126,7 +122,6 @@ slice-owned. If it's a building block any agent can emit, it lifts to framework.
 | ----------------------- | ----------------------------------------------- | --------------------------------------- | ----------------- |
 | Slice                   | `lib/jido/slices/<snake>/`                      | `Jido.Slices.<Name>`                    | `<Name>.State`    |
 | Middleware              | `lib/jido/middlewares/<snake>.ex`               | `Jido.Middlewares.<Name>`               | —                 |
-| Plugin                  | `lib/jido/plugins/<snake>/`                     | `Jido.Plugins.<Name>`                   | —                 |
 | Directive (framework)   | `lib/jido/directives/<snake>.ex`                | `Jido.Directives.<Name>`                | —                 |
 | Directive (slice-owned) | `lib/jido/slices/<slice>/directives/<snake>.ex` | `Jido.Slices.<Slice>.Directives.<Name>` | —                 |
 
@@ -139,7 +134,7 @@ Action modules under a slice live at
 ADR 0025 established the rule for two reasons:
 
 1. **The directory tree should signal architectural role.** A new contributor
-   running `ls lib/jido/` should immediately see the four extension surfaces
+   running `ls lib/jido/` should immediately see the three extension surfaces
    alongside framework infrastructure, without reading source.
 
 2. **Out-of-tree authors copy what they see.** A consistent convention in `jido`

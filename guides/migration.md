@@ -983,17 +983,89 @@ directly).
 
 ## Spark DSL migration (ADR 0023)
 
-Jido 2.x defines its agent / slice / plugin / middleware / action / sensor / pod
-/ instance surfaces with a **Spark DSL**. Modules use a sectioned
-`agent do … end` / `slice do … end` etc. style instead of a flat
-`use Jido.X, name: "…", path: …, schema: …` keyword list. The extension list on
-`use Jido.Agent` is a single ordered `extensions: […]` keyword that classifies
-each entry by its DSL.
+Jido 2.x defines its agent / slice / middleware / action / sensor / pod /
+instance surfaces with a **Spark DSL**. Modules use a sectioned `agent do … end`
+/ `slice do … end` etc. style instead of a flat
+`use Jido.X, name: "…", path: …, schema: …` keyword list.
 
 For the keyword-form → DSL conversion recipe, see
-[Migrating to the Spark DSL](migration-spark-dsl.md). It walks one in-tree
-agent, one in-tree slice, and one in-tree plugin through the mechanical
-conversion plus the common pitfalls.
+[Migrating to the Spark DSL](migration-spark-dsl.md). It walks one in-tree agent
+and one in-tree slice through the mechanical conversion plus the common
+pitfalls.
+
+## Migrating from `Jido.Plugin` (ADR 0028)
+
+Jido v3 retires `Jido.Plugin`. Plugin was a Slice + Middleware combo in one
+module; the same shape is now expressed by declaring `use Jido.Slice` and
+`@behaviour Jido.Middleware` on the module and registering it explicitly in both
+places on the host agent.
+
+### Before
+
+```elixir
+defmodule MyOrg.Plugins.RateLimiter do
+  use Jido.Plugin
+
+  slice do
+    name "rate_limiter"
+    schema Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
+  end
+
+  signal_routes do
+    route "rate_limited.*", MyOrg.Actions.Bump
+  end
+
+  @impl Jido.Middleware
+  def call(signal, _opts, _ctx, next), do: next.(signal)
+end
+
+defmodule MyOrg.Agent do
+  use Jido.Agent, extensions: [MyOrg.Plugins.RateLimiter]
+
+  agent do
+    name "my_agent"
+  end
+end
+```
+
+### After
+
+```elixir
+defmodule MyOrg.Slices.RateLimiter do
+  use Jido.Slice
+  @behaviour Jido.Middleware
+
+  slice do
+    name "rate_limiter"
+    schema Zoi.object(%{count: Zoi.integer() |> Zoi.default(0)})
+  end
+
+  signal_routes do
+    route "rate_limited.*", MyOrg.Actions.Bump
+  end
+
+  @impl Jido.Middleware
+  def call(signal, _opts, _ctx, next), do: next.(signal)
+end
+
+defmodule MyOrg.Agent do
+  use Jido.Agent, middleware: [MyOrg.Slices.RateLimiter]
+
+  agent do
+    name "my_agent"
+  end
+
+  slices do
+    slice :rate_limiter, MyOrg.Slices.RateLimiter
+  end
+end
+```
+
+The auto-mounting Plugin did is replaced by an explicit pair: mount under
+`slices do … end` for the Slice half, and add to `middleware: […]` for the
+Middleware half. Plugin-only features (`as:` aliasing, `route_prefix`, runtime
+`requires:` validation, `Application.get_env(otp_app, mod)` config merge) are
+not part of Slice and have no replacement.
 
 ## Getting Help
 

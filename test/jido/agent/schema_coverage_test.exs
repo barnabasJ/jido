@@ -186,14 +186,7 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
     test "merges base schema with plugins" do
       base = Zoi.map(%{mode: Zoi.atom(), counter: Zoi.integer()})
 
-      plugin_spec = %Jido.Plugin.Spec{
-        module: MyPlugin,
-        name: "plugin_one",
-        path: :plugin_one,
-        schema: Zoi.map(%{value: Zoi.integer()}),
-        actions: [],
-        config: %{}
-      }
+      plugin_spec = %{path: :plugin_one, schema: Zoi.map(%{value: Zoi.integer()})}
 
       result = Schema.merge_with_plugins(base, [plugin_spec])
 
@@ -203,157 +196,65 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       assert :plugin_one in keys
     end
 
-    test "merges nil base with plugins" do
-      plugin_spec = %Jido.Plugin.Spec{
-        module: MyPlugin,
-        name: "my_plugin",
-        path: :data,
-        schema: Zoi.map(%{count: Zoi.integer(), name: Zoi.string()}),
-        actions: [],
-        config: %{}
-      }
+    test "merges nil base with slices" do
+      slice_spec = %{path: :data, schema: Zoi.map(%{count: Zoi.integer(), name: Zoi.string()})}
 
-      result = Schema.merge_with_plugins(nil, [plugin_spec])
+      result = Schema.merge_with_plugins(nil, [slice_spec])
 
       keys = Schema.known_keys(result)
       assert :data in keys
     end
 
-    test "merges struct-based schema with plugins" do
+    test "merges struct-based schema with slices" do
       base = Zoi.struct(TestStruct, %{field_a: Zoi.string()})
+      slice_spec = %{path: :slice_data, schema: Zoi.map(%{x: Zoi.integer()})}
 
-      plugin_spec = %Jido.Plugin.Spec{
-        module: MyPlugin,
-        name: "my_plugin",
-        path: :plugin_data,
-        schema: Zoi.map(%{x: Zoi.integer()}),
-        actions: [],
-        config: %{}
-      }
-
-      result = Schema.merge_with_plugins(base, [plugin_spec])
+      result = Schema.merge_with_plugins(base, [slice_spec])
 
       keys = Schema.known_keys(result)
       assert :field_a in keys
-      assert :plugin_data in keys
+      assert :slice_data in keys
     end
 
-    test "merges Map type base with plugin" do
+    test "merges Map type base with slice" do
       base = Zoi.map(%{base_key: Zoi.atom()})
+      slice_spec = %{path: :slice, schema: Zoi.map(%{slice_val: Zoi.integer()})}
 
-      plugin_spec = %Jido.Plugin.Spec{
-        module: MyPlugin,
-        name: "plugin",
-        path: :plugin,
-        schema: Zoi.map(%{plugin_val: Zoi.integer()}),
-        actions: [],
-        config: %{}
-      }
-
-      result = Schema.merge_with_plugins(base, [plugin_spec])
+      result = Schema.merge_with_plugins(base, [slice_spec])
 
       keys = Schema.known_keys(result)
       assert :base_key in keys
-      assert :plugin in keys
+      assert :slice in keys
     end
 
-    test "merges Map type base with another plugin" do
-      base = Zoi.map(%{base_key: Zoi.atom()})
-
-      plugin_spec = %Jido.Plugin.Spec{
-        module: MyPlugin,
-        name: "plugin",
-        path: :plugin,
-        schema: Zoi.map(%{plugin_val: Zoi.integer()}),
-        actions: [],
-        config: %{}
-      }
-
-      result = Schema.merge_with_plugins(base, [plugin_spec])
-
-      keys = Schema.known_keys(result)
-      assert :base_key in keys
-      assert :plugin in keys
-    end
-
-    test "merges Struct type base with plugin" do
+    test "merges Struct type base with slice" do
       base = Zoi.struct(TestStruct, %{field_a: Zoi.string()})
+      slice_spec = %{path: :slice, schema: Zoi.map(%{slice_val: Zoi.integer()})}
 
-      plugin_spec = %Jido.Plugin.Spec{
-        module: MyPlugin,
-        name: "plugin",
-        path: :plugin,
-        schema: Zoi.map(%{plugin_val: Zoi.integer()}),
-        actions: [],
-        config: %{}
-      }
-
-      result = Schema.merge_with_plugins(base, [plugin_spec])
+      result = Schema.merge_with_plugins(base, [slice_spec])
 
       keys = Schema.known_keys(result)
       assert :field_a in keys
-      assert :plugin in keys
+      assert :slice in keys
     end
 
-    test "merges Struct type base with another plugin" do
-      base = Zoi.struct(TestStruct, %{field_a: Zoi.string()})
-
-      plugin_spec = %Jido.Plugin.Spec{
-        module: MyPlugin,
-        name: "plugin",
-        path: :plugin,
-        schema: Zoi.map(%{plugin_val: Zoi.integer()}),
-        actions: [],
-        config: %{}
-      }
-
-      result = Schema.merge_with_plugins(base, [plugin_spec])
-
-      keys = Schema.known_keys(result)
-      assert :field_a in keys
-      assert :plugin in keys
-    end
-
-    test "handles multiple plugins" do
+    test "handles multiple slices" do
       base = Zoi.map(%{base_field: Zoi.atom()})
+      slice1 = %{path: :slice_a, schema: Zoi.map(%{a: Zoi.integer()})}
+      slice2 = %{path: :slice_b, schema: Zoi.map(%{b: Zoi.string()})}
 
-      plugin1 = %Jido.Plugin.Spec{
-        module: PluginA,
-        name: "plugin_a",
-        path: :plugin_a,
-        schema: Zoi.map(%{a: Zoi.integer()}),
-        actions: [],
-        config: %{}
-      }
-
-      plugin2 = %Jido.Plugin.Spec{
-        module: PluginB,
-        name: "plugin_b",
-        path: :plugin_b,
-        schema: Zoi.map(%{b: Zoi.string()}),
-        actions: [],
-        config: %{}
-      }
-
-      result = Schema.merge_with_plugins(base, [plugin1, plugin2])
+      result = Schema.merge_with_plugins(base, [slice1, slice2])
 
       keys = Schema.known_keys(result)
       assert :base_field in keys
-      assert :plugin_a in keys
-      assert :plugin_b in keys
+      assert :slice_a in keys
+      assert :slice_b in keys
     end
 
-    test "nil base with plugins without schemas returns nil" do
-      plugin_without_schema = %Jido.Plugin.Spec{
-        module: PluginA,
-        name: "plugin_a",
-        path: :plugin_a,
-        schema: nil,
-        actions: [],
-        config: %{}
-      }
+    test "nil base with slices without schemas returns nil" do
+      slice_without_schema = %{path: :slice_a, schema: nil}
 
-      result = Schema.merge_with_plugins(nil, [plugin_without_schema])
+      result = Schema.merge_with_plugins(nil, [slice_without_schema])
       assert result == nil
     end
   end
@@ -373,20 +274,13 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       assert Schema.defaults_from_zoi_schema(fn -> :ok end) == %{}
     end
 
-    test "merge_with_plugins preserves plugin schema ordering" do
-      plugins =
+    test "merge_with_plugins preserves slice schema ordering" do
+      slices =
         for i <- 1..5 do
-          %Jido.Plugin.Spec{
-            module: Module.concat(Plugin, "S#{i}"),
-            name: "plugin_#{i}",
-            path: String.to_atom("s#{i}"),
-            schema: Zoi.map(%{value: Zoi.integer()}),
-            actions: [],
-            config: %{}
-          }
+          %{path: String.to_atom("s#{i}"), schema: Zoi.map(%{value: Zoi.integer()})}
         end
 
-      result = Schema.merge_with_plugins(nil, plugins)
+      result = Schema.merge_with_plugins(nil, slices)
 
       keys = Schema.known_keys(result)
       assert :s1 in keys
@@ -396,35 +290,14 @@ defmodule JidoTest.Agent.SchemaCoverageTest do
       assert :s5 in keys
     end
 
-    test "merge_with_plugins with mixed nil and valid plugin schemas" do
-      plugins = [
-        %Jido.Plugin.Spec{
-          module: PluginA,
-          name: "plugin_a",
-          path: :a,
-          schema: Zoi.map(%{x: Zoi.integer()}),
-          actions: [],
-          config: %{}
-        },
-        %Jido.Plugin.Spec{
-          module: PluginB,
-          name: "plugin_b",
-          path: :b,
-          schema: nil,
-          actions: [],
-          config: %{}
-        },
-        %Jido.Plugin.Spec{
-          module: PluginC,
-          name: "plugin_c",
-          path: :c,
-          schema: Zoi.map(%{y: Zoi.string()}),
-          actions: [],
-          config: %{}
-        }
+    test "merge_with_plugins with mixed nil and valid slice schemas" do
+      slices = [
+        %{path: :a, schema: Zoi.map(%{x: Zoi.integer()})},
+        %{path: :b, schema: nil},
+        %{path: :c, schema: Zoi.map(%{y: Zoi.string()})}
       ]
 
-      result = Schema.merge_with_plugins(nil, plugins)
+      result = Schema.merge_with_plugins(nil, slices)
 
       keys = Schema.known_keys(result)
       assert :a in keys

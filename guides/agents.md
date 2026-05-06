@@ -2,15 +2,18 @@
 
 <!-- covers: jido.agents_and_actions.schema_defined_agents jido.agents_and_actions.pure_cmd_contract -->
 
-**After:** You can define agents with schemas, hooks, and the `cmd/2`/`cmd/3` contract.
+**After:** You can define agents with schemas, hooks, and the `cmd/2`/`cmd/3`
+contract.
 
-Agents are immutable data structures that hold state and respond to actions. The core operation is `cmd/2` (or `cmd/3` with options), which processes actions and returns an updated agent plus directives for external effects.
+Agents are immutable data structures that hold state and respond to actions. The
+core operation is `cmd/2` (or `cmd/3` with options), which processes actions and
+returns an updated agent plus directives for external effects.
 
 ## Defining an Agent
 
 ```elixir
 defmodule MyAgent do
-  use Jido.Agent, extensions: [MyPlugin, MyBareSlice]
+  use Jido.Agent, middleware: [MyMiddleware]
 
   agent do
     name "my_agent"                           # Required — alphanumeric + underscores
@@ -25,16 +28,19 @@ defmodule MyAgent do
     ]
   end
 
+  slices do
+    slice :my_slice, MyBareSlice
+  end
+
   schedules do
     schedule "*/5 * * * *", "heartbeat.tick", job_id: :heartbeat
   end
 end
 ```
 
-`extensions: […]` is a single ordered registration list. The compile-time
-walker inspects each module and routes it to the right slot — slices,
-plugins, or middleware — by behaviour. See [Plugins](plugins.md) and
-[Slices](slices.md) for the contributing module shapes.
+Slices are mounted in the `slices do … end` block; middleware modules go into
+the agent's `middleware: […]` keyword. See [Slices](slices.md) and
+[Middleware](middleware.md) for the contributing module shapes.
 
 ## The `cmd/2` and `cmd/3` Contract
 
@@ -89,6 +95,7 @@ Pass options that apply to all actions in the command:
 ```
 
 Supported options:
+
 - `:timeout` — Maximum time (in ms) for each action to complete
 - `:max_retries` — Maximum retry attempts on failure
 - `:backoff` — Initial backoff time in ms (doubles with each retry)
@@ -131,6 +138,7 @@ end
 ```
 
 Use cases:
+
 - Mirror action params into agent state
 - Add default params based on current state
 - Enforce invariants before execution
@@ -148,14 +156,15 @@ end
 ```
 
 Use cases:
+
 - Auto-validate state after changes
 - Derive computed fields
 - Add invariant checks
 
 ## Schema Options
 
-Agent state is validated against a schema declared inside the
-`agent do … end` section. Two formats are supported:
+Agent state is validated against a schema declared inside the `agent do … end`
+section. Two formats are supported:
 
 ### NimbleOptions (familiar)
 
@@ -201,13 +210,14 @@ agent = MyAgent.new(state: %{counter: 10})
 ```
 
 If the module is primarily a durable coordinator for named collaborators, use
-`Jido.Slices.Pod` instead of `Jido.Agent`. `Jido.Slices.Pod` wraps the same agent model and
-adds a canonical topology plus a reserved singleton pod plugin.
+`Jido.Slices.Pod` instead of `Jido.Agent`. `Jido.Slices.Pod` wraps the same
+agent model and adds a canonical topology plus a reserved singleton pod plugin.
 
 ## Further Reading
 
 - [Actions](actions.md) — Defining actions that transform agent state
 - [Directives](directives.md) — External effects emitted by agents
-- [Plugins — Default Plugins](plugins.md#default-plugins) — Built-in plugins (Identity, Thread) and how to override them
+- [Plugins — Default Plugins](plugins.md#default-plugins) — Built-in plugins
+  (Identity, Thread) and how to override them
 - [Pods](pods.md) — Manager-led durable topologies built on top of agents
 - `Jido.Agent` — Full module documentation

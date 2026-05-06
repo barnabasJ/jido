@@ -1,20 +1,17 @@
 defmodule Jido.Dsl.Agent.Transformers.ExpandRoutes do
   @moduledoc """
-  Expands plugin / slice routes (with prefixing for plugins, absolute
-  paths for slices) and agent / plugin schedules into the runtime
-  route_spec tuple shape and persists each expansion under its dsl_state
-  key:
+  Expands slice routes (with absolute paths) and agent / slice schedules
+  into the runtime route_spec tuple shape and persists each expansion
+  under its dsl_state key:
 
     * `:expanded_signal_routes` — host-declared `signal_routes do … end`
       flattened to route_spec tuples.
-    * `:expanded_plugin_routes` and `:expanded_slice_routes` — per-instance
-      route expansions.
-    * `:expanded_plugin_schedules` and `:expanded_agent_schedules` — cron
+    * `:expanded_slice_routes` — per-slice route expansions.
+    * `:expanded_slice_schedules` and `:expanded_agent_schedules` — cron
       schedule specs.
-    * `:validated_plugin_routes` — combined and conflict-checked.
 
-  Conflict detection raises in `Jido.Dsl.Agent.Verifiers.NoRouteConflicts`;
-  this transformer only does the expansion.
+  Conflict detection is not performed in this transformer; route conflicts
+  surface at runtime through the signal router's own dedup logic.
   """
 
   use Spark.Dsl.Transformer
@@ -30,20 +27,16 @@ defmodule Jido.Dsl.Agent.Transformers.ExpandRoutes do
   @impl Spark.Dsl.Transformer
   def transform(dsl_state) do
     expanded_signal_routes = build_signal_routes(dsl_state)
-    plugin_instances = Transformer.get_persisted(dsl_state, :plugin_instances, [])
     slice_instances = Transformer.get_persisted(dsl_state, :slice_instances, [])
-
-    expanded_plugin_routes =
-      Enum.flat_map(plugin_instances, &Jido.Plugin.Routes.expand_routes/1)
 
     expanded_slice_routes =
       Enum.flat_map(slice_instances, &Jido.Slice.Instance.expand_routes/1)
 
-    expanded_plugin_schedules =
-      Enum.flat_map(plugin_instances, &Jido.Plugin.Schedules.expand_schedules/1)
+    expanded_slice_schedules =
+      Enum.flat_map(slice_instances, &Jido.Slice.Schedules.expand_schedules/1)
 
     schedule_routes =
-      Enum.flat_map(plugin_instances, &Jido.Plugin.Schedules.schedule_routes/1)
+      Enum.flat_map(slice_instances, &Jido.Slice.Schedules.schedule_routes/1)
 
     agent_name = Spark.Dsl.Extension.get_opt(dsl_state, [:agent], :name)
 
@@ -55,34 +48,23 @@ defmodule Jido.Dsl.Agent.Transformers.ExpandRoutes do
     agent_schedule_routes =
       Jido.Agent.Schedules.schedule_routes(expanded_agent_schedules)
 
-    all_plugin_routes =
-      expanded_plugin_routes ++
-        expanded_slice_routes ++
-        schedule_routes ++ agent_schedule_routes
+    all_routes =
+      expanded_slice_routes ++ schedule_routes ++ agent_schedule_routes
 
-    plugin_routes_result = Jido.Plugin.Routes.detect_conflicts(all_plugin_routes)
-
-    validated_plugin_routes =
-      case plugin_routes_result do
-        {:ok, routes} -> routes
-        {:error, _} -> []
-      end
+    validated_routes = normalize_routes(all_routes)
 
     mount_config_map =
-      Enum.reduce(plugin_instances ++ slice_instances, %{}, fn instance, acc ->
+      Enum.reduce(slice_instances, %{}, fn instance, acc ->
         Map.put(acc, instance.path, instance.config)
       end)
 
     dsl_state =
       dsl_state
       |> Transformer.persist(:expanded_signal_routes, expanded_signal_routes)
-      |> Transformer.persist(:expanded_plugin_routes, expanded_plugin_routes)
       |> Transformer.persist(:expanded_slice_routes, expanded_slice_routes)
-      |> Transformer.persist(:expanded_plugin_schedules, expanded_plugin_schedules)
+      |> Transformer.persist(:expanded_slice_schedules, expanded_slice_schedules)
       |> Transformer.persist(:expanded_agent_schedules, expanded_agent_schedules)
-      |> Transformer.persist(:all_plugin_routes, all_plugin_routes)
-      |> Transformer.persist(:plugin_routes_result, plugin_routes_result)
-      |> Transformer.persist(:validated_plugin_routes, validated_plugin_routes)
+      |> Transformer.persist(:validated_routes, validated_routes)
       |> Transformer.persist(:mount_config_map, mount_config_map)
 
     {:ok, dsl_state}
@@ -127,4 +109,13 @@ defmodule Jido.Dsl.Agent.Transformers.ExpandRoutes do
   defp append_if(opts, _, fun), do: fun.(opts)
 
   defp get_entities(path, dsl_state), do: Transformer.get_entities(dsl_state, path)
+
+  @default_priority -10
+
+  defp normalize_routes(routes) do
+    Enum.map(routes, fn {path, target, opts} ->
+      priority = Keyword.get(opts, :priority, @default_priority)
+      {path, target, priority}
+    end)
+  end
 end

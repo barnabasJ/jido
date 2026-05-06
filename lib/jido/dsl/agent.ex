@@ -76,7 +76,7 @@ defmodule Jido.Dsl.Agent do
       module: [
         type: :atom,
         required: true,
-        doc: "Slice (`use Jido.Slice`) or plugin (`use Jido.Plugin`) module to mount."
+        doc: "Slice (`use Jido.Slice`) module to mount."
       ],
       options: [
         type: {:or, [:keyword_list, :map]},
@@ -151,12 +151,10 @@ defmodule Jido.Dsl.Agent do
       Jido.Dsl.Agent.Transformers.WalkExtensions,
       Jido.Dsl.Agent.Transformers.MergeSchemas,
       Jido.Dsl.Agent.Transformers.ExpandRoutes,
-      Jido.Dsl.Agent.Transformers.ValidateRequirements,
       Jido.Dsl.Agent.Transformers.GenerateAccessors
     ],
     verifiers: [
       Jido.Dsl.Agent.Verifiers.PathSchemaPair,
-      Jido.Dsl.Agent.Verifiers.UniquePaths,
-      Jido.Dsl.Agent.Verifiers.NoRouteConflicts
+      Jido.Dsl.Agent.Verifiers.UniquePaths
     ]
 end

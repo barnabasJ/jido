@@ -3,14 +3,13 @@ defmodule Jido.Dsl.ScaffoldTest do
 
   # All `Jido.Dsl.*` extensions are now filled in. Task 0034 wired
   # `Jido.Dsl.Agent` and `Jido.Dsl.Instance`. Task 0035 wired
-  # `Jido.Dsl.Slice`, `Jido.Dsl.Plugin`, and `Jido.Dsl.Middleware`.
-  # Task 0036 wired `Jido.Dsl.Action` and `Jido.Dsl.Sensor`.
+  # `Jido.Dsl.Slice` and `Jido.Dsl.Middleware`. Task 0036 wired
+  # `Jido.Dsl.Action` and `Jido.Dsl.Sensor`.
 
   @migrated_modules [
     Jido.Dsl.Agent,
     Jido.Dsl.Instance,
     Jido.Dsl.Slice,
-    Jido.Dsl.Plugin,
     Jido.Dsl.Middleware,
     Jido.Dsl.Action,
     Jido.Dsl.Sensor
@@ -42,10 +41,6 @@ defmodule Jido.Dsl.ScaffoldTest do
     assert :schedules in section_names
     assert :capabilities in section_names
     assert :requires in section_names
-  end
-
-  test "Jido.Dsl.Plugin re-exports Jido.Dsl.Slice.sections/0 (task 0035)" do
-    assert Jido.Dsl.Plugin.sections() == Jido.Dsl.Slice.sections()
   end
 
   test "Jido.Dsl.Middleware contributes the `middleware` section (task 0035)" do

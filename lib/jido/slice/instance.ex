@@ -3,14 +3,6 @@ defmodule Jido.Slice.Instance do
   Represents a normalized slice instance attached to an agent via the
   framework's `slices:` option.
 
-  Parallel to `Jido.Plugin.Instance` but for bare slices (`use Jido.Slice`
-  without a middleware half). Differences from `Plugin.Instance`:
-
-  - No `route_prefix` field. Bare slices register their `signal_routes/0`
-    at the agent with **absolute** paths — `slices:` does not prefix.
-  - The `as:` field is reserved for a future multi-instance design but
-    not wired in v1. Always `nil` today.
-
   ## Fields
 
   - `module` - The slice module (`use Jido.Slice`)
@@ -21,7 +13,7 @@ defmodule Jido.Slice.Instance do
   """
 
   alias Jido.Dsl.Slice.Info, as: SliceInfo
-  alias Jido.Plugin.Config
+  alias Jido.Slice.Config
 
   @schema Zoi.struct(
             __MODULE__,
@@ -53,7 +45,7 @@ defmodule Jido.Slice.Instance do
   - `{Module, %{key: value}}` - slice with map config
   - `{Module, [key: value]}` - slice with keyword config
 
-  Config is resolved through `Jido.Plugin.Config.resolve_config!/2`, which
+  Config is resolved through `Jido.Slice.Config.resolve_config!/2`, which
   merges any `Application.get_env(otp_app, module)` config underneath the
   caller's overrides and validates against the slice's `config_schema/0` if
   one is declared.
@@ -83,9 +75,9 @@ defmodule Jido.Slice.Instance do
   @doc """
   Expands the slice's signal routes for the agent's combined route table.
 
-  Bare slices register their `signal_routes/0` with **absolute** paths — no
-  plugin-style `route_prefix` is applied. The output shape matches the
-  3-tuple format `Jido.Plugin.Routes.detect_conflicts/1` expects.
+  Bare slices register their `signal_routes/0` with **absolute** paths.
+  The output shape is the 3-tuple format `{path, target, opts}` used by
+  the agent's route table.
   """
   @spec expand_routes(t()) :: [tuple()]
   def expand_routes(%__MODULE__{module: module}) do

@@ -30,26 +30,18 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
     def run(_signal, _slice, _opts, _ctx), do: {:ok, %{}, []}
   end
 
-  defmodule PluginWithRoutes do
+  defmodule SliceWithRoutes do
     @moduledoc false
-    use Jido.Plugin
+    use Jido.Slice
 
     slice do
-      name "plugin_with_routes"
+      name "slice_with_routes"
+      schema Zoi.object(%{})
     end
 
     signal_routes do
-      route "plugin.custom", JidoTest.AgentServer.SignalRouterTest.TestAction
-      route "plugin.priority", JidoTest.AgentServer.SignalRouterTest.TestAction, priority: -20
-    end
-  end
-
-  defmodule PluginWithoutRoutes do
-    @moduledoc false
-    use Jido.Plugin
-
-    slice do
-      name "plugin_without_routes"
+      route "slice.custom", JidoTest.AgentServer.SignalRouterTest.TestAction
+      route "slice.priority", JidoTest.AgentServer.SignalRouterTest.TestAction, priority: -20
     end
   end
 
@@ -89,18 +81,16 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
     end
   end
 
-  defmodule AgentWithPlugins do
+  defmodule AgentWithSlices do
     @moduledoc false
-    use Jido.Agent,
-      middleware: [PluginWithRoutes, PluginWithoutRoutes]
+    use Jido.Agent
 
     agent do
-      name "agent_with_plugins"
+      name "agent_with_slices"
     end
 
     slices do
-      slice(:router_plugin, PluginWithRoutes)
-      slice(:no_route_plugin, PluginWithoutRoutes)
+      slice(:router_slice, SliceWithRoutes)
     end
   end
 
@@ -160,19 +150,19 @@ defmodule JidoTest.AgentServer.SignalRouterTest do
     end
   end
 
-  describe "build/1 — plugin routes" do
-    test "collects routes from plugins, prefixed by the plugin's route prefix" do
-      router = SignalRouter.build(build_state(AgentWithPlugins))
-      # Plugin name is "plugin_with_routes" so the route gets prefixed.
-      assert {:ok, [TestAction]} =
-               JidoRouter.route(router, signal("plugin_with_routes.plugin.custom"))
+  describe "build/1 — slice routes" do
+    test "collects routes from slices using their declared (absolute) paths" do
+      router = SignalRouter.build(build_state(AgentWithSlices))
 
       assert {:ok, [TestAction]} =
-               JidoRouter.route(router, signal("plugin_with_routes.plugin.priority"))
+               JidoRouter.route(router, signal("slice.custom"))
+
+      assert {:ok, [TestAction]} =
+               JidoRouter.route(router, signal("slice.priority"))
     end
 
-    test "plugins without signal_routes contribute nothing" do
-      router = SignalRouter.build(build_state(AgentWithPlugins))
+    test "non-matching signals fall through to error" do
+      router = SignalRouter.build(build_state(AgentWithSlices))
       assert {:error, _} = JidoRouter.route(router, signal("no.match"))
     end
   end

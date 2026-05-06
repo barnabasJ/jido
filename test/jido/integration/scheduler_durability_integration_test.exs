@@ -31,53 +31,53 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
   @moduletag capture_log: true
   @moduletag timeout: 25_000
 
-  defmodule PluginTickAction do
+  defmodule SliceTickAction do
     @moduledoc false
     use Jido.Action
 
     action do
-      name "plugin_tick"
+      name "slice_tick"
       schema []
     end
 
     def run(_signal, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
       ticks = Map.get(slice, :ticks, [])
-      {:ok, %{tick_count: count + 1, ticks: ticks ++ [%{source: :plugin_schedule}]}, []}
+      {:ok, %{tick_count: count + 1, ticks: ticks ++ [%{source: :slice_schedule}]}, []}
     end
   end
 
-  defmodule ScheduledPlugin do
+  defmodule ScheduledSlice do
     @moduledoc false
-    use Jido.Plugin
+    use Jido.Slice
 
     slice do
-      name "scheduler_integration_plugin"
+      name "scheduler_integration_slice"
+      schema Zoi.object(%{})
     end
 
     schedules do
-      schedule "* * * * * * *", PluginTickAction
+      schedule "* * * * * * *", SliceTickAction
     end
   end
 
-  defmodule PluginScheduledAgent do
+  defmodule SliceScheduledAgent do
     @moduledoc false
-    use Jido.Agent,
-      middleware: [ScheduledPlugin]
+    use Jido.Agent
 
     agent do
-      name "scheduler_integration_plugin_agent"
+      name "scheduler_integration_slice_agent"
       path :domain
       schema tick_count: [type: :integer, default: 0], ticks: [type: {:list, :any}, default: []]
     end
 
     slices do
-      slice(:scheduler_integration_plugin, ScheduledPlugin)
+      slice(:scheduler_integration_slice, ScheduledSlice)
     end
   end
 
-  defp plugin_job_id do
-    {:plugin_schedule, :scheduler_integration_plugin, PluginTickAction}
+  defp slice_job_id do
+    {:slice_schedule, :scheduler_integration_slice, SliceTickAction}
   end
 
   defmodule RestoreCountingAgent do
@@ -377,15 +377,15 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
       )
     end
 
-    test "bad durable replay does not block plugin schedules on thaw", context do
-      %{manager: manager, table: table} = start_manager(context, PluginScheduledAgent)
-      instance_key = "plugin-thaw-with-bad-durable-1"
+    test "bad durable replay does not block slice schedules on thaw", context do
+      %{manager: manager, table: table} = start_manager(context, SliceScheduledAgent)
+      instance_key = "slice-thaw-with-bad-durable-1"
       scheduler_key = Jido.Scheduler.cron_specs_state_key()
-      checkpoint_key = checkpoint_key(PluginScheduledAgent, manager, instance_key)
+      checkpoint_key = checkpoint_key(SliceScheduledAgent, manager, instance_key)
 
       checkpoint = %{
         version: 1,
-        agent_module: PluginScheduledAgent,
+        agent_module: SliceScheduledAgent,
         id: instance_key,
         state:
           %{tick_count: 0, ticks: []}
@@ -401,13 +401,13 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
         capture_log(fn ->
           {:ok, pid} = get_attached(manager, instance_key)
 
-          plugin_pid = wait_for_job(pid, plugin_job_id(), timeout: 5_000)
-          assert Process.alive?(plugin_pid)
+          slice_pid = wait_for_job(pid, slice_job_id(), timeout: 5_000)
+          assert Process.alive?(slice_pid)
 
           eventually(
             fn ->
               tick_count(pid) >= 1 and
-                Enum.any?(ticks(pid), &(&1[:source] == :plugin_schedule))
+                Enum.any?(ticks(pid), &(&1[:source] == :slice_schedule))
             end,
             timeout: 5_000
           )
@@ -417,7 +417,7 @@ defmodule JidoTest.Integration.SchedulerDurabilityIntegrationTest do
               {:ok, %{cron_jobs: s.cron_jobs, cron_specs: s.cron_specs}}
             end)
 
-          assert Map.has_key?(cron_jobs, plugin_job_id())
+          assert Map.has_key?(cron_jobs, slice_job_id())
           refute Map.has_key?(cron_specs, :bad_dynamic)
 
           :ok = AgentServer.detach(pid)

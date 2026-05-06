@@ -69,15 +69,10 @@ defmodule Jido.Slices.ChildBus.AutoSubscribeChild do
   end
 
   defp fetch_routes(child_module) do
-    cond do
-      Spark.Dsl.is?(child_module, Jido.Plugin) ->
-        {:ok, Jido.Dsl.Plugin.Info.signal_routes(child_module)}
-
-      Spark.Dsl.is?(child_module, Jido.Slice) ->
-        {:ok, Jido.Dsl.Slice.Info.signal_routes(child_module)}
-
-      true ->
-        {:error, "#{inspect(child_module)} is not a Jido.Slice or Jido.Plugin"}
+    if Spark.Dsl.is?(child_module, Jido.Slice) do
+      {:ok, Jido.Dsl.Slice.Info.signal_routes(child_module)}
+    else
+      {:error, "#{inspect(child_module)} is not a Jido.Slice"}
     end
   end
 end

@@ -168,3 +168,43 @@ Answer four questions:
   Already a no-op (`Jido.Pod.Plugin` doesn't exist post-task-0061), but
   individual documentation files can be cleaned up incrementally as they're
   touched, not in a sweep.
+
+## Decision
+
+**DEPRECATE and remove.** Recorded in
+[ADR 0028](../adr/0028-deprecate-jido-plugin.md). Execution lives in
+[task 0068](0068-remove-jido-plugin.md).
+
+The four audit questions resolved as:
+
+1. **External users?** The abstraction is documented (plugins.md,
+   your-first-plugin.md, layout.md) and the package is at v2.2.0 on Hex, so
+   "yes, possibly" is the right default. The decision accepts this as a hard
+   break released under v3.0.0 with a one-line migration recipe.
+
+2. **Future extensions wanting the combined shape?** ADR 0014's deferred
+   follow-ups (`CircuitBreaker`, `LogErrors`, `StopOnError`, `Logger`) and the
+   speculative tracing/rate-limiting candidates all resolve cleanly as either
+   middleware-only or `use Jido.Slice` + `@behaviour Jido.Middleware`. None
+   require a separate extension shape.
+
+3. **Cost of keeping?** ~800 LOC across eight framework files plus a parallel
+   persistence vocabulary (`:plugin_instances`, `:plugin_specs`,
+   `:plugin_paths`, `:validated_plugin_routes`, `:expanded_plugin_routes`,
+   `:expanded_plugin_schedules`, `:all_plugin_routes`) and a classifier branch
+   in `WalkExtensions.classify_mount/2` — all currently with zero production
+   callers. The audit confirmed even the mount-layer features Plugin appeared to
+   provide over Slice (`as:` aliasing, `route_prefix`,
+   `Application.get_env(otp_app, mod)` config merge, runtime `requires:`
+   validation) have no in-tree exercise outside Plugin's own self-tests.
+
+4. **Cost of removing?** Hard break for any external user mounting
+   `Jido.Plugin`. Migration is mechanical: `use Jido.Plugin` →
+   `use Jido.Slice` + `@behaviour Jido.Middleware` + add the module to the
+   agent's `middleware: […]` list. Documentation rewrite from "four shapes" to
+   "three shapes" across guides, ADRs, cheat sheets.
+
+Step 2A (KEEP path) is **not** executed. Step 2B (DEPRECATE) is implemented in a
+single phase by task 0068 — there is no observable external Plugin adoption that
+would benefit from a multi-release deprecation window, and the parallel
+persistence vocabulary should not have to be maintained through one.

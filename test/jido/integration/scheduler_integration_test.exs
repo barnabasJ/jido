@@ -21,53 +21,53 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
   @moduletag capture_log: true
   @moduletag timeout: 20_000
 
-  defmodule PluginTickAction do
+  defmodule SliceTickAction do
     @moduledoc false
     use Jido.Action
 
     action do
-      name "plugin_tick"
+      name "slice_tick"
       schema []
     end
 
     def run(_signal, slice, _opts, _ctx) do
       count = Map.get(slice, :tick_count, 0)
       ticks = Map.get(slice, :ticks, [])
-      {:ok, %{tick_count: count + 1, ticks: ticks ++ [%{source: :plugin_schedule}]}, []}
+      {:ok, %{tick_count: count + 1, ticks: ticks ++ [%{source: :slice_schedule}]}, []}
     end
   end
 
-  defmodule ScheduledPlugin do
+  defmodule ScheduledSlice do
     @moduledoc false
-    use Jido.Plugin
+    use Jido.Slice
 
     slice do
-      name "scheduler_integration_plugin"
+      name "scheduler_integration_slice"
+      schema Zoi.object(%{})
     end
 
     schedules do
-      schedule "* * * * * * *", PluginTickAction
+      schedule "* * * * * * *", SliceTickAction
     end
   end
 
-  defmodule PluginScheduledAgent do
+  defmodule SliceScheduledAgent do
     @moduledoc false
-    use Jido.Agent,
-      middleware: [ScheduledPlugin]
+    use Jido.Agent
 
     agent do
-      name "scheduler_integration_plugin_agent"
+      name "scheduler_integration_slice_agent"
       path :domain
       schema tick_count: [type: :integer, default: 0], ticks: [type: {:list, :any}, default: []]
     end
 
     slices do
-      slice(:scheduler_integration_plugin, ScheduledPlugin)
+      slice(:scheduler_integration_slice, ScheduledSlice)
     end
   end
 
-  defp plugin_job_id do
-    {:plugin_schedule, :scheduler_integration_plugin, PluginTickAction}
+  defp slice_job_id do
+    {:slice_schedule, :scheduler_integration_slice, SliceTickAction}
   end
 
   describe "runtime scheduler failures" do
@@ -303,18 +303,18 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
     end
   end
 
-  describe "plugin schedule behavior" do
-    test "plugin schedules are runtime-only and deliver ticks", context do
-      pid = start_server(context, PluginScheduledAgent, id: unique_id("scheduler-plugin-runtime"))
+  describe "slice schedule behavior" do
+    test "slice schedules are runtime-only and deliver ticks", context do
+      pid = start_server(context, SliceScheduledAgent, id: unique_id("scheduler-slice-runtime"))
 
-      job_id = plugin_job_id()
+      job_id = slice_job_id()
       job_pid = wait_for_job(pid, job_id, timeout: 5_000)
 
       assert Process.alive?(job_pid)
 
       eventually(
         fn ->
-          tick_count(pid) >= 1 and Enum.any?(ticks(pid), &(&1[:source] == :plugin_schedule))
+          tick_count(pid) >= 1 and Enum.any?(ticks(pid), &(&1[:source] == :slice_schedule))
         end,
         timeout: 5_000
       )
@@ -328,10 +328,10 @@ defmodule JidoTest.Integration.SchedulerIntegrationTest do
       assert snapshot.cron_specs == %{}
     end
 
-    test "plugin schedules restart after abnormal scheduler death", context do
-      pid = start_server(context, PluginScheduledAgent, id: unique_id("scheduler-plugin-restart"))
+    test "slice schedules restart after abnormal scheduler death", context do
+      pid = start_server(context, SliceScheduledAgent, id: unique_id("scheduler-slice-restart"))
 
-      job_id = plugin_job_id()
+      job_id = slice_job_id()
       original_job_pid = wait_for_job(pid, job_id, timeout: 5_000)
       assert Process.alive?(original_job_pid)
 

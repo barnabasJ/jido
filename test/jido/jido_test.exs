@@ -114,9 +114,9 @@ defmodule JidoTest.JidoTest do
       assert is_list(sensors)
     end
 
-    test "list_plugins/1 delegates to Jido.Discovery" do
-      plugins = Jido.list_plugins()
-      assert is_list(plugins)
+    test "list_slices/1 delegates to Jido.Discovery" do
+      slices = Jido.list_slices()
+      assert is_list(slices)
     end
 
     test "list_demos/1 delegates to Jido.Discovery" do
@@ -134,8 +134,8 @@ defmodule JidoTest.JidoTest do
       assert result == nil or is_map(result)
     end
 
-    test "get_plugin_by_slug/1 delegates to Jido.Discovery" do
-      result = Jido.get_plugin_by_slug("nonexistent-plugin-slug")
+    test "get_slice_by_slug/1 delegates to Jido.Discovery" do
+      result = Jido.get_slice_by_slug("nonexistent-slice-slug")
       assert result == nil or is_map(result)
     end
 

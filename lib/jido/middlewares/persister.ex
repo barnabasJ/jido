@@ -4,13 +4,13 @@ defmodule Jido.Middlewares.Persister do
 
   On `jido.agent.lifecycle.starting` Persister blocks synchronously on
   `Jido.Persist.thaw/3` and replaces `ctx.agent` with the rehydrated struct
-  before delegating to the rest of the chain. Any slice/plugin module that
+  before delegating to the rest of the chain. Any slice module that
   implements `Jido.Persist.Transform` has `reinstate/1` applied so the
   in-memory shape is restored from its serialized form. Failures emit a
   `jido.persist.thaw.failed` signal as a side effect; the chain still runs.
 
   On `jido.agent.lifecycle.stopping` Persister walks every declared
-  slice/plugin and calls `externalize/1` where the behaviour is implemented
+  slice and calls `externalize/1` where the behaviour is implemented
   (defaulting to passthrough), then synchronously persists the result via
   `Jido.Persist.hibernate/4`. Hibernate IO runs on the terminate path —
   callers must size the supervisor's shutdown timeout accordingly.
@@ -146,13 +146,8 @@ defmodule Jido.Middlewares.Persister do
 
   # Returns `{module, mount_path}` pairs for every transform-implementing
   # module attached to this agent. The agent's own slice (if any) ships
-  # alongside plugin / slice mounts so its checkpoint hooks fire too.
+  # alongside slice mounts so its checkpoint hooks fire too.
   defp transform_targets(agent_module) do
-    plugin_targets =
-      agent_module
-      |> Jido.Dsl.Agent.Info.plugin_instances()
-      |> Enum.map(fn %{module: mod, path: path} -> {mod, path} end)
-
     slice_targets =
       agent_module
       |> Jido.Dsl.Agent.Info.slice_instances()
@@ -164,7 +159,7 @@ defmodule Jido.Middlewares.Persister do
         path -> [{agent_module, path}]
       end
 
-    (own_target ++ plugin_targets ++ slice_targets)
+    (own_target ++ slice_targets)
     |> Enum.filter(fn {mod, _path} -> transform_impl?(mod) end)
   end
 

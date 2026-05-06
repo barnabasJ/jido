@@ -1,10 +1,7 @@
-defmodule Jido.Plugin.FSMSmokeTest do
+defmodule Jido.Slices.FSMSmokeTest do
   @moduledoc """
-  Narrow smoke coverage for the FSM port from strategy → plugin (C3 of
-  ADR 0014). The full FSM test suite at
-  `test/jido/agent/strategy_fsm_test.exs` is red until C8 rewrites it
-  against `Jido.Slices.FSM`; these tests give the C3 commit a green gate
-  so a port bug doesn't masquerade as a test-rewrite bug later.
+  Narrow smoke coverage for the FSM slice (originally ported from
+  strategy → plugin in C3 of ADR 0014, now a pure slice).
   """
 
   use ExUnit.Case, async: true

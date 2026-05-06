@@ -58,20 +58,6 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
     end
   end
 
-  defmodule BarePlugin do
-    @moduledoc false
-    use Jido.Plugin
-
-    slice do
-      name "bare_plugin"
-      schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
-    end
-
-    signal_routes do
-      route "bare_plugin.noop", JidoTest.PluginTestAction
-    end
-  end
-
   defmodule NotASlice do
     @moduledoc false
   end
@@ -151,7 +137,7 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
 
       route_paths =
         AgentRoutedSlice
-        |> AgentInfo.plugin_routes()
+        |> AgentInfo.routes()
         |> Enum.map(fn {path, _action, _priority} -> path end)
 
       assert "absolute.path.one" in route_paths
@@ -259,13 +245,13 @@ defmodule JidoTest.Agent.SlicesAttachmentTest do
   end
 
   # ===========================================================================
-  # Validation: rejects plugins, rejects non-slices
+  # Validation: rejects non-slices
   # ===========================================================================
 
   describe "slices do … end validation" do
-    test "non-slice/non-plugin module in `slices do …` raises a clear message" do
+    test "non-slice module in `slices do …` raises a clear message" do
       assert_raise RuntimeError,
-                   ~r/is neither a `use Jido\.Slice` nor a `use Jido\.Plugin`/,
+                   ~r/is not a `use Jido\.Slice` module/,
                    fn ->
                      defmodule AgentRejectsNonSlice do
                        use Jido.Agent, default_slices: false

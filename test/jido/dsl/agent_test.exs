@@ -46,8 +46,7 @@ defmodule Jido.Dsl.AgentTest do
       assert AgentInfo.path(SimpleAgent) == :domain
     end
 
-    test "plugins/1 / slices/1 / middleware/1 default to empty / framework defaults" do
-      assert AgentInfo.plugins(SimpleAgent) == []
+    test "slices/1 / middleware/1 default to framework defaults / empty" do
       # Framework default slices are auto-attached.
       assert Jido.Slices.Memory in AgentInfo.slices(SimpleAgent)
       assert Jido.Slices.Identity in AgentInfo.slices(SimpleAgent)

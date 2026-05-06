@@ -198,8 +198,6 @@ defmodule Jido.Agent do
       alias Jido.Directives, as: AgentDirective
       alias Jido.Instruction
       alias Jido.Observe.Config, as: ObserveConfig
-      alias Jido.Plugin.Requirements, as: PluginRequirements
-
       require OK
 
       @persist {:jido_user_middleware, unquote(Macro.escape(user_middleware))}

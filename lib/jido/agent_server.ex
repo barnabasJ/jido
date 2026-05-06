@@ -41,7 +41,7 @@ defmodule Jido.AgentServer do
           is returned to the caller
   ```
 
-  Signal routing is owned by AgentServer, not the Agent. Plugins and the
+  Signal routing is owned by AgentServer, not the Agent. Slices and the
   agent itself can define `signal_routes/1` to map signal types to action
   modules. Unmatched signals fall back to `{signal.type, signal.data}` as
   the action.
@@ -204,7 +204,6 @@ defmodule Jido.AgentServer do
 
   alias Jido.Config.Defaults
   alias Jido.RuntimeStore
-  alias Jido.Sensor.Runtime, as: SensorRuntime
   alias Jido.Signal
   alias Jido.Signal.Router, as: JidoRouter
   alias Jido.Telemetry.Formatter
@@ -490,7 +489,7 @@ defmodule Jido.AgentServer do
   Block until the AgentServer has emitted `jido.agent.lifecycle.ready`.
 
   Useful when callers spawn an agent and need to assert that thaw +
-  reconcile + plugin start has completed before sending signals or
+  reconcile + slice start has completed before sending signals or
   reading agent state. If the agent is already past `:idle` (ready
   fired before the call), replies immediately.
 
@@ -1041,8 +1040,8 @@ defmodule Jido.AgentServer do
       # Build the signal router before we emit lifecycle signals. The
       # Persister middleware (if declared) blocks on thaw IO during the
       # starting signal and replaces ctx.agent with the rehydrated struct;
-      # downstream state.agent reflects post-thaw state. Plugin children /
-      # subscriptions / cron jobs still bring up in handle_continue/2.
+      # downstream state.agent reflects post-thaw state. Cron jobs still
+      # bring up in handle_continue/2.
       signal_router = SignalRouter.build(state)
       state = %{state | signal_router: signal_router}
 
@@ -1119,9 +1118,6 @@ defmodule Jido.AgentServer do
 
   @impl true
   def handle_continue(:post_init, state) do
-    state = start_plugin_children(state)
-    state = start_plugin_subscriptions(state)
-
     lifecycle_opts = [
       idle_timeout: state.lifecycle.idle_timeout,
       pool: state.lifecycle.pool,
@@ -1130,7 +1126,7 @@ defmodule Jido.AgentServer do
 
     state = state.lifecycle.mod.init(lifecycle_opts, state)
 
-    state = register_plugin_schedules(state)
+    state = register_slice_schedules(state)
     state = register_restored_cron_specs(state)
     state = maybe_persist_parent_binding(state)
 
@@ -1274,7 +1270,7 @@ defmodule Jido.AgentServer do
 
             # Runtime adoption converges on the same observable signal as
             # boot-time adoption (`handle_continue(:post_init, ...)`). This
-            # lets plugins/signal_routes react to "a new child is now mine"
+            # lets slices/signal_routes react to "a new child is now mine"
             # without needing a separate hook for `AdoptChild` directives.
             notify_parent_of_startup(new_state)
 
@@ -2040,8 +2036,7 @@ defmodule Jido.AgentServer do
   # ---------------------------------------------------------------------------
 
   # Builds the on_signal/4 middleware chain for the agent at init time.
-  # Order: agent's compile-time `middleware:` ++ runtime `Options.middleware:`
-  # ++ plugin middleware halves (deferred to C5 — currently empty).
+  # Order: agent's compile-time `middleware:` ++ runtime `Options.middleware:`.
   #
   # Each entry is normalized to `{Mod, opts_map}` and wrapped around the core
   # next function in declaration order: the first entry becomes the outermost
@@ -2049,16 +2044,10 @@ defmodule Jido.AgentServer do
   # to user discretion — the chain runs whatever is declared, in order.
   defp build_middleware_chain(agent_module, %Options{middleware: runtime_mw}) do
     compile_mw = Jido.Dsl.Agent.Info.middleware(agent_module)
-    plugin_halves = plugin_middleware_halves(agent_module)
-    all_entries = compile_mw ++ runtime_mw ++ plugin_halves
+    all_entries = compile_mw ++ runtime_mw
 
     compose_chain(all_entries, &core_next/2)
   end
-
-  # Plugin middleware halves are wired in C5 when `Jido.Plugin` is rewritten
-  # on top of `use Jido.Slice + use Jido.Middleware`. C4 ships the chain
-  # infrastructure with this hook returning [].
-  defp plugin_middleware_halves(_agent_module), do: []
 
   defp normalize_entry({mod, opts}) when is_atom(mod) and is_map(opts), do: {mod, opts}
   defp normalize_entry(mod) when is_atom(mod), do: {mod, %{}}
@@ -2071,9 +2060,9 @@ defmodule Jido.AgentServer do
       if function_exported?(mod, :on_signal, 4) do
         fn sig, ctx -> mod.on_signal(sig, ctx, opts, acc_next) end
       else
-        # Plugin / module declared `@behaviour Jido.Middleware` but did
-        # not implement `on_signal/4`. The callback is optional — pass
-        # the signal through unchanged.
+        # Module declared `@behaviour Jido.Middleware` but did not
+        # implement `on_signal/4`. The callback is optional — pass the
+        # signal through unchanged.
         acc_next
       end
     end)
@@ -2138,171 +2127,19 @@ defmodule Jido.AgentServer do
   end
 
   # ---------------------------------------------------------------------------
-  # Internal: Plugin Children
+  # Internal: Slice Schedules
   # ---------------------------------------------------------------------------
 
   @doc false
-  defp start_plugin_children(%State{} = state) do
-    plugin_specs = Jido.Dsl.Agent.Info.plugin_specs(state.agent_module)
-
-    Enum.reduce(plugin_specs, state, fn spec, acc_state ->
-      config = spec.config || %{}
-      start_plugin_spec_children(acc_state, spec.module, config)
-    end)
-  end
-
-  defp start_plugin_spec_children(state, plugin_module, config) do
-    if function_exported?(plugin_module, :child_spec, 1) do
-      do_start_plugin_spec_children(state, plugin_module, config)
-    else
-      state
-    end
-  end
-
-  defp do_start_plugin_spec_children(state, plugin_module, config) do
-    case plugin_module.child_spec(config) do
-      nil ->
-        state
-
-      %{} = child_spec ->
-        start_plugin_child(state, plugin_module, child_spec)
-
-      list when is_list(list) ->
-        Enum.reduce(list, state, fn cs, s ->
-          start_plugin_child(s, plugin_module, cs)
-        end)
-
-      other ->
-        Logger.warning(
-          "Invalid child_spec from plugin #{inspect(plugin_module)}: #{inspect(other)}"
-        )
-
-        state
-    end
-  end
-
-  defp start_plugin_child(%State{} = state, plugin_module, %{start: {m, f, a}} = spec) do
-    case apply(m, f, a) do
-      {:ok, pid} ->
-        ref = Process.monitor(pid)
-        tag = {:plugin, plugin_module, spec[:id] || m}
-
-        child_info =
-          ChildInfo.new!(%{
-            pid: pid,
-            ref: ref,
-            module: plugin_module,
-            id: "#{plugin_module}-#{inspect(pid)}",
-            tag: tag,
-            meta: %{child_spec_id: spec[:id]}
-          })
-
-        new_children = Map.put(state.children, tag, child_info)
-        %{state | children: new_children}
-
-      {:error, reason} ->
-        Logger.error("Failed to start plugin child #{inspect(plugin_module)}: #{inspect(reason)}")
-
-        state
-    end
-  end
-
-  defp start_plugin_child(%State{} = state, plugin_module, spec) do
-    Logger.warning(
-      "Plugin child_spec missing :start key for #{inspect(plugin_module)}: #{inspect(spec)}"
-    )
-
+  defp register_slice_schedules(%State{skip_schedules: true} = state) do
+    Logger.debug("AgentServer #{state.id} skipping slice schedules")
     state
   end
 
-  # ---------------------------------------------------------------------------
-  # Internal: Plugin Subscriptions
-  # ---------------------------------------------------------------------------
-
-  @doc false
-  defp start_plugin_subscriptions(%State{} = state) do
-    agent_module = state.agent_module
-    plugin_specs = Jido.Dsl.Agent.Info.plugin_specs(agent_module)
-
-    Enum.reduce(plugin_specs, state, fn spec, acc_state ->
-      context = %{
-        agent_ref: via_tuple(acc_state.id, acc_state.registry, partition: acc_state.partition),
-        agent_id: acc_state.id,
-        agent_module: agent_module,
-        plugin_spec: spec,
-        jido_instance: acc_state.jido,
-        partition: acc_state.partition
-      }
-
-      config = spec.config || %{}
-
-      subscriptions =
-        if function_exported?(spec.module, :subscriptions, 2) do
-          spec.module.subscriptions(config, context)
-        else
-          Jido.Dsl.Plugin.Info.subscriptions(spec.module)
-        end
-
-      Enum.reduce(subscriptions, acc_state, fn {sensor_module, sensor_config}, inner_state ->
-        start_subscription_sensor(inner_state, spec.module, sensor_module, sensor_config, context)
-      end)
-    end)
-  end
-
-  defp start_subscription_sensor(
-         %State{} = state,
-         plugin_module,
-         sensor_module,
-         sensor_config,
-         context
-       ) do
-    opts = [
-      sensor: sensor_module,
-      config: sensor_config,
-      context: context
-    ]
-
-    case SensorRuntime.start_link(opts) do
-      {:ok, pid} ->
-        ref = Process.monitor(pid)
-        tag = {:sensor, plugin_module, sensor_module}
-
-        child_info =
-          ChildInfo.new!(%{
-            pid: pid,
-            ref: ref,
-            module: sensor_module,
-            id: "#{plugin_module}-#{sensor_module}-#{inspect(pid)}",
-            tag: tag,
-            meta: %{plugin: plugin_module, sensor: sensor_module}
-          })
-
-        new_children = Map.put(state.children, tag, child_info)
-        %{state | children: new_children}
-
-      {:error, reason} ->
-        Logger.warning(
-          "Failed to start subscription sensor #{inspect(sensor_module)} for plugin #{inspect(plugin_module)}: #{inspect(reason)}"
-        )
-
-        state
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # Internal: Plugin Schedules
-  # ---------------------------------------------------------------------------
-
-  @doc false
-  defp register_plugin_schedules(%State{skip_schedules: true} = state) do
-    Logger.debug("AgentServer #{state.id} skipping plugin schedules")
-    state
-  end
-
-  defp register_plugin_schedules(%State{} = state) do
+  defp register_slice_schedules(%State{} = state) do
     agent_module = state.agent_module
 
-    schedules = Jido.Dsl.Agent.Info.plugin_schedules(agent_module)
+    schedules = Jido.Dsl.Agent.Info.schedules(agent_module)
 
     Enum.reduce(schedules, state, fn schedule_spec, acc_state ->
       register_schedule(acc_state, schedule_spec)
@@ -2351,7 +2188,7 @@ defmodule Jido.AgentServer do
        ) do
     if Map.has_key?(state.cron_jobs, job_id) do
       Logger.warning(
-        "AgentServer #{state.id} skipping restored cron job #{inspect(job_id)} because declarative/plugin schedule already exists"
+        "AgentServer #{state.id} skipping restored cron job #{inspect(job_id)} because declarative/slice schedule already exists"
       )
 
       new_cron_specs = Map.delete(state.cron_specs, job_id)

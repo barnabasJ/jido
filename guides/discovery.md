@@ -21,9 +21,12 @@ end
 
 ## How Discovery Works
 
-Discovery scans all loaded applications for modules that export metadata functions (`__action_metadata__/0`, `__sensor_metadata__/0`, etc.). Results are cached in `:persistent_term` for fast, concurrent reads.
+Discovery scans all loaded applications for modules that export metadata
+functions (`__action_metadata__/0`, `__sensor_metadata__/0`, etc.). Results are
+cached in `:persistent_term` for fast, concurrent reads.
 
-Components are indexed automatically when you call `use Jido.Action`, `use Jido.Sensor`, `use Jido.Agent`, or `use Jido.Plugin`.
+Components are indexed automatically when you call `use Jido.Action`,
+`use Jido.Sensor`, `use Jido.Agent`, or `use Jido.Slice`.
 
 ## Initialization
 
@@ -46,7 +49,8 @@ defmodule MyApp.Application do
 end
 ```
 
-The catalog builds in the background. Queries before completion return empty lists.
+The catalog builds in the background. Queries before completion return empty
+lists.
 
 ## Listing Components
 
@@ -73,14 +77,14 @@ Jido.Discovery.list_demos()
 
 All list functions accept the same filter options:
 
-| Option | Type | Match | Description |
-|--------|------|-------|-------------|
-| `:name` | string | partial | Filter by component name |
-| `:description` | string | partial | Filter by description |
-| `:category` | atom | exact | Filter by category |
-| `:tag` | atom | exact | Component must have this tag |
-| `:limit` | integer | — | Maximum results |
-| `:offset` | integer | — | Skip first N results |
+| Option         | Type    | Match   | Description                  |
+| -------------- | ------- | ------- | ---------------------------- |
+| `:name`        | string  | partial | Filter by component name     |
+| `:description` | string  | partial | Filter by description        |
+| `:category`    | atom    | exact   | Filter by category           |
+| `:tag`         | atom    | exact   | Component must have this tag |
+| `:limit`       | integer | —       | Maximum results              |
+| `:offset`      | integer | —       | Skip first N results         |
 
 Filters use AND logic—all specified filters must match.
 
@@ -113,14 +117,14 @@ Each discovered component returns a metadata map:
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| `module` | The Elixir module |
-| `name` | Human-readable name |
-| `description` | What the component does |
-| `slug` | Unique 8-character identifier (derived from module hash) |
-| `category` | Component category (atom or nil) |
-| `tags` | List of tags for filtering |
+| Field         | Description                                              |
+| ------------- | -------------------------------------------------------- |
+| `module`      | The Elixir module                                        |
+| `name`        | Human-readable name                                      |
+| `description` | What the component does                                  |
+| `slug`        | Unique 8-character identifier (derived from module hash) |
+| `category`    | Component category (atom or nil)                         |
+| `tags`        | List of tags for filtering                               |
 
 ## Lookup by Slug
 
@@ -175,7 +179,7 @@ Combine discovery with agent route introspection:
 defmodule MyApp.Debug do
   def list_all_routes do
     for agent <- Jido.Discovery.list_agents() do
-      routes = 
+      routes =
         if function_exported?(agent.module, :signal_routes, 1) do
           agent.module.signal_routes(%{agent_module: agent.module})
         else
@@ -236,7 +240,7 @@ defmodule MyAppWeb.DiscoveryLive do
   use MyAppWeb, :live_view
 
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, 
+    {:ok, assign(socket,
       actions: Jido.Discovery.list_actions(),
       sensors: Jido.Discovery.list_sensors(),
       agents: Jido.Discovery.list_agents(),
@@ -252,7 +256,7 @@ defmodule MyAppWeb.DiscoveryLive do
         <li><strong><%= action.name %></strong> — <%= action.description %></li>
       <% end %>
     </ul>
-    
+
     <h2>Agents (<%= length(@agents) %>)</h2>
     <ul>
       <%= for agent <- @agents do %>
@@ -298,7 +302,8 @@ Discovery uses `:persistent_term` for storage:
 - **Concurrent reads** — all processes can read simultaneously
 - **Writes are expensive** — avoid frequent `refresh/0` calls
 
-For most applications, initialize once at startup and refresh only when deploying new code.
+For most applications, initialize once at startup and refresh only when
+deploying new code.
 
 ## Next Steps
 

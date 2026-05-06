@@ -5,31 +5,27 @@ defmodule Jido.Slices.Pod.TopologyState do
   alias Jido.AgentServer
   alias Jido.AgentServer.State
   alias Jido.Dsl.Agent.Info, as: AgentInfo
-  alias Jido.Plugin.Instance, as: PluginInstance
   alias Jido.Slices.Pod.Topology
   alias Jido.Signal
   alias Jido.Signal.Call
   alias Jido.Slice.Instance, as: SliceInstance
 
-  # The pod plugin's mount path is reserved — users mount `Jido.Slices.Pod`
-  # (or a custom pod plugin) at `:pod` via `slices do …`, and the
+  # The pod slice's mount path is reserved — users mount `Jido.Slices.Pod`
+  # (or a custom pod slice) at `:pod` via `slices do …`, and the
   # runtime relies on this key being stable.
   @pod_state_key :pod
 
-  @spec pod_plugin_instance(module()) ::
-          {:ok, PluginInstance.t() | SliceInstance.t()} | {:error, term()}
-  def pod_plugin_instance(agent_module) when is_atom(agent_module) do
-    instances =
-      AgentInfo.plugin_instances(agent_module) ++ AgentInfo.slice_instances(agent_module)
-
-    case Enum.find(instances, &(&1.path == @pod_state_key)) do
+  @spec pod_slice_instance(module()) ::
+          {:ok, SliceInstance.t()} | {:error, term()}
+  def pod_slice_instance(agent_module) when is_atom(agent_module) do
+    case Enum.find(AgentInfo.slice_instances(agent_module), &(&1.path == @pod_state_key)) do
       %_{} = instance ->
         {:ok, instance}
 
       nil ->
         {:error,
          Jido.Error.validation_error(
-           "#{inspect(agent_module)} is missing the reserved #{@pod_state_key} plugin instance."
+           "#{inspect(agent_module)} is missing the reserved #{@pod_state_key} slice instance."
          )}
     end
   end
@@ -38,15 +34,15 @@ defmodule Jido.Slices.Pod.TopologyState do
   def fetch_state(%State{agent: agent}), do: fetch_state(agent)
 
   def fetch_state(%Agent{agent_module: agent_module, state: state}) when is_map(state) do
-    with {:ok, instance} <- pod_plugin_instance(agent_module) do
+    with {:ok, instance} <- pod_slice_instance(agent_module) do
       case Map.get(state, instance.path) do
-        plugin_state when is_map(plugin_state) ->
-          {:ok, plugin_state}
+        slice_state when is_map(slice_state) ->
+          {:ok, slice_state}
 
         other ->
           {:error,
            Jido.Error.validation_error(
-             "Pod plugin state is missing or malformed.",
+             "Pod slice state is missing or malformed.",
              details: %{path: instance.path, value: other}
            )}
       end
@@ -73,8 +69,8 @@ defmodule Jido.Slices.Pod.TopologyState do
   def fetch_topology(%State{agent: agent}), do: fetch_topology(agent)
 
   def fetch_topology(%Agent{} = agent) do
-    with {:ok, plugin_state} <- fetch_state(agent) do
-      extract_topology(plugin_state)
+    with {:ok, slice_state} <- fetch_state(agent) do
+      extract_topology(slice_state)
     end
   end
 
@@ -94,7 +90,7 @@ defmodule Jido.Slices.Pod.TopologyState do
   @spec put_topology(Agent.t(), Topology.t()) :: {:ok, Agent.t()} | {:error, term()}
   def put_topology(%Agent{} = agent, %Topology{} = topology) do
     with {:ok, current_topology} <- fetch_topology(agent),
-         {:ok, instance} <- pod_plugin_instance(agent.agent_module),
+         {:ok, instance} <- pod_slice_instance(agent.agent_module),
          {:ok, pod_state} <- fetch_state(agent) do
       normalized_topology = normalize_updated_topology(current_topology, topology)
       {:ok, persist_topology(agent, instance.path, pod_state, normalized_topology)}
@@ -109,7 +105,7 @@ defmodule Jido.Slices.Pod.TopologyState do
   def update_topology(%Agent{} = agent, fun) when is_function(fun, 1) do
     with {:ok, topology} <- fetch_topology(agent),
          {:ok, new_topology} <- normalize_topology_update(fun.(topology)),
-         {:ok, instance} <- pod_plugin_instance(agent.agent_module),
+         {:ok, instance} <- pod_slice_instance(agent.agent_module),
          {:ok, pod_state} <- fetch_state(agent) do
       normalized_topology = normalize_updated_topology(topology, new_topology)
       {:ok, persist_topology(agent, instance.path, pod_state, normalized_topology)}
@@ -128,11 +124,11 @@ defmodule Jido.Slices.Pod.TopologyState do
 
   defp extract_topology(%{topology: %Topology{} = topology}), do: {:ok, topology}
 
-  defp extract_topology(plugin_state) do
+  defp extract_topology(slice_state) do
     {:error,
      Jido.Error.validation_error(
-       "Pod plugin state does not contain a valid topology snapshot.",
-       details: %{state: plugin_state}
+       "Pod slice state does not contain a valid topology snapshot.",
+       details: %{state: slice_state}
      )}
   end
 

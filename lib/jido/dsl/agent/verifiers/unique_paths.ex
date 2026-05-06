@@ -1,8 +1,8 @@
 defmodule Jido.Dsl.Agent.Verifiers.UniquePaths do
   @moduledoc """
-  Asserts that the agent's own slice path and every plugin / slice path
-  are unique. Raises a `Spark.Error.DslError` listing the duplicated
-  paths at compile time.
+  Asserts that the agent's own slice path and every slice path are
+  unique. Raises a `Spark.Error.DslError` listing the duplicated paths
+  at compile time.
   """
 
   use Spark.Dsl.Verifier
@@ -12,11 +12,10 @@ defmodule Jido.Dsl.Agent.Verifiers.UniquePaths do
   @impl Spark.Dsl.Verifier
   def verify(dsl_state) do
     own_path = Verifier.get_option(dsl_state, [:agent], :path)
-    plugin_paths = Verifier.get_persisted(dsl_state, :plugin_paths) || []
     slice_paths = Verifier.get_persisted(dsl_state, :slice_paths) || []
 
     all_paths =
-      [own_path | plugin_paths ++ slice_paths]
+      [own_path | slice_paths]
       |> Enum.reject(&is_nil/1)
 
     duplicates = all_paths -- Enum.uniq(all_paths)

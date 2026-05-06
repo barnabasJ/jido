@@ -4,7 +4,6 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   produces the runtime instance lists agent introspection consumes:
 
     * `:slice_instances` — bare-slice mounts (`use Jido.Slice` modules).
-    * `:plugin_instances` — plugin mounts (`use Jido.Plugin` modules).
     * `:middleware_list` — ordered middleware (from `middleware: […]`).
     * `:slice_paths_for_action` — compile-time lookup
       `%{action_module => [mount_path, …]}` so `cmd/2` can fan an
@@ -15,8 +14,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
       agent's own routes fans out across all of them).
 
   The mount path comes **from the agent's `slices do …` block**, not
-  from the slice's own DSL — slices/plugins no longer carry a `path`
-  field.
+  from the slice's own DSL — slices no longer carry a `path` field.
 
   When a slice contributes a typed DSL section to the host (the
   `Jido.Slice.Extension` host-section mechanism, e.g. `react do … end`),
@@ -27,10 +25,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   use Spark.Dsl.Transformer
 
   alias Jido.Dsl.Agent.SliceMount
-  alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
-  alias Jido.Plugin.Instance, as: PluginInstance
-  alias Jido.Plugin.Spec
   alias Jido.Slice.Instance, as: SliceInstance
   alias Spark.Dsl.Transformer
 
@@ -73,71 +68,44 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
     user_middleware = Transformer.get_persisted(dsl_state, :jido_user_middleware, [])
     default_slice_list = resolve_default_slices(dsl_state)
 
-    classified_user = Enum.map(user_mounts, &classify_mount(&1, dsl_state))
-
-    plugin_instances_from_user = collect(classified_user, :plugin)
-    slice_instances_from_user = collect(classified_user, :slice)
+    slice_instances_from_user = Enum.map(user_mounts, &classify_mount(&1, dsl_state))
 
     default_slice_instances =
       Enum.map(default_slice_list, &normalize_default_slice/1)
 
-    plugin_instances = plugin_instances_from_user
     slice_instances = default_slice_instances ++ slice_instances_from_user
 
     middleware_list = Enum.map(user_middleware, &normalize_middleware!/1)
-
-    plugin_specs = Enum.map(plugin_instances, &build_plugin_spec/1)
 
     slice_pseudo_specs =
       Enum.map(slice_instances, fn instance ->
         %{path: instance.path, schema: SliceInfo.schema(instance.module)}
       end)
 
-    plugin_paths = Enum.map(plugin_instances, & &1.path)
     slice_paths = Enum.map(slice_instances, & &1.path)
 
     plugin_actions =
-      ((plugin_specs |> Enum.flat_map(& &1.actions)) ++
-         (slice_instances |> Enum.flat_map(fn inst -> SliceInfo.actions(inst.module) end)))
+      slice_instances
+      |> Enum.flat_map(fn inst -> SliceInfo.actions(inst.module) end)
       |> Enum.uniq()
 
     agent_path = Spark.Dsl.Extension.get_opt(dsl_state, [:agent], :path)
     agent_routes = Transformer.get_entities(dsl_state, [:signal_routes])
 
     slice_paths_for_action =
-      build_action_path_table(plugin_instances, slice_instances, agent_routes, agent_path)
+      build_action_path_table(slice_instances, agent_routes, agent_path)
 
     dsl_state =
       dsl_state
-      |> Transformer.persist(:plugin_instances, plugin_instances)
       |> Transformer.persist(:slice_instances, slice_instances)
       |> Transformer.persist(:middleware_list, middleware_list)
-      |> Transformer.persist(:plugin_specs, plugin_specs)
       |> Transformer.persist(:slice_pseudo_specs, slice_pseudo_specs)
-      |> Transformer.persist(:plugin_paths, plugin_paths)
       |> Transformer.persist(:slice_paths, slice_paths)
       |> Transformer.persist(:plugin_actions, plugin_actions)
       |> Transformer.persist(:slice_paths_for_action, slice_paths_for_action)
       |> Transformer.persist(:default_slice_list, default_slice_list)
 
     {:ok, dsl_state}
-  end
-
-  defp build_plugin_spec(%PluginInstance{module: module, config: config, path: path}) do
-    %Spec{
-      module: module,
-      name: PluginInfo.name(module),
-      path: path,
-      description: PluginInfo.description(module),
-      category: PluginInfo.category(module),
-      vsn: PluginInfo.vsn(module),
-      schema: PluginInfo.schema(module),
-      config_schema: PluginInfo.config_schema(module),
-      config: config,
-      signal_patterns: [],
-      tags: PluginInfo.tags(module),
-      actions: PluginInfo.actions(module)
-    }
   end
 
   defp resolve_default_slices(dsl_state) do
@@ -165,7 +133,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   defp normalize_middleware!(module) when is_atom(module) do
     ensure_module_loaded!(module)
 
-    if middleware_eligible?(module) do
+    if behaves_as_middleware?(module) do
       {module, %{}}
     else
       raise CompileError,
@@ -179,7 +147,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   defp normalize_middleware!({module, opts}) when is_atom(module) do
     ensure_module_loaded!(module)
 
-    if middleware_eligible?(module) do
+    if behaves_as_middleware?(module) do
       {module, normalize_to_map(opts)}
     else
       raise CompileError,
@@ -196,43 +164,20 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
         "Invalid middleware entry: #{inspect(other)}. Expected a module or `{Module, opts}`."
   end
 
-  # A module is middleware-eligible if it explicitly declares the
-  # behaviour OR is a `use Jido.Plugin` module (which adds the
-  # behaviour via `handle_opts/1`).
-  defp middleware_eligible?(module) do
-    Spark.Dsl.is?(module, Jido.Plugin) or behaves_as_middleware?(module)
-  end
-
-  defp collect(classified, kind) do
-    classified
-    |> Enum.flat_map(fn
-      {^kind, value} -> [value]
-      _ -> []
-    end)
-  end
-
   defp classify_mount(%SliceMount{path: path, module: module, options: options}, dsl_state) do
     ensure_module_loaded!(module)
 
-    plugin? = Spark.Dsl.is?(module, Jido.Plugin)
-    slice? = Spark.Dsl.is?(module, Jido.Slice)
-
-    if not (plugin? or slice?) do
+    unless Spark.Dsl.is?(module, Jido.Slice) do
       raise CompileError,
         description:
-          "Module #{inspect(module)} mounted in `slices do …` is neither a " <>
-            "`use Jido.Slice` nor a `use Jido.Plugin` module. " <>
-            "Did you forget the `use` line?"
+          "Module #{inspect(module)} mounted in `slices do …` is not a " <>
+            "`use Jido.Slice` module. Did you forget the `use` line?"
     end
 
     block_config = read_contributed_block(module, dsl_state)
     config = Map.merge(normalize_to_map(options), block_config)
 
-    if plugin? do
-      {:plugin, PluginInstance.new({module, config}, path)}
-    else
-      {:slice, SliceInstance.new({module, config}, path)}
-    end
+    SliceInstance.new({module, config}, path)
   end
 
   defp read_contributed_block(module, dsl_state) do
@@ -273,14 +218,11 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   defp normalize_to_map(opts) when is_map(opts), do: opts
   defp normalize_to_map(opts) when is_list(opts), do: Map.new(opts)
 
-  defp build_action_path_table(plugin_instances, slice_instances, agent_routes, agent_path) do
+  defp build_action_path_table(slice_instances, agent_routes, agent_path) do
     pairs =
-      Enum.flat_map(plugin_instances, fn %PluginInstance{module: module, path: path} ->
+      Enum.flat_map(slice_instances, fn %SliceInstance{module: module, path: path} ->
         Enum.map(SliceInfo.actions(module), &{&1, path})
       end) ++
-        Enum.flat_map(slice_instances, fn %SliceInstance{module: module, path: path} ->
-          Enum.map(SliceInfo.actions(module), &{&1, path})
-        end) ++
         agent_route_pairs(agent_routes, agent_path)
 
     pairs

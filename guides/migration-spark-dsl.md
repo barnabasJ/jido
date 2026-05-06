@@ -1,18 +1,27 @@
 # Migrating to the Spark DSL
 
-This guide walks through migrating an out-of-tree Jido codebase to the
-sectioned **Spark DSL** surface that Jido ships today.
+This guide walks through migrating an out-of-tree Jido codebase to the sectioned
+**Spark DSL** surface that Jido ships today.
+
+> ## Update — ADR 0028: `Jido.Plugin` retired
+>
+> The Plugin tier (Slice + Middleware combo in one module) was removed in v3.
+> References below to `use Jido.Plugin` are historical — for any module that
+> needs both a Slice and a Middleware half, declare `use Jido.Slice` and
+> `@behaviour Jido.Middleware` on the same module and register it in both the
+> agent's `slices do … end` block AND its `middleware: […]` keyword. See the
+> [Migrating from `Jido.Plugin`](migration.md#migrating-from-jidoplugin-adr-0028)
+> section in the v1 → v2 migration guide for the full recipe.
 
 > ## Update — task 0053: `slices do … end` block
 >
-> Slice/plugin enumeration moved out of the `extensions: […]` flat list
-> and into a typed `slices do slice :path, Module end` block on the
-> agent. Middleware moved to a top-level `middleware: […]` opt on
-> `use Jido.Agent` (ordering matters and a flat ordered list is the
-> right shape). The `extensions: […]` keyword stays available for
-> modules that contribute a typed DSL section to the host (e.g.
-> `Jido.Slices.AiReact` to unlock `react do … end`) — it is no longer the
-> channel for slice/plugin enumeration.
+> Slice/plugin enumeration moved out of the `extensions: […]` flat list and into
+> a typed `slices do slice :path, Module end` block on the agent. Middleware
+> moved to a top-level `middleware: […]` opt on `use Jido.Agent` (ordering
+> matters and a flat ordered list is the right shape). The `extensions: […]`
+> keyword stays available for modules that contribute a typed DSL section to the
+> host (e.g. `Jido.Slices.AiReact` to unlock `react do … end`) — it is no longer
+> the channel for slice/plugin enumeration.
 >
 > ```elixir
 > # Before:
@@ -33,22 +42,20 @@ sectioned **Spark DSL** surface that Jido ships today.
 > end
 > ```
 >
-> Action modules no longer carry a `path :foo` field. The slice path
-> for an action's return value is now resolved through a compile-time
-> lookup table built from each slice's `signal_routes` — i.e. "the
-> slice whose route points at this action owns its return value."
-> Slices and plugins still declare an optional `path :foo` field on
-> their own DSL, but the agent's `slices do …` mount path always
-> wins. Most slices should omit the field entirely.
+> Action modules no longer carry a `path :foo` field. The slice path for an
+> action's return value is now resolved through a compile-time lookup table
+> built from each slice's `signal_routes` — i.e. "the slice whose route points
+> at this action owns its return value." Slices and plugins still declare an
+> optional `path :foo` field on their own DSL, but the agent's `slices do …`
+> mount path always wins. Most slices should omit the field entirely.
 >
-> The rest of this guide describes the original keyword-list →
-> Spark migration; pair it with the `slices do …` shape above.
+> The rest of this guide describes the original keyword-list → Spark migration;
+> pair it with the `slices do …` shape above.
 
 ## Why we're migrating
 
-The agent / slice / plugin / middleware / action / sensor / pod surfaces
-used to be defined by a hand-rolled `__using__` macro that took a long
-keyword list:
+The agent / slice / plugin / middleware / action / sensor / pod surfaces used to
+be defined by a hand-rolled `__using__` macro that took a long keyword list:
 
 ```elixir
 use Jido.Agent,
@@ -63,28 +70,26 @@ use Jido.Agent,
 ```
 
 Jido now defines those same surfaces with **Spark**. Each surface owns a
-`Spark.Dsl.Extension` module under `Jido.Dsl.<Kind>`, exposing one or
-more typed sections (`agent do … end`, `signal_routes do … end`,
-`pod do topology … end`, …). Introspection lives in per-DSL Info
-modules (`Jido.Dsl.<Kind>.Info`), generated from the same section
-definitions. The single ordered `extensions: [...]` keyword on
-`use Jido.Agent` replaces the old `slices:` / `plugins:` /
-`middleware:` triple.
+`Spark.Dsl.Extension` module under `Jido.Dsl.<Kind>`, exposing one or more typed
+sections (`agent do … end`, `signal_routes do … end`, `pod do topology … end`,
+…). Introspection lives in per-DSL Info modules (`Jido.Dsl.<Kind>.Info`),
+generated from the same section definitions. The single ordered
+`extensions: [...]` keyword on `use Jido.Agent` replaces the old `slices:` /
+`plugins:` / `middleware:` triple.
 
-ADR 0023 (`guides/adr/0023-spark-dsl-and-registerable-extensions.md`)
-captures the rationale: a typed compile-time surface with built-in cheat sheets,
-formatter integration, IDE autocompletion, and a single ordered list
-with a deterministic walker that classifies entries by their DSL.
+ADR 0023 (`guides/adr/0023-spark-dsl-and-registerable-extensions.md`) captures
+the rationale: a typed compile-time surface with built-in cheat sheets,
+formatter integration, IDE autocompletion, and a single ordered list with a
+deterministic walker that classifies entries by their DSL.
 
-The conversion is **mechanical**. There's no semantic change — `cmd/2`,
-`set/2`, `validate/2`, `signal_routes/0`, `actions/0`, etc. all return
-the same shapes they did before. The migration is just shape: keyword
-list → sectioned DSL.
+The conversion is **mechanical**. There's no semantic change — `cmd/2`, `set/2`,
+`validate/2`, `signal_routes/0`, `actions/0`, etc. all return the same shapes
+they did before. The migration is just shape: keyword list → sectioned DSL.
 
 ## One agent module migration
 
-Take a hypothetical agent that mounts the Memory slice and a few
-framework defaults. We'll use `MyApp.SupportAgent` as the example.
+Take a hypothetical agent that mounts the Memory slice and a few framework
+defaults. We'll use `MyApp.SupportAgent` as the example.
 
 ### Before (keyword form)
 
@@ -131,31 +136,30 @@ end
 
 ### What moved where
 
-| Old keyword | New section/field |
-|---|---|
-| `name:` | `agent do name "…" end` |
-| `description:`, `category:`, `tags:`, `vsn:` | `agent do … end` metadata fields |
-| `path:` | `agent do path :foo end` |
-| `schema:` | `agent do schema [...] end` (NimbleOptions) or `schema Zoi.object(...)` |
-| `slices:`, `plugins:`, `middleware:` | merged into `extensions: [...]` on `use Jido.Agent` |
-| `signal_routes:` | `signal_routes do route "type", Action end` |
-| `schedules:` | `schedules do schedule "cron", "signal.type" end` |
+| Old keyword                                  | New section/field                                                       |
+| -------------------------------------------- | ----------------------------------------------------------------------- |
+| `name:`                                      | `agent do name "…" end`                                                 |
+| `description:`, `category:`, `tags:`, `vsn:` | `agent do … end` metadata fields                                        |
+| `path:`                                      | `agent do path :foo end`                                                |
+| `schema:`                                    | `agent do schema [...] end` (NimbleOptions) or `schema Zoi.object(...)` |
+| `slices:`, `plugins:`, `middleware:`         | merged into `extensions: [...]` on `use Jido.Agent`                     |
+| `signal_routes:`                             | `signal_routes do route "type", Action end`                             |
+| `schedules:`                                 | `schedules do schedule "cron", "signal.type" end`                       |
 
-The `extensions: […]` list is **single, ordered, classified by the
-walker**. The compile-time `WalkExtensions` transformer inspects each
-entry — `Spark.Dsl.is?(mod, Jido.Plugin)` for plugins,
-`Spark.Dsl.is?(mod, Jido.Slice)` for slices,
-`Jido.Middleware` behaviour for middleware — and produces the same
-internal `slices` / `plugins` / `middleware` lists today's runtime
-reads via `Jido.Dsl.Agent.Info`.
+The `extensions: […]` list is **single, ordered, classified by the walker**. The
+compile-time `WalkExtensions` transformer inspects each entry —
+`Spark.Dsl.is?(mod, Jido.Plugin)` for plugins, `Spark.Dsl.is?(mod, Jido.Slice)`
+for slices, `Jido.Middleware` behaviour for middleware — and produces the same
+internal `slices` / `plugins` / `middleware` lists today's runtime reads via
+`Jido.Dsl.Agent.Info`.
 
 ### Reading the migrated agent
 
 Anything that used to read `MyAgent.slices/0`, `MyAgent.plugins/0`,
-`MyAgent.middleware/0`, `MyAgent.signal_routes/0`, etc. continues to
-work — those public accessors still exist and read from the Spark
-DSL state. The canonical introspection path for new code is
-`Jido.Dsl.Agent.Info` (or `Jido.Dsl.Slice.Info` for slices, etc.):
+`MyAgent.middleware/0`, `MyAgent.signal_routes/0`, etc. continues to work —
+those public accessors still exist and read from the Spark DSL state. The
+canonical introspection path for new code is `Jido.Dsl.Agent.Info` (or
+`Jido.Dsl.Slice.Info` for slices, etc.):
 
 ```elixir
 alias Jido.Dsl.Agent.Info
@@ -172,8 +176,8 @@ Info.signal_routes(MyApp.SupportAgent)
 
 ## One slice module migration
 
-`Jido.Slices.Memory` is a working in-tree slice — declares a name, path,
-schema, routes, and capabilities.
+`Jido.Slices.Memory` is a working in-tree slice — declares a name, path, schema,
+routes, and capabilities.
 
 ### Before
 
@@ -226,17 +230,17 @@ end
 
 ### Notes
 
-- **`slice do … end`** is required — a slice without `name` and `path`
-  fails Spark verification at compile time.
-- **`signal_routes do … end`** is required for slices: per
-  task 0039 (`guides/tasks/0039-slices-must-declare-schema-and-routes.md`), every
-  slice must declare at least one route, otherwise it's pure data with no
-  way to participate in the signal pipeline.
-- **`capabilities`, `requires`, `subscriptions`, `schedules`** are each
-  their own optional section.
-- **`config_schema` vs `schema`**: `schema` validates the slice's *runtime
-  state*; `config_schema` validates the per-host configuration map (the
-  second tuple element in `{Slice, %{...}}`).
+- **`slice do … end`** is required — a slice without `name` and `path` fails
+  Spark verification at compile time.
+- **`signal_routes do … end`** is required for slices: per task 0039
+  (`guides/tasks/0039-slices-must-declare-schema-and-routes.md`), every slice
+  must declare at least one route, otherwise it's pure data with no way to
+  participate in the signal pipeline.
+- **`capabilities`, `requires`, `subscriptions`, `schedules`** are each their
+  own optional section.
+- **`config_schema` vs `schema`**: `schema` validates the slice's _runtime
+  state_; `config_schema` validates the per-host configuration map (the second
+  tuple element in `{Slice, %{...}}`).
 
 ## One plugin module migration
 
@@ -300,18 +304,16 @@ end
 ```
 
 `use Jido.Plugin` exposes the slice DSL's six sections (`slice`,
-`signal_routes`, `subscriptions`, `schedules`, `capabilities`,
-`requires`) plus the `Jido.Middleware` `@behaviour`. Implement
-`on_signal/4` if the plugin actually wraps the pipeline; if it doesn't,
-prefer `use Jido.Slice` instead.
+`signal_routes`, `subscriptions`, `schedules`, `capabilities`, `requires`) plus
+the `Jido.Middleware` `@behaviour`. Implement `on_signal/4` if the plugin
+actually wraps the pipeline; if it doesn't, prefer `use Jido.Slice` instead.
 
 ## The `extensions: [...]` opt-in
 
-The agent's `extensions: […]` keyword is the single ordered registration
-list. Each entry can be a **bare module**, a **`{module, config_map}`
-tuple**, or — when the slice opts into the contribution mechanism — a
-bare module whose typed configuration block lives directly on the host
-agent.
+The agent's `extensions: […]` keyword is the single ordered registration list.
+Each entry can be a **bare module**, a **`{module, config_map}` tuple**, or —
+when the slice opts into the contribution mechanism — a bare module whose typed
+configuration block lives directly on the host agent.
 
 ### Mode 1 — `extensions: [Mod]` (no per-host config needed)
 
@@ -325,9 +327,8 @@ agent do
 end
 ```
 
-Identity slice has empty `config_schema/0`, so the bare module form
-suffices. Schema defaults seed `agent.state[:identity]` at
-`Jido.Agent.new/1`.
+Identity slice has empty `config_schema/0`, so the bare module form suffices.
+Schema defaults seed `agent.state[:identity]` at `Jido.Agent.new/1`.
 
 ### Mode 2 — `extensions: [{Mod, %{...}}]` (per-host config)
 
@@ -340,13 +341,13 @@ use Jido.Agent, extensions: [
 ]
 ```
 
-The map is validated against the slice's `config_schema` and
-shallow-merged on top of the slice's schema defaults at `new/1` time.
+The map is validated against the slice's `config_schema` and shallow-merged on
+top of the slice's schema defaults at `new/1` time.
 
 ### Mode 3 — typed contribution block
 
-When the slice opts in via `use Jido.Slice.Extension, host_section: :foo`,
-the host gets a typed `foo do … end` block on the agent itself:
+When the slice opts in via `use Jido.Slice.Extension, host_section: :foo`, the
+host gets a typed `foo do … end` block on the agent itself:
 
 ```elixir
 defmodule Jido.Slices.AiReact do
@@ -386,26 +387,26 @@ defmodule MyApp.LLMAgent do
 end
 ```
 
-The contribution mechanism gets you compile-time validation of the
-config map plus ExDoc-rendered docs for the contributed section under
-the agent's reference page.
+The contribution mechanism gets you compile-time validation of the config map
+plus ExDoc-rendered docs for the contributed section under the agent's reference
+page.
 
 ### When to use which
 
-| Need | Pattern |
-|---|---|
-| Slice has no per-host config (`config_schema: nil` or empty) | Mode 1 — bare module |
-| Slice has `config_schema/0` and only one or two host overrides | Mode 2 — `{Mod, %{...}}` tuple |
+| Need                                                                            | Pattern                                        |
+| ------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Slice has no per-host config (`config_schema: nil` or empty)                    | Mode 1 — bare module                           |
+| Slice has `config_schema/0` and only one or two host overrides                  | Mode 2 — `{Mod, %{...}}` tuple                 |
 | Slice has a richer config + you want compile-time validation + IDE autocomplete | Mode 3 — `host_section: :foo` + `foo do … end` |
 
-The third mode is preferred for first-party extensions you ship as part
-of an opinionated stack (`Jido.Slices.AiReact`, `Jido.Slices.Memory`,
+The third mode is preferred for first-party extensions you ship as part of an
+opinionated stack (`Jido.Slices.AiReact`, `Jido.Slices.Memory`,
 `Jido.Slices.Identity`), since it produces the cleanest call sites.
 
 ### Renaming the mount path on a host
 
-A contributed section gets a built-in `path:` field that lets the host
-rename where the slice lives in `agent.state`:
+A contributed section gets a built-in `path:` field that lets the host rename
+where the slice lives in `agent.state`:
 
 ```elixir
 react do
@@ -415,15 +416,15 @@ end
 ```
 
 Now the slice's runtime data lives at `agent.state.ai_state` instead of
-`agent.state.react`. Useful when you need two instances of the same
-slice (different paths) on one agent.
+`agent.state.react`. Useful when you need two instances of the same slice
+(different paths) on one agent.
 
 ## Common pitfalls
 
 ### Keyword `do:` blocks vs `do … end` blocks
 
-Spark sections expect block form, not keyword form. Both compile, but
-the keyword form is harder to read with multi-line content:
+Spark sections expect block form, not keyword form. Both compile, but the
+keyword form is harder to read with multi-line content:
 
 ```elixir
 # Works but cramped:
@@ -437,15 +438,15 @@ agent do
 end
 ```
 
-The formatter (with the `Spark.Formatter` plugin) auto-strips parentheses
-around section / entity / option calls — so `name "x"` reads naturally
-without needing `name("x")`.
+The formatter (with the `Spark.Formatter` plugin) auto-strips parentheses around
+section / entity / option calls — so `name "x"` reads naturally without needing
+`name("x")`.
 
 ### NimbleOptions-shaped section schemas vs Zoi-shaped runtime schemas
 
-Each Spark `Section` has its own NimbleOptions schema validating the
-section block at compile time. That's a different shape from the
-runtime schema you can declare *inside* the section.
+Each Spark `Section` has its own NimbleOptions schema validating the section
+block at compile time. That's a different shape from the runtime schema you can
+declare _inside_ the section.
 
 ```elixir
 agent do
@@ -460,29 +461,28 @@ agent do
 end
 ```
 
-Both schemas exist; they just validate at different layers. If you get
-a `Spark.Options.ValidationError` at compile time, you're misnaming a
-section field. If you get a Zoi or NimbleOptions error at runtime,
-your `state:` doesn't match the runtime schema.
+Both schemas exist; they just validate at different layers. If you get a
+`Spark.Options.ValidationError` at compile time, you're misnaming a section
+field. If you get a Zoi or NimbleOptions error at runtime, your `state:` doesn't
+match the runtime schema.
 
 ### Formatter quirks — `:locals_without_parens`
 
-`mix spark.formatter --extensions Jido.Dsl.Agent,Jido.Dsl.Slice,…`
-regenerates `.formatter.exs` with the right `:locals_without_parens`
-list. Run it after introducing a new DSL section or entity, otherwise
-`mix format` will add parentheses around your `name "x"` calls.
+`mix spark.formatter --extensions Jido.Dsl.Agent,Jido.Dsl.Slice,…` regenerates
+`.formatter.exs` with the right `:locals_without_parens` list. Run it after
+introducing a new DSL section or entity, otherwise `mix format` will add
+parentheses around your `name "x"` calls.
 
-For a Jido project consuming the framework, this regeneration usually
-isn't needed — the framework's exported `:locals_without_parens` flows
-in via `import_deps: [:jido]` in your project's `.formatter.exs`. If
-you're authoring a new extension, run `mix spark.formatter` against your
-own extension list.
+For a Jido project consuming the framework, this regeneration usually isn't
+needed — the framework's exported `:locals_without_parens` flows in via
+`import_deps: [:jido]` in your project's `.formatter.exs`. If you're authoring a
+new extension, run `mix spark.formatter` against your own extension list.
 
 ### `extensions: […]` order matters
 
-The walker classifies and registers entries left-to-right, so middleware
-order on the chain follows declaration order. If `RetryMiddleware`
-should wrap `PersisterMiddleware`, list `Retry` first.
+The walker classifies and registers entries left-to-right, so middleware order
+on the chain follows declaration order. If `RetryMiddleware` should wrap
+`PersisterMiddleware`, list `Retry` first.
 
 ### `path` must be unique across all extensions
 
@@ -492,25 +492,25 @@ Two slices that both declare `path :counter` raise at compile time:
 ** (Spark.Error.DslError) Duplicate slice paths: [:counter]
 ```
 
-Resolve with the contribution-mechanism `path:` override (Mode 3 above)
-or by changing one of the slices.
+Resolve with the contribution-mechanism `path:` override (Mode 3 above) or by
+changing one of the slices.
 
 ### Slices must declare at least one route
 
 Per task 0039 (`guides/tasks/0039-slices-must-declare-schema-and-routes.md`), a
-slice without `signal_routes do route "…", Action end` fails Spark
-verification. A "slice" with no routes is just data the agent could
-declare in its own schema — there's no reason to put it in a separate
-module. If you're hitting this verifier, either move the data into the
-agent's `agent do schema … end` or give the slice a route.
+slice without `signal_routes do route "…", Action end` fails Spark verification.
+A "slice" with no routes is just data the agent could declare in its own schema
+— there's no reason to put it in a separate module. If you're hitting this
+verifier, either move the data into the agent's `agent do schema … end` or give
+the slice a route.
 
 ### `Pod` agents — list `Jido.Slices.Pod` in `extensions:` and mount it
 
-Pod is a regular slice + Spark extension. Listing it in `extensions:`
-opens the contributed `pod do topology … end` block; mounting it under
+Pod is a regular slice + Spark extension. Listing it in `extensions:` opens the
+contributed `pod do topology … end` block; mounting it under
 `slices do slice :pod, Jido.Slices.Pod end` wires the pod slice into agent
-state. To use a custom pod plugin, mount a different module at `:pod`
-and configure it through `options:` on the slice mount.
+state. To use a custom pod plugin, mount a different module at `:pod` and
+configure it through `options:` on the slice mount.
 
 ```elixir
 defmodule MyApp.Workspace do
@@ -535,9 +535,9 @@ end
 
 ## A clean walkthrough — `MyApp.SupportAgent`
 
-A complete copy-pasteable example combining the migration steps. Drop
-this into a fresh test file in your project; it should compile and
-demonstrate the contribution mechanism end-to-end.
+A complete copy-pasteable example combining the migration steps. Drop this into
+a fresh test file in your project; it should compile and demonstrate the
+contribution mechanism end-to-end.
 
 ```elixir
 # test/my_app/support_agent_smoke_test.exs
@@ -623,39 +623,36 @@ end
 
 ## Conversion checklist
 
-When converting an agent / slice / plugin / middleware module from the
-keyword form, work top-to-bottom:
+When converting an agent / slice / plugin / middleware module from the keyword
+form, work top-to-bottom:
 
 1. **Top of `defmodule`** — change `use Jido.X, name: "…", …` to a bare
    `use Jido.X` (or `use Jido.X, extensions: [...]` for agents that mount
    slices/plugins/middleware).
-2. **Identity fields** — fold every `name:`, `description:`, `path:`,
-   `schema:`, `config_schema:`, `category:`, `tags:`, `vsn:`, `otp_app:`
-   into the **kind-named DSL section** (`agent do`, `slice do`,
-   `action do`, `sensor do`).
+2. **Identity fields** — fold every `name:`, `description:`, `path:`, `schema:`,
+   `config_schema:`, `category:`, `tags:`, `vsn:`, `otp_app:` into the
+   **kind-named DSL section** (`agent do`, `slice do`, `action do`,
+   `sensor do`).
 3. **Routes** — move `signal_routes: [...]` into a
    `signal_routes do route "type", Action end` section.
-4. **Schedules / subscriptions / capabilities / requires** — each gets
-   its own section with `schedule "cron", "signal"` /
-   `subscription Sensor, %{}` / `capability :name` /
-   `requires :kind, :name` entries.
-5. **Plugin / slice / middleware lists** — fold all three into a single
-   ordered `extensions: [...]` list on `use Jido.Agent`.
-6. **Contributed sections** — for agents that mount slices opting into
-   the contribution mechanism, add the typed `<host_section> do … end`
-   block on the agent.
-7. **Run `mix compile --warnings-as-errors`** — Spark surfaces config
-   errors at compile time. Errors should name the offending section /
-   field clearly.
-8. **Run `mix format`** — with the `Spark.Formatter` plugin (default
-   for Jido projects via `import_deps: [:jido]`), section / entity calls
-   lose their parentheses automatically.
+4. **Schedules / subscriptions / capabilities / requires** — each gets its own
+   section with `schedule "cron", "signal"` / `subscription Sensor, %{}` /
+   `capability :name` / `requires :kind, :name` entries.
+5. **Plugin / slice / middleware lists** — fold all three into a single ordered
+   `extensions: [...]` list on `use Jido.Agent`.
+6. **Contributed sections** — for agents that mount slices opting into the
+   contribution mechanism, add the typed `<host_section> do … end` block on the
+   agent.
+7. **Run `mix compile --warnings-as-errors`** — Spark surfaces config errors at
+   compile time. Errors should name the offending section / field clearly.
+8. **Run `mix format`** — with the `Spark.Formatter` plugin (default for Jido
+   projects via `import_deps: [:jido]`), section / entity calls lose their
+   parentheses automatically.
 9. **Update introspection callsites** — replace any `module.config_schema()`,
-   `module.spec().config`, or `@xxx_config_schema` reads with the
-   canonical `Jido.Dsl.<Kind>.Info.<accessor>(module)` path.
+   `module.spec().config`, or `@xxx_config_schema` reads with the canonical
+   `Jido.Dsl.<Kind>.Info.<accessor>(module)` path.
 
-That's it. The runtime contract is unchanged; only the surface shape
-moves.
+That's it. The runtime contract is unchanged; only the surface shape moves.
 
 ## Reference
 

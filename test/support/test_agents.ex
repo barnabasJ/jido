@@ -3,8 +3,6 @@ defmodule JidoTest.TestAgents do
   Shared test agents for Jido test suite.
   """
 
-  # Ensure test actions are compiled before this module
-  # (required for compile-time validation in use Jido.Plugin)
   Code.ensure_compiled!(JidoTest.PluginTestAction)
   Code.ensure_compiled!(JidoTest.TestActions.IncrementAction)
 
@@ -98,12 +96,12 @@ defmodule JidoTest.TestAgents do
     end
   end
 
-  defmodule TestPluginWithRoutes do
+  defmodule TestSliceWithRoutes do
     @moduledoc false
-    use Jido.Plugin
+    use Jido.Slice
 
     slice do
-      name "test_routes_plugin"
+      name "test_routes_slice"
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 
@@ -113,12 +111,12 @@ defmodule JidoTest.TestAgents do
     end
   end
 
-  defmodule TestPluginWithPriority do
+  defmodule TestSliceWithPriority do
     @moduledoc false
-    use Jido.Plugin
+    use Jido.Slice
 
     slice do
-      name "priority_plugin"
+      name "priority_slice"
       schema Zoi.object(%{value: Zoi.any() |> Zoi.optional()})
     end
 
@@ -127,18 +125,16 @@ defmodule JidoTest.TestAgents do
     end
   end
 
-  defmodule AgentWithPluginRoutes do
+  defmodule AgentWithSliceRoutes do
     @moduledoc false
-    use Jido.Agent,
-      middleware: [JidoTest.TestAgents.TestPluginWithRoutes],
-      default_slices: false
+    use Jido.Agent, default_slices: false
 
     agent do
-      name "agent_with_plugin_routes"
+      name "agent_with_slice_routes"
     end
 
     slices do
-      slice(:test_routes, JidoTest.TestAgents.TestPluginWithRoutes)
+      slice(:test_routes, JidoTest.TestAgents.TestSliceWithRoutes)
     end
   end
 end

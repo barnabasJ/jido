@@ -49,15 +49,6 @@ defmodule Jido.Dsl.Agent.Info do
   @spec middleware(module()) :: [module() | {module(), map()}]
   def middleware(module), do: Extension.get_persisted(module, :middleware_list, [])
 
-  @doc "Returns the deduplicated list of plugin modules attached to this agent."
-  @spec plugins(module()) :: [module()]
-  def plugins(module) do
-    module
-    |> plugin_instances()
-    |> Enum.map(& &1.module)
-    |> Enum.uniq()
-  end
-
   @doc "Returns the deduplicated list of bare-slice modules attached to this agent."
   @spec slices(module()) :: [module()]
   def slices(module) do
@@ -67,64 +58,51 @@ defmodule Jido.Dsl.Agent.Info do
     |> Enum.uniq()
   end
 
-  @doc "Returns the list of plugin instances attached to this agent."
-  @spec plugin_instances(module()) :: [Jido.Plugin.Instance.t()]
-  def plugin_instances(module),
-    do: Extension.get_persisted(module, :plugin_instances, [])
-
   @doc "Returns the list of slice instances attached to this agent."
   @spec slice_instances(module()) :: [Jido.Slice.Instance.t()]
   def slice_instances(module),
     do: Extension.get_persisted(module, :slice_instances, [])
 
-  @doc "Returns the list of plugin specs attached to this agent."
-  @spec plugin_specs(module()) :: [Jido.Plugin.Spec.t()]
-  def plugin_specs(module),
-    do: Extension.get_persisted(module, :plugin_specs, [])
-
-  @doc "Returns the slice paths owned by attached plugins."
-  @spec plugin_paths(module()) :: [atom()]
-  def plugin_paths(module),
-    do: Extension.get_persisted(module, :plugin_paths, [])
-
-  @doc "Returns the slice paths owned by attached bare slices."
+  @doc "Returns the slice paths owned by attached slices."
   @spec slice_paths(module()) :: [atom()]
   def slice_paths(module),
     do: Extension.get_persisted(module, :slice_paths, [])
 
-  @doc "Returns the deduplicated list of action modules from all attached plugins and slices."
+  @doc "Returns the deduplicated list of action modules from all attached slices."
   @spec actions(module()) :: [module()]
   def actions(module), do: Extension.get_persisted(module, :plugin_actions, [])
 
-  @doc "Returns the union of all capabilities from all mounted instances."
+  @doc "Returns the union of all capabilities from all mounted slices."
   @spec capabilities(module()) :: [atom()]
   def capabilities(module) do
-    (plugin_instances(module) ++ slice_instances(module))
+    module
+    |> slice_instances()
     |> Enum.flat_map(fn instance ->
       Jido.Dsl.Slice.Info.capabilities(instance.module)
     end)
     |> Enum.uniq()
   end
 
-  @doc "Returns the expanded and validated plugin routes."
-  @spec plugin_routes(module()) :: [{String.t(), module(), integer()}]
-  def plugin_routes(module),
-    do: Extension.get_persisted(module, :validated_plugin_routes, [])
+  @doc "Returns the expanded and validated routes for this agent."
+  @spec routes(module()) :: [{String.t(), module(), integer()}]
+  def routes(module),
+    do: Extension.get_persisted(module, :validated_routes, [])
 
-  @doc "Returns all expanded route signal types from plugin routes."
+  @doc "Returns all expanded route signal types."
   @spec signal_types(module()) :: [String.t()]
   def signal_types(module) do
     module
-    |> plugin_routes()
+    |> routes()
     |> Enum.map(fn {signal_type, _action, _priority} -> signal_type end)
   end
 
-  @doc "Returns the expanded plugin and agent schedules."
-  @spec plugin_schedules(module()) :: [
-          Jido.Plugin.Schedules.schedule_spec() | Jido.Agent.Schedules.schedule_spec()
+  @doc "Returns the expanded slice and agent schedules."
+  @spec schedules(module()) :: [
+          Jido.Slice.Schedules.schedule_spec()
+          | Jido.Agent.Schedules.schedule_spec()
         ]
-  def plugin_schedules(module) do
-    Extension.get_persisted(module, :expanded_plugin_schedules, []) ++
+  def schedules(module) do
+    Extension.get_persisted(module, :expanded_slice_schedules, []) ++
       Extension.get_persisted(module, :expanded_agent_schedules, [])
   end
 
@@ -156,66 +134,24 @@ defmodule Jido.Dsl.Agent.Info do
     do: Extension.get_persisted(module, :mount_config_map, %{})
 
   @doc """
-  Returns the resolved configuration for a specific plugin attached to
-  the agent, or `nil` if the plugin isn't mounted.
-
-  Accepts either the plugin module (matches the un-aliased instance) or
-  `{Module, as_alias}` to disambiguate when multiple instances share the
-  same plugin module.
+  Returns the resolved configuration for a specific slice attached to
+  the agent, or `nil` if the slice isn't mounted.
   """
-  @spec plugin_config(module(), module() | {module(), atom()}) :: map() | nil
-  def plugin_config(agent_module, plugin_mod) when is_atom(plugin_mod) do
-    instances = plugin_instances(agent_module)
-
-    case Enum.find(instances, &(&1.module == plugin_mod and is_nil(&1.as))) do
-      nil ->
-        case Enum.find(instances, &(&1.module == plugin_mod)) do
-          nil -> nil
-          instance -> instance.config
-        end
-
-      instance ->
-        instance.config
-    end
-  end
-
-  def plugin_config(agent_module, {plugin_mod, as_alias})
-      when is_atom(plugin_mod) and is_atom(as_alias) do
-    case Enum.find(
-           plugin_instances(agent_module),
-           &(&1.module == plugin_mod and &1.as == as_alias)
-         ) do
+  @spec slice_config(module(), module()) :: map() | nil
+  def slice_config(agent_module, slice_mod) when is_atom(slice_mod) do
+    case Enum.find(slice_instances(agent_module), &(&1.module == slice_mod)) do
       nil -> nil
       instance -> instance.config
     end
   end
 
   @doc """
-  Returns the slice of `agent.state` owned by a specific plugin
-  attached to the agent's module, or `nil` if the plugin isn't mounted.
+  Returns the slice of `agent.state` owned by a specific slice
+  attached to the agent's module, or `nil` if the slice isn't mounted.
   """
-  @spec plugin_state(module(), Jido.Agent.t(), module() | {module(), atom()}) :: map() | nil
-  def plugin_state(agent_module, agent, plugin_mod) when is_atom(plugin_mod) do
-    instances = plugin_instances(agent_module)
-
-    case Enum.find(instances, &(&1.module == plugin_mod and is_nil(&1.as))) do
-      nil ->
-        case Enum.find(instances, &(&1.module == plugin_mod)) do
-          nil -> nil
-          instance -> Map.get(agent.state, instance.path)
-        end
-
-      instance ->
-        Map.get(agent.state, instance.path)
-    end
-  end
-
-  def plugin_state(agent_module, agent, {plugin_mod, as_alias})
-      when is_atom(plugin_mod) and is_atom(as_alias) do
-    case Enum.find(
-           plugin_instances(agent_module),
-           &(&1.module == plugin_mod and &1.as == as_alias)
-         ) do
+  @spec slice_state(module(), Jido.Agent.t(), module()) :: map() | nil
+  def slice_state(agent_module, agent, slice_mod) when is_atom(slice_mod) do
+    case Enum.find(slice_instances(agent_module), &(&1.module == slice_mod)) do
       nil -> nil
       instance -> Map.get(agent.state, instance.path)
     end

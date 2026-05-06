@@ -1096,12 +1096,13 @@ defmodule JidoTest.AgentServerTest do
       def run(_signal, _slice, _opts, _ctx), do: {:ok, %{scheduled: true}, []}
     end
 
-    defmodule ScheduledPlugin do
+    defmodule ScheduledSlice do
       @moduledoc false
-      use Jido.Plugin
+      use Jido.Slice
 
       slice do
-        name "scheduled_plugin"
+        name "scheduled_slice"
+        schema Zoi.object(%{})
       end
 
       schedules do
@@ -1109,27 +1110,26 @@ defmodule JidoTest.AgentServerTest do
       end
     end
 
-    defmodule AgentWithScheduledPlugin do
+    defmodule AgentWithScheduledSlice do
       @moduledoc false
-      use Jido.Agent,
-        middleware: [ScheduledPlugin]
+      use Jido.Agent
 
       agent do
-        name "agent_with_scheduled_plugin"
+        name "agent_with_scheduled_slice"
       end
 
       slices do
-        slice(:scheduled_plugin, ScheduledPlugin)
+        slice(:scheduled_slice, ScheduledSlice)
       end
     end
 
-    test "registers plugin schedules on startup", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent_module: AgentWithScheduledPlugin, jido: jido)
+    test "registers slice schedules on startup", %{jido: jido} do
+      {:ok, pid} = AgentServer.start_link(agent_module: AgentWithScheduledSlice, jido: jido)
       {:ok, cron_jobs} = AgentServer.state(pid, fn s -> {:ok, s.cron_jobs} end)
 
       assert map_size(cron_jobs) == 1
 
-      job_id = {:plugin_schedule, :scheduled_plugin, ScheduledAction}
+      job_id = {:slice_schedule, :scheduled_slice, ScheduledAction}
       assert Map.has_key?(cron_jobs, job_id)
 
       cron_pid = Map.get(cron_jobs, job_id)
@@ -1142,7 +1142,7 @@ defmodule JidoTest.AgentServerTest do
     test "skips schedules when skip_schedules option is true", %{jido: jido} do
       {:ok, pid} =
         AgentServer.start_link(
-          agent_module: AgentWithScheduledPlugin,
+          agent_module: AgentWithScheduledSlice,
           jido: jido,
           skip_schedules: true
         )
@@ -1155,10 +1155,10 @@ defmodule JidoTest.AgentServerTest do
     end
 
     test "cleans up cron jobs on termination", %{jido: jido} do
-      {:ok, pid} = AgentServer.start_link(agent_module: AgentWithScheduledPlugin, jido: jido)
+      {:ok, pid} = AgentServer.start_link(agent_module: AgentWithScheduledSlice, jido: jido)
       {:ok, cron_jobs} = AgentServer.state(pid, fn s -> {:ok, s.cron_jobs} end)
 
-      job_id = {:plugin_schedule, :scheduled_plugin, ScheduledAction}
+      job_id = {:slice_schedule, :scheduled_slice, ScheduledAction}
       cron_pid = Map.get(cron_jobs, job_id)
       assert Process.alive?(cron_pid)
 
@@ -1169,19 +1169,19 @@ defmodule JidoTest.AgentServerTest do
       refute Process.alive?(cron_pid)
     end
 
-    test "agent exposes plugin_schedules/0 accessor" do
-      schedules = Jido.Dsl.Agent.Info.plugin_schedules(AgentWithScheduledPlugin)
+    test "agent exposes schedules/0 accessor" do
+      schedules = Jido.Dsl.Agent.Info.schedules(AgentWithScheduledSlice)
 
       assert length(schedules) == 1
       [spec] = schedules
       assert spec.cron_expression == "* * * * *"
       assert spec.action == ScheduledAction
-      assert spec.job_id == {:plugin_schedule, :scheduled_plugin, ScheduledAction}
-      assert spec.signal_type == "scheduled_plugin.__schedule__.scheduled_action"
+      assert spec.job_id == {:slice_schedule, :scheduled_slice, ScheduledAction}
+      assert spec.signal_type == "scheduled_slice.__schedule__.scheduled_action"
     end
 
-    test "schedule routes are included in plugin_routes/0" do
-      routes = Jido.Dsl.Agent.Info.plugin_routes(AgentWithScheduledPlugin)
+    test "schedule routes are included in routes/0" do
+      routes = Jido.Dsl.Agent.Info.routes(AgentWithScheduledSlice)
 
       schedule_route =
         Enum.find(routes, fn {signal_type, _, _} ->
@@ -1190,7 +1190,7 @@ defmodule JidoTest.AgentServerTest do
 
       assert schedule_route != nil
       {signal_type, action, priority} = schedule_route
-      assert signal_type == "scheduled_plugin.__schedule__.scheduled_action"
+      assert signal_type == "scheduled_slice.__schedule__.scheduled_action"
       assert action == ScheduledAction
       assert priority < 0
     end

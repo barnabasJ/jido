@@ -1,49 +1,36 @@
 defmodule Jido.Agent.Schema do
   @moduledoc false
-  # Utilities for merging agent and plugin schemas.
+  # Utilities for merging agent and slice schemas.
   # Handles Zoi schema introspection and merging.
 
-  alias Jido.Plugin.Spec
-
   @doc """
-  Merges the agent's base schema with plugin schemas.
+  Merges the agent's base schema with slice schemas.
 
-  Each plugin's schema is nested under its `path`.
-  Returns a Zoi object schema with base fields + plugin fields.
-
-  ## Examples
-
-      base = Zoi.object(%{mode: Zoi.atom()})
-      plugins = [%Spec{path: :calc, schema: Zoi.object(%{x: Zoi.integer()})}]
-
-      # Returns:
-      # Zoi.object(%{
-      #   mode: Zoi.atom(),
-      #   calc: Zoi.object(%{x: Zoi.integer()})
-      # })
+  Each slice's schema is nested under its `path`.
+  Returns a Zoi object schema with base fields + slice fields.
   """
-  @spec merge_with_plugins(any(), [Spec.t()]) :: any()
+  @spec merge_with_plugins(any(), [%{path: atom(), schema: term()}]) :: any()
   def merge_with_plugins(nil, []), do: nil
   def merge_with_plugins(base_schema, []), do: base_schema
 
-  def merge_with_plugins(base_schema, plugin_specs) when is_list(plugin_specs) do
-    plugin_fields =
-      plugin_specs
+  def merge_with_plugins(base_schema, slice_specs) when is_list(slice_specs) do
+    slice_fields =
+      slice_specs
       |> Enum.filter(& &1.schema)
-      |> Enum.map(fn spec -> {spec.path, plugin_field_schema(spec.schema)} end)
+      |> Enum.map(fn spec -> {spec.path, slice_field_schema(spec.schema)} end)
       |> Map.new()
 
     case base_schema do
       nil ->
-        if map_size(plugin_fields) == 0 do
+        if map_size(slice_fields) == 0 do
           nil
         else
-          Zoi.object(plugin_fields)
+          Zoi.object(slice_fields)
         end
 
       base ->
         base_fields = extract_fields(base)
-        Zoi.object(Map.merge(base_fields, plugin_fields))
+        Zoi.object(Map.merge(base_fields, slice_fields))
     end
   end
 
@@ -54,7 +41,7 @@ defmodule Jido.Agent.Schema do
   # that contract in the merged agent schema by wrapping the slice's
   # field in `Zoi.nullable/1` so state validation accepts the placeholder
   # `nil` until the slice is initialized.
-  defp plugin_field_schema(schema) do
+  defp slice_field_schema(schema) do
     case Zoi.parse(schema, %{}) do
       {:ok, _} -> schema
       {:error, _} -> Zoi.nullable(schema)

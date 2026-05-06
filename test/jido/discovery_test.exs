@@ -62,7 +62,7 @@ defmodule JidoTest.DiscoveryTest do
       assert Map.has_key?(catalog.components, :actions)
       assert Map.has_key?(catalog.components, :sensors)
       assert Map.has_key?(catalog.components, :agents)
-      assert Map.has_key?(catalog.components, :plugins)
+      assert Map.has_key?(catalog.components, :slices)
       assert Map.has_key?(catalog.components, :demos)
     end
   end
@@ -170,15 +170,15 @@ defmodule JidoTest.DiscoveryTest do
     end
   end
 
-  describe "list_plugins/1" do
-    test "returns a list of plugins" do
-      plugins = Discovery.list_plugins()
-      assert is_list(plugins)
+  describe "list_slices/1" do
+    test "returns a list of slices" do
+      slices = Discovery.list_slices()
+      assert is_list(slices)
     end
 
     test "filters by limit" do
-      plugins = Discovery.list_plugins(limit: 1)
-      assert length(plugins) <= 1
+      slices = Discovery.list_slices(limit: 1)
+      assert length(slices) <= 1
     end
   end
 
@@ -234,9 +234,9 @@ defmodule JidoTest.DiscoveryTest do
     end
   end
 
-  describe "get_plugin_by_slug/1" do
+  describe "get_slice_by_slug/1" do
     test "returns nil for non-existent slug" do
-      assert nil == Discovery.get_plugin_by_slug("nonexistent_slug_123")
+      assert nil == Discovery.get_slice_by_slug("nonexistent_slug_123")
     end
   end
 
@@ -273,7 +273,7 @@ defmodule JidoTest.DiscoveryTest do
       assert [] == Discovery.list_actions()
       assert [] == Discovery.list_sensors()
       assert [] == Discovery.list_agents()
-      assert [] == Discovery.list_plugins()
+      assert [] == Discovery.list_slices()
       assert [] == Discovery.list_demos()
 
       Discovery.refresh()
@@ -285,7 +285,7 @@ defmodule JidoTest.DiscoveryTest do
       assert nil == Discovery.get_action_by_slug("any")
       assert nil == Discovery.get_sensor_by_slug("any")
       assert nil == Discovery.get_agent_by_slug("any")
-      assert nil == Discovery.get_plugin_by_slug("any")
+      assert nil == Discovery.get_slice_by_slug("any")
       assert nil == Discovery.get_demo_by_slug("any")
 
       Discovery.refresh()

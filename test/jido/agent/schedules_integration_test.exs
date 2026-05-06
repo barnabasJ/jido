@@ -67,31 +67,31 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
   end
 
   describe "agent with schedules" do
-    test "Info.plugin_schedules/1 typespec includes plugin and agent schedule specs" do
+    test "Info.schedules/1 typespec includes slice and agent schedule specs" do
       module = Jido.Dsl.Agent.Info
       beam_path = :code.which(module) |> List.to_string()
 
       {:ok, {_module, [abstract_code: {:raw_abstract_v1, abstract_code}]}} =
         :beam_lib.chunks(String.to_charlist(beam_path), [:abstract_code])
 
-      {{:plugin_schedules, 1}, [spec]} =
+      {{:schedules, 1}, [spec]} =
         Enum.find_value(abstract_code, fn
-          {:attribute, _line, :spec, {{:plugin_schedules, 1}, _} = spec} -> spec
+          {:attribute, _line, :spec, {{:schedules, 1}, _} = spec} -> spec
           _other -> nil
         end)
 
       rendered =
-        :plugin_schedules
+        :schedules
         |> Code.Typespec.spec_to_quoted(spec)
         |> Macro.to_string()
 
-      assert String.contains?(rendered, "Jido.Plugin.Schedules.schedule_spec()")
+      assert String.contains?(rendered, "Jido.Slice.Schedules.schedule_spec()")
       assert String.contains?(rendered, "Jido.Agent.Schedules.schedule_spec()")
       assert String.contains?(rendered, "|")
     end
 
-    test "plugin_schedules/0 includes agent schedules" do
-      schedules = Jido.Dsl.Agent.Info.plugin_schedules(ScheduledAgent)
+    test "schedules/0 includes agent schedules" do
+      schedules = Jido.Dsl.Agent.Info.schedules(ScheduledAgent)
 
       agent_schedules =
         Enum.filter(schedules, fn spec ->
@@ -102,7 +102,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
     end
 
     test "agent schedules have correct job_id namespacing" do
-      schedules = Jido.Dsl.Agent.Info.plugin_schedules(ScheduledAgent)
+      schedules = Jido.Dsl.Agent.Info.schedules(ScheduledAgent)
 
       agent_schedule =
         Enum.find(schedules, fn spec ->
@@ -113,7 +113,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
     end
 
     test "agent schedules have correct signal_type" do
-      schedules = Jido.Dsl.Agent.Info.plugin_schedules(ScheduledAgent)
+      schedules = Jido.Dsl.Agent.Info.schedules(ScheduledAgent)
 
       agent_schedule =
         Enum.find(schedules, fn spec ->
@@ -123,8 +123,8 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
       assert agent_schedule.signal_type == "agent.tick"
     end
 
-    test "agent with no schedules has no agent schedules in plugin_schedules" do
-      schedules = Jido.Dsl.Agent.Info.plugin_schedules(NoScheduleAgent)
+    test "agent with no schedules has no agent schedules in schedules" do
+      schedules = Jido.Dsl.Agent.Info.schedules(NoScheduleAgent)
 
       agent_schedules =
         Enum.filter(schedules, fn spec ->
@@ -135,7 +135,7 @@ defmodule JidoTest.Agent.SchedulesIntegrationTest do
     end
 
     test "multiple schedules are all included" do
-      schedules = Jido.Dsl.Agent.Info.plugin_schedules(MultiScheduleAgent)
+      schedules = Jido.Dsl.Agent.Info.schedules(MultiScheduleAgent)
 
       agent_schedules =
         Enum.filter(schedules, fn spec ->

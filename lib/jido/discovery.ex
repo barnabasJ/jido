@@ -1,6 +1,6 @@
 defmodule Jido.Discovery do
   @moduledoc """
-  Fast, persistent catalog of Jido components (Actions, Sensors, Agents, Plugins, Demos).
+  Fast, persistent catalog of Jido components (Actions, Sensors, Agents, Slices, Demos).
 
   Discovery uses `:persistent_term` for optimal read performance. The catalog is built
   asynchronously during application startup and can be refreshed on demand.
@@ -13,7 +13,7 @@ defmodule Jido.Discovery do
   - **Actions** — `Spark.Dsl.is?(mod, Jido.Action)`
   - **Sensors** — `Spark.Dsl.is?(mod, Jido.Sensor)`
   - **Agents** — `Spark.Dsl.is?(mod, Jido.Agent)`
-  - **Plugins** — `Spark.Dsl.is?(mod, Jido.Plugin)`
+  - **Slices** — `Spark.Dsl.is?(mod, Jido.Slice)`
   - **Demos** — `__jido_demo__/0` marker (kept as a one-off; demos are
     not yet a Spark host on their own)
 
@@ -66,12 +66,12 @@ defmodule Jido.Discovery do
 
   alias Jido.Dsl.Action.Info, as: ActionInfo
   alias Jido.Dsl.Agent.Info, as: AgentInfo
-  alias Jido.Dsl.Plugin.Info, as: PluginInfo
   alias Jido.Dsl.Sensor.Info, as: SensorInfo
+  alias Jido.Dsl.Slice.Info, as: SliceInfo
 
   @catalog_key :jido_discovery_catalog
 
-  @type component_type :: :actions | :sensors | :agents | :plugins | :demos
+  @type component_type :: :actions | :sensors | :agents | :slices | :demos
   @type component_metadata :: %{
           module: module(),
           name: String.t(),
@@ -150,10 +150,10 @@ defmodule Jido.Discovery do
   def list_agents(opts \\ []), do: list(:agents, opts)
 
   @doc """
-  Lists all Plugins with optional filtering and pagination.
+  Lists all Slices with optional filtering and pagination.
   """
-  @spec list_plugins(keyword()) :: [component_metadata()]
-  def list_plugins(opts \\ []), do: list(:plugins, opts)
+  @spec list_slices(keyword()) :: [component_metadata()]
+  def list_slices(opts \\ []), do: list(:slices, opts)
 
   @doc """
   Lists all Demos with optional filtering and pagination.
@@ -182,10 +182,10 @@ defmodule Jido.Discovery do
   def get_agent_by_slug(slug), do: get_by_slug(:agents, slug)
 
   @doc """
-  Retrieves a Plugin by its slug.
+  Retrieves a Slice by its slug.
   """
-  @spec get_plugin_by_slug(String.t()) :: component_metadata() | nil
-  def get_plugin_by_slug(slug), do: get_by_slug(:plugins, slug)
+  @spec get_slice_by_slug(String.t()) :: component_metadata() | nil
+  def get_slice_by_slug(slug), do: get_by_slug(:slices, slug)
 
   @doc """
   Retrieves a Demo by its slug.
@@ -232,7 +232,7 @@ defmodule Jido.Discovery do
         actions: discover_spark_hosts(Jido.Action, &action_metadata/1),
         sensors: discover_spark_hosts(Jido.Sensor, &sensor_metadata/1),
         agents: discover_spark_hosts(Jido.Agent, &agent_metadata/1),
-        plugins: discover_spark_hosts(Jido.Plugin, &plugin_metadata/1),
+        slices: discover_spark_hosts(Jido.Slice, &slice_metadata/1),
         demos: discover_demos()
       }
     }
@@ -293,12 +293,12 @@ defmodule Jido.Discovery do
     })
   end
 
-  defp plugin_metadata(module) do
+  defp slice_metadata(module) do
     base_metadata(module, %{
-      name: PluginInfo.name(module),
-      description: PluginInfo.description(module),
-      category: PluginInfo.category(module),
-      tags: PluginInfo.tags(module)
+      name: SliceInfo.name(module),
+      description: SliceInfo.description(module),
+      category: SliceInfo.category(module),
+      tags: SliceInfo.tags(module)
     })
   end
 

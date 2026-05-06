@@ -14,66 +14,36 @@ defmodule JidoTest.Agent.SchemaTest do
       assert result == base
     end
 
-    test "nil base with plugins returns plugin fields only" do
-      plugin_spec = %Jido.Plugin.Spec{
-        module: MyPlugin,
-        name: "my_plugin",
-        path: :my_plugin,
-        schema: Zoi.object(%{count: Zoi.integer()}),
-        actions: [],
-        config: %{}
-      }
+    test "nil base with slices returns slice fields only" do
+      slice_spec = %{path: :my_slice, schema: Zoi.object(%{count: Zoi.integer()})}
 
-      result = Schema.merge_with_plugins(nil, [plugin_spec])
+      result = Schema.merge_with_plugins(nil, [slice_spec])
 
       assert result != nil
       keys = Schema.known_keys(result)
-      assert :my_plugin in keys
+      assert :my_slice in keys
     end
 
-    test "base with plugins merges both" do
+    test "base with slices merges both" do
       base = Zoi.object(%{mode: Zoi.atom()})
+      slice_spec = %{path: :slice_data, schema: Zoi.object(%{value: Zoi.integer()})}
 
-      plugin_spec = %Jido.Plugin.Spec{
-        module: MyPlugin,
-        name: "my_plugin",
-        path: :plugin_data,
-        schema: Zoi.object(%{value: Zoi.integer()}),
-        actions: [],
-        config: %{}
-      }
-
-      result = Schema.merge_with_plugins(base, [plugin_spec])
+      result = Schema.merge_with_plugins(base, [slice_spec])
 
       keys = Schema.known_keys(result)
       assert :mode in keys
-      assert :plugin_data in keys
+      assert :slice_data in keys
     end
 
-    test "filters out plugins without schema" do
-      plugin_with_schema = %Jido.Plugin.Spec{
-        module: PluginA,
-        name: "plugin_a",
-        path: :plugin_a,
-        schema: Zoi.object(%{a: Zoi.integer()}),
-        actions: [],
-        config: %{}
-      }
+    test "filters out slices without schema" do
+      slice_with_schema = %{path: :slice_a, schema: Zoi.object(%{a: Zoi.integer()})}
+      slice_without_schema = %{path: :slice_b, schema: nil}
 
-      plugin_without_schema = %Jido.Plugin.Spec{
-        module: PluginB,
-        name: "plugin_b",
-        path: :plugin_b,
-        schema: nil,
-        actions: [],
-        config: %{}
-      }
-
-      result = Schema.merge_with_plugins(nil, [plugin_with_schema, plugin_without_schema])
+      result = Schema.merge_with_plugins(nil, [slice_with_schema, slice_without_schema])
 
       keys = Schema.known_keys(result)
-      assert :plugin_a in keys
-      refute :plugin_b in keys
+      assert :slice_a in keys
+      refute :slice_b in keys
     end
   end
 

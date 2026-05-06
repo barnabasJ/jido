@@ -68,59 +68,6 @@ defmodule Jido.Igniter.Templates do
   end
 
   @doc """
-  Returns the template for a Plugin module.
-  """
-  @spec plugin_template(
-          module :: String.t(),
-          name :: String.t(),
-          path :: String.t(),
-          signal_routes :: [String.t()]
-        ) :: String.t()
-  def plugin_template(module, name, _path, signal_routes) do
-    routes_block =
-      signal_routes
-      |> Enum.map_join("\n", fn type -> "    route #{inspect(type)}, :todo" end)
-
-    """
-    defmodule #{module} do
-      use Jido.Plugin
-
-      slice do
-        name "#{name}"
-        schema Zoi.object(%{})
-      end
-
-      signal_routes do
-    #{routes_block}
-      end
-    end
-    """
-  end
-
-  @doc """
-  Returns the template for a Plugin test module.
-  """
-  @spec plugin_test_template(module :: String.t(), test_module :: String.t()) :: String.t()
-  def plugin_test_template(module, test_module) do
-    alias_name = module_alias(module)
-
-    """
-    defmodule #{test_module} do
-      use ExUnit.Case, async: true
-
-      alias Jido.Dsl.Plugin.Info, as: PluginInfo
-      alias #{module}
-
-      describe "Plugin.Info introspection" do
-        test "exposes the configured name" do
-          assert is_binary(PluginInfo.name(#{alias_name}))
-        end
-      end
-    end
-    """
-  end
-
-  @doc """
   Returns the template for a Sensor module.
   """
   @spec sensor_template(module :: String.t(), name :: String.t(), interval :: pos_integer()) ::

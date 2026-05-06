@@ -15,9 +15,9 @@ defmodule JidoTest.PodTest do
     end
   end
 
-  defmodule CustomPodPlugin do
+  defmodule CustomPodSlice do
     @moduledoc false
-    use Jido.Plugin
+    use Jido.Slice
 
     slice do
       name "custom_pod"
@@ -36,12 +36,12 @@ defmodule JidoTest.PodTest do
     end
   end
 
-  defmodule UserPlugin do
+  defmodule UserSlice do
     @moduledoc false
-    use Jido.Plugin
+    use Jido.Slice
 
     slice do
-      name "pod_test_user_plugin"
+      name "pod_test_user_slice"
       schema Zoi.object(%{})
     end
   end
@@ -79,19 +79,19 @@ defmodule JidoTest.PodTest do
     end
   end
 
-  defmodule CustomPluginPod do
+  defmodule CustomSlicePod do
     @moduledoc false
     use Jido.Agent
 
     agent do
-      name "custom_plugin_pod"
+      name "custom_slice_pod"
     end
 
     slices do
-      slice :pod, CustomPodPlugin do
+      slice :pod, CustomPodSlice do
         options(
           topology:
-            Jido.Slices.Pod.Topology.from_nodes!("custom_plugin_pod", %{
+            Jido.Slices.Pod.Topology.from_nodes!("custom_slice_pod", %{
               worker: %{agent: WorkerAgent, manager: :worker_nodes}
             })
         )
@@ -122,28 +122,28 @@ defmodule JidoTest.PodTest do
     assert {:ok, %Topology{name: "empty_pod", nodes: %{}}} = Pod.fetch_topology(agent)
   end
 
-  test "custom pod plugin can be mounted at :pod via slices block" do
-    assert Enum.any?(Jido.Dsl.Agent.Info.plugin_instances(CustomPluginPod), fn instance ->
-             instance.module == CustomPodPlugin and instance.path == :pod
+  test "custom pod slice can be mounted at :pod via slices block" do
+    assert Enum.any?(Jido.Dsl.Agent.Info.slice_instances(CustomSlicePod), fn instance ->
+             instance.module == CustomPodSlice and instance.path == :pod
            end)
 
-    agent = CustomPluginPod.new()
+    agent = CustomSlicePod.new()
 
     assert {:ok, %{metadata: %{}}} = Pod.fetch_state(agent)
-    assert {:ok, %Topology{name: "custom_plugin_pod"}} = Pod.fetch_topology(agent)
+    assert {:ok, %Topology{name: "custom_slice_pod"}} = Pod.fetch_topology(agent)
   end
 
-  test "plugins option resolves aliased plugin modules before opts are escaped" do
+  test "slices option resolves aliased slice modules before opts are escaped" do
     suffix = System.unique_integer([:positive])
-    pod_mod = Module.concat(__MODULE__, :"AliasedPluginPod#{suffix}")
-    pod_name = "aliased_plugin_pod_#{suffix}"
+    pod_mod = Module.concat(__MODULE__, :"AliasedSlicePod#{suffix}")
+    pod_name = "aliased_slice_pod_#{suffix}"
 
     Code.compile_string("""
     defmodule #{inspect(pod_mod)} do
       @moduledoc false
-      alias #{inspect(UserPlugin)}, as: UserPlugin
+      alias #{inspect(UserSlice)}, as: UserSlice
 
-      use Jido.Agent, extensions: [Jido.Slices.Pod], middleware: [UserPlugin]
+      use Jido.Agent, extensions: [Jido.Slices.Pod]
 
       agent do
         name #{inspect(pod_name)}
@@ -151,13 +151,13 @@ defmodule JidoTest.PodTest do
 
       slices do
         slice :pod, Jido.Slices.Pod
-        slice :pod_test_user_plugin, UserPlugin
+        slice :pod_test_user_slice, UserSlice
       end
     end
     """)
 
-    assert Enum.any?(Jido.Dsl.Agent.Info.plugin_instances(pod_mod), fn instance ->
-             instance.module == UserPlugin and instance.path == :pod_test_user_plugin
+    assert Enum.any?(Jido.Dsl.Agent.Info.slice_instances(pod_mod), fn instance ->
+             instance.module == UserSlice and instance.path == :pod_test_user_slice
            end)
   end
 

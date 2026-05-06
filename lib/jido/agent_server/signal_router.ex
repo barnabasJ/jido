@@ -1,9 +1,9 @@
 defmodule Jido.AgentServer.SignalRouter do
   @moduledoc """
-  Builds a unified Jido.Signal.Router from agent and plugin routes.
+  Builds a unified Jido.Signal.Router from agent and slice routes.
 
   This module is responsible for:
-  1. Collecting routes from all sources (agent, plugins)
+  1. Collecting routes from all sources (agent, slices)
   2. Normalizing route specs with appropriate priorities
   3. Building the trie-based router for efficient signal routing
 
@@ -12,7 +12,7 @@ defmodule Jido.AgentServer.SignalRouter do
   | Source | Default Priority | Range     |
   |--------|------------------|-----------|
   | Agent  | 0                | -25 to 25 |
-  | Plugin | -10              | -50 to -10|
+  | Slice  | -10              | -50 to -10|
 
   ## Route Spec Formats
 
@@ -32,14 +32,14 @@ defmodule Jido.AgentServer.SignalRouter do
   alias Jido.Signal.Router, as: SignalRouter
 
   @agent_default_priority 0
-  @plugin_default_priority -10
+  @slice_default_priority -10
 
   @doc """
   Builds a unified router from all route sources in the agent state.
 
   Collects routes from:
   - Agent routes (priority 0) via `agent_module.signal_routes/1`
-  - Plugin routes (priority -10) via plugin `signal_patterns` and `signal_routes/1`
+  - Slice routes (priority -10) via slice `signal_routes/0`
 
   Returns an empty router if no routes are found or if building fails.
   """
@@ -48,7 +48,7 @@ defmodule Jido.AgentServer.SignalRouter do
     routes =
       []
       |> add_agent_routes(state)
-      |> add_plugin_routes(state)
+      |> add_slice_routes(state)
       |> add_builtin_routes()
 
     case SignalRouter.new(routes) do
@@ -58,13 +58,13 @@ defmodule Jido.AgentServer.SignalRouter do
   end
 
   # Built-in system routes available on every agent. Priority sits below
-  # plugin/agent so user-defined routes always win on conflict.
+  # slice/agent so user-defined routes always win on conflict.
   defp add_builtin_routes(routes) do
     builtin = [
       {"jido.agent.query.children", Jido.AgentServer.Actions.QueryChildren}
     ]
 
-    routes ++ normalize_routes(builtin, @plugin_default_priority - 10)
+    routes ++ normalize_routes(builtin, @slice_default_priority - 10)
   end
 
   # Collects routes for the agent. Users may override `signal_routes/1`
@@ -89,12 +89,12 @@ defmodule Jido.AgentServer.SignalRouter do
     routes ++ normalized
   end
 
-  # Collects routes from plugins via the agent's pre-expanded `plugin_routes`
-  # table — the slice/plugin DSL's `signal_routes do … end` block is the
-  # single source of truth for plugin routes. Already normalized with
+  # Collects routes from slices via the agent's pre-expanded `routes/1`
+  # table — the slice DSL's `signal_routes do … end` block is the
+  # single source of truth for slice routes. Already normalized with
   # priority by the agent transformer pipeline.
-  defp add_plugin_routes(routes, %State{agent_module: agent_module}) do
-    routes ++ Jido.Dsl.Agent.Info.plugin_routes(agent_module)
+  defp add_slice_routes(routes, %State{agent_module: agent_module}) do
+    routes ++ Jido.Dsl.Agent.Info.routes(agent_module)
   end
 
   defp normalize_routes(routes, default_priority) do

@@ -6,7 +6,7 @@ defmodule Jido.DocsExamplesTest do
   test "Jido.Dsl.Agent.Info accessor docs do not emit doctest prompts" do
     docs = function_docs(Jido.Dsl.Agent.Info)
 
-    for function_name <- [:plugins, :capabilities, :signal_types] do
+    for function_name <- [:slices, :capabilities, :signal_types] do
       doc = Map.fetch!(docs, {function_name, 1})
 
       refute doc =~ "iex>"

@@ -563,7 +563,7 @@ defmodule Jido.Slices.Pod.Runtime do
     case Code.ensure_loaded(module) do
       {:module, _loaded} ->
         if Jido.Slices.Pod.Info.pod?(module) do
-          case TopologyState.pod_plugin_instance(module) do
+          case TopologyState.pod_slice_instance(module) do
             {:ok, _instance} -> :ok
             {:error, reason} -> {:error, reason}
           end

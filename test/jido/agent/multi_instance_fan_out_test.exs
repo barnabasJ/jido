@@ -1,15 +1,15 @@
 defmodule Jido.Agent.MultiInstanceFanOutTest do
   @moduledoc """
   Coverage for the multi-instance slice mount fan-out introduced by
-  task 0062. The same slice/plugin module mounted at multiple paths
-  (`slice :slack_support, SlackPlugin; slice :slack_sales, SlackPlugin`)
+  task 0062. The same slice module mounted at multiple paths
+  (`slice :slack_support, SlackSlice; slice :slack_sales, SlackSlice`)
   no longer trips `NoRouteConflicts`; instead, when a signal targets the
   shared action, `cmd/2` fans the action out — once per matching mount
   with that mount's own slice state and `ctx.slice_config`.
 
   These tests cover:
 
-    1. Compile-time acceptance of multi-instance same-plugin mounts.
+    1. Compile-time acceptance of multi-instance same-slice mounts.
     2. Per-mount state writes from a single `cmd/2` call.
     3. `ctx.slice_path` and `ctx.slice_config` visibility per fan-out
        iteration.
@@ -51,12 +51,12 @@ defmodule Jido.Agent.MultiInstanceFanOutTest do
     end
   end
 
-  defmodule SlackPlugin do
+  defmodule SlackSlice do
     @moduledoc false
-    use Jido.Plugin
+    use Jido.Slice
 
     slice do
-      name "slack_plugin"
+      name "slack_slice"
       schema Zoi.object(%{messages: Zoi.array(Zoi.string()) |> Zoi.default([])})
     end
 
@@ -74,8 +74,8 @@ defmodule Jido.Agent.MultiInstanceFanOutTest do
     end
 
     slices do
-      slice(:slack_support, SlackPlugin, options: %{token: "support-token"})
-      slice(:slack_sales, SlackPlugin, options: %{token: "sales-token"})
+      slice(:slack_support, SlackSlice, options: %{token: "support-token"})
+      slice(:slack_sales, SlackSlice, options: %{token: "sales-token"})
     end
   end
 
@@ -88,11 +88,11 @@ defmodule Jido.Agent.MultiInstanceFanOutTest do
     end
 
     slices do
-      slice(:slack_support, SlackPlugin, options: %{token: "support-token"})
+      slice(:slack_support, SlackSlice, options: %{token: "support-token"})
 
       slice(
         :slack_sales,
-        SlackPlugin,
+        SlackSlice,
         options: %{token: "sales-token", fail?: true}
       )
     end
@@ -112,8 +112,8 @@ defmodule Jido.Agent.MultiInstanceFanOutTest do
     end
 
     slices do
-      slice(:slack_support, SlackPlugin, options: %{token: "support-token"})
-      slice(:slack_sales, SlackPlugin, options: %{token: "sales-token"})
+      slice(:slack_support, SlackSlice, options: %{token: "support-token"})
+      slice(:slack_sales, SlackSlice, options: %{token: "sales-token"})
     end
 
     signal_routes do
@@ -124,7 +124,7 @@ defmodule Jido.Agent.MultiInstanceFanOutTest do
   # ─── Tests ─────────────────────────────────────────────────────────
 
   describe "compile-time acceptance" do
-    test "the same plugin module mounted at two different paths compiles cleanly" do
+    test "the same slice module mounted at two different paths compiles cleanly" do
       # If this module compiled, the verifier accepted the multi-mount
       # configuration. Belt-and-braces: assert the agent's helpers exist.
       assert function_exported?(MultiSlackAgent, :cmd, 3)

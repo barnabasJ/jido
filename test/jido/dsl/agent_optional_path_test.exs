@@ -19,7 +19,7 @@ defmodule Jido.Dsl.AgentOptionalPathTest do
       assert AgentInfo.name(NoOpAgent) == "noop_agent"
       assert AgentInfo.path(NoOpAgent) == nil
       assert AgentInfo.slice_instances(NoOpAgent) == []
-      assert AgentInfo.plugins(NoOpAgent) == []
+      assert AgentInfo.slices(NoOpAgent) == []
     end
 
     test "new/1 produces an agent with empty state and no nil-keyed entry" do

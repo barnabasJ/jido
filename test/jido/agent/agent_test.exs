@@ -403,35 +403,4 @@ defmodule JidoTest.AgentTest do
       assert validated.state.domain.count == 5
     end
   end
-
-  describe "plugin routes" do
-    test "plugin_routes/0 returns expanded routes with prefix" do
-      routes = AgentInfo.plugin_routes(TestAgents.AgentWithPluginRoutes)
-
-      assert length(routes) == 2
-      assert {"test_routes_plugin.post", JidoTest.PluginTestAction, -10} in routes
-      assert {"test_routes_plugin.list", JidoTest.PluginTestAction, -10} in routes
-    end
-
-    test "compile-time conflict detection emits a warning for duplicate routes" do
-      stderr =
-        ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          defmodule ConflictAgent do
-            use Jido.Agent,
-              middleware: [TestAgents.TestPluginWithRoutes]
-
-            agent do
-              name "conflict_agent"
-            end
-
-            slices do
-              slice(:test_routes, TestAgents.TestPluginWithRoutes)
-              slice(:test_routes, TestAgents.TestPluginWithRoutes)
-            end
-          end
-        end)
-
-      assert stderr =~ ~r/Route conflict|Duplicate.*paths|same path/
-    end
-  end
 end

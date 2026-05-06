@@ -1,13 +1,12 @@
 # Middleware
 
 A **Middleware** wraps the agent's signal pipeline. It is a single-tier,
-`next`-passing chain: each middleware sits between AgentServer and the
-inner pipeline (routing → action → directives), and decides whether to pass
-through, transform, retry, swallow, or short-circuit.
+`next`-passing chain: each middleware sits between AgentServer and the inner
+pipeline (routing → action → directives), and decides whether to pass through,
+transform, retry, swallow, or short-circuit.
 
-This is the cross-cutting tier in the Slice / Middleware / Plugin model.
-Where a Slice is "what the agent does," Middleware is "what happens
-around each signal."
+This is the cross-cutting tier in the Slice / Middleware model. Where a Slice is
+"what the agent does," Middleware is "what happens around each signal."
 
 ## The contract
 
@@ -24,18 +23,19 @@ Four arguments, one return shape. The chain builder closes over each
 middleware's per-registration `opts` at construction time, so the callback
 receives the same map every invocation.
 
-| Arg | Meaning |
-|---|---|
-| `signal` | The triggering `%Jido.Signal{}`. |
-| `ctx` | Per-signal runtime context: `current_user`, `trace_id`, agent identity (`agent_module`, `partition`, `parent`, etc.). Lives on `signal.extensions[:jido_ctx]` on the wire; promoted to an explicit arg here. |
-| `opts` | Per-registration options. Bare module registration → `%{}`. `{Module, %{...}}` registration → that map. |
-| `next` | The continuation. Calling `next.(signal, ctx)` invokes the rest of the chain. |
+| Arg      | Meaning                                                                                                                                                                                                      |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `signal` | The triggering `%Jido.Signal{}`.                                                                                                                                                                             |
+| `ctx`    | Per-signal runtime context: `current_user`, `trace_id`, agent identity (`agent_module`, `partition`, `parent`, etc.). Lives on `signal.extensions[:jido_ctx]` on the wire; promoted to an explicit arg here. |
+| `opts`   | Per-registration options. Bare module registration → `%{}`. `{Module, %{...}}` registration → that map.                                                                                                      |
+| `next`   | The continuation. Calling `next.(signal, ctx)` invokes the rest of the chain.                                                                                                                                |
 
 The return is `{new_ctx, [directive]}` — a possibly-modified context and the
 directive list the chain produces. Middleware can:
 
 - **Pass through**: `next.(signal, ctx)`.
-- **Mutate ctx before `next`**: thread a value down to inner middleware / actions.
+- **Mutate ctx before `next`**: thread a value down to inner middleware /
+  actions.
 - **Mutate ctx or directives after `next`**: read or rewrite the result.
 - **Retry**: call `next` more than once.
 - **Swallow / short-circuit**: skip `next` and return `{ctx, []}`.
@@ -82,13 +82,13 @@ end
 ```
 
 The chain composes outside-in. The first middleware listed wraps everything
-after it. So `[Audit, Retry]` means `Audit(Retry(action))` — `Audit` sees
-the *final* return after retries finished.
+after it. So `[Audit, Retry]` means `Audit(Retry(action))` — `Audit` sees the
+_final_ return after retries finished.
 
 ## Typed `opts` — the optional `middleware do … end` section
 
-A middleware module can declare a `middleware do schema […] end`
-section to validate its per-registration `opts` map at compile time:
+A middleware module can declare a `middleware do schema […] end` section to
+validate its per-registration `opts` map at compile time:
 
 ```elixir
 defmodule MyApp.RateLimit do
@@ -111,8 +111,8 @@ defmodule MyApp.RateLimit do
 end
 ```
 
-Most middleware do not need a configurable shape — leave the section out
-when there's nothing to validate.
+Most middleware do not need a configurable shape — leave the section out when
+there's nothing to validate.
 
 ## Common patterns
 
@@ -150,15 +150,15 @@ end
 ### Persist
 
 `Jido.Middlewares.Persister` runs hibernate/thaw IO synchronously around
-`jido.agent.lifecycle.starting` / `stopping` signals. It mutates `ctx.agent`
-in place after thaw, so the rest of the pipeline sees the rehydrated
-struct. See [the source](../lib/jido/middleware/persister.ex).
+`jido.agent.lifecycle.starting` / `stopping` signals. It mutates `ctx.agent` in
+place after thaw, so the rest of the pipeline sees the rehydrated struct. See
+[the source](../lib/jido/middleware/persister.ex).
 
 ### Retry
 
 [`Jido.Middlewares.Retry`](../lib/jido/middleware/retry.ex) re-invokes `next`
-when the chain returns `%Directives.Error{}`. Configurable max attempts
-and an optional `Jido.Signal.Router` pattern to scope which signals retry.
+when the chain returns `%Directives.Error{}`. Configurable max attempts and an
+optional `Jido.Signal.Router` pattern to scope which signals retry.
 
 ```elixir
 extensions: [
@@ -166,8 +166,8 @@ extensions: [
 ]
 ```
 
-Retry's only internal state is a counter on the stack — there's no
-shared mutable state, so it composes cleanly with any other middleware.
+Retry's only internal state is a counter on the stack — there's no shared
+mutable state, so it composes cleanly with any other middleware.
 
 ### Log-and-convert errors
 
@@ -187,28 +187,27 @@ end
 
 ## Stateless middleware vs. Plugin-paired state
 
-Middleware does not own any agent state. It runs as code inside the
-AgentServer process, with whatever capture closures hold. To carry state
-across signals (rate-limit counters, circuit-breaker open/closed, user
-session caches), either:
+Middleware does not own any agent state. It runs as code inside the AgentServer
+process, with whatever capture closures hold. To carry state across signals
+(rate-limit counters, circuit-breaker open/closed, user session caches), either:
 
-- **Process-local**: `Process.put/get` inside the AgentServer process (simple, OTP-friendly).
+- **Process-local**: `Process.put/get` inside the AgentServer process (simple,
+  OTP-friendly).
 - **External store**: `:ets`, `:persistent_term`, or a downstream service.
-- **Plugin pairing**: declare a Slice next to the Middleware so the data
-  lives in `agent.state[plugin.path]`. The middleware reads via
-  `ctx.agent.state[path]` and stages writes by passing an updated `ctx`
-  to `next` — for example,
-  `next.(signal, %{ctx | agent: %{ctx.agent | state: new_state}})`.
-  This is the documented `ctx.agent`-staging exception to "directives
-  mutate no state". See
-  [`Jido.Middlewares.Persister`](../lib/jido/middleware/persister.ex) for
-  the canonical example (it stages a thawed agent on
+- **Plugin pairing**: declare a Slice next to the Middleware so the data lives
+  in `agent.state[plugin.path]`. The middleware reads via
+  `ctx.agent.state[path]` and stages writes by passing an updated `ctx` to
+  `next` — for example,
+  `next.(signal, %{ctx | agent: %{ctx.agent | state: new_state}})`. This is the
+  documented `ctx.agent`-staging exception to "directives mutate no state". See
+  [`Jido.Middlewares.Persister`](../lib/jido/middleware/persister.ex) for the
+  canonical example (it stages a thawed agent on
   `jido.agent.lifecycle.starting`).
 
-The Plugin route is the right call when the state is *part of the agent's
-identity* (must persist through hibernate, must be visible to other
-actions). Middleware-without-state is the right call for ephemeral
-counters and observability.
+The Plugin route is the right call when the state is _part of the agent's
+identity_ (must persist through hibernate, must be visible to other actions).
+Middleware-without-state is the right call for ephemeral counters and
+observability.
 
 ## Interaction with `cast_and_await` and `subscribe`
 
@@ -216,15 +215,14 @@ Both [`AgentServer.cast_and_await/4`](../lib/jido/agent_server.ex) and
 [`subscribe/4`](../lib/jido/agent_server.ex) fire selectors **after the
 outermost middleware unwinds**, not on every retry. So:
 
-- Retry middleware re-invoking `next` 3× still produces exactly **one**
-  ack per `cast_and_await`.
-- Middleware that swallows a signal (skips `next`) still produces one
-  ack — using whatever `agent.state` looks like at the moment of
-  swallowing.
+- Retry middleware re-invoking `next` 3× still produces exactly **one** ack per
+  `cast_and_await`.
+- Middleware that swallows a signal (skips `next`) still produces one ack —
+  using whatever `agent.state` looks like at the moment of swallowing.
 
 If a middleware mutates `ctx.agent` (like `Persister` does on thaw), the
-selector sees the updated agent. This is what makes `cast_and_await` work
-across the full pipeline: the selector reads the *post-pipeline* state.
+selector sees the updated agent. This is what makes `cast_and_await` work across
+the full pipeline: the selector reads the _post-pipeline_ state.
 
 ## Order matters
 
@@ -234,23 +232,27 @@ Middleware composes outside-in. Concretely:
 extensions: [Retry, Persister, Audit]
 ```
 
-is `Retry(Persister(Audit(action)))`. Retry sees the *final* result of
+is `Retry(Persister(Audit(action)))`. Retry sees the _final_ result of
 everything inside it. If the Persister middleware raises during a thaw IO
 failure, Retry catches it and re-invokes `next`. If you reorder to
-`[Persister, Retry, Audit]`, Retry can't catch a Persister thaw failure
-because Persister wraps it.
+`[Persister, Retry, Audit]`, Retry can't catch a Persister thaw failure because
+Persister wraps it.
 
 A reasonable default order, outermost first:
 
 1. `Retry` — wrap everything that's transient
 2. Auth / rate-limit gates
 3. `Persister` — IO around lifecycle
-4. Audit / log / observability — closest to the action so timings reflect actual work
+4. Audit / log / observability — closest to the action so timings reflect actual
+   work
 
 ## See also
 
-- [`Jido.Middlewares.Persister`](../lib/jido/middleware/persister.ex) — reference implementation (hibernate / thaw)
-- [`Jido.Middlewares.Retry`](../lib/jido/middleware/retry.ex) — reference implementation (retry on `%Error{}`)
+- [`Jido.Middlewares.Persister`](../lib/jido/middleware/persister.ex) —
+  reference implementation (hibernate / thaw)
+- [`Jido.Middlewares.Retry`](../lib/jido/middleware/retry.ex) — reference
+  implementation (retry on `%Error{}`)
 - [Slices guide](slices.md) — the data tier
 - [Plugins guide](plugins.md) — when you need both
-- [Migration: keyword form to Spark DSL](migration-spark-dsl.md) — recipes for older code
+- [Migration: keyword form to Spark DSL](migration-spark-dsl.md) — recipes for
+  older code

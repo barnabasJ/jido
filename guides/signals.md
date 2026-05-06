@@ -2,14 +2,18 @@
 
 <!-- covers: jido.signals_and_directives.signal_routing -->
 
-Signals carry CloudEvents-style messages through the Jido system, providing a standardized communication envelope between agents.
+Signals carry CloudEvents-style messages through the Jido system, providing a
+standardized communication envelope between agents.
 
 ## What is a Signal?
 
-Signals (`jido_signal` package) are typed messages that trigger agent behavior. They follow the CloudEvents specification, providing:
+Signals (`jido_signal` package) are typed messages that trigger agent behavior.
+They follow the CloudEvents specification, providing:
 
-- **Standardized envelope** - Consistent structure for all inter-agent communication
-- **Type-based routing** - Signals are routed to actions based on their `type` field
+- **Standardized envelope** - Consistent structure for all inter-agent
+  communication
+- **Type-based routing** - Signals are routed to actions based on their `type`
+  field
 - **Traceability** - Built-in support for correlation and causation tracking
 
 ```
@@ -28,17 +32,17 @@ signal = Jido.Signal.new!("order.placed", %{order_id: 123}, source: "/orders")
 
 ### Required Fields
 
-| Field | Description | Example |
-|-------|-------------|---------|
-| `type` | The event type (used for routing) | `"order.placed"`, `"user.created"` |
-| `source` | Where the signal originated | `"/orders"`, `"/api"`, `"/worker"` |
+| Field    | Description                       | Example                            |
+| -------- | --------------------------------- | ---------------------------------- |
+| `type`   | The event type (used for routing) | `"order.placed"`, `"user.created"` |
+| `source` | Where the signal originated       | `"/orders"`, `"/api"`, `"/worker"` |
 
 ### Optional Fields
 
-| Field | Description | Example |
-|-------|-------------|---------|
-| `subject` | Who/what this is about | `"/users/123"` |
-| `data` | The payload (second argument) | `%{order_id: 123}` |
+| Field     | Description                   | Example            |
+| --------- | ----------------------------- | ------------------ |
+| `subject` | Who/what this is about        | `"/users/123"`     |
+| `data`    | The payload (second argument) | `%{order_id: 123}` |
 
 ### Examples
 
@@ -55,7 +59,8 @@ signal = Jido.Signal.new!("order.completed", %{
 
 ## Sending Signals to Agents
 
-Once an agent is running via `AgentServer`, send signals using `call/3` or `cast/2`.
+Once an agent is running via `AgentServer`, send signals using `call/3` or
+`cast/2`.
 
 ### Synchronous (call)
 
@@ -87,11 +92,11 @@ signal = Jido.Signal.new!("background.task", %{task_id: "abc"}, source: "/schedu
 
 ## Signal Routing
 
-When a signal arrives at an agent, the `SignalRouter` determines which action to execute. Routes are checked in priority order:
+When a signal arrives at an agent, the `SignalRouter` determines which action to
+execute. Routes are checked in priority order:
 
-1. **Strategy routes** (priority 50+) — via `strategy.signal_routes/1`
-2. **Agent routes** (priority 0) — via `agent_module.signal_routes/1`
-3. **Plugin routes** (priority -10) — via plugin `signal_patterns` and `signal_routes/1`
+1. **Agent routes** (priority 0) — via `agent_module.signal_routes/1`
+2. **Slice routes** (priority -10) — via slice `signal_routes/0`
 
 ### Agent Signal Routes
 
@@ -134,19 +139,18 @@ defmodule MyStrategy do
 end
 ```
 
-### Plugin / Slice Signal Routes
+### Slice Signal Routes
 
-Plugins and slices declare their routes inside a `signal_routes do … end`
-section the same way agents do. The router matches the slice's routes
-the moment its module is registered via `extensions: […]`:
+Slices declare their routes inside a `signal_routes do … end` section the same
+way agents do. The router matches the slice's routes the moment its module is
+mounted via the agent's `slices do … end` block:
 
 ```elixir
-defmodule MyApp.ChatPlugin do
-  use Jido.Plugin
+defmodule MyApp.ChatSlice do
+  use Jido.Slice
 
   slice do
     name "chat"
-    path :chat
     schema Zoi.object(%{messages: Zoi.list(Zoi.any()) |> Zoi.default([])})
   end
 
@@ -158,6 +162,7 @@ end
 ```
 
 Pattern matching is supported on each `route "type"`:
+
 - `"chat.*"` — matches `chat.message`, `chat.clear`, etc.
 - `"chat.**"` — matches `chat.message`, `chat.room.join`, etc.
 
@@ -179,10 +184,10 @@ defmodule MyApp.Actions.ProcessOrder do
 
   def run(%{order_id: order_id}, _context) do
     # Process the order...
-    
+
     # Emit a signal to notify completion
     signal = Signal.new!("order.processed", %{order_id: order_id}, source: "/processor")
-    
+
     {:ok, %{status: :processed}, [Directives.emit(signal)]}
   end
 end

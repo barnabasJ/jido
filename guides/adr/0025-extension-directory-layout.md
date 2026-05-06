@@ -1,6 +1,8 @@
 # 0025. Extension directory layout: `slices/` `middlewares/` `plugins/` `directives/`
 
-- Status: Accepted
+- Status: Accepted; the `plugins/` directory was removed in
+  [0028](0028-deprecate-jido-plugin.md). The remaining `slices/` `middlewares/`
+  `directives/` layout stands.
 - Implementation: Complete
 - Date: 2026-04-30
 - Related ADRs: [0014](0014-slice-middleware-plugin.md) (slice / middleware /

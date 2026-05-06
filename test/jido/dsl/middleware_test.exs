@@ -43,8 +43,7 @@ defmodule Jido.Dsl.MiddlewareTest do
       assert function_exported?(MinimalMiddleware, :on_signal, 4)
     end
 
-    test "bare middleware is not classified as a plugin or slice host" do
-      refute Spark.Dsl.is?(MinimalMiddleware, Jido.Plugin)
+    test "bare middleware is not classified as a slice host" do
       refute Spark.Dsl.is?(MinimalMiddleware, Jido.Slice)
     end
   end
@@ -72,13 +71,12 @@ defmodule Jido.Dsl.MiddlewareTest do
       end
     end
 
-    test "middleware appears in middleware/1, not plugins/1 or slices/1" do
+    test "middleware appears in middleware/1, not slices/1" do
       assert Enum.any?(
                Jido.Dsl.Agent.Info.middleware(MiddlewareAgent),
                &match?({MinimalMiddleware, _}, &1)
              )
 
-      refute MinimalMiddleware in Jido.Dsl.Agent.Info.plugins(MiddlewareAgent)
       refute MinimalMiddleware in Jido.Dsl.Agent.Info.slices(MiddlewareAgent)
     end
   end
