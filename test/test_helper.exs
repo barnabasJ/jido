@@ -6,4 +6,4 @@
 Mimic.copy(ReqLLM.Generation)
 
 ExUnit.start()
-ExUnit.configure(exclude: [:skip, :flaky, :example, :e2e])
+ExUnit.configure(exclude: [:flaky, :e2e])
