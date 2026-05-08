@@ -86,6 +86,121 @@ The conversion is **mechanical**. There's no semantic change — `cmd/2`, `set/2
 `validate/2`, `signal_routes/0`, `actions/0`, etc. all return the same shapes
 they did before. The migration is just shape: keyword list → sectioned DSL.
 
+## ADR 0025 directory layout — rename map
+
+Independently of the Spark migration above,
+[ADR 0025](adr/0025-extension-directory-layout.md) reorganized the four
+extension surfaces (`slices/`, `plugins/`, `middlewares/`, `directives/`) into
+top-level plural-namespaced directories with one module per file. Tasks
+0044–0050 moved the built-in slices, middlewares, and the framework-directive
+umbrella into the new shape; commit `b5a1c49` and tasks 0064–0065 then
+reclassified the three non-pure cases (FSM, BusPlugin, Pod itself); task 0068
+retired `Jido.Plugin` entirely. The table below is the consolidated before/after
+— every public module-name change a v2-era external project sees on upgrade.
+
+| Before                                         | After                                               | Task                                                            | Notes                                                                                                                                         |
+| ---------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Jido.Memory.Slice`                            | `Jido.Slices.Memory`                                | [task 0044](tasks/0044-move-rename-memory-slice.md)             | namespace only                                                                                                                                |
+| `Jido.Memory.Space`                            | `Jido.Slices.Memory.Space`                          | [task 0044](tasks/0044-move-rename-memory-slice.md)             | follows parent rename                                                                                                                         |
+| `Jido.Memory.Actions.*`                        | `Jido.Slices.Memory.Actions.*`                      | [task 0044](tasks/0044-move-rename-memory-slice.md)             | follows parent rename                                                                                                                         |
+| `Jido.Memory` (data type)                      | `Jido.Slices.Memory.State`                          | [task 0044](tasks/0044-move-rename-memory-slice.md)             | bare alias renamed to `.State` so it stops shadowing the slice DSL                                                                            |
+| `Jido.Identity.Slice`                          | `Jido.Slices.Identity`                              | [task 0045](tasks/0045-move-rename-identity-slice.md)           | namespace only                                                                                                                                |
+| `Jido.Identity.Actions.*`                      | `Jido.Slices.Identity.Actions.*`                    | [task 0045](tasks/0045-move-rename-identity-slice.md)           | follows parent rename                                                                                                                         |
+| `Jido.Identity` (data type)                    | `Jido.Slices.Identity.State`                        | [task 0045](tasks/0045-move-rename-identity-slice.md)           | bare alias renamed to `.State`                                                                                                                |
+| `Jido.Thread.Slice`                            | `Jido.Slices.Thread`                                | [task 0046](tasks/0046-move-rename-thread-slice.md)             | namespace only                                                                                                                                |
+| `Jido.Thread.{Entry,EntryNormalizer,Store}`    | `Jido.Slices.Thread.{Entry,EntryNormalizer,Store}`  | [task 0046](tasks/0046-move-rename-thread-slice.md)             | follows parent rename                                                                                                                         |
+| `Jido.Thread.Store.Adapters.*`                 | `Jido.Slices.Thread.Store.Adapters.*`               | [task 0046](tasks/0046-move-rename-thread-slice.md)             | follows parent rename                                                                                                                         |
+| `Jido.Thread.Actions.*`                        | `Jido.Slices.Thread.Actions.*`                      | [task 0046](tasks/0046-move-rename-thread-slice.md)             | follows parent rename                                                                                                                         |
+| `Jido.Thread` (data type)                      | `Jido.Slices.Thread.State`                          | [task 0046](tasks/0046-move-rename-thread-slice.md)             | bare alias renamed to `.State`                                                                                                                |
+| `Jido.AI.ReAct`                                | `Jido.Slices.AiReact`                               | [task 0047](tasks/0047-move-rename-ai-react-slice.md)           | slice DSL relocated; the `Jido.AI` facade itself stays put                                                                                    |
+| `Jido.AI.Turn`                                 | `Jido.Slices.AiReact.Turn`                          | [task 0047](tasks/0047-move-rename-ai-react-slice.md)           | follows parent rename                                                                                                                         |
+| `Jido.AI.ToolAdapter`                          | `Jido.Slices.AiReact.ToolAdapter`                   | [task 0047](tasks/0047-move-rename-ai-react-slice.md)           | follows parent rename                                                                                                                         |
+| `Jido.AI.Actions.*`                            | `Jido.Slices.AiReact.Actions.*`                     | [task 0047](tasks/0047-move-rename-ai-react-slice.md)           | follows parent rename                                                                                                                         |
+| `Jido.AI.Directive.{LLMCall,ToolExec}`         | `Jido.Slices.AiReact.Directives.{LLMCall,ToolExec}` | [task 0047](tasks/0047-move-rename-ai-react-slice.md)           | singular `Directive` → plural `Directives` to match the framework convention                                                                  |
+| `Jido.Middleware.Retry`                        | `Jido.Middlewares.Retry`                            | [task 0048](tasks/0048-move-rename-middlewares.md)              | namespace only; the framework base `Jido.Middleware` is untouched                                                                             |
+| `Jido.Middleware.Persister`                    | `Jido.Middlewares.Persister`                        | [task 0048](tasks/0048-move-rename-middlewares.md)              | namespace only                                                                                                                                |
+| `Jido.Plugin.FSM`                              | `Jido.Plugins.FSM` _(interim)_                      | [task 0049](tasks/0049-move-rename-fsm-plugin.md)               | superseded by the reclass row below — skip straight to `Jido.Slices.FSM`                                                                      |
+| `Jido.Plugins.FSM`                             | `Jido.Slices.FSM`                                   | commit `b5a1c49`                                                | reclassified Plugin → Slice; FSM exposes no `Jido.Middleware` callbacks, so the Plugin label was wrong                                        |
+| `Jido.Plugins.FSM.Transition`                  | `Jido.Slices.FSM.Transition`                        | commit `b5a1c49`                                                | follows parent rename                                                                                                                         |
+| `Jido.Agent.Directive` (umbrella)              | `Jido.Directives`                                   | [task 0050](tasks/0050-lift-framework-directives.md)            | umbrella slimmed to typespec + helpers; constructor API (`emit/2`, `spawn_agent/3`, …) unchanged                                              |
+| `Jido.Agent.Directive.{Emit,Spawn,Schedule,…}` | `Jido.Directives.{Emit,Spawn,Schedule,…}`           | [task 0050](tasks/0050-lift-framework-directives.md)            | one struct per file under `lib/jido/directives/`; full set listed in [`directives.md`](directives.md)                                         |
+| `Jido.Pod.BusPlugin`                           | `Jido.Slices.ChildBus`                              | [task 0064](tasks/0064-classify-and-relocate-pod-bus-plugin.md) | reclassified Plugin → Slice + renamed to drop the pod-specific framing (parallel to FSM — no middleware behaviour was used)                   |
+| `Jido.Pod.BusPlugin.AutoSubscribeChild`        | `Jido.Slices.ChildBus.AutoSubscribeChild`           | [task 0064](tasks/0064-classify-and-relocate-pod-bus-plugin.md) | follows parent rename                                                                                                                         |
+| `Jido.Pod.BusPlugin.AutoUnsubscribeChild`      | `Jido.Slices.ChildBus.AutoUnsubscribeChild`         | [task 0064](tasks/0064-classify-and-relocate-pod-bus-plugin.md) | follows parent rename                                                                                                                         |
+| `Jido.Pod`                                     | `Jido.Slices.Pod`                                   | [task 0065](tasks/0065-move-pod-into-slices.md)                 | full subtree move; the slice atom `:pod` and the contributed `pod do … end` host section keep their names (both module-keyed)                 |
+| `Jido.Pod.{Runtime,Topology,Info,Mutation,…}`  | `Jido.Slices.Pod.{Runtime,Topology,…}`              | [task 0065](tasks/0065-move-pod-into-slices.md)                 | follows parent rename                                                                                                                         |
+| `Jido.Plugin` (the abstraction)                | **removed**                                         | [task 0068](tasks/0068-remove-jido-plugin.md)                   | port to `use Jido.Slice` + `@behaviour Jido.Middleware` — see [Migrating from `Jido.Plugin`](migration.md#migrating-from-jidoplugin-adr-0028) |
+
+> **Plugin → Slice reclassifications.** Three ex-Plugin shapes ended up as plain
+> Slices: `Jido.Plugins.FSM` (commit `b5a1c49`), `Jido.Pod.BusPlugin` (task
+> 0064), and `Jido.Pod` itself (task 0065 finalized after task 0061's
+> `use Jido.Plugin` → `use Jido.Slice` flip). All three implemented zero
+> `Jido.Middleware` callbacks (`call/4`, `init/1`, `on_signal/4`); the Plugin
+> label was carried by directory layout, not behaviour. Once they moved, the
+> Plugin abstraction had no in-tree users and was removed in task 0068
+> ([ADR 0028](adr/0028-deprecate-jido-plugin.md)). **If your own code does
+> `use Jido.Plugin`:** grep your module for the three middleware callbacks. If
+> none are implemented, port to `use Jido.Slice` alone. If any are, port to
+> `use Jido.Slice` + `@behaviour Jido.Middleware` and mount the module in both
+> `slices do … end` _and_ `middleware: […]` on the host agent — the recipe is in
+> [Migrating from `Jido.Plugin`](migration.md#migrating-from-jidoplugin-adr-0028).
+
+### Bulk-rewrite recipe
+
+Run from the project root. The order matters — most-specific submodule prefixes
+first, so the trailing bare-alias step at the bottom only catches the data-type
+aliases nothing else has rewritten yet.
+
+```sh
+# 1. Slice DSL renames — fully-qualified prefixes that map 1:1.
+sed -i 's|Jido\.Memory\.Slice|Jido.Slices.Memory|g'      $(rg -l 'Jido\.Memory\.Slice' --type elixir)
+sed -i 's|Jido\.Identity\.Slice|Jido.Slices.Identity|g'  $(rg -l 'Jido\.Identity\.Slice' --type elixir)
+sed -i 's|Jido\.Thread\.Slice|Jido.Slices.Thread|g'      $(rg -l 'Jido\.Thread\.Slice' --type elixir)
+sed -i 's|Jido\.AI\.ReAct|Jido.Slices.AiReact|g'         $(rg -l 'Jido\.AI\.ReAct' --type elixir)
+sed -i 's|Jido\.Plugin\.FSM|Jido.Slices.FSM|g'           $(rg -l 'Jido\.Plugin\.FSM' --type elixir)
+sed -i 's|Jido\.Plugins\.FSM|Jido.Slices.FSM|g'          $(rg -l 'Jido\.Plugins\.FSM' --type elixir)
+sed -i 's|Jido\.Pod\.BusPlugin|Jido.Slices.ChildBus|g'   $(rg -l 'Jido\.Pod\.BusPlugin' --type elixir)
+
+# 2. Companion modules under each slice.
+sed -i 's|Jido\.Memory\.Space|Jido.Slices.Memory.Space|g'             $(rg -l 'Jido\.Memory\.Space' --type elixir)
+sed -i 's|Jido\.Memory\.Actions\.|Jido.Slices.Memory.Actions.|g'      $(rg -l 'Jido\.Memory\.Actions\.' --type elixir)
+sed -i 's|Jido\.Identity\.Actions\.|Jido.Slices.Identity.Actions.|g'  $(rg -l 'Jido\.Identity\.Actions\.' --type elixir)
+sed -i 's|Jido\.Thread\.Entry|Jido.Slices.Thread.Entry|g'             $(rg -l 'Jido\.Thread\.Entry' --type elixir)
+sed -i 's|Jido\.Thread\.Store|Jido.Slices.Thread.Store|g'             $(rg -l 'Jido\.Thread\.Store' --type elixir)
+sed -i 's|Jido\.Thread\.Actions\.|Jido.Slices.Thread.Actions.|g'      $(rg -l 'Jido\.Thread\.Actions\.' --type elixir)
+sed -i 's|Jido\.AI\.Turn|Jido.Slices.AiReact.Turn|g'                  $(rg -l 'Jido\.AI\.Turn' --type elixir)
+sed -i 's|Jido\.AI\.ToolAdapter|Jido.Slices.AiReact.ToolAdapter|g'    $(rg -l 'Jido\.AI\.ToolAdapter' --type elixir)
+sed -i 's|Jido\.AI\.Actions\.|Jido.Slices.AiReact.Actions.|g'         $(rg -l 'Jido\.AI\.Actions\.' --type elixir)
+sed -i 's|Jido\.AI\.Directive\.|Jido.Slices.AiReact.Directives.|g'    $(rg -l 'Jido\.AI\.Directive\.' --type elixir)
+
+# 3. Built-in middlewares (framework base Jido.Middleware is untouched).
+sed -i 's|Jido\.Middleware\.Retry|Jido.Middlewares.Retry|g'          $(rg -l 'Jido\.Middleware\.Retry' --type elixir)
+sed -i 's|Jido\.Middleware\.Persister|Jido.Middlewares.Persister|g'  $(rg -l 'Jido\.Middleware\.Persister' --type elixir)
+
+# 4. Framework directives umbrella + per-struct names.
+sed -i 's|\bJido\.Agent\.Directive\b|Jido.Directives|g'  $(rg -l 'Jido\.Agent\.Directive' --type elixir)
+
+# 5. Pod subtree (run after step 1 so Jido.Pod.BusPlugin is already gone).
+sed -i 's|\bJido\.Pod\b|Jido.Slices.Pod|g'  $(rg -l '\bJido\.Pod\b' --type elixir)
+
+# 6. Bare data-type aliases — last, with [^.] guard so dotted submodules
+#    (already rewritten above) are skipped.
+sed -i -E 's|(Jido\.Memory)([^A-Za-z0-9_.])|Jido.Slices.Memory.State\2|g'      $(rg -l '\bJido\.Memory\b' --type elixir)
+sed -i -E 's|(Jido\.Memory)$|Jido.Slices.Memory.State|g'                       $(rg -l '\bJido\.Memory\b' --type elixir)
+sed -i -E 's|(Jido\.Identity)([^A-Za-z0-9_.])|Jido.Slices.Identity.State\2|g'  $(rg -l '\bJido\.Identity\b' --type elixir)
+sed -i -E 's|(Jido\.Identity)$|Jido.Slices.Identity.State|g'                   $(rg -l '\bJido\.Identity\b' --type elixir)
+sed -i -E 's|(Jido\.Thread)([^A-Za-z0-9_.])|Jido.Slices.Thread.State\2|g'      $(rg -l '\bJido\.Thread\b' --type elixir)
+sed -i -E 's|(Jido\.Thread)$|Jido.Slices.Thread.State|g'                       $(rg -l '\bJido\.Thread\b' --type elixir)
+
+# Verify — should print nothing.
+rg -nP '\b(Jido\.Memory(\.Slice|\.Space|\.Actions)?|Jido\.Identity(\.Slice|\.Actions)?|Jido\.Thread(\.Slice|\.Entry|\.Store|\.Actions)?|Jido\.AI\.(ReAct|Turn|ToolAdapter|Actions|Directive)|Jido\.Middleware\.(Retry|Persister)|Jido\.Plugin\.FSM|Jido\.Plugins\.FSM|Jido\.Agent\.Directive|Jido\.Pod\.BusPlugin|\bJido\.Pod\b)\b' .
+```
+
+The recipe leaves `use Jido.Plugin` sites untouched on purpose — those are not a
+mechanical s/before/after/g (see the reclassification callout above).
+Diff-review the rewrite before committing in case your own namespaces overlap a
+`Jido.X` prefix.
+
 ## One agent module migration
 
 Take a hypothetical agent that mounts the Memory slice and a few framework
@@ -244,69 +359,18 @@ end
 
 ## One plugin module migration
 
-`Jido.Slices.FSM` is the in-tree plugin example: a slice that exposes
-state-machine transitions plus a small middleware half.
-
-### Before
-
-```elixir
-defmodule Jido.Slices.FSM do
-  use Jido.Plugin,
-    name: "fsm",
-    path: :fsm,
-    description: "Finite-state machine plugin",
-    schema: Zoi.object(%{
-      state: Zoi.string() |> Zoi.optional(),
-      initial_state: Zoi.string() |> Zoi.default("idle"),
-      transitions: Zoi.map(Zoi.string(), Zoi.list(Zoi.string())) |> Zoi.default(%{})
-    }),
-    config_schema: Zoi.object(%{
-      initial_state: Zoi.string() |> Zoi.default("idle"),
-      transitions: Zoi.map(Zoi.string(), Zoi.list(Zoi.string())) |> Zoi.default(%{})
-    }),
-    signal_routes: [
-      {"fsm.transition", Jido.Slices.FSM.Transition}
-    ]
-
-  @impl Jido.Middleware
-  def on_signal(signal, ctx, _opts, next), do: next.(signal, ctx)
-end
-```
-
-### After
-
-```elixir
-defmodule Jido.Slices.FSM do
-  use Jido.Plugin
-
-  slice do
-    name "fsm"
-    path :fsm
-    description "Finite-state machine plugin"
-    schema Zoi.object(%{
-      state: Zoi.string() |> Zoi.optional(),
-      initial_state: Zoi.string() |> Zoi.default("idle"),
-      transitions: Zoi.map(Zoi.string(), Zoi.list(Zoi.string())) |> Zoi.default(%{})
-    })
-    config_schema Zoi.object(%{
-      initial_state: Zoi.string() |> Zoi.default("idle"),
-      transitions: Zoi.map(Zoi.string(), Zoi.list(Zoi.string())) |> Zoi.default(%{})
-    })
-  end
-
-  signal_routes do
-    route "fsm.transition", Jido.Slices.FSM.Transition
-  end
-
-  @impl Jido.Middleware
-  def on_signal(signal, ctx, _opts, next), do: next.(signal, ctx)
-end
-```
-
-`use Jido.Plugin` exposes the slice DSL's six sections (`slice`,
-`signal_routes`, `subscriptions`, `schedules`, `capabilities`, `requires`) plus
-the `Jido.Middleware` `@behaviour`. Implement `on_signal/4` if the plugin
-actually wraps the pipeline; if it doesn't, prefer `use Jido.Slice` instead.
+`Jido.Plugin` was retired in v3 ([ADR 0028](adr/0028-deprecate-jido-plugin.md))
+— the table above lists it under the `Jido.Plugin (the abstraction) → removed`
+row. The Slice + Middleware combo it represented now expresses as
+`use Jido.Slice` + `@behaviour Jido.Middleware` on the same module, mounted
+explicitly in both `slices do … end` _and_ `middleware: […]` on the host agent.
+The full before/after recipe lives in
+[Migrating from `Jido.Plugin`](migration.md#migrating-from-jidoplugin-adr-0028);
+see also the [reclassification callout](#adr-0025-directory-layout--rename-map)
+above for the audit checklist (do you actually implement any middleware
+callback?). For the slice half on its own, the
+[One slice module migration](#one-slice-module-migration) section above is the
+recipe.
 
 ## The `extensions: [...]` opt-in
 
