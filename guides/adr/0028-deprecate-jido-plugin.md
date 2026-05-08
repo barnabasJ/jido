@@ -1,10 +1,10 @@
 # 0028. Deprecate `Jido.Plugin` — collapse the four-shape vocabulary to three
 
 - Status: Accepted
-- Implementation: Pending (executed by
+- Implementation: Complete (executed by
   [task 0068](../tasks/0068-remove-jido-plugin.md))
 - Date: 2026-05-06
-- Related commits / PRs: —
+- Related commits / PRs: 22a1a5e, c465e05
 - Supersedes (in part): the four-shape vocabulary introduced in
   [0014](0014-slice-middleware-plugin.md), echoed by
   [0011](0011-retire-strategy-plugins-are-control-flow.md),
