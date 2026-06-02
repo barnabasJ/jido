@@ -29,6 +29,7 @@ defmodule Jido.Directives do
   - `Jido.Directives.Emit` — dispatch a signal via `Jido.Signal.Dispatch`
   - `Jido.Directives.Error` — signal an error (wraps `Jido.Error.t()`)
   - `Jido.Directives.Spawn` — spawn a generic BEAM child process (fire-and-forget, no tracking)
+  - `Jido.Directives.AsyncTask` — run supervised async work and report success/error as signals
   - `Jido.Directives.SpawnAgent` — spawn a child Jido agent with hierarchy tracking
   - `Jido.Directives.SpawnManagedAgent` — spawn an agent via `Jido.Agent.InstanceManager`
   - `Jido.Directives.AdoptChild` — attach an orphaned child to current parent
@@ -71,6 +72,7 @@ defmodule Jido.Directives do
 
   alias Jido.Directives.{
     AdoptChild,
+    AsyncTask,
     Cron,
     CronCancel,
     Emit,
@@ -95,6 +97,7 @@ defmodule Jido.Directives do
   @type core ::
           Emit.t()
           | Error.t()
+          | AsyncTask.t()
           | Spawn.t()
           | SpawnAgent.t()
           | AdoptChild.t()
@@ -197,6 +200,43 @@ defmodule Jido.Directives do
   @spec spawn(term(), term()) :: Spawn.t()
   def spawn(child_spec, tag \\ nil) do
     %Spawn{child_spec: child_spec, tag: tag}
+  end
+
+  @doc """
+  Creates an AsyncTask directive.
+
+  ## Options
+
+  - `:success_type` - Signal type for successful non-signal results
+    (default: `"jido.async_task.completed"`)
+  - `:error_type` - Signal type for errors, exits, throws, and crashes
+    (default: `"jido.async_task.failed"`)
+  - `:payload` - Static data merged into generated success/error signal data
+  - `:source` - Source for generated signals (defaults to `/agent/:id/async_task`)
+  - `:target` - Reply target (defaults to the originating agent process)
+
+  The work may be an MFA tuple (`{module, function, args}`), a zero-arity
+  function, or a unary function. Unary functions receive a small runtime context
+  map with `:agent_id`, `:input_signal`, `:jido`, and `:partition`.
+
+  ## Examples
+
+      Directives.async_task({MyApp.Worker, :run, [job_id]},
+        success_type: "job.completed",
+        error_type: "job.failed",
+        payload: %{job_id: job_id}
+      )
+  """
+  @spec async_task(work :: AsyncTask.work(), opts :: keyword()) :: AsyncTask.t()
+  def async_task(work, opts \\ []) do
+    %AsyncTask{
+      work: work,
+      success_type: Keyword.get(opts, :success_type, "jido.async_task.completed"),
+      error_type: Keyword.get(opts, :error_type, "jido.async_task.failed"),
+      payload: Keyword.get(opts, :payload, %{}),
+      source: Keyword.get(opts, :source),
+      target: Keyword.get(opts, :target)
+    }
   end
 
   @doc """

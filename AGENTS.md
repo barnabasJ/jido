@@ -10,6 +10,15 @@ Build reliable agent systems by separating pure decision logic from runtime side
 
 Sole exception: middleware may stage `ctx.agent` for I/O purposes ([ADR 0018](guides/adr/0018-tagged-tuple-return-shape.md) §1). Canonical rule: [ADR 0019](guides/adr/0019-actions-mutate-state-directives-do-side-effects.md).
 
+## Action/Directive Design Rules
+- Actions are the only place that decides and applies agent state transitions. If another process needs state changed, send it a signal and let that process route the signal to an action.
+- Directives should be as short as possible: one runtime effect, then return. Do not put multi-step workflows inside `DirectiveExec`.
+- Directives must not call `Jido.AgentServer.call/4`, wait for replies, inspect agent state to decide business logic, or mutate process state. Synchronous calls from directive execution can deadlock when the target is the current agent or is waiting on the current mailbox turn.
+- For expensive or blocking work, use `Jido.Directives.AsyncTask`. The task does one unit of work and returns a result signal (or `{:ok, value}` / `{:error, reason}` for the directive to wrap). The receiving action handles the result and returns the next directive if more work remains.
+- For cross-agent communication, prefer existing signal delivery directives (`Emit` or app-specific cast descriptors) that deliver one signal. The receiving action owns any state changes and may queue the next signal/directive.
+- Model workflows as signal chains: `action -> directive -> signal -> action -> directive`. Each action changes state at most for its own agent/slice, then returns the next small directive.
+- Never use debug helpers such as `:sys.replace_state/2` in normal runtime code. If a state update is needed, expose a routed action that updates state through the agent pipeline.
+
 ## Runtime Baseline
 - Elixir `~> 1.18`
 - OTP `27+` (release QA baseline)

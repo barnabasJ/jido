@@ -26,8 +26,10 @@ defprotocol Jido.AgentServer.DirectiveExec do
 
   ### The async pattern
 
-  There is no special `{:async, ...}` return. If a directive needs to do
-  work that could block the GenServer:
+  There is no special `{:async, ...}` return. Use
+  `Jido.Directives.AsyncTask` for the common case where blocking work should run
+  under the agent task supervisor and report success/error back as signals. If a
+  custom directive needs its own async runtime:
 
   1. Spawn a supervised task for the side-effect.
   2. When the task finishes, emit a **signal** back to the agent — the
