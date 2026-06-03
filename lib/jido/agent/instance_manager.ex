@@ -74,10 +74,10 @@ defmodule Jido.Agent.InstanceManager do
 
   use Supervisor
 
-  require Logger
-
   alias Jido.Config.Defaults
   alias Jido.Storage
+
+  require Logger
 
   @reserved_agent_opts [
     :agent,
@@ -164,7 +164,7 @@ defmodule Jido.Agent.InstanceManager do
     children = [
       {Registry, keys: :unique, partitions: registry_partitions, name: registry_name(name)},
       {DynamicSupervisor, strategy: :one_for_one, name: dynamic_supervisor_name(name)},
-      {Jido.Agent.InstanceManager.Cleanup, name}
+      {Jido.Agent.InstanceManager.Cleanup, {name, config}}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)

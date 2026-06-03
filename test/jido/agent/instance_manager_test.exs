@@ -1,11 +1,8 @@
 defmodule JidoTest.Agent.InstanceManagerTest do
   use ExUnit.Case, async: false
 
-  import JidoTest.Eventually
   import JidoTest.AgentWait
-
-  # Tests with timing-based assertions (idle timeout behavior)
-  @moduletag :integration
+  import JidoTest.Eventually
 
   alias Jido.Agent.InstanceManager
   alias Jido.AgentServer
@@ -14,6 +11,9 @@ defmodule JidoTest.Agent.InstanceManagerTest do
   alias Jido.Signal
   alias Jido.Storage.ETS
   alias Jido.Storage.Redis
+
+  # Tests with timing-based assertions (idle timeout behavior)
+  @moduletag :integration
 
   # Use module attribute for manager naming to avoid atom leaks
   # Each test gets a unique integer suffix but we clean up persistent_term
@@ -85,7 +85,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
     agent do
       name "test_agent"
       description "Test agent for instance manager tests"
-      path :domain
+      path(:domain)
       schema counter: [type: :integer, default: 0]
     end
   end
@@ -147,7 +147,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
     agent do
       name "durable_cron_agent"
-      path :domain
+      path(:domain)
       schema tick_count: [type: :integer, default: 0]
     end
 
@@ -164,7 +164,7 @@ defmodule JidoTest.Agent.InstanceManagerTest do
 
     agent do
       name "declarative_conflict_agent"
-      path :domain
+      path(:domain)
       schema tick_count: [type: :integer, default: 0]
     end
 
@@ -266,6 +266,30 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       assert Jido.whereis(JidoTest.InstanceManagerTestJido, "registry-scope-key") == nil
     end
 
+    test "manager config survives cleanup child restart", %{manager: manager} do
+      assert InstanceManager.agent_module(manager) == {:ok, TestAgent}
+
+      {:ok, pid} = cleanup_pid(manager)
+      ref = Process.monitor(pid)
+      Process.exit(pid, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :killed}, 1000
+
+      assert_eventually(InstanceManager.agent_module(manager) == {:ok, TestAgent}, timeout: 1000)
+
+      agent_pid =
+        eventually(
+          fn ->
+            case get_without_exit(manager, "after-cleanup-restart") do
+              {:ok, pid} -> pid
+              _error -> false
+            end
+          end,
+          timeout: 1000
+        )
+
+      assert Process.alive?(agent_pid)
+    end
+
     test "get/3 and lookup/3 isolate same manager key across partitions", %{manager: manager} do
       {:ok, alpha_pid} = InstanceManager.get(manager, "shared-key", partition: :alpha)
       {:ok, beta_pid} = InstanceManager.get(manager, "shared-key", partition: :beta)
@@ -275,6 +299,31 @@ defmodule JidoTest.Agent.InstanceManagerTest do
       assert InstanceManager.lookup(manager, "shared-key", partition: :beta) == {:ok, beta_pid}
       assert InstanceManager.lookup(manager, "shared-key") == :error
     end
+  end
+
+  defp cleanup_pid(manager) do
+    result =
+      manager
+      |> InstanceManager.supervisor_name()
+      |> Supervisor.which_children()
+      |> Enum.find_value(fn
+        {Jido.Agent.InstanceManager.Cleanup, pid, :worker, [Jido.Agent.InstanceManager.Cleanup]} ->
+          {:ok, pid}
+
+        _child ->
+          false
+      end)
+
+    case result do
+      {:ok, pid} -> {:ok, pid}
+      nil -> {:error, :not_found}
+    end
+  end
+
+  defp get_without_exit(manager, key) do
+    InstanceManager.get(manager, key)
+  catch
+    :exit, _reason -> {:error, :supervisor_restarting}
   end
 
   describe "agent_module/1" do
