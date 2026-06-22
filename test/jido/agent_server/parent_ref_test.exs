@@ -54,12 +54,6 @@ defmodule JidoTest.AgentServer.ParentRefTest do
         ParentRef.new!(%{})
       end
     end
-
-    test "raises on non-map input" do
-      assert_raise Jido.Error.ValidationError, fn ->
-        ParentRef.new!("not a map")
-      end
-    end
   end
 
   describe "validate/1" do

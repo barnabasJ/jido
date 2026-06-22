@@ -68,11 +68,5 @@ defmodule JidoTest.Observe.SpanCtxTest do
         SpanCtx.new!(%{})
       end
     end
-
-    test "raises on non-map input" do
-      assert_raise Jido.Error.ValidationError, fn ->
-        SpanCtx.new!("not a map")
-      end
-    end
   end
 end

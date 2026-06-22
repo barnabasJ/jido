@@ -153,10 +153,61 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
     end
   end
 
-  defp quoted_cmd_function(slice_paths_for_action, mount_config_map) do
+  # Slice-less agents have empty `slice_paths_for_action` / `mount_config_map`
+  # lookup tables, which makes the generated `Map.get(%{}, key)` calls
+  # statically dead (and tripped Elixir's type checker). For the empty case we
+  # generate the lookup-free variant and omit the now-unused module attribute.
+  defp quoted_slice_paths_attr(table) when map_size(table) == 0, do: nil
+
+  defp quoted_slice_paths_attr(table) do
+    quote do: @slice_paths_for_action(unquote(Macro.escape(table)))
+  end
+
+  defp quoted_mount_config_attr(table) when map_size(table) == 0, do: nil
+
+  defp quoted_mount_config_attr(table) do
+    quote do: @mount_config_map(unquote(Macro.escape(table)))
+  end
+
+  defp quoted_resolve_slice_paths_body(table) when map_size(table) == 0 do
+    quote do: [__fallback_slice_path__(action)]
+  end
+
+  defp quoted_resolve_slice_paths_body(_table) do
     quote do
-      @slice_paths_for_action unquote(Macro.escape(slice_paths_for_action))
-      @mount_config_map unquote(Macro.escape(mount_config_map))
+      case Map.get(@slice_paths_for_action, action) do
+        [_ | _] = paths ->
+          paths
+
+        _ ->
+          [__fallback_slice_path__(action)]
+      end
+    end
+  end
+
+  defp quoted_slice_config_assign(table) when map_size(table) == 0 do
+    quote do: slice_config = %{}
+  end
+
+  defp quoted_slice_config_assign(_table) do
+    quote do: slice_config = Map.get(@mount_config_map, mount_path, %{})
+  end
+
+  defp quoted_cmd_function(slice_paths_for_action, mount_config_map) do
+    attr_statements =
+      Enum.reject(
+        [
+          quoted_slice_paths_attr(slice_paths_for_action),
+          quoted_mount_config_attr(mount_config_map)
+        ],
+        &is_nil/1
+      )
+
+    resolve_slice_paths_body = quoted_resolve_slice_paths_body(slice_paths_for_action)
+    slice_config_assign = quoted_slice_config_assign(mount_config_map)
+
+    quote do
+      unquote_splicing(attr_statements)
       @doc "Execute actions against the agent."
       @spec cmd(Jido.Agent.t(), Jido.Agent.action()) :: Jido.Agent.cmd_result()
       def cmd(%Jido.Agent{} = agent, action), do: cmd(agent, action, [])
@@ -212,7 +263,7 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
 
         Enum.reduce_while(paths, {:ok, agent, []}, fn mount_path, {:ok, acc_agent, acc_dirs} ->
           scoped_state = Map.get(acc_agent.state, mount_path, %{})
-          slice_config = Map.get(@mount_config_map, mount_path, %{})
+          unquote(slice_config_assign)
 
           per_mount = %{
             instruction
@@ -249,13 +300,7 @@ defmodule Jido.Dsl.Agent.Transformers.GenerateAccessors do
         #      lookup table).
         #   2. Fall back to a single-element list with the action's own
         #      `path :foo` escape valve, then the agent's own path.
-        case Map.get(@slice_paths_for_action, action) do
-          [_ | _] = paths ->
-            paths
-
-          _ ->
-            [__fallback_slice_path__(action)]
-        end
+        unquote(resolve_slice_paths_body)
       rescue
         UndefinedFunctionError -> [Jido.Dsl.Agent.Info.path(__MODULE__)]
       end

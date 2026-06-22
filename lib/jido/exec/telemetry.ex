@@ -127,11 +127,10 @@ defmodule Jido.Exec.Telemetry do
         message
 
       %{message: message} when is_struct(message) ->
-        if Map.has_key?(message, :message) and is_binary(message.message) do
-          message.message
-        else
-          safe_inspect(message)
-        end
+        # A struct whose own `:message` field is a binary is already handled by
+        # the `%{message: %{message: inner_message}}` clause above (a struct is a
+        # map), so by the time we reach here `message.message` is never a binary.
+        safe_inspect(message)
 
       _ ->
         safe_inspect(error)

@@ -141,7 +141,6 @@ defmodule Jido.Actions.Control do
 
     defp resolve_payload(payload, _original) when is_map(payload), do: payload
     defp resolve_payload(nil, %{data: data}) when is_map(data), do: data
-    defp resolve_payload(nil, _original), do: %{}
 
     defp resolve_source(source, _original) when is_binary(source), do: source
 

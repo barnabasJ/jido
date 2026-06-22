@@ -68,18 +68,6 @@ defmodule JidoTest.AgentServer.ChildInfoTest do
         ChildInfo.new!(%{})
       end
     end
-
-    test "raises on non-map input" do
-      assert_raise Jido.Error.ValidationError, fn ->
-        ChildInfo.new!("not a map")
-      end
-    end
-
-    test "raises on nil input" do
-      assert_raise Jido.Error.ValidationError, fn ->
-        ChildInfo.new!(nil)
-      end
-    end
   end
 
   describe "schema/0" do

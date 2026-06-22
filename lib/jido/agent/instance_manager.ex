@@ -77,8 +77,6 @@ defmodule Jido.Agent.InstanceManager do
   alias Jido.Config.Defaults
   alias Jido.Storage
 
-  require Logger
-
   @reserved_agent_opts [
     :agent,
     :agent_module,
