@@ -3,31 +3,10 @@ defmodule Jido.Ash.SliceTest do
 
   alias Jido.Ash.Slice.Info
   alias Jido.Ash.Slice.SignalEntry
-
-  defmodule DeclaredSliceResource do
-    @moduledoc false
-    use Ash.Resource,
-      domain: nil,
-      data_layer: nil,
-      extensions: [Jido.Ash.Slice]
-
-    actions do
-      action :start
-      action :cancel
-    end
-
-    jido_slice do
-      name :event_loop
-      description "Event loop slice"
-      category "reasoning"
-      vsn "0.1.0"
-      otp_app :jido
-      tags ["agent", "reasoning"]
-
-      signal("event.start", :start)
-      signal("event.cancel", :cancel)
-    end
-  end
+  alias Jido.Ash.Slice.StateField
+  alias JidoTest.Ash.DeclaredSliceResource
+  alias JidoTest.Ash.StateSliceResource
+  alias JidoTest.Ash.UnsupportedStateSliceResource
 
   @tag story: "US-AJSL-01"
   test "an Ash resource can declare a Jido slice block and signal bindings" do
@@ -61,5 +40,48 @@ defmodule Jido.Ash.SliceTest do
 
     assert Info.generated_slice_module(DeclaredSliceResource) == nil
     assert Info.generated_action_modules(DeclaredSliceResource) == []
+  end
+
+  @tag story: "US-AJSL-07"
+  test "Info derives a slice state schema from Ash attributes" do
+    # Given an Ash-backed slice resource with typed attributes
+    # When a developer asks for state fields and the derived state schema
+    # Then attributes, defaults, docs, and public metadata are represented
+    assert [
+             %StateField{
+               name: :title,
+               type: Ash.Type.String,
+               allow_nil?: false,
+               public?: true,
+               default: :none,
+               description: "Visible title"
+             },
+             %StateField{name: :attempts, type: Ash.Type.Integer, default: {:static, 0}},
+             %StateField{name: :active, type: Ash.Type.Boolean, default: {:static, true}},
+             %StateField{name: :tags, type: {:array, Ash.Type.String}, default: {:static, []}},
+             %StateField{name: :metadata, type: Ash.Type.Map, allow_nil?: true, public?: false}
+           ] = Info.state_fields(StateSliceResource)
+
+    schema = Info.state_schema(StateSliceResource)
+
+    assert {:ok, %{title: "run", attempts: 0, active: true, tags: []}} =
+             Zoi.parse(schema, %{title: "run"})
+
+    assert {:ok, %{title: "run", metadata: nil, attempts: 0, active: true, tags: []}} =
+             Zoi.parse(schema, %{title: "run", metadata: nil})
+
+    assert {:error, [%Zoi.Error{code: :required, path: [:title]}]} = Zoi.parse(schema, %{})
+  end
+
+  @tag story: "US-AJSL-08"
+  test "unsupported Ash attribute types fail clearly" do
+    # Given an Ash-backed slice resource with an unsupported state type
+    # When a developer asks for the derived state schema
+    # Then the error names the unsupported Ash type instead of silently using any
+    assert_raise ArgumentError,
+                 ~r/unsupported Ash-backed slice state attribute type Ash.Type.Binary/,
+                 fn ->
+                   Info.state_schema(UnsupportedStateSliceResource)
+                 end
   end
 end

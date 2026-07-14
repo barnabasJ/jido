@@ -19,6 +19,8 @@ flowchart LR
 | --- | --- | --- |
 | US-AJSL-01 | Declare an Ash-backed slice resource | [US-AJSL-01](./US-AJSL-01-declare-ash-backed-slice-resource.md) |
 | US-AJSL-05 | Inspect Ash-backed slice declarations | [US-AJSL-05](./US-AJSL-05-inspect-ash-backed-slice-declarations.md) |
+| US-AJSL-07 | Derive slice state from Ash attributes | [US-AJSL-07](./US-AJSL-07-derive-slice-state-from-ash-attributes.md) |
+| US-AJSL-08 | Reject unsupported slice state attributes | [US-AJSL-08](./US-AJSL-08-reject-unsupported-slice-state-attributes.md) |
 
 ## See also
 
