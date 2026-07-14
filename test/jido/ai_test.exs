@@ -136,7 +136,10 @@ defmodule Jido.AITest do
 
   describe "ask/3 fire-and-forget" do
     test "returns {:ok, request_id} once the run is launched", ctx do
+      test_pid = self()
+
       expect(ReqLLM.Generation, :generate_text, fn _model, _messages, _opts ->
+        send(test_pid, :llm_started)
         {:ok, final_answer_response("ok")}
       end)
 
@@ -145,6 +148,7 @@ defmodule Jido.AITest do
       assert {:ok, request_id} = Jido.AI.ask(pid, "What is 5 + 7 * 2?")
       assert is_binary(request_id)
       assert String.starts_with?(request_id, "req_")
+      assert_receive :llm_started, 1_000
     end
 
     test "caller can subscribe out-of-band and observe every intermediate signal", ctx do
