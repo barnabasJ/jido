@@ -21,6 +21,8 @@ flowchart LR
 | US-AJSL-05 | Inspect Ash-backed slice declarations | [US-AJSL-05](./US-AJSL-05-inspect-ash-backed-slice-declarations.md) |
 | US-AJSL-07 | Derive slice state from Ash attributes | [US-AJSL-07](./US-AJSL-07-derive-slice-state-from-ash-attributes.md) |
 | US-AJSL-08 | Reject unsupported slice state attributes | [US-AJSL-08](./US-AJSL-08-reject-unsupported-slice-state-attributes.md) |
+| US-AJSL-09 | Derive signal payload schemas from Ash actions | [US-AJSL-09](./US-AJSL-09-derive-signal-payload-schemas-from-ash-actions.md) |
+| US-AJSL-10 | Reject signals bound to missing actions | [US-AJSL-10](./US-AJSL-10-reject-signals-bound-to-missing-actions.md) |
 
 ## See also
 

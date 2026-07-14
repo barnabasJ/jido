@@ -1,11 +1,16 @@
 defmodule Jido.Ash.SliceTest do
   use ExUnit.Case, async: true
 
+  alias Jido.Ash.Slice.PayloadField
   alias Jido.Ash.Slice.Info
   alias Jido.Ash.Slice.SignalEntry
+  alias Jido.Ash.Slice.SignalPayload
   alias Jido.Ash.Slice.StateField
+  alias Jido.Ash.Slice.Verifiers.SignalActionsExist
   alias JidoTest.Ash.DeclaredSliceResource
+  alias JidoTest.Ash.SignalPayloadSliceResource
   alias JidoTest.Ash.StateSliceResource
+  alias JidoTest.Ash.UnsupportedSignalPayloadSliceResource
   alias JidoTest.Ash.UnsupportedStateSliceResource
 
   @tag story: "US-AJSL-01"
@@ -83,5 +88,68 @@ defmodule Jido.Ash.SliceTest do
                  fn ->
                    Info.state_schema(UnsupportedStateSliceResource)
                  end
+  end
+
+  @tag story: "US-AJSL-09"
+  test "Info derives signal payload schemas from Ash action inputs" do
+    # Given an Ash-backed slice with signal bindings to an action and an update
+    # When a developer inspects signal payloads and schemas
+    # Then action arguments and accepted attributes appear in stable payload shape
+    assert [
+             %SignalPayload{
+               type: "event.record",
+               action: :record,
+               fields: [
+                 %PayloadField{name: :reason, source: :argument, allow_nil?: false},
+                 %PayloadField{name: :urgent, source: :argument, default: {:static, false}}
+               ]
+             },
+             %SignalPayload{
+               type: "event.rename",
+               action: :rename,
+               fields: [
+                 %PayloadField{name: :title, source: :attribute, allow_nil?: false},
+                 %PayloadField{name: :attempts, source: :attribute, default: {:static, 0}}
+               ]
+             }
+           ] = Info.signal_payloads(SignalPayloadSliceResource)
+
+    record_schema = Info.signal_payload_schema(SignalPayloadSliceResource, "event.record")
+
+    assert {:ok, %{reason: "because", urgent: false}} =
+             Zoi.parse(record_schema, %{reason: "because"})
+
+    assert {:error, [%Zoi.Error{code: :required, path: [:reason]}]} =
+             Zoi.parse(record_schema, %{})
+
+    rename_schema = Info.signal_payload_schema(SignalPayloadSliceResource, "event.rename")
+    assert {:ok, %{title: "next", attempts: 0}} = Zoi.parse(rename_schema, %{title: "next"})
+
+    assert_raise ArgumentError,
+                 ~r/unsupported Ash-backed slice payload field type Ash.Type.Binary/,
+                 fn ->
+                   Info.signal_payload_schema(
+                     UnsupportedSignalPayloadSliceResource,
+                     "event.record"
+                   )
+                 end
+  end
+
+  @tag story: "US-AJSL-10"
+  test "missing signal target actions fail at compile time" do
+    # Given an Ash-backed slice signal that references a missing action
+    # When the verifier checks the resource's signal declarations
+    # Then the verifier reports the missing target action clearly
+    dsl_state = %{
+      [:jido_slice] => %{entities: [%SignalEntry{type: "event.missing", action: :missing}]},
+      persist: %{module: DeclaredSliceResource}
+    }
+
+    assert {:error,
+            %Spark.Error.DslError{
+              message:
+                "jido_slice signal \"event.missing\" references missing Ash action :missing",
+              path: [:jido_slice, :signal]
+            }} = SignalActionsExist.verify(dsl_state)
   end
 end

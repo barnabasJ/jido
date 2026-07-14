@@ -38,7 +38,9 @@ defmodule Jido.Ash.Slice do
     entities: [@signal]
   }
 
-  use Spark.Dsl.Extension, sections: [@jido_slice_section]
+  use Spark.Dsl.Extension,
+    sections: [@jido_slice_section],
+    verifiers: [Jido.Ash.Slice.Verifiers.SignalActionsExist]
 
   @doc false
   @spec validate_slice_name(name :: atom() | String.t(), opts :: keyword()) ::
