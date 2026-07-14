@@ -23,6 +23,9 @@ flowchart LR
 | US-AJSL-08 | Reject unsupported slice state attributes | [US-AJSL-08](./US-AJSL-08-reject-unsupported-slice-state-attributes.md) |
 | US-AJSL-09 | Derive signal payload schemas from Ash actions | [US-AJSL-09](./US-AJSL-09-derive-signal-payload-schemas-from-ash-actions.md) |
 | US-AJSL-10 | Reject signals bound to missing actions | [US-AJSL-10](./US-AJSL-10-reject-signals-bound-to-missing-actions.md) |
+| US-AJSL-11 | Generate stable reducer action modules | [US-AJSL-11](./US-AJSL-11-generate-stable-reducer-action-modules.md) |
+| US-AJSL-12 | Adapt Ash reducer success results | [US-AJSL-12](./US-AJSL-12-adapt-ash-reducer-success-results.md) |
+| US-AJSL-13 | Preserve Ash reducer error results | [US-AJSL-13](./US-AJSL-13-preserve-ash-reducer-error-results.md) |
 
 ## See also
 

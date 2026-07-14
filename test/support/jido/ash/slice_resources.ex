@@ -133,3 +133,90 @@ defmodule JidoTest.Ash.UnsupportedSignalPayloadSliceResource do
     signal("event.record", :record)
   end
 end
+
+defmodule JidoTest.Ash.IncrementReducer do
+  @moduledoc false
+  use Ash.Resource.Actions.Implementation
+
+  alias Jido.Ash.Slice.ReducerResult
+
+  @impl Ash.Resource.Actions.Implementation
+  @spec run(
+          input :: Ash.ActionInput.t(),
+          opts :: keyword(),
+          context :: Ash.Resource.Actions.Implementation.context()
+        ) :: {:ok, ReducerResult.t()}
+  def run(input, _opts, _context) do
+    slice = Map.get(input.context, :slice, %{})
+    amount = input.arguments.amount
+    count = Map.get(slice, :count, 0) + amount
+
+    signal =
+      Jido.Signal.new!(%{type: "counter.incremented", source: "/test", data: %{count: count}})
+
+    directive = %Jido.Directives.Emit{signal: signal}
+
+    {:ok, ReducerResult.new(Map.put(slice, :count, count), [directive])}
+  end
+end
+
+defmodule JidoTest.Ash.FailingReducer do
+  @moduledoc false
+  use Ash.Resource.Actions.Implementation
+
+  @impl Ash.Resource.Actions.Implementation
+  @spec run(
+          input :: Ash.ActionInput.t(),
+          opts :: keyword(),
+          context :: Ash.Resource.Actions.Implementation.context()
+        ) :: {:ok, {:error, {:reducer_failed, String.t()}}}
+  def run(input, _opts, _context) do
+    {:ok, {:error, {:reducer_failed, input.arguments.reason}}}
+  end
+end
+
+defmodule JidoTest.Ash.ReducerSliceResource do
+  @moduledoc false
+  use Ash.Resource,
+    domain: JidoTest.Ash.ReducerDomain,
+    data_layer: nil,
+    extensions: [Jido.Ash.Slice]
+
+  attributes do
+    attribute :count, :integer, default: 0, public?: true
+  end
+
+  actions do
+    action :increment, :term do
+      argument :amount, :integer, default: 1
+
+      run JidoTest.Ash.IncrementReducer
+    end
+
+    action :fail, :term do
+      argument :reason, :string, allow_nil?: false
+
+      run JidoTest.Ash.FailingReducer
+    end
+  end
+
+  resource do
+    require_primary_key? false
+  end
+
+  jido_slice do
+    name :counter
+
+    signal("counter.increment", :increment)
+    signal("counter.fail", :fail)
+  end
+end
+
+defmodule JidoTest.Ash.ReducerDomain do
+  @moduledoc false
+  use Ash.Domain, validate_config_inclusion?: false
+
+  resources do
+    resource JidoTest.Ash.ReducerSliceResource
+  end
+end

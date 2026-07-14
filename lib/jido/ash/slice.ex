@@ -40,6 +40,7 @@ defmodule Jido.Ash.Slice do
 
   use Spark.Dsl.Extension,
     sections: [@jido_slice_section],
+    transformers: [Jido.Ash.Slice.Transformers.GenerateActionModules],
     verifiers: [Jido.Ash.Slice.Verifiers.SignalActionsExist]
 
   @doc false

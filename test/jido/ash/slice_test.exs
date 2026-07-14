@@ -8,6 +8,7 @@ defmodule Jido.Ash.SliceTest do
   alias Jido.Ash.Slice.StateField
   alias Jido.Ash.Slice.Verifiers.SignalActionsExist
   alias JidoTest.Ash.DeclaredSliceResource
+  alias JidoTest.Ash.ReducerSliceResource
   alias JidoTest.Ash.SignalPayloadSliceResource
   alias JidoTest.Ash.StateSliceResource
   alias JidoTest.Ash.UnsupportedSignalPayloadSliceResource
@@ -28,10 +29,10 @@ defmodule Jido.Ash.SliceTest do
   end
 
   @tag story: "US-AJSL-05"
-  test "Info exposes metadata and generation placeholders" do
+  test "Info exposes metadata and generated action modules" do
     # Given an Ash-backed slice resource with metadata and signal bindings
     # When a developer calls the Info accessors
-    # Then they receive stable declaration data and empty generation placeholders
+    # Then they receive stable declaration data and generated action module metadata
     assert Info.description(DeclaredSliceResource) == "Event loop slice"
     assert Info.category(DeclaredSliceResource) == "reasoning"
     assert Info.vsn(DeclaredSliceResource) == "0.1.0"
@@ -44,7 +45,11 @@ defmodule Jido.Ash.SliceTest do
            ] = Info.signals(DeclaredSliceResource)
 
     assert Info.generated_slice_module(DeclaredSliceResource) == nil
-    assert Info.generated_action_modules(DeclaredSliceResource) == []
+
+    assert [
+             JidoTest.Ash.DeclaredSliceResource.Jido.Start,
+             JidoTest.Ash.DeclaredSliceResource.Jido.Cancel
+           ] = Info.generated_action_modules(DeclaredSliceResource)
   end
 
   @tag story: "US-AJSL-07"
@@ -151,5 +156,47 @@ defmodule Jido.Ash.SliceTest do
                 "jido_slice signal \"event.missing\" references missing Ash action :missing",
               path: [:jido_slice, :signal]
             }} = SignalActionsExist.verify(dsl_state)
+  end
+
+  @tag story: "US-AJSL-11"
+  test "Info exposes stable generated reducer action modules" do
+    # Given an Ash-backed slice resource with generic reducer actions
+    # When the resource compiles through the Jido Ash slice extension
+    # Then generated Jido action modules are stable and introspectable
+    assert [
+             JidoTest.Ash.ReducerSliceResource.Jido.Increment,
+             JidoTest.Ash.ReducerSliceResource.Jido.Fail
+           ] = Info.generated_action_modules(ReducerSliceResource)
+
+    assert Info.generated_action_module(ReducerSliceResource, :increment) ==
+             JidoTest.Ash.ReducerSliceResource.Jido.Increment
+
+    assert Jido.Dsl.Action.Info.name(JidoTest.Ash.ReducerSliceResource.Jido.Increment) ==
+             "counter_increment"
+  end
+
+  @tag story: "US-AJSL-12"
+  test "generated reducer actions return next slice state and directives" do
+    # Given a generated Jido action for an Ash reducer action
+    # When the action runs with signal payload and current slice state
+    # Then the Ash result is adapted to {:ok, next_slice, directives}
+    signal = Jido.Signal.new!(%{type: "counter.increment", source: "/test", data: %{amount: 3}})
+
+    assert {:ok, %{count: 5}, [%Jido.Directives.Emit{signal: emitted}]} =
+             JidoTest.Ash.ReducerSliceResource.Jido.Increment.run(signal, %{count: 2}, %{}, %{})
+
+    assert emitted.type == "counter.incremented"
+    assert emitted.data == %{count: 5}
+  end
+
+  @tag story: "US-AJSL-13"
+  test "generated reducer actions preserve error results without state mutation" do
+    # Given a generated Jido action for an Ash reducer action that fails
+    # When the action returns an error-shaped reducer result
+    # Then the generated action returns {:error, reason} and no replacement slice
+    signal = Jido.Signal.new!(%{type: "counter.fail", source: "/test", data: %{reason: "boom"}})
+
+    assert {:error, {:reducer_failed, "boom"}} =
+             JidoTest.Ash.ReducerSliceResource.Jido.Fail.run(signal, %{count: 2}, %{}, %{})
   end
 end

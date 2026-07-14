@@ -93,6 +93,14 @@ defmodule Jido.Ash.Slice.Info do
     Extension.get_persisted(resource, :jido_generated_action_modules, [])
   end
 
+  @doc "Returns the generated action module for the given Ash action name."
+  @spec generated_action_module(resource :: module(), action :: atom()) :: module() | nil
+  def generated_action_module(resource, action) do
+    resource
+    |> Extension.get_persisted(:jido_generated_action_modules_by_action, %{})
+    |> Map.get(action)
+  end
+
   defp fetch_action!(resource, action) do
     case Ash.Resource.Info.action(resource, action) do
       nil -> raise ArgumentError, "missing Ash action #{inspect(action)} on #{inspect(resource)}"
