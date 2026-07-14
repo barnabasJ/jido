@@ -421,6 +421,7 @@ defmodule Jido.MixProject do
       {:jido_signal, "~> 2.1"},
 
       # Jido Deps
+      {:ash, "~> 3.0"},
       {:deep_merge, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:nimble_options, "~> 1.1"},
@@ -454,7 +455,7 @@ defmodule Jido.MixProject do
       {:expublish, "~> 2.7", only: [:dev], runtime: false},
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
       {:mimic, "~> 2.0", only: :test},
-      {:stream_data, "~> 1.0", only: [:dev, :test]},
+      {:stream_data, "~> 1.0"},
       {:mix_test_interactive, "~> 5.1", only: :dev, runtime: false},
 
       # Code generation
