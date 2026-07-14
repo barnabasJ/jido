@@ -220,3 +220,81 @@ defmodule JidoTest.Ash.ReducerDomain do
     resource JidoTest.Ash.ReducerSliceResource
   end
 end
+
+defmodule JidoTest.Ash.PolicyReducer do
+  @moduledoc false
+  use Ash.Resource.Actions.Implementation
+
+  alias Jido.Ash.Slice.ReducerResult
+
+  @impl Ash.Resource.Actions.Implementation
+  @spec run(
+          input :: Ash.ActionInput.t(),
+          opts :: keyword(),
+          context :: Ash.Resource.Actions.Implementation.context()
+        ) :: {:ok, ReducerResult.t()}
+  def run(input, _opts, _context) do
+    slice = Map.get(input.context, :slice, %{})
+    count = Map.get(slice, :count, 0) + input.arguments.amount
+    actor = input.context[:private][:actor]
+
+    next_slice =
+      slice
+      |> Map.put(:count, count)
+      |> Map.put(:actor_role, actor.role)
+      |> Map.put(:request_id, input.context.request_id)
+      |> Map.put(:tenant, input.tenant)
+
+    {:ok, ReducerResult.new(next_slice)}
+  end
+end
+
+defmodule JidoTest.Ash.PolicySliceResource do
+  @moduledoc false
+  use Ash.Resource,
+    domain: JidoTest.Ash.PolicyDomain,
+    data_layer: nil,
+    extensions: [Jido.Ash.Slice],
+    authorizers: [Ash.Policy.Authorizer]
+
+  attributes do
+    attribute :count, :integer, default: 0, public?: true
+  end
+
+  actions do
+    action :secure_increment, :term do
+      argument :amount, :integer, default: 1
+
+      run JidoTest.Ash.PolicyReducer
+    end
+  end
+
+  policies do
+    policy action(:secure_increment) do
+      authorize_if actor_attribute_equals(:role, :operator)
+    end
+
+    policy action(:secure_increment) do
+      authorize_if context_equals(:allow_slice_transition?, true)
+    end
+  end
+
+  resource do
+    require_primary_key? false
+  end
+
+  jido_slice do
+    name :policy_counter
+
+    signal("policy_counter.increment", :secure_increment)
+  end
+end
+
+defmodule JidoTest.Ash.PolicyDomain do
+  @moduledoc false
+  use Ash.Domain, validate_config_inclusion?: false
+
+  resources do
+    resource JidoTest.Ash.PolicySliceResource
+  end
+end

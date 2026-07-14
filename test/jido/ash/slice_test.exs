@@ -10,6 +10,7 @@ defmodule Jido.Ash.SliceTest do
   alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias JidoTest.Ash.DeclaredSliceResource
+  alias JidoTest.Ash.PolicySliceResource
   alias JidoTest.Ash.ReducerSliceResource
   alias JidoTest.Ash.SignalPayloadSliceResource
   alias JidoTest.Ash.StateSliceResource
@@ -290,5 +291,70 @@ defmodule Jido.Ash.SliceTest do
     assert AgentInfo.slice_paths_for_action(AshSliceRouteAgent)[
              JidoTest.Ash.ReducerSliceResource.Jido.Increment
            ] == [:counter_two]
+  end
+
+  @tag story: "US-AJSL-18"
+  test "generated reducers run with runtime actor context and tenant" do
+    # Given an Ash-backed reducer protected by Ash policies
+    # When the generated action runs with runtime actor, context, and tenant data
+    # Then Ash authorizes the reducer and the action sees the same runtime data
+    signal =
+      Jido.Signal.new!(%{
+        type: "policy_counter.increment",
+        source: "/test",
+        data: %{amount: 2}
+      })
+
+    ctx = %{
+      actor: %{role: :operator},
+      context: %{allow_slice_transition?: true, request_id: "req-1"},
+      tenant: "tenant-a"
+    }
+
+    refute Keyword.has_key?(
+             Jido.Ash.Slice.ReducerAdapter.ash_opts(%{}, %{}, %{}, %{}),
+             :authorize?
+           )
+
+    assert {:ok,
+            %{
+              count: 5,
+              actor_role: :operator,
+              request_id: "req-1",
+              tenant: "tenant-a"
+            }, []} =
+             PolicySliceResource.Jido.SecureIncrement.run(
+               signal,
+               %{count: 3},
+               %{authorize?: true},
+               ctx
+             )
+  end
+
+  @tag story: "US-AJSL-19"
+  test "generated reducers preserve structured Ash policy denial errors" do
+    # Given an Ash-backed reducer protected by Ash policies
+    # When the generated action runs with authorization enabled and a forbidden actor
+    # Then the reducer returns Ash's structured policy denial without mutating state
+    signal =
+      Jido.Signal.new!(%{
+        type: "policy_counter.increment",
+        source: "/test",
+        data: %{amount: 2}
+      })
+
+    ctx = %{
+      actor: %{role: :viewer},
+      context: %{allow_slice_transition?: true, request_id: "req-2"},
+      tenant: "tenant-a"
+    }
+
+    assert {:error, %Ash.Error.Forbidden{}} =
+             PolicySliceResource.Jido.SecureIncrement.run(
+               signal,
+               %{count: 3},
+               %{authorize?: true},
+               ctx
+             )
   end
 end
