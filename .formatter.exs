@@ -24,6 +24,7 @@ spark_locals_without_parens = [
   schedule: 3,
   schema: 1,
   signal: 1,
+  signal: 2,
   static: 1,
   storage: 1,
   subscription: 2,
@@ -37,9 +38,9 @@ spark_locals_without_parens = [
 
 # Used by "mix format"
 [
-  import_deps: [:spark],
+  import_deps: [:ash, :spark],
   plugins: [Spark.Formatter],
   inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"],
   locals_without_parens: spark_locals_without_parens,
-  export: [locals_without_parens: spark_locals_without_parens]
+  export: [locals_without_parens: [jido_slice: 1] ++ spark_locals_without_parens]
 ]

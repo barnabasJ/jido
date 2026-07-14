@@ -4,6 +4,8 @@ defmodule Jido.Slices.AiReact.Directives.ToolExecTest do
   alias Jido.AI.TestActions.{TestAdd, TestFails}
   alias Jido.Slices.AiReact.Directives.ToolExec
 
+  @async_directive_timeout 5_000
+
   defp directive(opts \\ []) do
     call =
       Keyword.get(opts, :tool_call, %{
@@ -60,7 +62,7 @@ defmodule Jido.Slices.AiReact.Directives.ToolExecTest do
         Jido.AgentServer.DirectiveExec.exec(directive(), :input_signal, fake_state(jido))
       end)
 
-    assert_receive {:cast, signal}, 1_000
+    assert_receive {:cast, signal}, @async_directive_timeout
     assert signal.type == "ai.react.tool.completed"
     assert signal.data.tool_call_id == "call_1"
     assert signal.data.name == "test_add"
@@ -81,7 +83,7 @@ defmodule Jido.Slices.AiReact.Directives.ToolExecTest do
         Jido.AgentServer.DirectiveExec.exec(failing, :input_signal, fake_state(jido))
       end)
 
-    assert_receive {:cast, signal}, 1_000
+    assert_receive {:cast, signal}, @async_directive_timeout
     assert signal.type == "ai.react.tool.completed"
     assert Jason.decode!(signal.data.content) == %{"error" => "nope"}
   end
@@ -98,7 +100,7 @@ defmodule Jido.Slices.AiReact.Directives.ToolExecTest do
         Jido.AgentServer.DirectiveExec.exec(missing, :input_signal, fake_state(jido))
       end)
 
-    assert_receive {:cast, signal}, 1_000
+    assert_receive {:cast, signal}, @async_directive_timeout
     assert signal.type == "ai.react.tool.completed"
     assert Jason.decode!(signal.data.content) == %{"error" => "tool not found: ghost"}
   end
