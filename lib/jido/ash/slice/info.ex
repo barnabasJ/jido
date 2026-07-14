@@ -4,6 +4,8 @@ defmodule Jido.Ash.Slice.Info do
   """
 
   alias Jido.Ash.Slice.PayloadField
+  alias Jido.Ash.Slice.PersistenceEntry
+  alias Jido.Ash.Slice.PersistenceField
   alias Jido.Ash.Slice.SignalPayload
   alias Jido.Ash.Slice.StateField
   alias Spark.Dsl.Extension
@@ -36,7 +38,7 @@ defmodule Jido.Ash.Slice.Info do
 
   @doc "Returns signal declarations in declaration order."
   @spec signals(resource :: module()) :: [Jido.Ash.Slice.SignalEntry.t()]
-  def signals(resource), do: Extension.get_entities(resource, @section)
+  def signals(resource), do: entities(resource, Jido.Ash.Slice.SignalEntry)
 
   @doc "Returns Ash attributes as stable slice state-field metadata."
   @spec state_fields(resource :: module()) :: [StateField.t()]
@@ -61,6 +63,28 @@ defmodule Jido.Ash.Slice.Info do
     |> Enum.map(&StateField.from_attribute/1)
     |> Map.new(fn %StateField{} = field -> {field.name, field_schema!(field, :state)} end)
     |> Zoi.object()
+  end
+
+  @doc "Returns derived persistence metadata in state-field order."
+  @spec persistence_fields(resource :: module()) :: [PersistenceField.t()]
+  def persistence_fields(resource) do
+    resource
+    |> Ash.Resource.Info.attributes()
+    |> persistence_fields_from_attributes(persistence_entries(resource))
+  end
+
+  @doc false
+  @spec persistence_fields_from_attributes(
+          attributes :: [Ash.Resource.Attribute.t()],
+          entries :: [PersistenceEntry.t()]
+        ) :: [PersistenceField.t()]
+  def persistence_fields_from_attributes(attributes, entries) do
+    modes = Map.new(entries, &{&1.attribute, &1.mode})
+
+    Enum.map(attributes, fn attribute ->
+      field = StateField.from_attribute(attribute)
+      PersistenceField.from_state_field(field, Map.get(modes, field.name, :durable))
+    end)
   end
 
   @doc "Returns derived signal payload metadata in signal declaration order."
@@ -114,6 +138,14 @@ defmodule Jido.Ash.Slice.Info do
       nil -> raise ArgumentError, "missing Ash action #{inspect(action)} on #{inspect(resource)}"
       action -> action
     end
+  end
+
+  defp persistence_entries(resource), do: entities(resource, PersistenceEntry)
+
+  defp entities(resource, module) do
+    resource
+    |> Extension.get_entities(@section)
+    |> Enum.filter(&match?(%{__struct__: ^module}, &1))
   end
 
   defp payload_fields(resource, action) do

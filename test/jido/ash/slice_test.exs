@@ -3,6 +3,7 @@ defmodule Jido.Ash.SliceTest do
 
   alias Jido.Ash.Slice.PayloadField
   alias Jido.Ash.Slice.Info
+  alias Jido.Ash.Slice.PersistenceField
   alias Jido.Ash.Slice.SignalEntry
   alias Jido.Ash.Slice.SignalPayload
   alias Jido.Ash.Slice.StateField
@@ -10,6 +11,7 @@ defmodule Jido.Ash.SliceTest do
   alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias JidoTest.Ash.DeclaredSliceResource
+  alias JidoTest.Ash.PersistenceSliceResource
   alias JidoTest.Ash.PolicySliceResource
   alias JidoTest.Ash.ReducerSliceResource
   alias JidoTest.Ash.SignalPayloadSliceResource
@@ -97,6 +99,44 @@ defmodule Jido.Ash.SliceTest do
                  fn ->
                    Info.state_schema(UnsupportedStateSliceResource)
                  end
+  end
+
+  @tag story: "US-AJSL-20"
+  test "Info exposes generated persistence metadata for Ash attributes" do
+    # Given an Ash-backed slice resource with durable, transient, and restored fields
+    # When a developer inspects persistence metadata
+    # Then each state attribute has a stable checkpoint mode
+    assert [
+             %PersistenceField{name: :durable_count, mode: :durable, default: {:static, 0}},
+             %PersistenceField{name: :durable_note, mode: :durable, default: :none},
+             %PersistenceField{name: :transient_buffer, mode: :transient, default: {:static, []}},
+             %PersistenceField{name: :restored_buffer, mode: :restored, default: {:static, []}}
+           ] = Info.persistence_fields(PersistenceSliceResource)
+  end
+
+  @tag story: "US-AJSL-21"
+  test "generated slice persistence transform excludes and restores attributes by metadata" do
+    # Given a generated Ash-backed slice module with persistence metadata
+    # When checkpoint externalize and thaw reinstate run through the generated callbacks
+    # Then durable fields survive, transient fields are dropped, and restored fields reset
+    slice_module = Info.generated_slice_module(PersistenceSliceResource)
+
+    runtime_state = %{
+      durable_count: 7,
+      durable_note: nil,
+      transient_buffer: ["drop me"],
+      restored_buffer: ["runtime only"]
+    }
+
+    Code.ensure_loaded!(slice_module)
+
+    assert function_exported?(slice_module, :externalize, 1)
+    assert function_exported?(slice_module, :reinstate, 1)
+
+    assert %{durable_count: 7, durable_note: nil} = slice_module.externalize(runtime_state)
+
+    assert %{durable_count: 7, durable_note: nil, restored_buffer: []} =
+             slice_module.reinstate(%{durable_count: 7, durable_note: nil})
   end
 
   @tag story: "US-AJSL-09"

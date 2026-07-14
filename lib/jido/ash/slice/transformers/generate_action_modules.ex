@@ -4,6 +4,7 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
   use Spark.Dsl.Transformer
 
   alias Jido.Ash.Slice.Info
+  alias Jido.Ash.Slice.PersistenceEntry
   alias Jido.Ash.Slice.SignalEntry
   alias Spark.Dsl.Transformer
 
@@ -15,11 +16,15 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
 
     ash_actions = Transformer.get_entities(dsl_state, [:actions])
     attributes = Transformer.get_entities(dsl_state, [:attributes])
-    slice_generation = slice_generation(resource, attributes)
+
+    jido_slice_entities = Transformer.get_entities(dsl_state, [:jido_slice])
+    signal_entries = Enum.filter(jido_slice_entities, &match?(%SignalEntry{}, &1))
+    persistence_entries = Enum.filter(jido_slice_entities, &match?(%PersistenceEntry{}, &1))
+
+    slice_generation = slice_generation(resource, attributes, persistence_entries)
 
     generated =
-      dsl_state
-      |> Transformer.get_entities([:jido_slice])
+      signal_entries
       |> generic_signal_entries(ash_actions)
       |> Enum.map(&generated_entry(resource, ash_actions, slice_opts.name, &1))
 
@@ -92,11 +97,13 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
     Module.concat([resource, Jido, Slice])
   end
 
-  defp slice_generation(resource, attributes) do
+  defp slice_generation(resource, attributes, persistence_entries) do
     {:ok,
      %{
        module: generated_slice_module_name(resource),
-       schema: Info.state_schema_from_attributes(attributes)
+       schema: Info.state_schema_from_attributes(attributes),
+       persistence_fields:
+         Info.persistence_fields_from_attributes(attributes, persistence_entries)
      }}
   rescue
     ArgumentError -> :skip
@@ -168,11 +175,15 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
 
   defp slice_module_blocks(:skip, _slice_opts, _generated), do: []
 
-  defp slice_module_blocks({:ok, %{module: slice_module, schema: schema}}, slice_opts, generated) do
-    [slice_module_block(slice_module, schema, slice_opts, generated)]
+  defp slice_module_blocks(
+         {:ok, %{module: slice_module, schema: schema, persistence_fields: persistence_fields}},
+         slice_opts,
+         generated
+       ) do
+    [slice_module_block(slice_module, schema, persistence_fields, slice_opts, generated)]
   end
 
-  defp slice_module_block(slice_module, schema, slice_opts, generated) do
+  defp slice_module_block(slice_module, schema, persistence_fields, slice_opts, generated) do
     route_blocks = Enum.map(generated, &route_block/1)
     option_blocks = slice_option_blocks(slice_opts)
 
@@ -182,6 +193,9 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
 
         use Jido.Slice
 
+        @behaviour Jido.Persist.Transform
+        @persistence_fields unquote(Macro.escape(persistence_fields))
+
         slice do
           name unquote(slice_opts.name)
           unquote_splicing(option_blocks)
@@ -190,6 +204,18 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
 
         signal_routes do
           (unquote_splicing(route_blocks))
+        end
+
+        @impl Jido.Persist.Transform
+        @spec externalize(slice_value :: term()) :: term()
+        def externalize(slice_value) do
+          Jido.Ash.Slice.Persistence.externalize(slice_value, @persistence_fields)
+        end
+
+        @impl Jido.Persist.Transform
+        @spec reinstate(stored_value :: term()) :: term()
+        def reinstate(stored_value) do
+          Jido.Ash.Slice.Persistence.reinstate(stored_value, @persistence_fields)
         end
       end
     end

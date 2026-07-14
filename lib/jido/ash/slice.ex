@@ -8,6 +8,7 @@ defmodule Jido.Ash.Slice do
   """
 
   alias Jido.Ash.Slice.SignalEntry
+  alias Jido.Ash.Slice.PersistenceEntry
 
   @signal %Spark.Dsl.Entity{
     name: :signal,
@@ -17,6 +18,17 @@ defmodule Jido.Ash.Slice do
     schema: [
       type: [type: :string, required: true],
       action: [type: :atom, required: true]
+    ]
+  }
+
+  @persist %Spark.Dsl.Entity{
+    name: :persist,
+    describe: "Marks an Ash attribute's generated checkpoint behavior.",
+    target: PersistenceEntry,
+    args: [:attribute, :mode],
+    schema: [
+      attribute: [type: :atom, required: true],
+      mode: [type: {:in, [:durable, :transient, :restored]}, required: true]
     ]
   }
 
@@ -35,13 +47,16 @@ defmodule Jido.Ash.Slice do
       otp_app: [type: :atom],
       tags: [type: {:list, :string}, default: []]
     ],
-    entities: [@signal]
+    entities: [@signal, @persist]
   }
 
   use Spark.Dsl.Extension,
     sections: [@jido_slice_section],
     transformers: [Jido.Ash.Slice.Transformers.GenerateActionModules],
-    verifiers: [Jido.Ash.Slice.Verifiers.SignalActionsExist]
+    verifiers: [
+      Jido.Ash.Slice.Verifiers.SignalActionsExist,
+      Jido.Ash.Slice.Verifiers.PersistenceAttributesExist
+    ]
 
   @doc false
   @spec validate_slice_name(name :: atom() | String.t(), opts :: keyword()) ::

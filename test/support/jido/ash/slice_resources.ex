@@ -71,6 +71,32 @@ defmodule JidoTest.Ash.UnsupportedStateSliceResource do
   end
 end
 
+defmodule JidoTest.Ash.PersistenceSliceResource do
+  @moduledoc false
+  use Ash.Resource,
+    domain: nil,
+    data_layer: nil,
+    extensions: [Jido.Ash.Slice]
+
+  attributes do
+    attribute :durable_count, :integer, default: 0, public?: true
+    attribute :durable_note, :string, public?: true
+    attribute :transient_buffer, {:array, :string}, default: [], public?: true
+    attribute :restored_buffer, {:array, :string}, default: [], public?: true
+  end
+
+  resource do
+    require_primary_key? false
+  end
+
+  jido_slice do
+    name :persistence_state
+
+    persist(:transient_buffer, :transient)
+    persist(:restored_buffer, :restored)
+  end
+end
+
 defmodule JidoTest.Ash.SignalPayloadSliceResource do
   @moduledoc false
   use Ash.Resource,
