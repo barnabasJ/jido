@@ -7,6 +7,7 @@ defmodule Jido.Ash.SliceTest do
   alias Jido.Ash.Slice.SignalPayload
   alias Jido.Ash.Slice.StateField
   alias Jido.Ash.Slice.Verifiers.SignalActionsExist
+  alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias JidoTest.Ash.DeclaredSliceResource
   alias JidoTest.Ash.ReducerSliceResource
@@ -234,5 +235,60 @@ defmodule Jido.Ash.SliceTest do
     assert Spark.Dsl.is?(Jido.Slices.Thread, Jido.Slice)
     assert SliceInfo.name(Jido.Slices.Thread) == "thread"
     assert [_ | _] = SliceInfo.signal_routes(Jido.Slices.Thread)
+  end
+
+  @tag story: "US-AJSL-16"
+  test "Jido.Agent mounts Ash-backed slice resources at agent-owned paths" do
+    # Given an agent that mounts an Ash-backed resource and a hand-authored slice
+    # When the agent compiles and seeds initial state
+    # Then the Ash resource resolves to its generated slice at the agent-owned path
+    defmodule MixedAshSliceAgent do
+      use Jido.Agent, default_slices: false
+
+      agent do
+        name "mixed_ash_slice_agent"
+      end
+
+      slices do
+        slice(:counter_one, ReducerSliceResource)
+        slice(:conversation, Jido.Slices.Thread)
+      end
+    end
+
+    assert [
+             %{module: JidoTest.Ash.ReducerSliceResource.Jido.Slice, path: :counter_one},
+             %{module: Jido.Slices.Thread, path: :conversation}
+           ] = AgentInfo.slice_instances(MixedAshSliceAgent)
+
+    agent = MixedAshSliceAgent.new(state: %{counter_one: %{count: 7}})
+
+    assert agent.state.counter_one == %{count: 7}
+    assert Map.has_key?(agent.state, :conversation)
+  end
+
+  @tag story: "US-AJSL-17"
+  test "Ash-backed slice mounts expand routes to generated reducer actions" do
+    # Given an agent mounting an Ash-backed slice resource
+    # When the agent route table is expanded
+    # Then generated reducer actions are routed from the resource-backed mount
+    defmodule AshSliceRouteAgent do
+      use Jido.Agent, default_slices: false
+
+      agent do
+        name "ash_slice_route_agent"
+      end
+
+      slices do
+        slice(:counter_two, ReducerSliceResource)
+      end
+    end
+
+    assert {"counter.increment", JidoTest.Ash.ReducerSliceResource.Jido.Increment, -10} in AgentInfo.routes(
+             AshSliceRouteAgent
+           )
+
+    assert AgentInfo.slice_paths_for_action(AshSliceRouteAgent)[
+             JidoTest.Ash.ReducerSliceResource.Jido.Increment
+           ] == [:counter_two]
   end
 end

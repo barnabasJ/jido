@@ -25,6 +25,7 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   use Spark.Dsl.Transformer
 
   alias Jido.Dsl.Agent.SliceMount
+  alias Jido.Ash.Slice.Info, as: AshSliceInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias Jido.Slice.Instance, as: SliceInstance
   alias Spark.Dsl.Transformer
@@ -167,17 +168,47 @@ defmodule Jido.Dsl.Agent.Transformers.WalkExtensions do
   defp classify_mount(%SliceMount{path: path, module: module, options: options}, dsl_state) do
     ensure_module_loaded!(module)
 
-    unless Spark.Dsl.is?(module, Jido.Slice) do
-      raise CompileError,
-        description:
-          "Module #{inspect(module)} mounted in `slices do …` is not a " <>
-            "`use Jido.Slice` module. Did you forget the `use` line?"
-    end
+    slice_module = resolve_slice_module!(module)
 
-    block_config = read_contributed_block(module, dsl_state)
+    block_config = read_contributed_block(slice_module, dsl_state)
     config = Map.merge(normalize_to_map(options), block_config)
 
-    SliceInstance.new({module, config}, path)
+    SliceInstance.new({slice_module, config}, path)
+  end
+
+  defp resolve_slice_module!(module) do
+    if Spark.Dsl.is?(module, Jido.Slice) do
+      module
+    else
+      case generated_ash_slice_module(module) do
+        nil ->
+          raise CompileError,
+            description:
+              "Module #{inspect(module)} mounted in `slices do …` is not a " <>
+                "`use Jido.Slice` module or an Ash resource using `Jido.Ash.Slice`."
+
+        slice_module ->
+          ensure_generated_slice_module!(slice_module, module)
+      end
+    end
+  end
+
+  defp generated_ash_slice_module(module) do
+    AshSliceInfo.generated_slice_module(module)
+  rescue
+    _error -> nil
+  end
+
+  defp ensure_generated_slice_module!(nil, resource) do
+    raise CompileError,
+      description:
+        "Ash-backed slice resource #{inspect(resource)} did not generate a mountable " <>
+          "Jido slice module. Ensure its state attributes are supported."
+  end
+
+  defp ensure_generated_slice_module!(slice_module, _resource) do
+    ensure_module_loaded!(slice_module)
+    slice_module
   end
 
   defp read_contributed_block(module, dsl_state) do

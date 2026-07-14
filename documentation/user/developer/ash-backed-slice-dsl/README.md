@@ -28,6 +28,8 @@ flowchart LR
 | US-AJSL-13 | Preserve Ash reducer error results | [US-AJSL-13](./US-AJSL-13-preserve-ash-reducer-error-results.md) |
 | US-AJSL-14 | Generate a mountable Jido slice module | [US-AJSL-14](./US-AJSL-14-generate-mountable-jido-slice-module.md) |
 | US-AJSL-15 | Preserve hand-authored slice introspection | [US-AJSL-15](./US-AJSL-15-preserve-hand-authored-slice-introspection.md) |
+| US-AJSL-16 | Mount Ash-backed slice resources | [US-AJSL-16](./US-AJSL-16-mount-ash-backed-slice-resources.md) |
+| US-AJSL-17 | Expand Ash-backed slice routes | [US-AJSL-17](./US-AJSL-17-expand-ash-backed-slice-routes.md) |
 
 ## See also
 
