@@ -14,6 +14,7 @@ defmodule Jido.Ash.SliceTest do
   alias JidoTest.Ash.DomainComposedAgentDomain
   alias JidoTest.Ash.PersistenceSliceResource
   alias JidoTest.Ash.PolicySliceResource
+  alias JidoTest.Ash.ProvingSliceResource
   alias JidoTest.Ash.ReducerSliceResource
   alias JidoTest.Ash.SignalPayloadSliceResource
   alias JidoTest.Ash.StateSliceResource
@@ -388,6 +389,98 @@ defmodule Jido.Ash.SliceTest do
              AgentInfo.slice_paths_for_action(DomainCompositionBaselineAgent)
   end
 
+  @tag story: "US-AJSL-22"
+  test "mounted proving slice handles a signal through the generated reducer" do
+    # Given a tiny Ash-backed slice mounted in a Jido agent
+    # When the agent runs the generated action with the original input signal
+    # Then state updates through the mounted slice and directives are returned
+    defmodule ProvingSliceAgent do
+      use Jido.Agent, default_slices: false
+
+      agent do
+        name "proving_slice_agent"
+      end
+
+      slices do
+        slice(:proving, ProvingSliceResource)
+      end
+    end
+
+    agent = ProvingSliceAgent.new(state: %{proving: %{count: 2}})
+
+    assert Info.generated_slice_module(ProvingSliceResource) ==
+             JidoTest.Ash.ProvingSliceResource.Jido.Slice
+
+    assert Info.generated_action_module(ProvingSliceResource, :add) ==
+             JidoTest.Ash.ProvingSliceResource.Jido.Add
+
+    assert {:ok, %{count: 0}} = Zoi.parse(Info.state_schema(ProvingSliceResource), %{})
+
+    assert [
+             %{module: JidoTest.Ash.ProvingSliceResource.Jido.Slice, path: :proving}
+           ] = AgentInfo.slice_instances(ProvingSliceAgent)
+
+    signal =
+      Jido.Signal.new!(%{
+        type: "proving.add",
+        source: "/test",
+        data: %{amount: 4}
+      })
+
+    assert {"proving.add", JidoTest.Ash.ProvingSliceResource.Jido.Add, -10} in AgentInfo.routes(
+             ProvingSliceAgent
+           )
+
+    assert {:ok, updated_agent, [%Jido.Directives.Emit{signal: emitted}]} =
+             ProvingSliceAgent.cmd(
+               agent,
+               {JidoTest.Ash.ProvingSliceResource.Jido.Add, %{amount: 4}},
+               input_signal: signal,
+               ctx: proving_policy_ctx(:operator)
+             )
+
+    assert updated_agent.state.proving == %{count: 6}
+    assert emitted.type == "proving.counted"
+    assert emitted.data == %{count: 6}
+  end
+
+  @tag story: "US-AJSL-23"
+  test "mounted proving slice policy denial prevents state updates" do
+    # Given a tiny Ash-backed slice mounted in a Jido agent
+    # When the generated reducer is denied by Ash policy checks
+    # Then cmd returns a structured error and leaves the original agent unchanged
+    defmodule ProvingSliceDeniedAgent do
+      use Jido.Agent, default_slices: false
+
+      agent do
+        name "proving_slice_denied_agent"
+      end
+
+      slices do
+        slice(:proving, ProvingSliceResource)
+      end
+    end
+
+    agent = ProvingSliceDeniedAgent.new(state: %{proving: %{count: 2}})
+
+    signal =
+      Jido.Signal.new!(%{
+        type: "proving.add",
+        source: "/test",
+        data: %{amount: 4}
+      })
+
+    assert {:error, %Jido.Error.ExecutionError{details: %{reason: %Ash.Error.Forbidden{}}}} =
+             ProvingSliceDeniedAgent.cmd(
+               agent,
+               {JidoTest.Ash.ProvingSliceResource.Jido.Add, %{amount: 4}},
+               input_signal: signal,
+               ctx: proving_policy_ctx(:viewer)
+             )
+
+    assert agent.state.proving == %{count: 2}
+  end
+
   @tag story: "US-AJSL-18"
   test "generated reducers run with runtime actor context and tenant" do
     # Given an Ash-backed reducer protected by Ash policies
@@ -451,5 +544,13 @@ defmodule Jido.Ash.SliceTest do
                %{authorize?: true},
                ctx
              )
+  end
+
+  defp proving_policy_ctx(role) do
+    %{
+      actor: %{role: role},
+      context: %{allow_slice_transition?: true},
+      tenant: "tenant-a"
+    }
   end
 end

@@ -338,3 +338,81 @@ defmodule JidoTest.Ash.PolicyDomain do
     resource JidoTest.Ash.PolicySliceResource
   end
 end
+
+defmodule JidoTest.Ash.ProvingReducer do
+  @moduledoc false
+  use Ash.Resource.Actions.Implementation
+
+  alias Jido.Ash.Slice.ReducerResult
+
+  @impl Ash.Resource.Actions.Implementation
+  @spec run(
+          input :: Ash.ActionInput.t(),
+          opts :: keyword(),
+          context :: Ash.Resource.Actions.Implementation.context()
+        ) :: {:ok, ReducerResult.t()}
+  def run(input, _opts, _context) do
+    slice = Map.get(input.context, :slice, %{})
+    count = Map.get(slice, :count, 0) + input.arguments.amount
+    next_slice = Map.put(slice, :count, count)
+
+    signal =
+      Jido.Signal.new!(%{
+        type: "proving.counted",
+        source: "/test/proving",
+        data: %{count: count}
+      })
+
+    {:ok, ReducerResult.new(next_slice, [%Jido.Directives.Emit{signal: signal}])}
+  end
+end
+
+defmodule JidoTest.Ash.ProvingSliceResource do
+  @moduledoc false
+  use Ash.Resource,
+    domain: JidoTest.Ash.ProvingDomain,
+    data_layer: nil,
+    extensions: [Jido.Ash.Slice],
+    authorizers: [Ash.Policy.Authorizer]
+
+  attributes do
+    attribute :count, :integer, default: 0, public?: true
+  end
+
+  actions do
+    action :add, :term do
+      argument :amount, :integer, default: 1
+
+      run JidoTest.Ash.ProvingReducer
+    end
+  end
+
+  policies do
+    policy action(:add) do
+      authorize_if actor_attribute_equals(:role, :operator)
+    end
+
+    policy action(:add) do
+      authorize_if context_equals(:allow_slice_transition?, true)
+    end
+  end
+
+  resource do
+    require_primary_key? false
+  end
+
+  jido_slice do
+    name :proving_counter
+
+    signal("proving.add", :add)
+  end
+end
+
+defmodule JidoTest.Ash.ProvingDomain do
+  @moduledoc false
+  use Ash.Domain, validate_config_inclusion?: false
+
+  resources do
+    resource JidoTest.Ash.ProvingSliceResource
+  end
+end

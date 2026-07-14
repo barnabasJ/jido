@@ -30,6 +30,8 @@ flowchart LR
 | US-AJSL-15 | Preserve hand-authored slice introspection | [US-AJSL-15](./US-AJSL-15-preserve-hand-authored-slice-introspection.md) |
 | US-AJSL-16 | Mount Ash-backed slice resources | [US-AJSL-16](./US-AJSL-16-mount-ash-backed-slice-resources.md) |
 | US-AJSL-17 | Expand Ash-backed slice routes | [US-AJSL-17](./US-AJSL-17-expand-ash-backed-slice-routes.md) |
+| US-AJSL-22 | Run a mounted proving slice | [US-AJSL-22](./US-AJSL-22-run-mounted-proving-slice.md) |
+| US-AJSL-23 | Deny a mounted proving reducer | [US-AJSL-23](./US-AJSL-23-deny-mounted-proving-reducer.md) |
 
 ## See also
 
