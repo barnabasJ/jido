@@ -247,6 +247,20 @@ defmodule JidoTest.Ash.ReducerDomain do
   end
 end
 
+defmodule JidoTest.Ash.DomainComposedAgentDomain do
+  @moduledoc false
+  use Ash.Domain,
+    extensions: [Jido.Ash.Domain],
+    validate_config_inclusion?: false
+
+  jido_agent do
+    name "domain_composed_agent"
+    description "Domain-backed agent composition"
+
+    slice(:counter_mount, JidoTest.Ash.ReducerSliceResource)
+  end
+end
+
 defmodule JidoTest.Ash.PolicyReducer do
   @moduledoc false
   use Ash.Resource.Actions.Implementation

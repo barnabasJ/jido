@@ -11,6 +11,7 @@ defmodule Jido.Ash.SliceTest do
   alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias JidoTest.Ash.DeclaredSliceResource
+  alias JidoTest.Ash.DomainComposedAgentDomain
   alias JidoTest.Ash.PersistenceSliceResource
   alias JidoTest.Ash.PolicySliceResource
   alias JidoTest.Ash.ReducerSliceResource
@@ -331,6 +332,60 @@ defmodule Jido.Ash.SliceTest do
     assert AgentInfo.slice_paths_for_action(AshSliceRouteAgent)[
              JidoTest.Ash.ReducerSliceResource.Jido.Increment
            ] == [:counter_two]
+  end
+
+  @tag story: "US-AJAC-01"
+  test "Ash domains expose Jido agent composition metadata" do
+    # Given an Ash domain declaring Jido agent metadata and an Ash-backed slice mount
+    # When a developer inspects the domain-backed composition
+    # Then identity, explicit mount paths, routes, and action ownership are available
+    assert Jido.Ash.Domain.Info.name(DomainComposedAgentDomain) == "domain_composed_agent"
+
+    assert Jido.Ash.Domain.Info.description(DomainComposedAgentDomain) ==
+             "Domain-backed agent composition"
+
+    assert [
+             %{module: JidoTest.Ash.ReducerSliceResource.Jido.Slice, path: :counter_mount}
+           ] = Jido.Ash.Domain.Info.slice_instances(DomainComposedAgentDomain)
+
+    assert {"counter.increment", JidoTest.Ash.ReducerSliceResource.Jido.Increment, -10} in Jido.Ash.Domain.Info.routes(
+             DomainComposedAgentDomain
+           )
+
+    assert Jido.Ash.Domain.Info.slice_paths_for_action(DomainComposedAgentDomain)[
+             JidoTest.Ash.ReducerSliceResource.Jido.Increment
+           ] == [:counter_mount]
+  end
+
+  @tag story: "US-AJAC-02"
+  test "domain-backed composition matches a simple hand-authored Jido agent" do
+    # Given a hand-authored Jido agent and a domain composition with the same slice mount
+    # When their composition metadata is inspected
+    # Then the generated domain metadata matches the existing agent baseline
+    defmodule DomainCompositionBaselineAgent do
+      use Jido.Agent, default_slices: false
+
+      agent do
+        name "domain_composed_agent"
+        description "Domain-backed agent composition"
+      end
+
+      slices do
+        slice(:counter_mount, ReducerSliceResource)
+      end
+    end
+
+    assert Jido.Ash.Domain.Info.name(DomainComposedAgentDomain) ==
+             AgentInfo.name(DomainCompositionBaselineAgent)
+
+    assert Jido.Ash.Domain.Info.slice_instances(DomainComposedAgentDomain) ==
+             AgentInfo.slice_instances(DomainCompositionBaselineAgent)
+
+    assert Jido.Ash.Domain.Info.routes(DomainComposedAgentDomain) ==
+             AgentInfo.routes(DomainCompositionBaselineAgent)
+
+    assert Jido.Ash.Domain.Info.slice_paths_for_action(DomainComposedAgentDomain) ==
+             AgentInfo.slice_paths_for_action(DomainCompositionBaselineAgent)
   end
 
   @tag story: "US-AJSL-18"
