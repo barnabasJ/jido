@@ -50,7 +50,15 @@ defmodule Jido.Ash.Slice.Info do
   @spec state_schema(resource :: module()) :: Zoi.schema()
   def state_schema(resource) do
     resource
-    |> state_fields()
+    |> Ash.Resource.Info.attributes()
+    |> state_schema_from_attributes()
+  end
+
+  @doc false
+  @spec state_schema_from_attributes(attributes :: [Ash.Resource.Attribute.t()]) :: Zoi.schema()
+  def state_schema_from_attributes(attributes) do
+    attributes
+    |> Enum.map(&StateField.from_attribute/1)
     |> Map.new(fn %StateField{} = field -> {field.name, field_schema!(field, :state)} end)
     |> Zoi.object()
   end

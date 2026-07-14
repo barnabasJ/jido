@@ -26,6 +26,8 @@ flowchart LR
 | US-AJSL-11 | Generate stable reducer action modules | [US-AJSL-11](./US-AJSL-11-generate-stable-reducer-action-modules.md) |
 | US-AJSL-12 | Adapt Ash reducer success results | [US-AJSL-12](./US-AJSL-12-adapt-ash-reducer-success-results.md) |
 | US-AJSL-13 | Preserve Ash reducer error results | [US-AJSL-13](./US-AJSL-13-preserve-ash-reducer-error-results.md) |
+| US-AJSL-14 | Generate a mountable Jido slice module | [US-AJSL-14](./US-AJSL-14-generate-mountable-jido-slice-module.md) |
+| US-AJSL-15 | Preserve hand-authored slice introspection | [US-AJSL-15](./US-AJSL-15-preserve-hand-authored-slice-introspection.md) |
 
 ## See also
 

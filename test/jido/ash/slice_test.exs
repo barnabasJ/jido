@@ -7,6 +7,7 @@ defmodule Jido.Ash.SliceTest do
   alias Jido.Ash.Slice.SignalPayload
   alias Jido.Ash.Slice.StateField
   alias Jido.Ash.Slice.Verifiers.SignalActionsExist
+  alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias JidoTest.Ash.DeclaredSliceResource
   alias JidoTest.Ash.ReducerSliceResource
   alias JidoTest.Ash.SignalPayloadSliceResource
@@ -44,7 +45,8 @@ defmodule Jido.Ash.SliceTest do
              %SignalEntry{type: "event.cancel", action: :cancel}
            ] = Info.signals(DeclaredSliceResource)
 
-    assert Info.generated_slice_module(DeclaredSliceResource) == nil
+    assert Info.generated_slice_module(DeclaredSliceResource) ==
+             JidoTest.Ash.DeclaredSliceResource.Jido.Slice
 
     assert [
              JidoTest.Ash.DeclaredSliceResource.Jido.Start,
@@ -198,5 +200,39 @@ defmodule Jido.Ash.SliceTest do
 
     assert {:error, {:reducer_failed, "boom"}} =
              JidoTest.Ash.ReducerSliceResource.Jido.Fail.run(signal, %{count: 2}, %{}, %{})
+  end
+
+  @tag story: "US-AJSL-14"
+  test "generated Ash-backed slice module exposes state schema and routes" do
+    # Given an Ash-backed slice resource with state and generated reducer actions
+    # When a developer inspects its generated Jido slice module
+    # Then the module is mountable and exposes schema, routes, and action targets
+    slice_module = Info.generated_slice_module(ReducerSliceResource)
+
+    assert slice_module == JidoTest.Ash.ReducerSliceResource.Jido.Slice
+    assert Spark.Dsl.is?(slice_module, Jido.Slice)
+    assert SliceInfo.name(slice_module) == "counter"
+
+    assert {:ok, %{count: 0}} = Zoi.parse(SliceInfo.schema(slice_module), %{})
+
+    assert [
+             {"counter.increment", JidoTest.Ash.ReducerSliceResource.Jido.Increment},
+             {"counter.fail", JidoTest.Ash.ReducerSliceResource.Jido.Fail}
+           ] = SliceInfo.signal_routes(slice_module)
+
+    assert SliceInfo.actions(slice_module) == [
+             JidoTest.Ash.ReducerSliceResource.Jido.Increment,
+             JidoTest.Ash.ReducerSliceResource.Jido.Fail
+           ]
+  end
+
+  @tag story: "US-AJSL-15"
+  test "hand-authored Jido slices keep their existing Info surfaces" do
+    # Given existing hand-authored Jido slices
+    # When Ash-backed slice modules are generated elsewhere
+    # Then existing slice introspection still reads the hand-authored DSL
+    assert Spark.Dsl.is?(Jido.Slices.Thread, Jido.Slice)
+    assert SliceInfo.name(Jido.Slices.Thread) == "thread"
+    assert [_ | _] = SliceInfo.signal_routes(Jido.Slices.Thread)
   end
 end

@@ -3,6 +3,7 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
 
   use Spark.Dsl.Transformer
 
+  alias Jido.Ash.Slice.Info
   alias Jido.Ash.Slice.SignalEntry
   alias Spark.Dsl.Transformer
 
@@ -10,20 +11,26 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
   @spec transform(dsl_state :: map()) :: {:ok, map()} | {:error, term()}
   def transform(dsl_state) do
     resource = Transformer.get_persisted(dsl_state, :module)
-    slice_name = Transformer.get_option(dsl_state, [:jido_slice], :name)
+    slice_opts = slice_opts(dsl_state)
 
     ash_actions = Transformer.get_entities(dsl_state, [:actions])
+    attributes = Transformer.get_entities(dsl_state, [:attributes])
+    slice_generation = slice_generation(resource, attributes)
 
     generated =
       dsl_state
       |> Transformer.get_entities([:jido_slice])
       |> generic_signal_entries(ash_actions)
-      |> Enum.map(&generated_entry(resource, ash_actions, slice_name, &1))
+      |> Enum.map(&generated_entry(resource, ash_actions, slice_opts.name, &1))
 
-    block = build_modules(resource, generated)
+    block = build_modules(resource, slice_generation, slice_opts, generated)
 
     dsl_state =
       dsl_state
+      |> Transformer.persist(
+        :jido_generated_slice_module,
+        generated_slice_module(slice_generation)
+      )
       |> Transformer.persist(:jido_generated_action_modules, Enum.map(generated, & &1.module))
       |> Transformer.persist(
         :jido_generated_action_modules_by_action,
@@ -57,7 +64,19 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
       ash_action: action,
       module: generated_module(resource, signal.action),
       slice_name: slice_name,
+      signal_type: signal.type,
       schema: []
+    }
+  end
+
+  defp slice_opts(dsl_state) do
+    %{
+      name: Transformer.get_option(dsl_state, [:jido_slice], :name),
+      description: Transformer.get_option(dsl_state, [:jido_slice], :description),
+      category: Transformer.get_option(dsl_state, [:jido_slice], :category),
+      vsn: Transformer.get_option(dsl_state, [:jido_slice], :vsn),
+      otp_app: Transformer.get_option(dsl_state, [:jido_slice], :otp_app),
+      tags: Transformer.get_option(dsl_state, [:jido_slice], :tags, []) || []
     }
   end
 
@@ -69,10 +88,27 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
     Module.concat([resource, Jido, Macro.camelize(to_string(action))])
   end
 
-  defp build_modules(_resource, []), do: quote(do: nil)
+  defp generated_slice_module_name(resource) do
+    Module.concat([resource, Jido, Slice])
+  end
 
-  defp build_modules(resource, generated) do
-    blocks = Enum.map(generated, &module_block(resource, &1))
+  defp slice_generation(resource, attributes) do
+    {:ok,
+     %{
+       module: generated_slice_module_name(resource),
+       schema: Info.state_schema_from_attributes(attributes)
+     }}
+  rescue
+    ArgumentError -> :skip
+  end
+
+  defp generated_slice_module({:ok, %{module: module}}), do: module
+  defp generated_slice_module(:skip), do: nil
+
+  defp build_modules(resource, slice_generation, slice_opts, generated) do
+    blocks =
+      Enum.map(generated, &module_block(resource, &1)) ++
+        slice_module_blocks(slice_generation, slice_opts, generated)
 
     quote do
       (unquote_splicing(blocks))
@@ -128,5 +164,57 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
   defp action_name(resource, slice_name, action) do
     slice_name = slice_name || resource |> Module.split() |> List.last() |> Macro.underscore()
     "#{slice_name}_#{action}"
+  end
+
+  defp slice_module_blocks(:skip, _slice_opts, _generated), do: []
+
+  defp slice_module_blocks({:ok, %{module: slice_module, schema: schema}}, slice_opts, generated) do
+    [slice_module_block(slice_module, schema, slice_opts, generated)]
+  end
+
+  defp slice_module_block(slice_module, schema, slice_opts, generated) do
+    route_blocks = Enum.map(generated, &route_block/1)
+    option_blocks = slice_option_blocks(slice_opts)
+
+    quote location: :keep do
+      defmodule unquote(slice_module) do
+        @moduledoc false
+
+        use Jido.Slice
+
+        slice do
+          name unquote(slice_opts.name)
+          unquote_splicing(option_blocks)
+          schema unquote(Macro.escape(schema))
+        end
+
+        signal_routes do
+          (unquote_splicing(route_blocks))
+        end
+      end
+    end
+  end
+
+  defp route_block(%{module: module, signal_type: signal_type}) do
+    quote do
+      route unquote(signal_type), unquote(module)
+    end
+  end
+
+  defp slice_option_blocks(slice_opts) do
+    []
+    |> maybe_option(:description, slice_opts.description)
+    |> maybe_option(:category, slice_opts.category)
+    |> maybe_option(:vsn, slice_opts.vsn)
+    |> maybe_option(:otp_app, slice_opts.otp_app)
+    |> maybe_option(:tags, slice_opts.tags)
+    |> Enum.reverse()
+  end
+
+  defp maybe_option(blocks, _name, nil), do: blocks
+  defp maybe_option(blocks, :tags, []), do: blocks
+
+  defp maybe_option(blocks, name, value) do
+    [quote(do: unquote(name)(unquote(value))) | blocks]
   end
 end
