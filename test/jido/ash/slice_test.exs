@@ -11,6 +11,8 @@ defmodule Jido.Ash.SliceTest do
   alias Jido.Dsl.Agent.Info, as: AgentInfo
   alias Jido.Dsl.Slice.Info, as: SliceInfo
   alias JidoTest.Ash.DeclaredSliceResource
+  alias JidoTest.Ash.CustomPersistenceSliceResource
+  alias JidoTest.Ash.CustomPersistenceTransform
   alias JidoTest.Ash.DomainComposedAgentDomain
   alias JidoTest.Ash.PersistenceSliceResource
   alias JidoTest.Ash.PolicySliceResource
@@ -139,6 +141,22 @@ defmodule Jido.Ash.SliceTest do
 
     assert %{durable_count: 7, durable_note: nil, restored_buffer: []} =
              slice_module.reinstate(%{durable_count: 7, durable_note: nil})
+  end
+
+  @tag story: "US-AJSL-24"
+  test "generated slice delegates checkpoint callbacks to the declared custom transform" do
+    # Given an Ash-backed slice declaring application-specific checkpoint encoding
+    slice_module = Info.generated_slice_module(CustomPersistenceSliceResource)
+
+    # When the generated persistence callbacks run
+    assert Info.persistence_transform(CustomPersistenceSliceResource) ==
+             CustomPersistenceTransform
+
+    assert %{encoded: "durable"} = slice_module.externalize(%{value: "durable"})
+
+    # Then both directions delegate to the declared transform
+    assert %{value: "durable", restored_by: CustomPersistenceTransform} =
+             slice_module.reinstate(%{encoded: "durable"})
   end
 
   @tag story: "US-AJSL-09"

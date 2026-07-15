@@ -11,6 +11,7 @@ transform callbacks.
 | --- | --- | --- |
 | US-AJSL-20 | Inspect attribute checkpoint metadata | [US-AJSL-20](./US-AJSL-20-inspect-attribute-checkpoint-metadata.md) |
 | US-AJSL-21 | Checkpoint only durable generated state | [US-AJSL-21](./US-AJSL-21-checkpoint-only-durable-generated-state.md) |
+| US-AJSL-24 | Delegate generated checkpoints to a custom transform | [US-AJSL-24](./US-AJSL-24-delegate-generated-checkpoints.md) |
 
 ## See Also
 

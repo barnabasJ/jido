@@ -36,6 +36,11 @@ defmodule Jido.Ash.Slice.Info do
   @spec tags(resource :: module()) :: [String.t()]
   def tags(resource), do: Extension.get_opt(resource, @section, :tags) || []
 
+  @doc "Returns the declared custom persistence transform module."
+  @spec persistence_transform(resource :: module()) :: module() | nil
+  def persistence_transform(resource),
+    do: Extension.get_opt(resource, @section, :persistence_transform)
+
   @doc "Returns signal declarations in declaration order."
   @spec signals(resource :: module()) :: [Jido.Ash.Slice.SignalEntry.t()]
   def signals(resource), do: entities(resource, Jido.Ash.Slice.SignalEntry)

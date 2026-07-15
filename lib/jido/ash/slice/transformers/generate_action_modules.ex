@@ -86,7 +86,9 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
       category: Transformer.get_option(dsl_state, [:jido_slice], :category),
       vsn: Transformer.get_option(dsl_state, [:jido_slice], :vsn),
       otp_app: Transformer.get_option(dsl_state, [:jido_slice], :otp_app),
-      tags: Transformer.get_option(dsl_state, [:jido_slice], :tags, []) || []
+      tags: Transformer.get_option(dsl_state, [:jido_slice], :tags, []) || [],
+      persistence_transform:
+        Transformer.get_option(dsl_state, [:jido_slice], :persistence_transform)
     }
   end
 
@@ -192,6 +194,9 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
     route_blocks = Enum.map(generated, &route_block/1)
     option_blocks = slice_option_blocks(slice_opts)
 
+    persistence_callbacks =
+      persistence_callbacks(slice_opts.persistence_transform, persistence_fields)
+
     quote location: :keep do
       defmodule unquote(slice_module) do
         @moduledoc false
@@ -199,7 +204,6 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
         use Jido.Slice
 
         @behaviour Jido.Persist.Transform
-        @persistence_fields unquote(Macro.escape(persistence_fields))
 
         slice do
           name unquote(slice_opts.name)
@@ -211,18 +215,38 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
           (unquote_splicing(route_blocks))
         end
 
-        @impl Jido.Persist.Transform
-        @spec externalize(slice_value :: term()) :: term()
-        def externalize(slice_value) do
-          Jido.Ash.Slice.Persistence.externalize(slice_value, @persistence_fields)
-        end
-
-        @impl Jido.Persist.Transform
-        @spec reinstate(stored_value :: term()) :: term()
-        def reinstate(stored_value) do
-          Jido.Ash.Slice.Persistence.reinstate(stored_value, @persistence_fields)
-        end
+        unquote(persistence_callbacks)
       end
+    end
+  end
+
+  defp persistence_callbacks(nil, persistence_fields) do
+    quote do
+      @persistence_fields unquote(Macro.escape(persistence_fields))
+
+      @impl Jido.Persist.Transform
+      @spec externalize(slice_value :: term()) :: term()
+      def externalize(slice_value) do
+        Jido.Ash.Slice.Persistence.externalize(slice_value, @persistence_fields)
+      end
+
+      @impl Jido.Persist.Transform
+      @spec reinstate(stored_value :: term()) :: term()
+      def reinstate(stored_value) do
+        Jido.Ash.Slice.Persistence.reinstate(stored_value, @persistence_fields)
+      end
+    end
+  end
+
+  defp persistence_callbacks(transform, _persistence_fields) do
+    quote do
+      @impl Jido.Persist.Transform
+      @spec externalize(slice_value :: term()) :: term()
+      def externalize(slice_value), do: unquote(transform).externalize(slice_value)
+
+      @impl Jido.Persist.Transform
+      @spec reinstate(stored_value :: term()) :: term()
+      def reinstate(stored_value), do: unquote(transform).reinstate(stored_value)
     end
   end
 

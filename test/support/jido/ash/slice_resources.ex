@@ -97,6 +97,40 @@ defmodule JidoTest.Ash.PersistenceSliceResource do
   end
 end
 
+defmodule JidoTest.Ash.CustomPersistenceTransform do
+  @moduledoc false
+  @behaviour Jido.Persist.Transform
+
+  @impl Jido.Persist.Transform
+  @spec externalize(state :: map()) :: map()
+  def externalize(state), do: %{encoded: state.value}
+
+  @impl Jido.Persist.Transform
+  @spec reinstate(stored :: map()) :: map()
+  def reinstate(stored), do: %{value: stored.encoded, restored_by: __MODULE__}
+end
+
+defmodule JidoTest.Ash.CustomPersistenceSliceResource do
+  @moduledoc false
+  use Ash.Resource,
+    domain: nil,
+    data_layer: nil,
+    extensions: [Jido.Ash.Slice]
+
+  attributes do
+    attribute :value, :string, public?: true
+  end
+
+  resource do
+    require_primary_key? false
+  end
+
+  jido_slice do
+    name :custom_persistence
+    persistence_transform(JidoTest.Ash.CustomPersistenceTransform)
+  end
+end
+
 defmodule JidoTest.Ash.SignalPayloadSliceResource do
   @moduledoc false
   use Ash.Resource,

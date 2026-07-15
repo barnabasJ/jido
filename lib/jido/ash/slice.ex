@@ -45,7 +45,12 @@ defmodule Jido.Ash.Slice do
       category: [type: :string],
       vsn: [type: :string],
       otp_app: [type: :atom],
-      tags: [type: {:list, :string}, default: []]
+      tags: [type: {:list, :string}, default: []],
+      persistence_transform: [
+        type: :atom,
+        doc:
+          "Optional Jido.Persist.Transform module for application-specific checkpoint encoding."
+      ]
     ],
     entities: [@signal, @persist]
   }
