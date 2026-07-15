@@ -234,6 +234,7 @@ defmodule JidoTest.Ash.ReducerSliceResource do
     name :counter
 
     signal("counter.increment", :increment)
+    signal("counter.increment.alternate", :increment)
     signal("counter.fail", :fail)
   end
 end

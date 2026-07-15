@@ -23,12 +23,15 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
 
     slice_generation = slice_generation(resource, attributes, persistence_entries)
 
+    generic_signals = generic_signal_entries(signal_entries, ash_actions)
+
     generated =
-      signal_entries
-      |> generic_signal_entries(ash_actions)
+      generic_signals
+      |> Enum.uniq_by(& &1.action)
       |> Enum.map(&generated_entry(resource, ash_actions, slice_opts.name, &1))
 
-    block = build_modules(resource, slice_generation, slice_opts, generated)
+    routes = Enum.map(generic_signals, &generated_route(resource, &1))
+    block = build_modules(resource, slice_generation, slice_opts, generated, routes)
 
     dsl_state =
       dsl_state
@@ -54,11 +57,13 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
   def after?(_transformer), do: false
 
   defp generic_signal_entries(signals, ash_actions) do
-    signals
-    |> Enum.filter(fn %SignalEntry{action: action} ->
+    Enum.filter(signals, fn %SignalEntry{action: action} ->
       match?(%{type: :action}, action_by_name(ash_actions, action))
     end)
-    |> Enum.uniq_by(& &1.action)
+  end
+
+  defp generated_route(resource, %SignalEntry{} = signal) do
+    %{module: generated_module(resource, signal.action), signal_type: signal.type}
   end
 
   defp generated_entry(resource, ash_actions, slice_name, %SignalEntry{} = signal) do
@@ -112,10 +117,10 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
   defp generated_slice_module({:ok, %{module: module}}), do: module
   defp generated_slice_module(:skip), do: nil
 
-  defp build_modules(resource, slice_generation, slice_opts, generated) do
+  defp build_modules(resource, slice_generation, slice_opts, generated, routes) do
     blocks =
       Enum.map(generated, &module_block(resource, &1)) ++
-        slice_module_blocks(slice_generation, slice_opts, generated)
+        slice_module_blocks(slice_generation, slice_opts, routes)
 
     quote do
       (unquote_splicing(blocks))

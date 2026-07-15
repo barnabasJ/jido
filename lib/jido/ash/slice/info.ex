@@ -194,7 +194,7 @@ defmodule Jido.Ash.Slice.Info do
     |> type_schema!(description, context)
     |> maybe_allow_nil(allow_nil?)
     |> maybe_require(allow_nil?, default)
-    |> maybe_default(default)
+    |> maybe_default(context, allow_nil?, default)
   end
 
   defp type_schema!({:array, type}, description, context) do
@@ -274,8 +274,11 @@ defmodule Jido.Ash.Slice.Info do
   defp maybe_require(schema, false, :none), do: Zoi.required(schema)
   defp maybe_require(schema, _allow_nil?, _default), do: schema
 
-  defp maybe_default(schema, {:static, default}), do: Zoi.default(schema, default)
-  defp maybe_default(schema, _default), do: schema
+  defp maybe_default(schema, _context, _allow_nil?, {:static, default}),
+    do: Zoi.default(schema, default)
+
+  defp maybe_default(schema, :state, true, :none), do: Zoi.default(schema, nil)
+  defp maybe_default(schema, _context, _allow_nil?, _default), do: schema
 
   defp description_opts(nil), do: []
   defp description_opts(description), do: [description: description]

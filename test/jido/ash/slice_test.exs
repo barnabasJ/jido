@@ -82,7 +82,7 @@ defmodule Jido.Ash.SliceTest do
 
     schema = Info.state_schema(StateSliceResource)
 
-    assert {:ok, %{title: "run", attempts: 0, active: true, tags: []}} =
+    assert {:ok, %{title: "run", attempts: 0, active: true, tags: [], metadata: nil}} =
              Zoi.parse(schema, %{title: "run"})
 
     assert {:ok, %{title: "run", metadata: nil, attempts: 0, active: true, tags: []}} =
@@ -261,6 +261,7 @@ defmodule Jido.Ash.SliceTest do
 
     assert [
              {"counter.increment", JidoTest.Ash.ReducerSliceResource.Jido.Increment},
+             {"counter.increment.alternate", JidoTest.Ash.ReducerSliceResource.Jido.Increment},
              {"counter.fail", JidoTest.Ash.ReducerSliceResource.Jido.Fail}
            ] = SliceInfo.signal_routes(slice_module)
 
