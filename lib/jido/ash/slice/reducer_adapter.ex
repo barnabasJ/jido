@@ -12,6 +12,21 @@ defmodule Jido.Ash.Slice.ReducerAdapter do
   def payload(_signal), do: %{}
 
   @doc false
+  @spec payload(signal :: Jido.Signal.t() | map(), resource :: module(), action :: atom()) ::
+          map()
+  def payload(signal, resource, action) do
+    allowed_keys =
+      resource
+      |> Ash.Resource.Info.action(action)
+      |> Map.fetch!(:arguments)
+      |> Enum.flat_map(fn argument -> [argument.name, Atom.to_string(argument.name)] end)
+
+    signal
+    |> payload()
+    |> Map.take(allowed_keys)
+  end
+
+  @doc false
   @spec ash_opts(
           ctx :: map(),
           opts :: map() | keyword(),

@@ -425,7 +425,7 @@ defmodule Jido.Ash.SliceTest do
       Jido.Signal.new!(%{
         type: "proving.add",
         source: "/test",
-        data: %{amount: 4}
+        data: %{amount: 4, lifecycle_metadata: "ignored"}
       })
 
     assert {"proving.add", JidoTest.Ash.ProvingSliceResource.Jido.Add, -10} in AgentInfo.routes(

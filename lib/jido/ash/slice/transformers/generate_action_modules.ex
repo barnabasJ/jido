@@ -161,7 +161,7 @@ defmodule Jido.Ash.Slice.Transformers.GenerateActionModules do
         @spec run(signal :: Jido.Signal.t() | map(), slice :: map(), opts :: map(), ctx :: map()) ::
                 {:ok, map(), [Jido.Directives.t()]} | {:error, term()}
         def run(signal, slice, opts, ctx) do
-          payload = Jido.Ash.Slice.ReducerAdapter.payload(signal)
+          payload = Jido.Ash.Slice.ReducerAdapter.payload(signal, @resource, @ash_action)
           ash_opts = Jido.Ash.Slice.ReducerAdapter.ash_opts(ctx, opts, slice, signal)
 
           @resource
